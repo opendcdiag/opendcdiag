@@ -9,6 +9,7 @@ sysdeps_unix_a = static_library(
 		'stacksize.cpp',
 		'tmpfile.c',
 	),
+	build_by_default: false,
 	include_directories : [
 		framework_incdir,
 	],

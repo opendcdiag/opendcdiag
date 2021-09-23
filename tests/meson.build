@@ -81,6 +81,7 @@ tests_base_a = static_library(
 	'tests_base',
 	sources : tests_base_config.sources(),
 	dependencies : tests_base_config.dependencies(),
+	build_by_default: false,
 	include_directories : [
 		tests_common_incdirs,
 	],
@@ -100,6 +101,7 @@ tests_hsw_a = static_library(
 	'tests_hsw',
 	sources : tests_hsw_config.sources(),
 	dependencies : tests_hsw_config.dependencies(),
+	build_by_default: false,
 	include_directories : [
 		tests_common_incdirs,
 	],
@@ -122,6 +124,7 @@ tests_skx_a = static_library(
 	'tests_skx',
 	sources : tests_skx_config.sources(),
 	dependencies : tests_skx_config.dependencies(),
+	build_by_default: false,
 	include_directories : [
 		tests_common_incdirs,
 	],
