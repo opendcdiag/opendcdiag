@@ -43,6 +43,7 @@ framework_main_a = static_library(
 	files(
 		'main.cpp',
 	),
+	build_by_default: false,
 	include_directories : [
 		framework_incdir,
 	],
@@ -107,6 +108,7 @@ endif
 framework_core_a = static_library(
 	'framework_core',
 	framework_files,
+	build_by_default: false,
 	include_directories : [
 		framework_incdir,
 	],

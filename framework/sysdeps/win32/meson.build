@@ -19,6 +19,7 @@ sysdeps_a = static_library(
 		'../unix/mmap_region.c',
 
 	),
+	build_by_default: false,
 	include_directories : [
 		framework_incdir,
 	],
