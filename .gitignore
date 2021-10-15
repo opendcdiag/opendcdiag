@@ -1,0 +1,5 @@
+*~
+/opendcdiag-*.log
+/opendcdiag-*.yaml
+# typical names for meson build directories
+/build*/

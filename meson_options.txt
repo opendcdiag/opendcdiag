@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+
+option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'none'], value : 'yaml',
+	description : 'Set build-time default logging format to "none", "yaml" (default), or "tap".')
+option('march_base', type : 'combo', choices : ['haswell', 'westmere'], value : 'haswell',
+	description : 'Build framework with this base optimization -march= value (valid are "haswell" (default) and "westmere").')
+option('tests_options', type : 'array', value : [],
+	description : 'Pass strings to flag test content build options.')
+option('docdir', type : 'string', value : 'doc/dcdiag',
+	description : 'Directory name of where documentation will be installed.')
+option('static_libstdcpp', type : 'boolean', value : false,
+	description : 'Link with -static-libstdc++ (default false).')
+option('executable_name', type : 'string', value : 'opendcdiag',
+	description : 'Output name of the main binary (default "opendcdiag").')
+option('fallback_exec', type : 'string', value : '',
+	description : 'Executable to run if processor does not support required features (e.g. AVX2)')
+option('selftests', type : 'boolean', value : true,
+	description : 'Build in selftests (default true)')

@@ -1,0 +1,24 @@
+name: Pull Request
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: debian:sid
+    steps:
+    - name: Install distro packages
+      run: |
+        apt-get -y update
+        apt-get -y install libboost-dev zlib1g-dev libgtest-dev libeigen3-dev libzstd-dev ninja-build meson
+    - uses: actions/checkout@v2
+    - name: meson setup
+      run: meson setup builddir
+    - name: ninja build
+      run: ninja -C builddir
+
