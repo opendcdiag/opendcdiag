@@ -38,7 +38,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifdef __unix__
+#ifndef _WIN32
 #  include <sys/utsname.h>
 #endif
 
