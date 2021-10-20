@@ -95,6 +95,18 @@ nasm_system_flags = [
 	'-Xgnu',
 	'-DWIN_ABI',
 ]
+elif target_machine.system() == 'darwin'
+add_project_arguments([
+	'-D__unix__',		# Why doesn't Apple think their OS is Unix?
+	'-D_DARWIN_C_SOURCE',
+], language: [ 'c', 'cpp' ])
+nasm_system_flags = [
+	'-fmacho64',
+	'-Xgnu',
+	'-DAPPLE',
+	'-D__APPLE__',
+        '--prefix=_'
+]
 else
 if get_option('buildtype') == 'debug'
 	debug_nasm_flags = '-gdwarf'
