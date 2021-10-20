@@ -631,8 +631,12 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         case FPE_FLTRES: return "FPE_FLTRES";        // Floating point inexact result.
         case FPE_FLTINV: return "FPE_FLTINV";        // Floating point invalid operation.
         case FPE_FLTSUB: return "FPE_FLTSUB";        // Subscript out of range.
+#ifdef FPE_FLTUNK
         case FPE_FLTUNK: return "FPE_FLTUNK";        // Undiagnosed floating-point exception.
+#endif
+#ifdef FPE_CONDTRAP
         case FPE_CONDTRAP: return "FPE_CONDTRAP";    // Trap on condition.
+#endif
         }
         return generic_code_string(code);
     };
@@ -647,7 +651,9 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         case ILL_PRVREG: return "ILL_PRVREG";        // Privileged register.
         case ILL_COPROC: return "ILL_COPROC";        // Coprocessor error.
         case ILL_BADSTK: return "ILL_BADSTK";        // Internal stack error.
+#ifdef ILL_BADIADDR
         case ILL_BADIADDR: return "ILL_BADIADDR";    // Unimplemented instruction address.
+#endif
         }
         return generic_code_string(code);
     };
@@ -657,8 +663,12 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         // Linux seems to generate only MAPERR, BNDERR and PKUERR
         case SEGV_MAPERR: return "SEGV_MAPERR";        // Address not mapped to object.
         case SEGV_ACCERR: return "SEGV_ACCERR";        // Invalid permissions for mapped object.
+#ifdef SEGV_BNDERR
         case SEGV_BNDERR: return "SEGV_BNDERR";        // Bounds checking failure.
+#endif
+#ifdef SEGV_PKUERR
         case SEGV_PKUERR: return "SEGV_PKUERR";        // Protection key checking failure.
+#endif
 #if 0               // seem to be Sparc-specific
         case SEGV_ACCADI: return "SEGV_ACCADI";        // ADI not enabled for mapped object.
         case SEGV_ADIDERR: return "SEGV_ADIDERR";      // Disrupting MCD error.
@@ -677,8 +687,12 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         case BUS_ADRALN: return "BUS_ADRALN";        // Invalid address alignment.
         case BUS_ADRERR: return "BUS_ADRERR";        // Non-existant physical address.
         case BUS_OBJERR: return "BUS_OBJERR";        // Object specific hardware error.
+#ifdef BUS_MCEERR_AR
         case BUS_MCEERR_AR: return "BUS_MCEERR_AR";  // Hardware memory error: action required.
+#endif
+#ifdef BUS_MCEERR_AO
         case BUS_MCEERR_AO: return "BUS_MCEERR_AO";  // Hardware memory error: action optional.
+#endif
         }
         return generic_code_string(code);
     };
