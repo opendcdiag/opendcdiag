@@ -26,7 +26,7 @@ protected:
 public:
 
 
-    struct test * get_next_test(){
+    struct test * get_next_test() override{
         auto weighted_info = this->select_test();
         test * next_test = testinfo[weighted_info->test_index];
         if (next_test != nullptr)
