@@ -533,7 +533,7 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
         ret = read(in, buf, sizeof(buf));
         if (ret > 0)
             IGNORE_RETVAL(write(log, buf, ret));
-#else
+#elif defined(__linux__)
         ret = splice(in, nullptr, log, nullptr, std::numeric_limits<int>::max(), SPLICE_F_NONBLOCK);
 #endif
         if (ret == -1 && (errno == EINTR || errno == EWOULDBLOCK))
