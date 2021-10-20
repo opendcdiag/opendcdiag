@@ -1370,7 +1370,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 {
     Duration remaining = test_timeout(sApp->current_test_duration);
 
-#ifdef __unix__
+#if !defined(_WIN32)
     enum ExitStatus {
         Interrupted = -1,
         TimedOut = 0,
