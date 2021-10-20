@@ -1,3 +1,4 @@
+# -*- indent-tabs-mode: t -*-
 # SPDX-License-Identifier: Apache-2.0
 
 project(
