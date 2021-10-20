@@ -4,7 +4,6 @@ sysdeps_unix_a = static_library(
 	'sysdeps_unix',
 	files(
 		'child_debug.cpp',
-		'mmap_region.c',
 		'splitlock_detect.c',
 		'stacksize.cpp',
 		'tmpfile.c',
