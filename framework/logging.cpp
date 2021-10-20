@@ -27,6 +27,7 @@
 #include <string.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -275,11 +276,18 @@ static const char *iso8601_time_now(Iso8601Format format)
     static char buffer[sizeof "2147483647-12-31T23:59:60.999999Z"];
     struct tm tm;
     struct timespec now;
+#if _POSIX_MONOTONIC_CLOCK >= 0
     clock_t clock = CLOCK_REALTIME;
-#ifdef CLOCK_REALTIME_COARSE
+#  ifdef CLOCK_REALTIME_COARSE
     clock = CLOCK_REALTIME_COARSE;
-#endif
+#  endif
     clock_gettime(clock, &now);
+#else
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    now.tv_sec = tv.tv_sec;
+    now.tv_nsec = tv.tv_usec * 1000;
+#endif
     gmtime_r(&now.tv_sec, &tm);
 
     size_t off = strftime(buffer, sizeof(buffer) - sizeof(".999999Z") + 1,
