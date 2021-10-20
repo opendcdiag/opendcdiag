@@ -238,12 +238,14 @@ std::string stdprintf(const char *fmt, ...)
 
 coarse_steady_clock::time_point coarse_steady_clock::now() noexcept
 {
+#ifdef CLOCK_MONOTONIC_COARSE
     using namespace std::chrono;
     struct timespec ts;
     clock_t clk = CLOCK_MONOTONIC;
-#ifdef CLOCK_MONOTONIC_COARSE
     clk = CLOCK_MONOTONIC_COARSE;
-#endif
     clock_gettime(clk, &ts);
     return time_point(seconds(ts.tv_sec) + nanoseconds(ts.tv_nsec));
+#else
+    return time_point(std::chrono::steady_clock::now().time_since_epoch());
+#endif
 }
