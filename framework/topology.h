@@ -16,7 +16,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct LogicalProcessorSet;
+class LogicalProcessorSet;
 
 class Topology
 {
