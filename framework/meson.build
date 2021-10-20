@@ -66,6 +66,7 @@ framework_files = files(
 	'Floats.c',
 	'generated_vectors.c',
 	'logging.cpp',
+	'mmap_region.c',
 	'random.cpp',
 	'sandstone.cpp',
 	'sandstone_data.cpp',
