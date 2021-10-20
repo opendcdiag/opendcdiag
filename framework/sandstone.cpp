@@ -279,11 +279,11 @@ static void signal_handler(int signum)
 {
     // communicate which signal we've received
     uint32_t expected = 0;
-    if (signal_control.compare_exchange_strong(expected, __W_EXITCODE(1, signum), std::memory_order_relaxed)) {
+    if (signal_control.compare_exchange_strong(expected, W_EXITCODE(1, signum), std::memory_order_relaxed)) {
         // initial clean up
     } else {
         // just increment the counter
-        signal_control.fetch_add(__W_EXITCODE(1, 0), std::memory_order_relaxed);
+        signal_control.fetch_add(W_EXITCODE(1, 0), std::memory_order_relaxed);
     }
 }
 
