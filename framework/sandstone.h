@@ -40,6 +40,12 @@ extern "C" {
 #endif
 #define MAX_HWTHREADS_PER_CORE  4
 
+#ifdef __APPLE__
+#  define SANDSTONE_SECTION_PREFIX              "__DATA,"
+#else
+#  define SANDSTONE_SECTION_PREFIX
+#endif
+
 // Requested thread stack size for our test threads:
 // We have some tests that do deep recursion, so we need a stable value
 #define THREAD_STACK_SIZE   (8192*1024)
@@ -121,7 +127,7 @@ extern "C" {
 #define EXIT_SKIP               -255
 
 #define DECLARE_TEST_INNER2(test_id, test_description) \
-    __attribute__((aligned(alignof(void*)), used, section("tests"))) struct test _test_ ## test_id = { \
+    __attribute__((aligned(alignof(void*)), used, section(SANDSTONE_SECTION_PREFIX "tests"))) struct test _test_ ## test_id = { \
         .id = SANDSTONE_STRINGIFY(test_id), .description = test_description,
 #define DECLARE_TEST_INNER(test_id, test_description)   DECLARE_TEST_INNER2(test_id, test_description)
 

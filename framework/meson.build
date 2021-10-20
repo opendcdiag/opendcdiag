@@ -90,6 +90,11 @@ framework_files += [
 	'forkfd/forkfd.c',
 ]
 endif
+if target_machine.system() == 'darwin'
+framework_files += [
+	'sandstone_sections.S',
+]
+endif
 
 # Default logging options
 logging_c_flags = []
