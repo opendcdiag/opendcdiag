@@ -5,6 +5,7 @@ sysdeps_a = static_library(
 	files(
 		'cpu_affinity.cpp',
 		'malloc.cpp',
+		'pthread_barrier.cpp',
 		'../generic/kvm.c',
 		'../generic/memfpt.c',
 		'../generic/msr.c',
