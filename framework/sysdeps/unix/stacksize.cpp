@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  */
-
+#define _XOPEN_SOURCE 1
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
