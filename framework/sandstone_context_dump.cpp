@@ -169,7 +169,7 @@ static void print_gpr(FILE *f, const char *name, int64_t value)
 
 static void print_rip(FILE *f, uintptr_t rip)
 {
-    fprintf(f, " %-5s = 0x%016" PRIx64, "rip", rip);
+    fprintf(f, " %-5s = 0x%016tx", "rip", rip);
 #ifdef __unix__
     uint8_t *ptr = reinterpret_cast<uint8_t *>(rip);
     Dl_info dli;
@@ -260,38 +260,38 @@ void dump_gprs(FILE *f, const mcontext_t *mc)
     print_segment(f, "gs", mc->mc_gs);
 }
 #elif defined(__APPLE__) || defined(__MACH__)
-void dump_gprs(FILE *f, const mcontext_t *mc)
+void dump_gprs(FILE *f, const mcontext_t mc)
 {
-    auto *state = &mc->ss;
-    using ThreadState = decltype(*state);
+    auto *state = &mc->__ss;
+    using ThreadState = std::decay_t<decltype(*state)>;
     using register_t = decltype(state->__rax);
     static constexpr struct {
         char name[4];
         register_t ThreadState:: *ptr;
     } registers[] = {
-        { "rax", &ThreadState::rax },
-        { "rbx", &ThreadState::rbx },
-        { "rcx", &ThreadState::rcx },
-        { "rdx", &ThreadState::rdx },
-        { "rsi", &ThreadState::rsi },
-        { "rdi", &ThreadState::rdi },
-        { "rbp", &ThreadState::rbp },
-        { "rsp", &ThreadState::rsp },
-        { "r8", &ThreadState::r8 },
-        { "r9", &ThreadState::r9 },
-        { "r10", &ThreadState::r10 },
-        { "r11", &ThreadState::r11 },
-        { "r12", &ThreadState::r12 },
-        { "r13", &ThreadState::r13 },
-        { "r14", &ThreadState::r14 },
-        { "r15", &ThreadState::r15 },
+        { "rax", &ThreadState::__rax },
+        { "rbx", &ThreadState::__rbx },
+        { "rcx", &ThreadState::__rcx },
+        { "rdx", &ThreadState::__rdx },
+        { "rsi", &ThreadState::__rsi },
+        { "rdi", &ThreadState::__rdi },
+        { "rbp", &ThreadState::__rbp },
+        { "rsp", &ThreadState::__rsp },
+        { "r8", &ThreadState::__r8 },
+        { "r9", &ThreadState::__r9 },
+        { "r10", &ThreadState::__r10 },
+        { "r11", &ThreadState::__r11 },
+        { "r12", &ThreadState::__r12 },
+        { "r13", &ThreadState::__r13 },
+        { "r14", &ThreadState::__r14 },
+        { "r15", &ThreadState::__r15 },
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, state->*(reg.ptr));
-    print_rip(f, state->rip);
-    print_eflags(f, state->rflags);
-    print_segment(f, "fs", state->fs);
-    print_segment(f, "gs", state->gs);
+    print_rip(f, state->__rip);
+    print_eflags(f, state->__rflags);
+    print_segment(f, "fs", state->__fs);
+    print_segment(f, "gs", state->__gs);
 }
 #endif
 

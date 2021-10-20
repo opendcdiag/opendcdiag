@@ -1,6 +1,10 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  */
+#ifdef __APPLE__
+// ucontext.h:43:2: error: #error The deprecated ucontext routines require _XOPEN_SOURCE to be defined
+#  define _XOPEN_SOURCE 1
+#endif
 
 #include "sandstone.h"
 #include "sandstone_p.h"
@@ -10,6 +14,7 @@
 
 #include <initializer_list>
 #include <limits>
+#include <type_traits>
 
 #include <sys/types.h>
 #include <cpuid.h>
@@ -92,7 +97,7 @@ struct CrashContext
     static_assert(std::is_trivially_destructible_v<Fixed>, "Must be trivial to transfer over sockets");
 
     span<uint8_t> xsave_buffer;
-    mcontext_t mc;
+    std::remove_pointer_t<mcontext_t> mc;
     enum Contents {
         NoContents = 0x00,
         FixedContext = 0x01,
@@ -261,8 +266,9 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
 #elif defined(__APPLE__)
     // We're not transferring the XSAVE state...
     vec[1] = { ctx->uc_mcontext, ctx->uc_mcsize };
-    fixed.rip = reinterpret_cast<void *>(mc->ss->__rip);
+    mcontext_t mc = ctx->uc_mcontext;
     fixed.error_code = mc->__es.__err;
+    fixed.rip = reinterpret_cast<void *>(mc->__ss.__rip);
     fixed.trap_nr = mc->__es.__trapno;
     count = 2;
 #endif
