@@ -99,7 +99,7 @@ using AutoClosingHandle = std::unique_ptr<void, HandleCloser>;
 #  define O_CLOEXEC     0
 #endif
 
-#ifndef __GLIBC__
+#if !defined(__GLIBC__) && !defined(fileno_unlocked)
 #  define fileno_unlocked   fileno
 #endif
 
