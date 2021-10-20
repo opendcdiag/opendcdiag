@@ -31,6 +31,10 @@
 #include <ucontext.h>
 #include <unistd.h>
 
+#ifndef MSG_NOSIGNAL
+#  define MSG_NOSIGNAL  0
+#endif
+
 #ifdef __linux__
 #  include <sys/prctl.h>
 #  include <sys/syscall.h>
@@ -381,6 +385,10 @@ static void create_crash_pipe(int xsave_size)
     int ret = fcntl(crashpipe[CrashPipeParent], F_GETFL);
     if (ret >= 0)
         fcntl(crashpipe[CrashPipeParent], F_SETFL, ret | O_NONBLOCK);
+
+#ifdef F_SETNOSIGPIPE
+    fcntl(crashpipe[CrashPipeChild], F_SETNOSIGPIPE, 1);
+#endif
 }
 #endif
 
