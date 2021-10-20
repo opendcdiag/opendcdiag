@@ -65,46 +65,6 @@
 #  define __FLT128_DENORM_MIN__ 6.47517511943802511092443895822764655e-4966F128
 #endif
 
-#ifndef __FLT128_DIG__
-#  define __FLT128_DIG__ 33
-#endif
-#ifndef __FLT128_EPSILON__
-#  define __FLT128_EPSILON__ 1.92592994438723585305597794258492732e-34F128
-#endif
-#ifndef __FLT128_HAS_DENORM__
-#  define __FLT128_HAS_DENORM__ 1
-#endif
-#ifndef __FLT128_HAS_INFINITY__
-#  define __FLT128_HAS_INFINITY__ 1
-#endif
-#ifndef __FLT128_HAS_QUIET_NAN__
-#  define __FLT128_HAS_QUIET_NAN__ 1
-#endif
-#ifndef __FLT128_MANT_DIG__
-#  define __FLT128_MANT_DIG__ 113
-#endif
-#ifndef __FLT128_MAX_10_EXP__
-#  define __FLT128_MAX_10_EXP__ 4932
-#endif
-#ifndef __FLT128_MAX__
-#  define __FLT128_MAX__ 1.18973149535723176508575932662800702e+4932F128
-#endif
-#ifndef __FLT128_MAX_EXP__
-#  define __FLT128_MAX_EXP__ 16384
-#endif
-#ifndef __FLT128_MIN_10_EXP__
-#  define __FLT128_MIN_10_EXP__ (-4931)
-#endif
-#ifndef __FLT128_MIN__
-#  define __FLT128_MIN__ 3.36210314311209350626267781732175260e-4932F128
-#endif
-#ifndef __FLT128_MIN_EXP__
-#  define __FLT128_MIN_EXP__ (-16381)
-#endif
-#ifndef __FLT128_NORM_MAX__
-#  define __FLT128_NORM_MAX__ 1.18973149535723176508575932662800702e+4932F128
-#endif
-
 #define BFLT16_DECIMAL_DIG      3
 #define BFLT16_DENORM_MIN       (0x1p-133)
 #define BFLT16_DIG              2
@@ -256,6 +216,7 @@ private:
 #endif
 };
 
+#ifdef __FLT128_MAX__
 struct Float128
 {
     __float128 payload;
@@ -314,6 +275,7 @@ struct Float128
     { return __builtin_nansf128(""); }
 #endif
 };
+#endif // __FLT128_MAX__
 
 extern Float16 tofp16_emulated(float f);
 extern float fromfp16_emulated(Float16 f);
@@ -420,7 +382,6 @@ template<> struct TypeToDataType<int32_t> : TypeToDataType_helper<Int32Data> {};
 template<> struct TypeToDataType<int64_t> : TypeToDataType_helper<Int64Data> {};
 template<> struct TypeToDataType<__int128_t> : TypeToDataType_helper<Int128Data> {};
 
-template<> struct TypeToDataType<Float128> : TypeToDataType_helper<Float128Data> {};
 template<> struct TypeToDataType<Float16> : TypeToDataType_helper<Float16Data> {};
 template<> struct TypeToDataType<BFloat16> : TypeToDataType_helper<BFloat16Data> {};
 template<> struct TypeToDataType<float> : TypeToDataType_helper<Float32Data> {};
@@ -428,6 +389,7 @@ template<> struct TypeToDataType<double> : TypeToDataType_helper<Float64Data> {}
 template<> struct TypeToDataType<long double> :
         TypeToDataType_helper<sizeof(long double) == sizeof(double) ? Float64Data : Float80Data> {};
 #ifdef __FLT128_MAX__
+template<> struct TypeToDataType<Float128> : TypeToDataType_helper<Float128Data> {};
 template<> struct TypeToDataType<__float128> : TypeToDataType_helper<Float128Data> {};
 #endif
 #ifndef SANDSTONE_FLOAT16_EMULATED
