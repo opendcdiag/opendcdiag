@@ -8,7 +8,8 @@
 
 #include <stdio.h>
 
-#ifdef __unix__
+// macOS doesn't consider itself to be Unix?
+#if defined(__unix__) || defined(__APPLE__)
 #  include <sys/ucontext.h>
 #else
 // do we want to define something for Windows?
@@ -21,7 +22,11 @@ typedef struct {} mcontext_t;
 extern "C" {
 #endif
 
+#ifdef __APPLE__
+extern void dump_gprs(FILE *, const mcontext_t);
+#else
 extern void dump_gprs(FILE *, const mcontext_t *);
+#endif
 extern void dump_xsave(FILE *, const void *xsave_area, size_t xsave_size, int xsave_dump_mask);
 
 #ifdef __cplusplus
