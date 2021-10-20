@@ -10,6 +10,8 @@
 #ifndef INC_SANDSTONE_P_H
 #define INC_SANDSTONE_P_H
 
+#define _DARWIN_C_SOURCE 1
+
 #include <assert.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -445,6 +447,12 @@ struct Pipe
 #ifdef _WIN32
         // Windows won't signal any way
         return _pipe(fds, reserved, _O_BINARY | _O_NOINHERIT);
+#elif defined(__APPLE__)
+        int ret = pipe(fds);
+        if (ret < 0)
+            return ret;
+        fcntl(out(), F_SETNOSIGPIPE, 1);
+        return 0;
 #else
         // pipe2 is a Linux invention but all modern Unix (not macOS) have it too
         int ret = pipe2(fds, O_CLOEXEC | O_NOSIGPIPE);
