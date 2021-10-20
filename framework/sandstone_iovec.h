@@ -38,7 +38,7 @@ template <typename... Args>
     return writev(fd, vec, std::size(vec));
 }
 
-#if _POSIX_VERSION < 200809L && !defined(__GLIBC__)
+#ifdef _WIN32
 [[maybe_unused]] int dprintf(int fd, const char *fmt, ...)
 {
     std::string msg = va_start_and_stdprintf(fmt);
