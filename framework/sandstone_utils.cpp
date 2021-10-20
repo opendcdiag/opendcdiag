@@ -94,8 +94,8 @@ template void check_type_assumptions<_Float16>();
 #endif
 #ifdef __FLT128_MAX__
 template void check_type_assumptions<__float128>();
-#endif
 template void check_type_assumptions<Float128>();
+#endif
 
 string format_single_type(DataType type, int typeSize, const uint8_t *data, bool detailed)
 {
