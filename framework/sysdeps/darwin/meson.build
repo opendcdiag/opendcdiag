@@ -4,6 +4,7 @@ sysdeps_a = static_library(
         sysdeps_unix_files,
 	files(
 		'cpu_affinity.cpp',
+		'malloc.cpp',
 		'../generic/kvm.c',
 		'../generic/memfpt.c',
 		'../generic/msr.c',
