@@ -10,14 +10,12 @@ tests_hsw_set = setmod.source_set()
 tests_skx_set = setmod.source_set()
 
 tests_common_c_args = [
-	win_c_flags,
 	default_c_warn,
 	default_c_flags,
 	debug_c_flags,
 ]
 
 tests_common_cpp_args = [
-	win_c_flags,
 	default_cpp_warn,
 	default_cpp_flags,
 	debug_c_flags,
