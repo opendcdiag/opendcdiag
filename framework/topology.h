@@ -58,7 +58,11 @@ enum class LogicalProcessor : int {};
 class LogicalProcessorSet
 {
 public:
+#if defined(__linux__) || defined(_WIN32)
     static constexpr int Size = 1024;
+#else
+    static constexpr int Size = 256;
+#endif
 
     using Word = unsigned long long;
     Word array[Size / (CHAR_BIT * sizeof(Word))];
