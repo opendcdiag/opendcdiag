@@ -58,7 +58,6 @@ add_project_link_arguments([
 ], language : 'cpp')
 endif
 
-win_c_flags = []
 nasm_system_flags = [
 	'-felf64',
 	'-Xgnu',
@@ -69,7 +68,7 @@ default_c_flags = []
 default_cpp_flags = []
 
 if target_machine.system() == 'windows'
-win_c_flags = [
+add_project_arguments([
 	'-D__STDC_FORMAT_MACROS',
 	'-D__USE_MINGW_ANSI_STDIO',
 	'-D_POSIX',
@@ -77,7 +76,7 @@ win_c_flags = [
 	'-Wa,-mbig-obj',
 	'-include',
 	meson.current_source_dir() + '/framework/sysdeps/win32/win32_stdlib.h',
-]
+], language: [ 'c', 'cpp' ])
 add_project_link_arguments([
 	'-mconsole',
 	'-Wl,--stack,8388608',
@@ -228,7 +227,6 @@ executable(
 		framework_incdir,
 	],
 	cpp_args : [
-		win_c_flags,
 		default_cpp_warn,
 		default_cpp_flags,
 	],

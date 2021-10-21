@@ -23,12 +23,10 @@ sysdeps_a = static_library(
 		framework_incdir,
 	],
 	c_args : [
-		win_c_flags,
 		default_c_flags,
 		default_c_warn,
 	],
 	cpp_args : [
-		win_c_flags,
 		default_cpp_flags,
 		default_cpp_warn,
 	],
