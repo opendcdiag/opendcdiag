@@ -1300,7 +1300,9 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
             // on forkfd_wait() until it finally does exit
         } else {
             /* child has exited */
+#ifndef __FreeBSD__
             assert(pfd[0].revents & POLLIN);
+#endif
         }
 
         EINTR_LOOP(ret, forkfd_wait(pfd[0].fd, &info, nullptr));
