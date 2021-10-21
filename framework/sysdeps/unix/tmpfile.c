@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>           /* memfd_create is here on FreeBSD */
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -18,7 +19,9 @@
 #include <inttypes.h>
 
 #if !defined(__linux__)
-#  define memfd_create(name, flags)     -1
+#  ifndef MFD_CLOEXEC
+#    define memfd_create(name, flags)   -1
+#  endif
 #  define gettid()                      getpid()
 #else
 #  define gettid()                      syscall(SYS_gettid)
