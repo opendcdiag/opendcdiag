@@ -119,7 +119,8 @@ private:
 
 enum CrashAction : uint8_t {
     coredump_on_crash       = 0x01,
-    backtrace_on_crash      = 0x02,
+    context_on_crash        = 0x02,
+    backtrace_on_crash      = 0x06,
     attach_gdb_on_crash     = 0x10,
     kill_on_crash           = 0x20,
 };
@@ -355,7 +356,7 @@ static bool check_gdb_available()
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
-static void create_crash_pipe()
+static void create_crash_pipe(int xsave_size)
 {
     int socktype = SOCK_DGRAM;
 #ifdef SOCK_CLOEXEC
@@ -770,8 +771,10 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
             handle = 0;
     }
 
-    // generate the backtrace as a second step
-    generate_backtrace(pidstr, handle, cpu);
+    if ((on_crash_action & backtrace_on_crash) == backtrace_on_crash) {
+        // generate the backtrace as a second stepping
+        generate_backtrace(pidstr, handle, cpu);
+    }
 
     // now include the register state
     if (handle && ctx.contents & CrashContext::MachineContext) {
@@ -843,22 +846,26 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             }
         }
     } else {
+#  ifdef __linux__
         // do we have gdb?
         if (gdb_available == -1)
             gdb_available = check_gdb_available();
         if (gdb_available)
             on_crash_action = backtrace_on_crash;
+#  else
+        on_crash_action = context_on_crash;
+#  endif
     }
 
     if (on_crash_action & (backtrace_on_crash | attach_gdb_on_crash)) {
-        create_crash_pipe();
-
         // get the size of the context to transfer
         uint32_t eax, ebx, ecx, edx;
         if (__get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx))
             xsave_size = ebx;
         else
             xsave_size = FXSAVE_SIZE;
+
+        create_crash_pipe(xsave_size);
     }
 #endif
 
