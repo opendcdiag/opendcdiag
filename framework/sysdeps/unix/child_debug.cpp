@@ -85,7 +85,7 @@ struct CrashContext
 #ifdef __linux__
         tid_t handle = sys_gettid();
 #else
-        pthread_t handle = pthread_self();
+        uintptr_t handle = reinterpret_cast<uintptr_t>(pthread_self());
 #endif
     } fixed;
     static_assert(std::is_trivially_copyable_v<Fixed>, "Must be trivial to transfer over sockets");
@@ -251,8 +251,8 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     // On FreeBSD, the XSAVE area is split into two chunks, so we transfer
     // everything, including pointers. We put it together in the parent process.
     mcontext_t *mc = &ctx->uc_mcontext;
-    vec[1] = { mc, size_t(mc->mc_len)) };
-    vec[2] = { reinterpret_cast<void *>(mc->mc_xfpustate), mc->mc_xfpustate_len };
+    vec[1] = { mc, size_t(mc->mc_len) };
+    vec[2] = { reinterpret_cast<void *>(mc->mc_xfpustate), size_t(mc->mc_xfpustate_len) };
     fixed.rip = reinterpret_cast<void *>(mc->mc_rip);
     fixed.error_code = mc->mc_err;
     fixed.trap_nr = mc->mc_trapno;
@@ -269,10 +269,9 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     if ((on_crash_action & backtrace_on_crash) == 0)
         count = 1;
 
-    struct msghdr hdr = {
-        .msg_iov = vec,
-        .msg_iovlen = count
-    };
+    struct msghdr hdr = {};
+    hdr.msg_iov = vec;
+    hdr.msg_iovlen = count;
     IGNORE_RETVAL(sendmsg(sockfd, &hdr, MSG_NOSIGNAL));
 }
 
@@ -295,15 +294,14 @@ void CrashContext::receive_internal(int sockfd)
         // not tested
         gpr_size = sizeof(mc);
         vec[1] = { &mc, gpr_size };
-        vec[2] = { buffer + Fxsave::size, size_t(xsave_len - Fxsave::size) };
+        vec[2] = { xsave_buffer.data() + FXSAVE_SIZE, xsave_buffer.size() - FXSAVE_SIZE };
         count = 3;
 #endif
     }
 
-    struct msghdr hdr = {
-        .msg_iov = vec,
-        .msg_iovlen = count
-    };
+    struct msghdr hdr = {};
+    hdr.msg_iov = vec;
+    hdr.msg_iovlen = count;
     ssize_t ret = recvmsg(sockfd, &hdr, 0);
     contents = NoContents;
     ret -= sizeof(fixed);
@@ -321,9 +319,9 @@ void CrashContext::receive_internal(int sockfd)
 
 #ifdef __FreeBSD__
         // need to move some stuff around
-        if (ret == mc->mc_xfpustate_len) {
-            memcpy(xsave_buffer.data(), mc->mc_fpstate, sizeof(mc->fpstate));
-            ret = sizeof(mc->fpstate) + mc->mc_xfpustate_len;
+        if (ret == mc.mc_xfpustate_len) {
+            memcpy(xsave_buffer.data(), mc.mc_fpstate, sizeof(mc.mc_fpstate));
+            ret = sizeof(mc.mc_fpstate) + mc.mc_xfpustate_len;
         } else {
             ret = 0;
         }
