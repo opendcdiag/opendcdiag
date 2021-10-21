@@ -56,7 +56,7 @@ public:
     bool allocate(size_t size) {
         free_code_buffer();
         buffer_ptr = static_cast<uint8_t *>(
-                mmap(nullptr, ROUND_UP_TO_PAGE(size), (PROT_READ | PROT_WRITE), (MAP_ANONYMOUS | MAP_PRIVATE), 0, 0)
+                mmap(nullptr, ROUND_UP_TO_PAGE(size), (PROT_READ | PROT_WRITE), (MAP_ANONYMOUS | MAP_PRIVATE), -1, 0)
         );
         buffer_size = (is_valid()) ? size : 0;
         return is_valid();
@@ -66,7 +66,7 @@ public:
     bool allocate_at(void * at_address, size_t size){
         free_code_buffer();
         buffer_ptr = static_cast<uint8_t *>(
-                mmap(at_address, size, (PROT_READ | PROT_WRITE), (MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED), 0, 0)
+                mmap(at_address, size, (PROT_READ | PROT_WRITE), (MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED), -1, 0)
         );
         buffer_size = (is_valid()) ? size : 0;
         return is_valid();
@@ -77,7 +77,7 @@ public:
     bool allocate_near(void * at_address, size_t size){
         free_code_buffer();
         buffer_ptr = static_cast<uint8_t *>(
-                mmap(at_address, size, (PROT_READ | PROT_WRITE), (MAP_ANONYMOUS | MAP_PRIVATE ), 0, 0)
+                mmap(at_address, size, (PROT_READ | PROT_WRITE), (MAP_ANONYMOUS | MAP_PRIVATE ), -1, 0)
         );
         buffer_size = (is_valid()) ? size : 0;
         return is_valid();
