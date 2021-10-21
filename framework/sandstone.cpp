@@ -1869,7 +1869,7 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
     if (!topology.isValid()) {
         // can't use this information
         if (all_cpus_failed_equally)
-            logging_printf(LOG_LEVEL_VERBOSE(1), "# All failing CPUs failed equally.");
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# All failing CPUs failed equally.\n");
     } else {
         // valid topology, we can do more a interesting analysis
         logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
