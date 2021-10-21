@@ -27,7 +27,7 @@ int internal_main(int argc, char **argv);
 
 #if defined(AT_EXECPATH) && !defined(AT_EXECFN)
 // FreeBSD uses AT_EXECPATH instead of AT_EXECFN
-#  define AT_EXECFN AT_EXECPATH
+//#  define AT_EXECFN AT_EXECPATH
 #endif
 #if defined(AT_EXECFN)
 #  if !defined(__GLIBC_PREREQ) || !__GLIBC_PREREQ(2, 16)
