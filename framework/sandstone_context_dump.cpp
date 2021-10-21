@@ -233,24 +233,24 @@ void dump_gprs(FILE *f, const mcontext_t *mc)
     using register_t = decltype(mc->mc_rax);
     static constexpr struct {
         char name[4];
-        register_t mcontext:: *ptr;
+        register_t mcontext_t:: *ptr;
     } registers[] = {
-        { "rax", &mcontext::mc_rax },
-        { "rbx", &mcontext::mc_rbx },
-        { "rcx", &mcontext::mc_rcx },
-        { "rdx", &mcontext::mc_rdx },
-        { "rsi", &mcontext::mc_rsi },
-        { "rdi", &mcontext::mc_rdi },
-        { "rbp", &mcontext::mc_rbp },
-        { "rsp", &mcontext::mc_rsp },
-        { "r8", &mcontext::mc_r8 },
-        { "r9", &mcontext::mc_r9 },
-        { "r10", &mcontext::mc_r10 },
-        { "r11", &mcontext::mc_r11 },
-        { "r12", &mcontext::mc_r12 },
-        { "r13", &mcontext::mc_r13 },
-        { "r14", &mcontext::mc_r14 },
-        { "r15", &mcontext::mc_r15 },
+        { "rax", &mcontext_t::mc_rax },
+        { "rbx", &mcontext_t::mc_rbx },
+        { "rcx", &mcontext_t::mc_rcx },
+        { "rdx", &mcontext_t::mc_rdx },
+        { "rsi", &mcontext_t::mc_rsi },
+        { "rdi", &mcontext_t::mc_rdi },
+        { "rbp", &mcontext_t::mc_rbp },
+        { "rsp", &mcontext_t::mc_rsp },
+        { "r8", &mcontext_t::mc_r8 },
+        { "r9", &mcontext_t::mc_r9 },
+        { "r10", &mcontext_t::mc_r10 },
+        { "r11", &mcontext_t::mc_r11 },
+        { "r12", &mcontext_t::mc_r12 },
+        { "r13", &mcontext_t::mc_r13 },
+        { "r14", &mcontext_t::mc_r14 },
+        { "r15", &mcontext_t::mc_r15 },
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, mc->*(reg.ptr));
