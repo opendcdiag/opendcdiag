@@ -359,6 +359,12 @@ static void create_crash_pipe()
     if (socketpair(AF_UNIX, socktype, 0, crashpipe) == -1)
         return;
 
+    // set the buffer sizes
+    xsave_size += sizeof(CrashContext::Fixed) + sizeof(CrashContext::mc);
+    xsave_size = ROUND_UP_TO(xsave_size, 1024U);
+    setsockopt(crashpipe[CrashPipeParent], SOL_SOCKET, SO_RCVBUF, &xsave_size, sizeof(xsave_size));
+    setsockopt(crashpipe[CrashPipeChild], SOL_SOCKET, SO_SNDBUF, &xsave_size, sizeof(xsave_size));
+
     // set the parent end to non-blocking and leave the child end blocking
     int ret = fcntl(crashpipe[CrashPipeParent], F_GETFL);
     if (ret >= 0)
