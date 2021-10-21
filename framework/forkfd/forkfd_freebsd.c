@@ -56,7 +56,7 @@ int system_forkfd(int flags, pid_t *ppid, int *system)
     if (state < 0)
         return -1;
 
-    pid = pdfork(&ret, PD_DAEMON);
+    pid = pdfork(&ret, PD_DAEMON | PD_CLOEXEC);
 #  if __FreeBSD__ == 9
     if (state == 0 && pid != 0) {
         /* Parent process: remember whether PROCDESC was compiled into the kernel */
@@ -76,8 +76,8 @@ int system_forkfd(int flags, pid_t *ppid, int *system)
     }
 
     /* parent process */
-    if (flags & FFD_CLOEXEC)
-        fcntl(ret, F_SETFD, FD_CLOEXEC);
+    if ((flags & FFD_CLOEXEC) == 0)
+        fcntl(ret, F_SETFD, 0);
     if (flags & FFD_NONBLOCK)
         fcntl(ret, F_SETFL, fcntl(ret, F_GETFL) | O_NONBLOCK);
     if (ppid)
