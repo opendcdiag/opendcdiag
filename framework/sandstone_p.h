@@ -450,6 +450,7 @@ struct Pipe
         int ret = pipe2(fds, O_CLOEXEC | O_NOSIGPIPE);
         if (ret < 0)
             return ret;
+#  ifdef F_SETPIPE_SZ
         if (reserved > PIPE_BUF) {
             int ret = fcntl(out(), F_GETPIPE_SZ);
             if (ret >= 0 && ret < reserved) {
@@ -457,6 +458,7 @@ struct Pipe
                 fcntl(out(), F_SETPIPE_SZ, reserved);
             }
         }
+#  endif
         return 0;
 #endif
     }
