@@ -471,6 +471,8 @@ static inline long double frandoml()
 static inline void *aligned_alloc_safe(size_t alignment, size_t size)
 {
     extern void *aligned_alloc(size_t, size_t); // in case it isn't defined
+    if (alignment < sizeof(void*))
+        alignment = sizeof(void*);
     size_t aligned_size = (size / alignment) * alignment;
     if (aligned_size < size)
         aligned_size += alignment;
