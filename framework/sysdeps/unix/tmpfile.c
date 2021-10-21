@@ -56,7 +56,12 @@ static int try_open_regular_tmpfile(const char *dir, int ocloexec)
     if (dir == NULL)
         return -1;
 
-    if (asprintf(&name, "%s/tmpfile.%" PRIdMAX ".%u", dir, (intmax_t)gettid(), atomic_fetch_add(&seq_nr, 1)) < 0)
+    const char *tool_name = strrchr(program_invocation_name, '/');
+    if (!tool_name)
+        tool_name = program_invocation_name;
+
+    if (asprintf(&name, "%s/%s.tmp.%" PRIdMAX ".%u", dir, tool_name,
+                 (intmax_t)gettid(), atomic_fetch_add(&seq_nr, 1)) < 0)
         return -1;
     fd = open(name, O_RDWR | O_CREAT | O_EXCL | ocloexec, 0600);
     saved_errno = errno;
