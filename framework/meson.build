@@ -113,6 +113,9 @@ framework_core_a = static_library(
 	include_directories : [
 		framework_incdir,
 	],
+	objects: [
+		sysdeps_a.extract_all_objects(recursive: true),
+	],
 	c_args : [
 		march_base,
 		'-mtune=skylake',
