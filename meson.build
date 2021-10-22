@@ -196,8 +196,6 @@ generated_gitid_h = configure_file(
 )
 
 # Subdirs add (static) libraries to these arrays for linking
-framework_main = []
-
 sandstone_tests = []
 sandstone_tests_link = []
 sandstone_tests_link_whole = []
@@ -214,11 +212,10 @@ executable(
 	install : true,
 	dependencies : target_deps,
 	link_with : [
-		framework_core_a,
-		framework_main,
 		sandstone_tests_link,
 	],
 	link_whole : [
+		framework_a,
 		sandstone_tests_link_whole,
 	],
 	include_directories : [
@@ -255,7 +252,6 @@ executable(
 summary({
 		'Logging format': get_option('logging_format'),
 		'Min architecture': get_option('march_base'),
-		'Using main function': framework_main.name(),
 		'Using -march': march_base,
 		'Static libstdc++': get_option('static_libstdcpp'),
 		'Executable name': get_option('executable_name'),

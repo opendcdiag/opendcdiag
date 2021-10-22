@@ -60,8 +60,6 @@ framework_main_a = static_library(
 	],
 )
 
-framework_main = framework_main_a
-
 framework_files = files(
 	'Floats.c',
 	'generated_vectors.c',
@@ -106,8 +104,8 @@ else
 	warning('Requested logging_format unknown, using hard-coded default format')
 endif
 
-framework_core_a = static_library(
-	'framework_core',
+framework_a = static_library(
+	'framework',
 	framework_files,
 	build_by_default: false,
 	include_directories : [
@@ -115,6 +113,7 @@ framework_core_a = static_library(
 	],
 	objects: [
 		sysdeps_a.extract_all_objects(recursive: true),
+		framework_main_a.extract_all_objects(recursive: false),
 	],
 	c_args : [
 		march_base,
