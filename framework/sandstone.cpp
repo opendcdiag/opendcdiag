@@ -65,7 +65,6 @@
 #include "forkfd.h"
 
 #include "sandstone_tests.h"
-#include "sandstone_test_groups_p.h"
 #include "sandstone_utils.h"
 #include "topology.h"
 
