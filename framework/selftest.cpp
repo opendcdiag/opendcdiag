@@ -360,7 +360,7 @@ static void cause_sigill()
     // make sure there are no function calls between the instruction above and the one below
 
     asm volatile(
-#ifdef __clang__
+#if defined(__clang__) || defined(__APPLE__)
                 "ud2" : :           // clang's integrated assembler doesn't support ud1
 #else
                 "ud1 %0, %1" : :
