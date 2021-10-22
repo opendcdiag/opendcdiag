@@ -8,7 +8,7 @@
 #ifndef WIN32_STDLIB_H
 #define WIN32_STDLIB_H
 
-asm(".include \"framework/sysdeps/win32/macros.S\"");
+asm(".include \"framework/sysdeps/windows/macros.S\"");
 
 #define _CRT_RAND_S
 #include <stdlib.h>
