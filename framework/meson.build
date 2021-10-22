@@ -3,8 +3,8 @@
 framework_base_incdirs = ['..', '.', 'test_selectors', ]
 
 if target_machine.system() == 'windows'
-	framework_incdir = include_directories([ 'sysdeps/win32' ] + framework_base_incdirs)
-	subdir('sysdeps/win32')
+	framework_incdir = include_directories([ 'sysdeps/windows' ] + framework_base_incdirs)
+	subdir('sysdeps/windows')
 	sysdeps_unix_a = []
 else
 	framework_incdir = include_directories([ 'sysdeps/linux' ] + framework_base_incdirs)

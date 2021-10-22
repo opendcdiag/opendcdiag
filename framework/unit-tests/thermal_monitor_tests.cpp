@@ -109,7 +109,7 @@ namespace LinuxTesting {
 // We will populate this when we implement it
 namespace WindowsBuild {
 
-#include "sysdeps/win32/thermal_monitor.hpp"
+#include "sysdeps/windows/thermal_monitor.hpp"
 
     class WindowsThermalFixture : public ::testing::Test {
     };

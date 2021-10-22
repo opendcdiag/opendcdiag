@@ -75,7 +75,7 @@ add_project_arguments([
 	'-D_WIN32_WINNT=0x0A00',
 	'-Wa,-mbig-obj',
 	'-include',
-	meson.current_source_dir() + '/framework/sysdeps/win32/win32_stdlib.h',
+	meson.current_source_dir() + '/framework/sysdeps/windows/win32_stdlib.h',
 ], language: [ 'c', 'cpp' ])
 add_project_link_arguments([
 	'-mconsole',
