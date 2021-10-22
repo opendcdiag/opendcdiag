@@ -2,6 +2,7 @@
 
 _sysdeps_a = static_library(
 	'sysdeps_linux',
+        sysdeps_unix_files,
 	files(
 		'cpu_affinity.cpp',
 		'interrupt_monitor.cpp',

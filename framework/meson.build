@@ -1,16 +1,16 @@
+# -*- indent-tabs-mode: t -*-
 # SPDX-License-Identifier: Apache-2.0
 
-framework_base_incdirs = ['..', '.', 'test_selectors', ]
-
-if target_machine.system() == 'windows'
-	framework_incdir = include_directories([ 'sysdeps/windows' ] + framework_base_incdirs)
-	subdir('sysdeps/windows')
-	sysdeps_unix_a = []
-else
-	framework_incdir = include_directories([ 'sysdeps/linux' ] + framework_base_incdirs)
+framework_incdir = include_directories([
+	'sysdeps/' + target_machine.system(),
+	'..',
+	'.',
+	'test_selectors',
+])
+if target_machine.system() != 'windows'
 	subdir('sysdeps/unix')
-	subdir('sysdeps/linux')
 endif
+subdir('sysdeps/' + target_machine.system())
 
 generated_cpu_features_h = configure_file(
 	output : 'cpu_features.h',

@@ -215,7 +215,6 @@ executable(
 	dependencies : target_deps,
 	link_with : [
 		sysdeps_a,
-		sysdeps_unix_a,
 		framework_core_a,
 		framework_main,
 		sandstone_tests_link,
