@@ -74,6 +74,49 @@ static uint64_t adjusted_xcr0(uint64_t xcr0, uint64_t xcr0_wanted)
     }
     return xcr0;
 }
+#elif defined(__linux__)
+#  include <sys/syscall.h>
+#  include <asm/prctl.h>
+#  ifndef ARCH_GET_XCOMP_SUPP
+#    define ARCH_GET_XCOMP_SUPP     0x1021
+#    define ARCH_GET_XCOMP_PERM     0x1022
+#    define ARCH_REQ_XCOMP_PERM     0x1023
+#  endif // ARCH_GET_XCOMP_SUPP
+static uint64_t adjusted_xcr0(uint64_t xcr0, uint64_t xcr0_wanted)
+{
+    static const uint64_t KernelNonDynamicXSave = XSave_Xtilecfg - 1;
+
+    // Linux doesn't hide XCR0 bits
+    xcr0 &= xcr0_wanted;
+
+    // Check if we need to make a dynamic XSAVE request
+    if ((xcr0_wanted & ~KernelNonDynamicXSave) == 0)
+        return xcr0;            // no, XCR0 is accurate
+
+    // dynamic XSAVE support required, ask for everything
+    uint64_t feature_nr = 63 - __builtin_clzll(xcr0_wanted);
+    if (syscall(SYS_arch_prctl, ARCH_REQ_XCOMP_PERM, feature_nr) == 0)
+        return xcr0_wanted;     // we got it
+
+    // Either ARCH_REQ_XCOMP_PERM isn't supported or the kernel doesn't support
+    // XSAVE'ing the feature we asked for (and we can't tell from the errno, since
+    // it returns EINVAL for both situations). Ask the kernel what it does support.
+    uint64_t xcr0_supported;
+    if (syscall(SYS_arch_prctl, ARCH_GET_XCOMP_SUPP, &xcr0_supported) == 0) {
+        // The call is supported (Linux >= 5.16). Ask for the highest bit that
+        // we want and the kernel supports.
+        xcr0_wanted &= xcr0_supported;
+        feature_nr = 63 - __builtin_clzll(xcr0_wanted);
+        if (syscall(SYS_arch_prctl, ARCH_REQ_XCOMP_PERM, feature_nr) == 0)
+            return xcr0_wanted;     // we got it
+    }
+
+    // Either Linux < 5.16 or the kernel failed to enable what it told us it
+    // supported (can happen if something else has installed a sigaltstack()
+    // that is too small).
+    xcr0 &= KernelNonDynamicXSave;
+    return xcr0;
+}
 #else
 static uint64_t adjusted_xcr0(uint64_t xcr0, uint64_t xcr0_wanted)
 {
@@ -171,9 +214,10 @@ static void detect_cpu(struct cpu_basic_info *basic_info)
             xcr0 = adjusted_xcr0(xcr0, xcr0_wanted);
         }
 
-        // AMX state-saving is not present in the OS, disable the AMX-requiring
-        // features. We may want to revert this change in the future.
-        if ((xcr0_wanted & XSave_AmxState) != (xcr0 & XSave_AmxState)) {
+        // Check what XSAVE features this OS supports and we're allowed to use.
+        // For AMX, we (currently) allow gracefully degrading. For AVX512 and
+        // earlier, we stop execution.
+        if ((xcr0 & XSave_AmxState) != XSave_AmxState) {
             xcr0_wanted &= ~XSave_AmxState;
             features &= ~XSaveReq_AmxState;
         }
