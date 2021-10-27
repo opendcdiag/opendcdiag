@@ -36,10 +36,10 @@ struct cpu_basic_info {
  * you prefer the framework to check for system or CPU criteria and exit() if
  * those criteria are not met.
  */
-void is_system_supported(const struct cpu_basic_info&);
+void is_system_supported(const struct cpu_basic_info *);
 
 __attribute__((weak))
-void is_system_supported(const struct cpu_basic_info& basic_info) { }
+void is_system_supported(const struct cpu_basic_info *basic_info) { }
 
 #ifdef __APPLE__
 /*
