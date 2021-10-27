@@ -102,6 +102,13 @@ static uint64_t parse_register(enum X86CpuidLeaves leaf, uint32_t reg)
 #  define cpuid_errmsg(id, msg)         fputs(msg, stderr)
 #endif
 
+__attribute__((cold, noreturn))
+static void detect_cpu_not_supported(const char *msg)
+{
+    cpuid_errmsg(MSG_OS_Not_Supported, msg);
+    exit(EX_CONFIG);
+}
+
 __attribute__((noinline))
 static void detect_cpu(struct cpu_basic_info *basic_info)
 {
@@ -123,10 +130,8 @@ static void detect_cpu(struct cpu_basic_info *basic_info)
     if (ecx & (1<<26)) {
         // CPU supports XSAVE
         osxsave = true;
-        if ((ecx & (1<<27)) == 0) {     // OSXSAVE
-            cpuid_errmsg(MSG_OS_Not_Supported, "This OS did not enable XSAVE support. Cannot run.\n");
-            exit(EX_CONFIG);
-        }
+        if ((ecx & (1<<27)) == 0)           // OSXSAVE
+            detect_cpu_not_supported("This OS did not enable XSAVE support. Cannot run.\n");
     }
 
     if (max_level >= 7) {
@@ -166,11 +171,10 @@ static void detect_cpu(struct cpu_basic_info *basic_info)
             features &= ~XSaveReq_AmxState;
         }
 
-        if (xcr0_wanted && (xcr0 & xcr0_wanted) != xcr0_wanted) {
-            cpuid_errmsg(MSG_OS_Not_Supported,
-                         "This kernel did not enable necessary AVX or AMX state-saving. Cannot run.\n");
-            exit(EX_CONFIG);
-        }
+        if (xcr0_wanted && (xcr0 & xcr0_wanted) != xcr0_wanted)
+            detect_cpu_not_supported("This kernel did not enable necessary AVX or AMX state-saving."
+                                     " Cannot run.\n");
+
     }
 
     __cpuid(0x80000000, eax, ebx, ecx, edx);
