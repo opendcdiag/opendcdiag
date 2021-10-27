@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <assert.h>
+#include <errno.h>
 #ifndef __cplusplus
 #include <stdbool.h>
 #endif
@@ -150,9 +152,8 @@ static void detect_cpu(struct cpu_basic_info *basic_info)
     features |= parse_register(Leaf80000001hECX, ecx);
 
     if (osxsave) {
-        uint32_t xcr0, xcr0_high;
+        uint64_t xcr0 = 0;
         uint64_t xcr0_wanted = 0;
-        asm("xgetbv" : "=a" (xcr0), "=d" (xcr0_high) : "c" (0));
 
         if (features & XSaveReq_AvxState)
             xcr0_wanted |= XSave_AvxState;
@@ -161,7 +162,14 @@ static void detect_cpu(struct cpu_basic_info *basic_info)
         if (features & XSaveReq_AmxState)
             xcr0_wanted |= XSave_AmxState;
 
-        xcr0 = adjusted_xcr0(xcr0, xcr0_wanted);
+        if (xcr0_wanted) {
+            uint32_t xcr0_low, xcr0_high;
+            asm("xgetbv" : "=a" (xcr0_low), "=d" (xcr0_high) : "c" (0));
+            xcr0 = xcr0_low;
+            if (xcr0_wanted != (uint32_t)xcr0_wanted)
+                xcr0 |= (uint64_t)xcr0_high << 32;      // don't discard %edx
+            xcr0 = adjusted_xcr0(xcr0, xcr0_wanted);
+        }
 
         // AMX state-saving is not present in the OS, disable the AMX-requiring
         // features. We may want to revert this change in the future.
