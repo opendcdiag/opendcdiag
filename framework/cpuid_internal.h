@@ -115,7 +115,9 @@ static uint64_t adjusted_xcr0(uint64_t xcr0, uint64_t xcr0_wanted)
     // Either Linux < 5.16 or the kernel failed to enable what it told us it
     // supported (can happen if something else has installed a sigaltstack()
     // that is too small).
+#  ifndef LINUX_COMPAT_PRE_5_16_AMX_SUPPORT
     xcr0 &= KernelNonDynamicXSave;
+#  endif
     return xcr0;
 }
 #else
