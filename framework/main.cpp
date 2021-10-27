@@ -115,7 +115,7 @@ int main(int argc, char **argv)
     if (minimum_cpu_features & ~cpu_features)
         fallback_exec(argv);
     check_missing_features(cpu_features, minimum_cpu_features);
-    is_system_supported(cpu_info);
+    is_system_supported(&cpu_info);
 
     return internal_main(argc, argv);
 }
