@@ -35,6 +35,7 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
 // ------------------------------
 // Helper Methods
 // ------------------------------
+__attribute__((unused))
 static std::ostream &operator<<(std::ostream &s, TestKnobValue value)
 {
     std::visit([&s](auto v) { s << v; }, value);

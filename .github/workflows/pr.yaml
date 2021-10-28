@@ -14,8 +14,8 @@ jobs:
     steps:
     - name: Install distro packages
       run: |
-        apt-get -y update
-        apt-get -y install libboost-dev zlib1g-dev libgtest-dev libeigen3-dev libzstd-dev ninja-build meson
+        DEBIAN_FRONTEND=noninteractive apt-get -y update
+        DEBIAN_FRONTEND=noninteractive apt-get -y install libboost-dev zlib1g-dev libgtest-dev libeigen3-dev libzstd-dev ninja-build meson
     - uses: actions/checkout@v2
     - name: meson setup
       run: meson setup builddir
@@ -23,4 +23,8 @@ jobs:
       run: ninja -C builddir
     - name: ninja build unittests
       run: ninja -C builddir unittests
+    - name: run unittests
+      run: |
+        ./builddir/unittests \
+          --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
 
