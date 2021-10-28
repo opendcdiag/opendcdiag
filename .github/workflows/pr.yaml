@@ -23,4 +23,8 @@ jobs:
       run: ninja -C builddir
     - name: ninja build unittests
       run: ninja -C builddir unittests
+    - name: run unittests
+      run: |
+        ./builddir/unittests \
+          --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
 
