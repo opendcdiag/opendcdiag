@@ -353,9 +353,9 @@ DECLARE_TEST(vector_add, "Repeatedly add arrays of unsigned integers using AVX-5
 END_DECLARE_TEST
 ```
 
-This new test makes more use of the sandstone framework than the first test and
-we'll discuss each of the differences below. First, however, let's build it.
-This can be done by adding the following lines to the
+This new test makes more use of the OpenDCDiag framework than the first test
+and we'll discuss each of the differences below. First, however, let's build
+it. This can be done by adding the following lines to the
 [meson.build](../tests/meson.build) file in the tests directory and rebuilding.
 
 ```
@@ -379,7 +379,7 @@ with the same compile options and this has some implications.
 1. The framework and tests added to tests_base_set are compiled with
 -march=haswell by default.  This default can be overridden via the march_base
 meson option.
-2. The sandstone binary is only guaranteed to run correctly on machines that
+2. The OpenDCDiag binary is only guaranteed to run correctly on machines that
 support the base architecture or greater. If run on older machines, it will
 crash with SIGILL.
 3. Test writers adding new tests that use features of the CPU not present in
@@ -398,7 +398,7 @@ prevent it from executing. The end result could be that OpenDCDiag would fail
 to start when run on a machine that just supported the base architecture. For this reason,
 global statics are not allowed in OpenDCDiag tests. Note that some of the C++
 standard library header files define global statics, e.g., \<iostream\>, so the
-inclusion of such files in sandstone tests is not permitted.
+inclusion of such files in OpenDCDiag tests is not permitted.
 
 ### Running vector_add
 
