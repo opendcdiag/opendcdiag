@@ -12,6 +12,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include "cpu_features.h"
+#include "sandstone_p.h"
 
 #ifndef signature_INTEL_ebx     /* cpuid.h lacks include guards */
 #  include <cpuid.h>
