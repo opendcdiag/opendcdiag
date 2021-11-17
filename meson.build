@@ -232,7 +232,7 @@ executable(
 	],
 )
 
-executable(
+unittests = executable(
 	'unittests',
 	files(
 		'framework/sysdeps/linux/malloc.cpp',
@@ -253,6 +253,8 @@ executable(
 	build_by_default : false,
 	native : true,
 )
+
+test('Unit Tests', unittests)
 
 summary({
 		'Logging format': get_option('logging_format'),
