@@ -689,12 +689,12 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
     }
 
     if (ctx.rip == ctx.crash_address)
-        log_message(cpu, SANDSTONE_LOG_ERROR "Received signal %d (%s) code=%s, RIP = %p",
-                    ctx.signum, strsignal(ctx.signum), code_string_fn(ctx.signal_code),
+        log_message(cpu, SANDSTONE_LOG_ERROR "Received signal %d (%s) code=%d (%s), RIP = %p",
+                    ctx.signum, strsignal(ctx.signum), ctx.signal_code, code_string_fn(ctx.signal_code),
                     ctx.rip);
     else
-        log_message(cpu, SANDSTONE_LOG_ERROR "Received signal %d (%s) code=%s, RIP = %p, CR2 = %p",
-                    ctx.signum, strsignal(ctx.signum), code_string_fn(ctx.signal_code),
+        log_message(cpu, SANDSTONE_LOG_ERROR "Received signal %d (%s) code=%d (%s), RIP = %p, CR2 = %p",
+                    ctx.signum, strsignal(ctx.signum), ctx.signal_code, code_string_fn(ctx.signal_code),
                     ctx.rip, ctx.crash_address);
 
     return true;
