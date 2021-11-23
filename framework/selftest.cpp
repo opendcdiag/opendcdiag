@@ -435,6 +435,11 @@ static void cause_sigsegv_instruction()
     asm volatile ("jmp *%0" : : "r" (ptr));
 }
 
+static void cause_sigtrap_int3()
+{
+    asm volatile("int3");
+}
+
 #ifdef _WIN32
 static void raise_fastfail()
 {
@@ -888,6 +893,13 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .description = "Crashes with SIGSEGV (instruction)",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigsegv_instruction>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_sigtrap_int3",
+    .description = "Crashes with SIGTRAP (int3 instruction)",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crash_run<cause_sigtrap_int3>,
     .desired_duration = -1,
 },
 #ifdef _WIN32

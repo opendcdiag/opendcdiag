@@ -698,6 +698,23 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         return generic_code_string(code);
     };
 
+    auto sigtrap_code_string = [](int code) {
+        switch (code) {
+        case TRAP_BRKPT: return "TRAP_BRKPT";
+        case TRAP_TRACE: return "TRAP_TRACE";
+#ifdef TRAP_BRANCH      // added on 2.6.28
+        case TRAP_BRANCH: return "TRAP_BRANCH";
+#endif
+#ifdef TRAP_HWBKPT
+        case TRAP_HWBKPT: return "TRAP_HWBKPT";
+#endif
+#ifdef TRAP_UNK
+        case TRAP_UNK: return "TRAP_UNK";
+#endif
+        }
+        return generic_code_string(code);
+    };
+
     const char *(*code_string_fn)(int) = nullptr;
     (void)code_string_fn;
 
@@ -722,6 +739,10 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
 
     case SIGBUS:
         code_string_fn = sigbus_code_string;
+        break;
+
+    case SIGTRAP:
+        code_string_fn = sigtrap_code_string;
         break;
 
     default:
@@ -906,6 +927,8 @@ void debug_init_child()
         for (int signum : { SIGILL, SIGABRT, SIGFPE, SIGBUS, SIGSEGV }) {
             sigaction(signum, &action, nullptr);
         }
+        if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test)
+            sigaction(SIGTRAP, &action, nullptr);
     }
 }
 
