@@ -401,12 +401,30 @@ static void cause_sigbus()
     close(fd);
 }
 
-static void cause_sigsegv()
+static void cause_sigsegv_null()
+{
+    // not exactly null, but first page
+    uintptr_t ptr = rand() & 0xfff;
+    int result;
+    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
+}
+
+static void cause_sigsegv_kernel()
 {
     uintptr_t ptr = ~uintptr_t(0) - 64 * 1024 * 1024;
     ptr += rand() & 0xfff;
     int result;
     asm volatile ("mov%z0 (%1), %0" : "=r" (result) : "r" (ptr));
+}
+
+static void cause_sigsegv_noncanonical()
+{
+    // even with Linear Address Masking (LAM), an address is non-canonical if
+    // bit 63 and bit 56 (5-level page tables) or bit 47 (4-level) don't match
+    uintptr_t ptr = UINT64_C(1) << 63;
+    ptr += rand() & 0xfff;
+    int result;
+    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
 }
 
 static void cause_sigsegv_instruction()
@@ -830,15 +848,29 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .id = "selftest_sigsegv_init",
     .description = "Crashes with SIGSEGV (data) on init",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
-    .test_init = selftest_crash_initcleanup<cause_sigsegv>,
+    .test_init = selftest_crash_initcleanup<cause_sigsegv_null>,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
 },
 {
     .id = "selftest_sigsegv",
-    .description = "Crashes with SIGSEGV (data)",
+    .description = "Crashes with SIGSEGV (data) dereferencing the null page",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
-    .test_run = selftest_crash_run<cause_sigsegv>,
+    .test_run = selftest_crash_run<cause_sigsegv_null>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_sigsegv_noncanonical",
+    .description = "Crashes with SIGSEGV (data) with a non-canonical address",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crash_run<cause_sigsegv_noncanonical>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_sigsegv_kernel",
+    .description = "Crashes with SIGSEGV (data) on a kernel address",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crash_run<cause_sigsegv_kernel>,
     .desired_duration = -1,
 },
 {
@@ -846,7 +878,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .description = "Crashes with SIGSEGV (data) on cleanup",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_pass_run,
-    .test_cleanup  = selftest_crash_initcleanup<cause_sigsegv>,
+    .test_cleanup  = selftest_crash_initcleanup<cause_sigsegv_null>,
     .desired_duration = -1,
 },
 {
