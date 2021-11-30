@@ -80,10 +80,11 @@ struct CrashContext
         int thread_num;
         int signum;
         int signal_code;
+        int trap_nr = -1;
+        long error_code = 0;
 #ifdef __linux__
         tid_t handle = sys_gettid();
 #else
-        int padding = 0;
         pthread_t handle = pthread_self();
 #endif
     } fixed;
@@ -243,6 +244,8 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     vec[1] = { &mc->gregs, sizeof(mc->gregs) };
     vec[2] = { mc->fpregs, n };
     fixed.rip = reinterpret_cast<void *>(mc->gregs[REG_RIP]);
+    fixed.error_code = mc->gregs[REG_ERR];
+    fixed.trap_nr = mc->gregs[REG_TRAPNO];
     count = 3;
 #elif defined(__FreeBSD__)
     // On FreeBSD, the XSAVE area is split into two chunks, so we transfer
@@ -251,11 +254,15 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     vec[1] = { mc, size_t(mc->mc_len)) };
     vec[2] = { reinterpret_cast<void *>(mc->mc_xfpustate), mc->mc_xfpustate_len };
     fixed.rip = reinterpret_cast<void *>(mc->mc_rip);
+    fixed.error_code = mc->mc_err;
+    fixed.trap_nr = mc->mc_trapno;
     count = 3;
 #elif defined(__APPLE__)
     // We're not transferring the XSAVE state...
     vec[1] = { ctx->uc_mcontext, ctx->uc_mcsize };
     fixed.rip = reinterpret_cast<void *>(mc->ss->__rip);
+    fixed.error_code = mc->__es.__err;
+    fixed.trap_nr = mc->__es.__trapno;
     count = 2;
 #endif
 
@@ -595,6 +602,27 @@ static void attach_gdb(const char *pidstr)
 /// returns true we should print register information for this signal
 static bool print_signal_info(const CrashContext::Fixed &ctx)
 {
+    static auto generic_code_string = +[](int code) {
+        switch (code) {
+        // POSIX.1 constants - https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/signal.h.html
+        case SI_USER: return "SI_USER";
+        case SI_QUEUE: return "SI_QUEUE";
+        case SI_TIMER: return "SI_TIMER";
+        case SI_ASYNCIO: return "SI_ASYNCIO";
+        case SI_MESGQ: return "SI_MESGQ";
+#ifdef SI_KERNEL
+        case SI_KERNEL: return "SI_KERNEL";
+#endif
+#ifdef SI_SIGIO
+        case SI_SIGIO: return "SI_SIGIO";
+#endif
+#ifdef SI_DETHREAD
+        case SI_DETHREAD: return "SI_DETHREAD";
+#endif
+        }
+        return "??";
+    };
+
     auto sigfpe_code_string = [](int code) {
         switch (code) {
         case FPE_INTDIV: return "FPE_INTDIV";        // Integer divide by zero.
@@ -608,7 +636,7 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         case FPE_FLTUNK: return "FPE_FLTUNK";        // Undiagnosed floating-point exception.
         case FPE_CONDTRAP: return "FPE_CONDTRAP";    // Trap on condition.
         }
-        return "??";
+        return generic_code_string(code);
     };
 
     auto sigill_code_string = [](int code) {
@@ -623,7 +651,7 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         case ILL_BADSTK: return "ILL_BADSTK";        // Internal stack error.
         case ILL_BADIADDR: return "ILL_BADIADDR";    // Unimplemented instruction address.
         }
-        return "??";
+        return generic_code_string(code);
     };
 
     auto sigsegv_code_string = [](int code) {
@@ -643,7 +671,7 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         case SEGV_MTESERR: return "SEGV_MTESERR";      // Synchronous ARM MTE exception.
 #endif
         }
-        return "??";
+        return generic_code_string(code);
     };
 
     auto sigbus_code_string = [](int code) {
@@ -654,7 +682,7 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         case BUS_MCEERR_AR: return "BUS_MCEERR_AR";  // Hardware memory error: action required.
         case BUS_MCEERR_AO: return "BUS_MCEERR_AO";  // Hardware memory error: action optional.
         }
-        return "??";
+        return generic_code_string(code);
     };
 
     const char *(*code_string_fn)(int) = nullptr;
@@ -688,15 +716,30 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         return false;
     }
 
-    if (ctx.rip == ctx.crash_address)
-        log_message(cpu, SANDSTONE_LOG_ERROR "Received signal %d (%s) code=%s, RIP = %p",
-                    ctx.signum, strsignal(ctx.signum), code_string_fn(ctx.signal_code),
-                    ctx.rip);
-    else
-        log_message(cpu, SANDSTONE_LOG_ERROR "Received signal %d (%s) code=%s, RIP = %p, CR2 = %p",
-                    ctx.signum, strsignal(ctx.signum), code_string_fn(ctx.signal_code),
-                    ctx.rip, ctx.crash_address);
+    std::string extra_info;
+    if (ctx.rip != ctx.crash_address)
+        extra_info = stdprintf(", CR2 = %p", ctx.crash_address);
+    if (ctx.trap_nr >= 0) {
+        static const char trap_names[][4] = {
+            "DE", "DB", "NMI", "BP",
+            "OF", "BR", "UD", "NM",
+            "DF", "MF", "TS", "NP",
+            "SS", "GP", "PF", "spu",
+            "MF", "AC", "MC", "XF",
+        };
+        const char *trap_name = "??";
+        if (ctx.trap_nr == 32)
+            trap_name = "IRET";
+        else if (size_t(ctx.trap_nr) < std::size(trap_names))
+            trap_name = trap_names[ctx.trap_nr];
 
+        extra_info += stdprintf(", trap=%d (%s), error_code = 0x%lx",
+                                ctx.trap_nr, trap_name, ctx.error_code);
+    }
+
+    log_message(cpu, SANDSTONE_LOG_ERROR "Received signal %d (%s) code=%d (%s), RIP = %p%s",
+                ctx.signum, strsignal(ctx.signum), ctx.signal_code, code_string_fn(ctx.signal_code),
+                ctx.rip, extra_info.c_str());
     return true;
 }
 
