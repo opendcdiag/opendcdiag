@@ -344,6 +344,7 @@ static void cause_sigill()
                             -std::numeric_limits<double>::infinity());
 
     __m128i one = _mm_set1_epi32(-1);
+#ifndef __clang__
     if (cpu_has_feature(cpu_feature_avx)) {
         // init the AVX state (using inline assembly to avoid vzeroupper)
         if (cpu_has_feature(cpu_feature_avx512f)) {
@@ -354,6 +355,7 @@ static void cause_sigill()
             asm ("vpcmpeqb %t0, %t0, %t0" : "=x" (one));
         }
     }
+#endif
 
     // make sure there are no function calls between the instruction above and the one below
 
@@ -382,7 +384,7 @@ static void cause_sigill()
 static void cause_sigfpe()
 {
     int r = 0;
-    asm volatile ("idiv%z0 %0, %0" : "+a" (r));
+    asm volatile ("idivl %0, %0" : "+a" (r));
 }
 
 static void cause_sigbus()
@@ -395,7 +397,7 @@ static void cause_sigbus()
     IGNORE_RETVAL(ftruncate(fd, 0));
 
     int result;
-    asm volatile ("mov%z0 (%1), %0" : "=r" (result) : "r" (ptr));
+    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
 
     munmap(ptr, 4096);
     close(fd);
@@ -414,7 +416,7 @@ static void cause_sigsegv_kernel()
     uintptr_t ptr = ~uintptr_t(0) - 64 * 1024 * 1024;
     ptr += rand() & 0xfff;
     int result;
-    asm volatile ("mov%z0 (%1), %0" : "=r" (result) : "r" (ptr));
+    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
 }
 
 static void cause_sigsegv_noncanonical()

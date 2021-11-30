@@ -75,7 +75,9 @@ extern "C" {
 /// This macro is provided in case tests need more fine grained control.
 #define cpu_has_feature(f)      ((_compilerCpuFeatures & (f)) == (f) || (cpu_features & (f)) == (f))
 
-#if defined(__GNUC__) && !SANDSTONE_NO_LOGGING
+#if defined(__clang__) && !SANDSTONE_NO_LOGGING
+#  define ATTRIBUTE_PRINTF(x, y)    __attribute__((__format__(printf, x, y)))
+#elif defined(__GNUC__) && !SANDSTONE_NO_LOGGING
 #  define ATTRIBUTE_PRINTF(x, y)    __attribute__((__format__(gnu_printf, x, y)))
 #else
 #  define ATTRIBUTE_PRINTF(x, y)
