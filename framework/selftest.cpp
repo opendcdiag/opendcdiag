@@ -474,7 +474,7 @@ static int selftest_libc_fatal_run(struct test *, int)
 }
 #endif
 
-#ifndef _WIN32
+#ifdef __linux__
 BEGIN_ASM_FUNCTION(payload_long_64bit)
     asm("movabs $0x1234deadbeaf5678, %rax\n"
         "mov    $0x12345, %ebx\n"
@@ -557,7 +557,7 @@ static const kvm_config_t *selftest_kvm_config_real_16bit_fail()
 {
     return &kvm_config_real_16bit_fail;
 }
-#endif // _WIN32
+#endif // __linux__
 
 const static test_group group_positive = {
     .id = "positive",
@@ -687,7 +687,7 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 
-#ifndef _WIN32
+#ifdef __linux__
 {
     .id = "kvm_long_64bit",
     .description = "Runs simple 64-bit KVM workload successfully",
@@ -702,7 +702,7 @@ static struct test selftests_array[] = {
     .test_kvm_config = selftest_kvm_config_real_16bit,
     .flags = test_type_kvm,
 },
-#endif // _WIN32
+#endif // __linux__
 
     /* Randomly failing tests */
 
@@ -941,7 +941,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .desired_duration = -1,
 },
 
-#ifndef _WIN32
+#ifdef __linux__
 {
     .id = "kvm_prot_64bit_fail",
     .description = "Runs simple 64-bit KVM workload that fails",
@@ -958,7 +958,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .desired_duration = -1,
     .flags = test_type_kvm,
 },
-#endif // _WIN32
+#endif // __linux__
 };
 
 const span<struct test> selftests = { std::begin(selftests_array), std::end(selftests_array) };
