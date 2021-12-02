@@ -265,8 +265,9 @@ static constexpr std::initializer_list<int> termination_signals = {
     SIGHUP, SIGINT, SIGTERM, SIGPIPE
 };
 
-#  if defined(__WAIT_INT) && defined(__linux__)
+#  if (defined(__WAIT_INT) && defined(__linux__)) || defined(__APPLE__)
 // glibc prior to 2.24 defined WTERMSIG with compatibility with BSD union wait
+// Apple libc does the same
 static constexpr uint32_t SignalMask = 0x7f;
 #  else
 static constexpr uint32_t SignalMask = WTERMSIG(~0);
