@@ -75,6 +75,26 @@ static inline tid_t sys_gettid()
 #  endif
 #endif
 
+#ifdef __FreeBSD__
+using tid_t = long;
+static tid_t sys_gettid()
+{
+    tid_t result;
+    thr_self(&result);
+    return result;
+}
+#endif
+
+#ifdef __APPLE__
+using tid_t = uint64_t;
+static tid_t sys_gettid()
+{
+    tid_t result;
+    pthread_threadid_np(nullptr, &result);
+    return result;
+}
+#endif
+
 namespace {
 bool must_ignore_sigpipe()
 {
@@ -166,20 +186,12 @@ thread apply all bt full
 quit
 )";
 static const char gdb_python_commands[] = "python\n"
-#ifdef __linux__
-        // using TID
         R"gdb(
 thr = None
 for t in gdb.selected_inferior().threads():
     if t.ptid[1] == handle:
         thr = t
         break
-)gdb"
-#else
-        // using pthread_self()
-        "thr = gdb.selected_inferior().thread_from_handle(handle = gdb.Value(handle))\n"
-#endif
-        R"gdb(
 if thr is not None:
     thr.switch()
     f = gdb.newest_frame()
