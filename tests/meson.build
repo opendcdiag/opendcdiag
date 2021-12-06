@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-static_link = get_option('cpp_link_args').contains('-static')
+dep_static = get_option('dependency_link') == 'static'
 
 setmod = import('sourceset')
 
@@ -25,7 +25,7 @@ tests_common_incdirs = [
 	framework_incdir,
 ]
 
-eigen3_dep = dependency('eigen3', static : static_link)
+eigen3_dep = dependency('eigen3', static : dep_static)
 tests_base_set.add(
 	when : eigen3_dep,
 	if_true : files(
@@ -58,7 +58,7 @@ tests_skx_set.add(
 	)
 )
 
-zstd_dep = dependency('libzstd', static : static_link)
+zstd_dep = dependency('libzstd', static : dep_static)
 tests_base_set.add(
 	when : zstd_dep,
 	if_true : files(
@@ -66,7 +66,7 @@ tests_base_set.add(
 	)
 )
 
-zlib_dep = dependency('zlib', static : static_link)
+zlib_dep = dependency('zlib', static : dep_static)
 tests_base_set.add(
 	when : zlib_dep,
 	if_true : files(
