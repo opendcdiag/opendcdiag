@@ -6,6 +6,8 @@ option('march_base', type : 'combo', choices : ['haswell', 'westmere'], value : 
 	description : 'Build framework with this base optimization -march= value (valid are "haswell" (default) and "westmere").')
 option('tests_options', type : 'array', value : [],
 	description : 'Pass strings to flag test content build options.')
+option('dependency_link', type : 'combo', choices : ['dynamic', 'static'], value : 'dynamic',
+	description : 'Link preference for dependencies: dynamic (default) or static')
 option('docdir', type : 'string', value : 'doc/dcdiag',
 	description : 'Directory name of where documentation will be installed.')
 option('static_libstdcpp', type : 'boolean', value : false,
