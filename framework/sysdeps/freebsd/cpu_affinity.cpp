@@ -1,11 +1,5 @@
 /*
- * (C) 2019-2021 Intel Corporation
- *
- * This source code is Intel Confidential and not for distribution outside of Intel without
- * explicit permission from the authors
- *
- * sandstone test framework and tests
- *
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <topology.h>
