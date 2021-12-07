@@ -3,6 +3,9 @@
  */
 
 #define _GNU_SOURCE 1
+#ifdef _WIN32
+#  define _POSIX_C_SOURCE 200112L
+#endif
 #include "sandstone.h"
 #include "sandstone_p.h"
 #include "sandstone_iovec.h"
