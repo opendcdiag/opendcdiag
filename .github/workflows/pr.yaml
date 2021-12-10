@@ -24,7 +24,19 @@ jobs:
     - name: Check if the PR adds tabs in source files
       run: .github/scripts/check-no-tabs.sh origin/${{ github.base_ref }} HEAD
 
+  git-sanity:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout the PR branch
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+    - name: Run the git checks
+      run: .github/scripts/check-git-history.sh origin/${{ github.base_ref }} ${{ github.head_ref }}
+
   build-linux:
+    needs: [ lint, git-sanity ]
     runs-on: ubuntu-latest
     container: debian:sid
     steps:
@@ -45,6 +57,7 @@ jobs:
           --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
 
   build-windows:
+    needs: [ lint, git-sanity ]
     runs-on: ubuntu-latest
     container: fedora:34
     steps:
