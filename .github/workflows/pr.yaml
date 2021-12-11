@@ -10,6 +10,7 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' }}
     steps:
     - name: Checkout target branch (${{ github.base_ref }})
       uses: actions/checkout@v2
@@ -26,6 +27,7 @@ jobs:
 
   git-sanity:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' }}
     steps:
     - name: Checkout the PR branch
       uses: actions/checkout@v2
