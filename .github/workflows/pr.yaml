@@ -27,7 +27,8 @@ jobs:
 
   git-sanity:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: false
+#    if: github.event_name == 'pull_request'
     steps:
     - name: Checkout the PR branch
       uses: actions/checkout@v2
@@ -42,9 +43,8 @@ jobs:
     if: |
       github.event_name == 'push'
       || ( github.event_name == 'pull_request'
-        && needs.lint.result == 'success'
-        && needs.git-sanity.result == 'success' )
-    needs: [ lint, git-sanity ]
+        && needs.lint.result == 'success' )
+    needs: [ lint ]
     runs-on: ubuntu-latest
     container: debian:sid
     steps:
@@ -68,9 +68,8 @@ jobs:
     if: |
       github.event_name == 'push'
       || ( github.event_name == 'pull_request'
-        && needs.lint.result == 'success'
-        && needs.git-sanity.result == 'success' )
-    needs: [ lint, git-sanity ]
+        && needs.lint.result == 'success' )
+    needs: [ lint ]
     runs-on: ubuntu-latest
     container: fedora:34
     steps:
