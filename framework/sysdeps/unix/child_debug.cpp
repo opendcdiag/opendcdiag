@@ -31,6 +31,10 @@
 #include <ucontext.h>
 #include <unistd.h>
 
+#ifdef __FreeBSD__
+#  include <sys/thr.h>
+#endif
+
 #ifndef MSG_NOSIGNAL
 #  define MSG_NOSIGNAL  0
 #endif
