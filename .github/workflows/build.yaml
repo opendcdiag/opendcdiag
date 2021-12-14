@@ -1,0 +1,52 @@
+name: Pull Request
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    container: debian:sid
+    steps:
+    - name: Install distro packages
+      run: |
+        DEBIAN_FRONTEND=noninteractive apt-get -y update
+        DEBIAN_FRONTEND=noninteractive apt-get -y install libboost-dev zlib1g-dev libgtest-dev libeigen3-dev libzstd-dev ninja-build meson
+    - uses: actions/checkout@v2
+    - name: meson setup
+      run: meson setup builddir
+    - name: ninja build
+      run: ninja -C builddir
+    - name: ninja build unittests
+      run: ninja -C builddir unittests
+    - name: run unittests
+      run: |
+        ./builddir/unittests \
+          --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
+
+  build-windows:
+    runs-on: ubuntu-latest
+    container: fedora:34
+    steps:
+    - name: Install distro packages
+      run: |
+        dnf install -y \
+            cmake \
+            git \
+            meson \
+            mingw64-boost-static \
+            mingw64-eigen3 \
+            mingw64-gcc-c++ \
+            mingw64-pixman-static \
+            mingw64-pkg-config \
+            mingw64-winpthreads-static \
+            mingw64-zstd \
+            perl
+    - uses: actions/checkout@v2
+    - name: meson setup
+      run: meson setup builddir-windows-cross --cross-file meson-cross-win32.ini
+    - name: ninja build
+      run: ninja -C builddir-windows-cross
