@@ -1035,7 +1035,14 @@ Common command-line options are:
      When this option is present, test execution will be limited by the number
      of times the test executes its main execution loop. This option augments
      the time-based options in that the test will end if either the test time
-     condition is exceeded, or the test-max-loop-count is exhausted.
+     condition is exceeded, or the test-max-loop-count is exhausted.  The use
+     of --max-test-loop-count disables test fracturing, the default mode of
+     test execution in which individual tests are run multiple times with
+     different random number seeds during the same invocation of opendcdiag.
+     A value of 0 for --max-test-loop-count is interpreted as there being no
+     limit to the number of loop iterations.  This special value can be
+     used to disable test fracturing.  When specified tests will not be
+     fractured and their execution will be time limited.
  --dump-cpu-info
      Prints the CPU information that the tool detects (package ID, core ID,
      thread ID, microcode, and PPIN) then exit.
@@ -3108,6 +3115,8 @@ int internal_main(int argc, char **argv)
 
         case max_test_loop_count_option:
             sApp->max_test_loop_count = ParseIntArgument<>{"--max-test-loop-count"}();
+            if (sApp->max_test_loop_count == 0)
+                    sApp->max_test_loop_count = std::numeric_limits<int>::max();
             break;
 
             /* deprecated options */

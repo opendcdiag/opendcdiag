@@ -162,7 +162,10 @@ Fracturing is enabled by default for all tests but it can be disabled on a test-
 by-test basis by specifying a value of less than 0 for the *fracture_loop_count*
 field when declaring a test. It may make sense to disable fracturing if you
 only want your test to run once for some reason or if your init function (see
-below) is very expensive.
+below) is very expensive.  It is also possible to disable fracturing from the
+command line using the --max-test-loop-count option.  Specifying this option on
+the opendcdiag command line and setting it to 0, e.g.,
+--max-test-loop-count=0, disables fracturing for that run of opendcdiag.
 
 ### Test execution
 
