@@ -311,7 +311,7 @@ static const char *iso8601_time_now(Iso8601Format format)
 }
 
 /// needs to be async-signal-safe
-static int get_monotonic_time_now(struct timespec *tv)
+int get_monotonic_time_now(struct timespec *tv)
 {
 #if defined(CLOCK_MONOTONIC_COARSE)
     return clock_gettime(CLOCK_MONOTONIC_COARSE, tv);

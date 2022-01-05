@@ -485,6 +485,7 @@ static_assert(std::is_trivially_copyable_v<SandstoneApplication::ExecState>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::ExecState>);
 
 /* logging.cpp */
+int get_monotonic_time_now(struct timespec *tv);
 int logging_stdout_fd(void);
 void logging_init_global(void);
 void logging_init_global_child();
