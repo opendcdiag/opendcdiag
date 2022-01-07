@@ -17,6 +17,7 @@ protected:
     std::unordered_map<std::string, struct test *> test_by_id;
 
 public:
+    virtual ~TestrunSelector() = default;
     virtual void set_test_list(std::vector<struct test *> _tests){
         testinfo = std::move(_tests);
 
