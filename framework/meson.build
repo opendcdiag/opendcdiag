@@ -1,18 +1,25 @@
 # -*- indent-tabs-mode: t -*-
 # SPDX-License-Identifier: Apache-2.0
 
+sysdeps_dir = 'sysdeps/' + target_machine.system()
+
+if target_machine.system() == 'cygwin'
+  sysdeps_dir = 'sysdeps/windows'
+endif
+
 framework_incdir = [
 	top_incdir,
 	include_directories([
 		'.',
 		'test_selectors',
-		'sysdeps/' + target_machine.system(),
+		sysdeps_dir,
 	])
 ]
-if target_machine.system() != 'windows'
+
+if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
 	subdir('sysdeps/unix')
 endif
-subdir('sysdeps/' + target_machine.system())
+subdir(sysdeps_dir)
 
 generated_cpu_features_h = configure_file(
 	output : 'cpu_features.h',
@@ -83,7 +90,7 @@ else
 	default_cpp_flags += [ '-DNO_SELF_TESTS', ]
 endif
 
-if target_machine.system() != 'windows'
+if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
 framework_files += [
 	'forkfd/forkfd.c',
 ]
