@@ -23,17 +23,15 @@ jobs:
 
   git-sanity:
     runs-on: ubuntu-latest
-    if: false
     steps:
-    - name: Checkout the PR branch
+    - name: Checkout the PR merge point
       uses: actions/checkout@v2
       with:
-        ref: ${{ github.head_ref }}
         fetch-depth: 0
     - name: Run the git checks
-      run: .github/scripts/check-git-history.sh origin/${{ github.base_ref }} ${{ github.head_ref }}
+      run: .github/scripts/check-git-history.sh ${{ github.base_ref }} ${GITHUB_SHA}
 
 
   build:
-    needs: [ lint ]
+    needs: [ lint, git-sanity ]
     uses: opendcdiag/opendcdiag/.github/workflows/build.yaml@main

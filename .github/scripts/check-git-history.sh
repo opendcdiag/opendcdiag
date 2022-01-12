@@ -4,18 +4,25 @@
 #   * there are no merge commits on the branch;
 #   * all the commits have sign-off-by as required.
 
-# It takes two arguments: the ref name of the target branch and the commit-ish
-# of the branch being merged, e.g.:
-# scripts/check-git-history.sh main e7f58691
+# When the PR branch is checked out in CI actions, it's a temporary merge
+# commit. This script looks at the right parent to see if all the non-merge
+# commit follow the requirements.
 
 target=$1
 head=$2
 err=0
 
-base=$(git merge-base ${target} ${head})
+
+read left right <<<$(git show -s --pretty=%P ${head})
+
+if [[ -z "${right}" ]]; then
+    echo "::error:: ${head} is expected to merge commit for the PR. (Cannot retrieve tip of the branch.)"
+fi
+
+base=$(git merge-base origin/${target} ${right})
 
 # check there are no merges on the branch
-merges=$(git log --oneline --merges ${base}..${head})
+merges=$(git log --oneline --merges ${base}..${right})
 
 if [[ -n "${merges}" ]]; then
     echo "::error:: The branch contains merge commits. Rebase your work on top of current ${target}."
@@ -23,7 +30,7 @@ if [[ -n "${merges}" ]]; then
 fi
 
 # look sign offs in all the non-merge commits
-for sha in $(git log --no-merges --format=%H ${base}..${head}); do
+for sha in $(git log --no-merges --format=%H ${base}..${right}); do
     signoff=$(git show -s --format=%B ${sha} | grep '^Signed-off-by:')
     if [[ -z "${signoff}" ]]; then
         echo "::error:: Commit ${sha} does not contain Signed-off-by. Rebase and amend with 'git commit --amend --signoff'."
