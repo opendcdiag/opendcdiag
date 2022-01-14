@@ -540,32 +540,51 @@ static int fill_cache_info_sysfs(struct cpu_info *info)
 #endif /*__linux__ */
 }
 
+template <auto &fnArray> static int try_detection(struct cpu_info *cpu)
+{
+    using DetectorFunction = std::decay_t<decltype(fnArray[0])>;
+    if (std::size(fnArray) > 0) {
+        if (std::size(fnArray) == 1) {
+            // no need to cache, there's only one implementation
+            DetectorFunction fn = fnArray[0];
+            return fn ? fn(cpu) : 0;
+        }
+
+        static DetectorFunction cached_fn = nullptr;
+        if (cached_fn)
+            return cached_fn(cpu);
+
+        for (DetectorFunction fn : fnArray) {
+            if (!fn)
+                continue;
+            int r = fn(cpu);
+            if (r == EXIT_SUCCESS) {
+                cached_fn = fn;
+                return r;
+            }
+        }
+    }
+    return EXIT_FAILURE;
+}
+
 typedef int (* fill_family_func)(struct cpu_info *);
 typedef int (* fill_ppin_func)(struct cpu_info *);
 typedef int (* fill_ucode_func)(struct cpu_info *);
 typedef int (* fill_cache_info_func)(struct cpu_info *);
 typedef int (* fill_topo_func)(struct cpu_info *);
 
-static const fill_family_func family_impls[] = { fill_family_cpuid, nullptr };
-static const fill_ppin_func ppin_impls[] = { fill_ppin_msr, nullptr };
+static const fill_family_func family_impls[] = { fill_family_cpuid };
+static const fill_ppin_func ppin_impls[] = { fill_ppin_msr };
 /* prefer sysfs, fallback to MSR. the latter is not reliable and may require
  * root. */
-static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr, nullptr };
+static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
 /* prefer CPUID, fallback to sysfs. */
-static const fill_cache_info_func cache_info_impls[] = { fill_cache_info_cpuid, fill_cache_info_sysfs, nullptr };
+static const fill_cache_info_func cache_info_impls[] = { fill_cache_info_cpuid, fill_cache_info_sysfs };
 /* prefer CPUID, fallback to sysfs. */
-static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs, nullptr };
+static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
 
 void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
 {
-    /* these functions will be set to the first usable implementation from the
-     * corresponding *_impls. */
-    static fill_family_func const *family_impl = nullptr;
-    static fill_ppin_func const *ppin_impl = nullptr;
-    static fill_ucode_func const *ucode_impl = nullptr;
-    static fill_cache_info_func const *cache_info_impl = nullptr;
-    static fill_topo_func const *topo_impl = nullptr;
-
     int curr_cpu,
         i;
 
@@ -593,51 +612,11 @@ void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
 
         pin_to_logical_processor(lp);
         init_cpu_info(&cpu_info[i], curr_cpu);
-
-        if (!family_impl) {
-            family_impl = family_impls;
-            while (*family_impl) {
-                if (!(*family_impl)(&cpu_info[i])) break;
-                family_impl++;
-            }
-        } else if (*family_impl)
-            (*family_impl)(&cpu_info[i]);
-
-        if (!ppin_impl) {
-            ppin_impl = ppin_impls;
-            while (*ppin_impl) {
-                if (!(*ppin_impl)(&cpu_info[i])) break;
-                ppin_impl++;
-            }
-        } else if (*ppin_impl)
-            (*ppin_impl)(&cpu_info[i]);
-
-        if (!ucode_impl) {
-            ucode_impl = ucode_impls;
-            while (*ucode_impl) {
-                if (!(*ucode_impl)(&cpu_info[i])) break;
-                ucode_impl++;
-            }
-        } else if (*ucode_impl)
-            (*ucode_impl)(&cpu_info[i]);
-
-        if (!cache_info_impl) {
-            cache_info_impl = cache_info_impls;
-            while (*cache_info_impl) {
-                if (!(*cache_info_impl)(&cpu_info[i])) break;
-                cache_info_impl++;
-            }
-        } else if (*cache_info_impl)
-            (*cache_info_impl)(&cpu_info[i]);
-
-        if (!topo_impl) {
-            topo_impl = topo_impls;
-            while (*topo_impl) {
-                if (!(*topo_impl)(&cpu_info[i])) break;
-                topo_impl++;
-            }
-        } else if (*topo_impl)
-            (*topo_impl)(&cpu_info[i]);
+        try_detection<family_impls>(&cpu_info[i]);
+        try_detection<ppin_impls>(&cpu_info[i]);
+        try_detection<ucode_impls>(&cpu_info[i]);
+        try_detection<cache_info_impls>(&cpu_info[i]);
+        try_detection<topo_impls>(&cpu_info[i]);
     }
 
     if (sApp->schedule_by == SandstoneApplication::ScheduleBy::Core)
