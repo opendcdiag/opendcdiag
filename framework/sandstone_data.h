@@ -216,7 +216,7 @@ private:
 #endif
 };
 
-#ifdef __FLT128_MAX__
+#ifdef __SIZEOF_FLOAT128__
 struct Float128
 {
     __float128 payload;
@@ -388,12 +388,12 @@ template<> struct TypeToDataType<float> : TypeToDataType_helper<Float32Data> {};
 template<> struct TypeToDataType<double> : TypeToDataType_helper<Float64Data> {};
 template<> struct TypeToDataType<long double> :
         TypeToDataType_helper<sizeof(long double) == sizeof(double) ? Float64Data : Float80Data> {};
-#ifdef __FLT128_MAX__
+#ifdef __SIZEOF_FLOAT128__
 template<> struct TypeToDataType<Float128> : TypeToDataType_helper<Float128Data> {};
 template<> struct TypeToDataType<__float128> : TypeToDataType_helper<Float128Data> {};
 #endif
 #ifndef SANDSTONE_FLOAT16_EMULATED
-template<> struct TypeToDataType<_Float16> : TypeToDataType_helper<Float16Data> {};
+template<> struct TypeToDataType<__fp16> : TypeToDataType_helper<Float16Data> {};
 #endif
 
 static constexpr size_t type_real_size(DataType type)
