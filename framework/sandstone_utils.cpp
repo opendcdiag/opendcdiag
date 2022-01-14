@@ -12,7 +12,6 @@
 #include <string>
 #include "sandstone_utils.h"
 
-#include <immintrin.h>
 #include <math.h>
 #include <string.h>
 #include <time.h>
