@@ -17,7 +17,6 @@
 #include <vector>
 
 #include <assert.h>
-#include <cpuid.h>
 #include <errno.h>
 #include <fcntl.h>
 #if __has_include(<fnmatch.h>)
