@@ -847,7 +847,7 @@ static void *thread_runner(void *arg)
 
             if (new_state == thread_failed) {
                 if (sApp->ud_on_failure)
-                    __asm__ volatile("ud2");
+                    ud2();
                 logging_mark_thread_failed(thread_number);
             }
             test_end(new_state);
