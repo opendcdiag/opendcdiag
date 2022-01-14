@@ -823,6 +823,7 @@ static void *thread_runner(void *arg)
         struct per_thread_data *this_thread;
         int ret = EXIT_FAILURE;
         int thread_number;
+        CPUTimeFreqStamp before, after;
 
         TestRunWrapper(int thread_number)
             : this_thread(cpu_data_for_thread(thread_number)),
@@ -851,6 +852,9 @@ static void *thread_runner(void *arg)
             }
             test_end(new_state);
 
+            after.Snapshot(thread_number);
+            this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
+
             if (sApp->verbosity >= 3)
                 log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
                             thread_number, this_thread->inner_loop_count);
@@ -860,6 +864,9 @@ static void *thread_runner(void *arg)
         {
             // indicate to SIGQUIT handler that we're running
             this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
+
+            before.Snapshot(thread_number);
+
             test_start();
 
             try {

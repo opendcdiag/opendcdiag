@@ -32,6 +32,7 @@
 #include <sandstone_config.h>
 #include <sandstone_utils.h>
 
+#include "effective_cpu_freq.hpp"
 #include "topology.h"
 #include "interrupt_monitor.hpp"
 #include "SelectorFactory.h"
@@ -176,6 +177,9 @@ struct alignas(64) per_thread_data
     uint64_t inner_loop_count;
     uint64_t inner_loop_count_at_fail;
     uint64_t fail_time;
+
+    /* Thread's effective CPU frequency during execution */
+    double effective_freq_mhz;
 
     bool has_failed() const
     {

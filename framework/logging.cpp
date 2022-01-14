@@ -2014,6 +2014,9 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
                 writeln(fd, indent_spaces(), "    loop-count: ",
                         std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count));
             }
+            const double effective_freq_mhz = sApp->shmem->per_thread[cpu].effective_freq_mhz;
+            if (std::isfinite(effective_freq_mhz))
+                dprintf(fd, "%s    freq_mhz: %.1f\n", indent_spaces().data(), effective_freq_mhz);
         }
     }
     writeln(fd, indent_spaces(), "    messages:");
@@ -2216,6 +2219,16 @@ void YamlLogger::print(int, ChildExitStatus status)
     logging_printf(LOG_LEVEL_VERBOSE(1), "  time-at-end:   %s\n", get_current_time().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  test-runtime: %s\n",
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str());
+
+    double freqs = 0.0;
+    for (int i = 0; i < num_cpus(); i++) {
+        const struct per_thread_data *data = cpu_data_for_thread(i);
+        freqs += data->effective_freq_mhz;
+    }
+
+    const double freq_avg = freqs / num_cpus();
+    if (std::isfinite(freq_avg) && freq_avg != 0.0)
+        logging_printf(LOG_LEVEL_VERBOSE(1), "  avg-freq-mhz: %.1f\n", freq_avg);
 
     logging_flush();
 
