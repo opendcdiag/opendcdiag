@@ -387,6 +387,22 @@ static void cause_sigfpe()
     asm volatile ("idivl %0, %0" : "+a" (r));
 }
 
+__attribute__((__no_sanitize_address__))
+static int force_memory_load(uintptr_t ptr)
+{
+    asm("" ::: "memory");
+    //    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
+    return *reinterpret_cast<volatile int *>(ptr);
+}
+
+__attribute__((__no_sanitize_address__))
+static void force_call(uintptr_t ptr)
+{
+    asm("" ::: "memory");
+    //    asm volatile ("jmp *%0" : : "r" (ptr));
+    reinterpret_cast<void (*)(void)>(ptr)();
+}
+
 static void cause_sigbus()
 {
     // SIGBUS happens if memory can't be faulted in, instead of invalid
@@ -396,8 +412,8 @@ static void cause_sigbus()
     void *ptr = mmap(nullptr, 4096, PROT_READ, MAP_SHARED, fd, 0);
     IGNORE_RETVAL(ftruncate(fd, 0));
 
-    int result;
-    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
+    int result = force_memory_load(uintptr_t(ptr));
+    (void) result;
 
     munmap(ptr, 4096);
     close(fd);
@@ -407,16 +423,16 @@ static void cause_sigsegv_null()
 {
     // not exactly null, but first page
     uintptr_t ptr = rand() & 0xfff;
-    int result;
-    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
+    int result = force_memory_load(ptr);
+    (void) result;
 }
 
 static void cause_sigsegv_kernel()
 {
     uintptr_t ptr = ~uintptr_t(0) - 64 * 1024 * 1024;
     ptr += rand() & 0xfff;
-    int result;
-    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
+    int result = force_memory_load(ptr);
+    (void) result;
 }
 
 static void cause_sigsegv_noncanonical()
@@ -425,14 +441,14 @@ static void cause_sigsegv_noncanonical()
     // bit 63 and bit 56 (5-level page tables) or bit 47 (4-level) don't match
     uintptr_t ptr = UINT64_C(1) << 63;
     ptr += rand() & 0xfff;
-    int result;
-    asm volatile ("movl (%1), %0" : "=r" (result) : "r" (ptr));
+    int result = force_memory_load(ptr);
+    (void) result;
 }
 
 static void cause_sigsegv_instruction()
 {
     uintptr_t ptr = rand() & 0xfff;
-    asm volatile ("jmp *%0" : : "r" (ptr));
+    force_call(ptr);
 }
 
 static void cause_sigtrap_int3()
