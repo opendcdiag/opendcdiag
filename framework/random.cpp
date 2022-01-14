@@ -47,7 +47,10 @@ union alignas(64) thread_rng {
     uint8_t u8[64];
     uint32_t u32[sizeof(u8) / sizeof(uint32_t)];
     uint64_t u64[sizeof(u8) / sizeof(uint64_t)];
+    __uint128_t u128[sizeof(u8) / sizeof(__uint128_t)];
+#ifdef __AES__
     __m128i m128[sizeof(u8) / sizeof(__m128i)];
+#endif
 };
 
 // std::seed_seq does too much. This class simply copies the buffer as the seed.
@@ -69,7 +72,13 @@ enum EngineType {
     LCG = 1,
     AESSequence = 3
 };
-static constexpr std::initializer_list<EngineType> engine_types = { Constant, LCG, AESSequence };
+static constexpr std::initializer_list<EngineType> engine_types = {
+    Constant,
+    LCG,
+#ifdef __AES__
+    AESSequence,
+#endif
+};
 
 } // unnamed namespace
 
@@ -270,6 +279,7 @@ int EngineWrapper<std::minstd_rand>::generateInt(thread_rng *generator)
 
 template struct EngineWrapper<std::minstd_rand>;
 
+#ifdef __AES__
 // -- AES engine (generates numbers by running AES over a state) --
 
 struct aes_engine
@@ -351,6 +361,7 @@ __uint128_t EngineWrapper<aes_engine>::generate128(thread_rng *generator)
 }
 
 template struct EngineWrapper<aes_engine>;
+#endif // __AES__
 
 } // unnamed namespace
 
@@ -401,11 +412,15 @@ void random_global_init(const char *seed_from_user)
         case Constant:
             sApp->random_engine.reset(new EngineWrapper<constant_value_engine>(engine_type));
             return;
+        case AESSequence:
+#ifdef __AES__
+            sApp->random_engine.reset(new EngineWrapper<aes_engine>(engine_type));
+            return;
+#else
+            [[fallthrough]];
+#endif
         case LCG:
             sApp->random_engine.reset(new EngineWrapper<std::minstd_rand>(engine_type));
-            return;
-        case AESSequence:
-            sApp->random_engine.reset(new EngineWrapper<aes_engine>(engine_type));
             return;
         }
         __builtin_unreachable();
@@ -502,9 +517,9 @@ void random_init()
 
 template <typename FP> static inline FP random_template(FP scale)
 {
-    constexpr int extra_bits = 64 - std::numeric_limits<FP>::digits;
+    constexpr int extra_bits = std::max(64 - std::numeric_limits<FP>::digits, 0);
     static_assert(std::numeric_limits<FP>::is_specialized, "FP type is invalid");
-    static_assert(extra_bits >= 0, "FP type too big");
+    //    static_assert(extra_bits >= 0, "FP type too big");
 
     uint64_t mantissa_mask = UINT64_C(~0);
     mantissa_mask >>= extra_bits;
@@ -517,7 +532,6 @@ template <typename FP> static inline FP random_template(FP scale)
         mantissa = sApp->random_engine->generate32(thread_local_rng());
     mantissa &= mantissa_mask;
     return mantissa / max_integral * scale;
-
 }
 
 [[gnu::noinline]] uint32_t random32()
