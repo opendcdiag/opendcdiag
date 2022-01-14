@@ -336,7 +336,7 @@ static Duration calculate_runtime(MonotonicTimePoint start_time, MonotonicTimePo
 
 static inline __attribute__((always_inline, noreturn)) void ud2()
 {
-    __asm__ volatile("ud2");
+    __builtin_trap();
     __builtin_unreachable();
 }
 
