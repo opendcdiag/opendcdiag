@@ -29,7 +29,22 @@ if cpp.get_linker_id() != 'ld.bfd' or cc.get_linker_id() != 'ld.bfd'
 	warning('We recommend linking OpenDCDiag with the binutils linker (ld). Your build may fail or your executable may not behave as expected.')
 endif
 
-march_base = '-march=' + get_option('march_base')
+march_base = get_option('march_base')
+if march_base == ''
+	march_base='haswell'
+endif
+march_generic_flags = [
+	'-march=core2',
+	'-mno-sse3',
+]
+march_flags = [
+	'-march=' + march_base,
+	'-mtune=skylake',
+	'-maes',
+	'-mpclmul',
+	'-mno-rdrnd',
+	'-falign-loops=32',
+]
 
 debug_nasm_flags = ''
 if get_option('buildtype') == 'debug'
@@ -117,22 +132,14 @@ endif
 default_c_flags += [
 	'-DEXECUTABLE_NAME="' + get_option('executable_name') + '"',
 	'-DSANDSTONE',
-	'-maes',
-	'-mpclmul',
-	'-mno-rdrnd',
 	'-fno-associative-math',
-	'-falign-loops=32',
 	'-fno-asynchronous-unwind-tables',
 ]
 
 default_cpp_flags += [
 	'-DEXECUTABLE_NAME="' + get_option('executable_name') + '"',
 	'-DSANDSTONE',
-	'-maes',
-	'-mpclmul',
-	'-mno-rdrnd',
 	'-fno-associative-math',
-	'-falign-loops=32',
 	'-fvisibility-inlines-hidden',
 ]
 
