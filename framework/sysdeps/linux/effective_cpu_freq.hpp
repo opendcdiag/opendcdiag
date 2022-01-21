@@ -6,6 +6,7 @@
 #define LINUX_EFFECTIVE_FREQ_HPP
 
 #include <limits>
+#include <x86intrin.h>
 #include "sandstone_p.h"
 
 extern int get_monotonic_time_now(struct timespec *);
