@@ -215,6 +215,7 @@ generated_gitid_h = configure_file(
 		perl, '@INPUT0@', '@OUTPUT@', 'opendcdiag',
 	],
 )
+top_incdir = include_directories('.')
 
 # Subdirs add (static) libraries to these arrays for linking
 sandstone_tests = []

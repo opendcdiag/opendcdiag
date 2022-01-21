@@ -1,12 +1,14 @@
 # -*- indent-tabs-mode: t -*-
 # SPDX-License-Identifier: Apache-2.0
 
-framework_incdir = include_directories([
-	'sysdeps/' + target_machine.system(),
-	'..',
-	'.',
-	'test_selectors',
-])
+framework_incdir = [
+	top_incdir,
+	include_directories([
+		'.',
+		'test_selectors',
+		'sysdeps/' + target_machine.system(),
+	])
+]
 if target_machine.system() != 'windows'
 	subdir('sysdeps/unix')
 endif
