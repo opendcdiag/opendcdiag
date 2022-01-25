@@ -157,6 +157,7 @@ endif
 default_c_warn = [
 	'-Wall',
 	'-Wextra',
+        '-Werror=discarded-qualifiers',
 	'-Werror=incompatible-pointer-types',
 	'-Werror=implicit-function-declaration',
 	'-Werror=int-conversion',
