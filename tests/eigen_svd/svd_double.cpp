@@ -40,7 +40,6 @@ DECLARE_TEST(eigen_svd_double, "Eigen SVD (Singular Value Decomposition) solving
   .test_init = eigen_svd_double_test::init,
   .test_run = eigen_svd_double_test::run,
   .test_cleanup = eigen_svd_double_test::cleanup,
-  .minimum_cpu = cpu_haswell,
   .fracture_loop_count = 5,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
@@ -53,7 +52,6 @@ DECLARE_TEST(eigen_svd_double2, "Eigen SVD (Singular Value Decomposition) solvin
   .test_init = eigen_svd_double2_test::init,
   .test_run = eigen_svd_double2_test::run,
   .test_cleanup = eigen_svd_double2_test::cleanup,
-  .minimum_cpu = cpu_haswell,
   .fracture_loop_count = 5,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST

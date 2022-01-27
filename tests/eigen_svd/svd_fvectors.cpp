@@ -58,7 +58,6 @@ DECLARE_TEST(eigen_svd_fvectors, "Eigen SVD (Singular Value Decomposition) solvi
   .test_init = eigen_svd_fvectors_init,
   .test_run = eigen_svd_fvectors_test::run,
   .test_cleanup = eigen_svd_fvectors_test::cleanup,
-  .minimum_cpu = cpu_haswell,
   .fracture_loop_count = 5,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST

@@ -40,7 +40,6 @@ DECLARE_TEST(eigen_svd, "Eigen SVD (Singular Value Decomposition) solving payloa
   .test_init = eigen_svd_test::init,
   .test_run = eigen_svd_test::run,
   .test_cleanup = eigen_svd_test::cleanup,
-  .minimum_cpu = cpu_haswell,
   .fracture_loop_count = 2,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
