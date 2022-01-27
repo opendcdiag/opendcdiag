@@ -118,7 +118,6 @@ DECLARE_TEST(eigen_sparse, "Eigen sparse linear algebra payload. Solve Ax=b usin
   .test_init = eigen_sparse_init,
   .test_run = eigen_sparse_run,
   .test_cleanup = eigen_sparse_cleanup,
-  .minimum_cpu = cpu_haswell,
   .desired_duration = -1,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST

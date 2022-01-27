@@ -35,15 +35,9 @@ tests_base_set.add(
 		'eigen_gemm/gemm_cdouble_dynamic_square.cpp',
 		'eigen_gemm/gemm_double_dynamic_square.cpp',
 		'eigen_gemm/gemm_float_dynamic_square.cpp',
-		'eigen_svd/svd_cdouble_noavx512.cpp',
-	)
-)
-
-tests_hsw_set.add(
-	when : eigen3_dep,
-	if_true : files(
 		'eigen_sparse/eigen_sparse.cpp',
 		'eigen_svd/svd.cpp',
+		'eigen_svd/svd_cdouble_noavx512.cpp',
 		'eigen_svd/svd_double.cpp',
 		'eigen_svd/svd_fvectors.cpp',
 		'eigen_svd_jacobi/svd.cpp',

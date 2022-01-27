@@ -40,6 +40,5 @@ DECLARE_TEST(eigen_svd_jacobi_cdouble, "Eigen SVD (Singular Value Decomposition,
   .test_init = eigen_svd_jacobi_cdouble_test::init,
   .test_run = eigen_svd_jacobi_cdouble_test::run,
   .test_cleanup = eigen_svd_jacobi_cdouble_test::cleanup,
-  .minimum_cpu = cpu_haswell,
   .quality_level = TEST_QUALITY_SKIP,
 END_DECLARE_TEST
