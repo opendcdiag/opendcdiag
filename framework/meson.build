@@ -37,13 +37,12 @@ generated_cpu_features_h = configure_file(
 generated_weighted_runs = configure_file(
 	input : [
 		'scripts/weighted_runs_list2header.py',
-		'weighted_runs.list',
 	],
 	output : 'weighted_runs.h',
 	encoding : 'ascii',
 	capture : true,
 	command : [
-		python, '@INPUT0@', '@INPUT1@',
+		python, '@INPUT0@', 'weighted_runs.list', meson.current_source_dir(), meson.global_source_root(),
 	]
 )
 
