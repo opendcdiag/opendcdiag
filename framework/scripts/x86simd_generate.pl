@@ -208,6 +208,7 @@ enum X86CpuArchitectures : uint64_t {|;
 #endif /* C++11 */\n|;
 };
 
+print "// -- implementation start --\n";
 # Now generate the string table and bit-location array
 my $offset = 0;
 my @offsets;
@@ -324,4 +325,5 @@ struct XSaveRequirementMapping
 static const struct XSaveRequirementMapping xsave_requirements[] = {
 %s};
 
+// -- implementation end --
 #endif /* $headerguard */\n|, $xsaveRequirementMapping if $xsaveRequirementMapping ne "";
