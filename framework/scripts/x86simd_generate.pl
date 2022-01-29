@@ -128,8 +128,8 @@ for (my $i = 0; $i < scalar @features; ++$i) {
     printf "#define cpu_feature_%-31s (UINT64_C(1) << %d)\n", lc($feature->{id}), $i;
 
     # Feature string names for Clang and GCC
-    my $str = $feature->{name};
-    $str .= ",$feature->{depends}" if defined($feature->{depends});
+    my $str = $feature->{name} . ',' . $feature->{depends};
+    $str =~ s/,$//;
     printf "#define QT_FUNCTION_TARGET_STRING_%-17s \"%s\"\n",
         $feature->{id}, $str;
 }
