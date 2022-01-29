@@ -7,7 +7,6 @@ $\ = "\n";
 $/ = "\n";
 my $debug = 0;
 my %leaves = (
-    Leaf01EDX           => "CPUID Leaf 1, EDX",
     Leaf01ECX           => "CPUID Leaf 1, ECX",
     Leaf07_00EBX        => "CPUID Leaf 7, Sub-leaf 0, EBX",
     Leaf07_00ECX        => "CPUID Leaf 7, Sub-leaf 0, ECX",
@@ -18,6 +17,10 @@ my %leaves = (
     Leaf80000008hEBX    => "CPUID Leaf 80000008h, EBX",
 );
 my @leafNames = sort keys %leaves;
+
+# out of order (we want it first)
+unshift @leafNames, "Leaf01EDX";
+$leaves{Leaf01EDX} = "CPUID Leaf 1, EDX";
 
 # Read input from file specified by first argument
 my $input_conf_file = shift @ARGV;
