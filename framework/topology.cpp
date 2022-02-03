@@ -19,9 +19,41 @@
 #   include <windows.h>
 #endif
 
+namespace {
+struct auto_fd
+{
+    int fd = -1;
+    auto_fd(int fd = -1) : fd(fd) {}
+    ~auto_fd() { if (fd != -1) close(fd); }
+
+    // make it movable but not copyable
+    auto_fd(const auto_fd &) = delete;
+    auto_fd &operator=(const auto_fd &) = delete;
+
+    auto_fd(auto_fd &&other) : fd(std::exchange(other.fd, -1)) {}
+    auto_fd &operator=(auto_fd &&other)
+    {
+        auto_fd tmp(std::move(other));
+        std::swap(tmp.fd, fd);
+        return *this;
+    }
+
+    operator int() const { return fd; }
+};
+}
+
 struct cpu_info *cpu_info = nullptr;
 
 static int topo_gen = 0; // topology version, incremented each time load_cpu_info is executed
+
+#ifdef __linux__
+static auto_fd open_sysfs_cpu_dir(int cpu)
+{
+    char buf[sizeof("/sys/devices/system/cpu/cpu2147483647")];
+    sprintf(buf, "/sys/devices/system/cpu/cpu%d", cpu);
+    return auto_fd { open(buf, O_PATH | O_CLOEXEC) };
+}
+#endif
 
 static void reorder_cpus()
 {
@@ -129,14 +161,6 @@ static void apply_mock_topology(const std::vector<struct cpu_info> &mock_topolog
     }
 }
 
-namespace {
-struct auto_fd {
-    int fd = -1;
-    operator int() const { return fd; }
-    ~auto_fd() { if (fd != -1) close(fd); }
-};
-}
-
 #ifdef __linux__
 /* this is only used to read sysfs, hence inside __linux__ */
 static FILE *fopenat(int dfd, const char *name)
@@ -167,11 +191,8 @@ static int fill_topo_sysfs(struct cpu_info *info)
 {
 #ifdef __linux__
     FILE *f;
-    char buf[256];  // size repeated in fscanf below
 
-
-    sprintf(buf, "/sys/devices/system/cpu/cpu%d", info->cpu_number);
-    auto_fd cpufd{open(buf, O_PATH | O_CLOEXEC)};
+    auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
     if (cpufd < 0)
         return 1;
 
@@ -321,8 +342,7 @@ static int fill_ucode_sysfs(struct cpu_info *info)
     FILE *f;
     char buf[256];  // size repeated in fscanf below
 
-    sprintf(buf, "/sys/devices/system/cpu/cpu%d", info->cpu_number);
-    auto_fd cpufd{open(buf, O_PATH | O_CLOEXEC)};
+    auto_fd cpufd { open_sysfs_cpu_dir(info->cpu_number) };
     if (cpufd < 0)
         return 1;
 
@@ -479,6 +499,23 @@ static int fill_cache_info_cpuid(struct cpu_info *info) {
     return 0;
 }
 
+static int fill_ppin_sysfs(struct cpu_info *info)
+{
+    int ret = 1;
+#if defined(__linux__)
+    auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
+    if (cpufd < 0)
+        return 1;
+
+    if (AutoClosingFile f { fopenat(cpufd, "topology/ppin") }) {
+        if (fscanf(f, "%" PRIx64, &info->ppin) > 0)
+            ret = 0;
+    }
+#endif
+
+    return ret;
+}
+
 static int fill_cache_info_sysfs(struct cpu_info *info)
 {
 #ifdef __linux__
@@ -574,7 +611,7 @@ typedef int (* fill_cache_info_func)(struct cpu_info *);
 typedef int (* fill_topo_func)(struct cpu_info *);
 
 static const fill_family_func family_impls[] = { fill_family_cpuid };
-static const fill_ppin_func ppin_impls[] = { fill_ppin_msr };
+static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
 /* prefer sysfs, fallback to MSR. the latter is not reliable and may require
  * root. */
 static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
