@@ -282,7 +282,6 @@ executable(
 
 summary({
 		'Logging format': get_option('logging_format'),
-		'Min architecture': get_option('march_base'),
 		'Using -march': march_base,
 		'Static libstdc++': get_option('static_libstdcpp'),
 		'Executable name': get_option('executable_name'),
