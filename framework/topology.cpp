@@ -393,7 +393,6 @@ static int fill_ucode_sysfs(struct cpu_info *info)
     }
     return 0;
 #elif defined(_WIN32)
-{
     HKEY hKey = (HKEY)-1;
     LONG lResult = ERROR_SUCCESS;
     int rc = 1;
@@ -438,7 +437,6 @@ static int fill_ucode_sysfs(struct cpu_info *info)
     }
 
     return rc;
-}
 #else
     return 1;
 #endif /* __linux__ */
