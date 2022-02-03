@@ -2667,7 +2667,7 @@ static void warn_deprecated_opt(const char *opt)
 }
 
 extern constexpr const uint64_t minimum_cpu_features = _compilerCpuFeatures;
-int internal_main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     // initialize the main application
     new (sApp) SandstoneApplication;

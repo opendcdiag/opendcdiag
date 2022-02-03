@@ -23,7 +23,6 @@
 
 // from sandstone.cpp
 extern const uint64_t minimum_cpu_features;
-int internal_main(int argc, char **argv);
 
 #if defined(AT_EXECPATH) && !defined(AT_EXECFN)
 // FreeBSD uses AT_EXECPATH instead of AT_EXECFN
@@ -105,9 +104,13 @@ static void fallback_exec(char **argv)
 static void fallback_exec(char **) {}
 #endif
 
-__attribute__((visibility("default")))
-int main(int argc, char **argv)
+extern "C" {
+__attribute__((constructor(101), used))
+static void premain(int argc, char **argv, char **envp)
 {
+    (void) argc;
+    (void) envp;
+
     // initialize CPU detection
     cpu_basic_info cpu_info;
     detect_cpu(&cpu_info);
@@ -116,6 +119,5 @@ int main(int argc, char **argv)
         fallback_exec(argv);
     check_missing_features(cpu_features, minimum_cpu_features);
     is_system_supported(&cpu_info);
-
-    return internal_main(argc, argv);
+}
 }
