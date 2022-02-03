@@ -391,7 +391,7 @@ static int fill_ucode_sysfs(struct cpu_info *info)
         free(line);
         fclose(f);
     }
-    return 0;
+    return info->microcode == 0 ? 0 : 1;
 #elif defined(_WIN32)
     HKEY hKey = (HKEY)-1;
     LONG lResult = ERROR_SUCCESS;
