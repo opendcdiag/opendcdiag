@@ -3,8 +3,11 @@
  */
 
 #include "topology.h"
+#include "sandstone_p.h"
 
+#include <map>
 #include <string>
+#include <vector>
 
 #include <assert.h>
 #include <cpuid.h>
@@ -14,7 +17,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <sandstone_p.h>
 #if defined(_WIN32)
 #   include <windows.h>
 #endif
@@ -40,6 +42,35 @@ struct auto_fd
 
     operator int() const { return fd; }
 };
+
+struct linux_cpu_info
+{
+    using Fields = std::map<std::string, std::string>;
+    Fields general_fields;
+    std::vector<Fields> cpu_fields;
+
+    std::optional<uint64_t> number(int cpu_number, const char *field, int base = 0)
+    {
+        const Fields *f;
+        if (cpu_number < 0)
+            f = &general_fields;
+        else if (cpu_number < cpu_fields.size())
+            f = &cpu_fields[cpu_number];
+        else
+            return std::nullopt;
+
+        auto it = f->find(field);
+        if (it == f->end())
+            return std::nullopt;
+
+        // decode using strtoull, which skips spaces and decodes numbers with 0x prefix
+        char *endptr;
+        uint64_t value = strtoull(it->second.c_str(), &endptr, base);
+        if (endptr > it->second.c_str())
+            return value;
+        return std::nullopt;
+    }
+};
 }
 
 struct cpu_info *cpu_info = nullptr;
@@ -53,7 +84,71 @@ static auto_fd open_sysfs_cpu_dir(int cpu)
     sprintf(buf, "/sys/devices/system/cpu/cpu%d", cpu);
     return auto_fd { open(buf, O_PATH | O_CLOEXEC) };
 }
+
+static linux_cpu_info parse_proc_cpuinfo()
+{
+    static const char header[] = "processor\t";
+    AutoClosingFile f{ fopen("/proc/cpuinfo", "r") };
+    assert(f.f && "/proc must be mounted for proper operation");
+
+    linux_cpu_info result;
+    linux_cpu_info::Fields *current = &result.general_fields;
+
+    char *line = nullptr;
+    size_t len = 0;
+    size_t nread;
+    while ((nread = getline(&line, &len, f)) != -1) {
+        const char *colon = strchr(line, ':');
+        char *lineend = strchr(line, '\n');
+        if (lineend)
+            *lineend = '\0';
+        else
+            lineend = line + strlen(line);
+
+        if (strlen(line) == 0) {
+            current = &result.general_fields;
+        } else if (strlen(line) >= strlen(header) && memcmp(line, header, strlen(header)) == 0) {
+            // new processor, parse the number
+
+            char *endptr = nullptr;
+            uint64_t value = strtoull(colon + 1, &endptr, 0);
+            if (endptr > colon) {
+                if (value <= result.cpu_fields.size())
+                    result.cpu_fields.resize(value + 1);
+                current = &result.cpu_fields[value];
+            } else {
+                current = &result.general_fields;
+            }
+        } else if (colon != nullptr) {
+            auto trimmed_string = [](const char *s, const char *e) {
+                while (s != e && (*s == ' ' || *s == '\t'))
+                    ++s;
+                while (e - 1 != s && (e[-1] == ' ' || e[-1] == '\t'))
+                    --e;
+
+                return std::string(s, e - s);
+            };
+
+            current->insert({ trimmed_string(line, colon),
+                              trimmed_string(colon + 1, lineend) });
+        }
+    }
+
+    free(line);
+    return result;
+}
 #endif
+
+static linux_cpu_info &proc_cpuinfo()
+{
+    static linux_cpu_info r =
+#ifdef __linux__
+        parse_proc_cpuinfo();
+#else
+        {};
+#endif
+    return r;
+}
 
 static void reorder_cpus()
 {
@@ -340,8 +435,6 @@ static int fill_ucode_sysfs(struct cpu_info *info)
 {
 #ifdef __linux__
     FILE *f;
-    char buf[256];  // size repeated in fscanf below
-
     auto_fd cpufd { open_sysfs_cpu_dir(info->cpu_number) };
     if (cpufd < 0)
         return 1;
@@ -353,43 +446,8 @@ static int fill_ucode_sysfs(struct cpu_info *info)
         fclose(f);
     } else {
         // Prior to Linux 4.19, the microcode/version sysfs node was not world-readable
-        char *line = nullptr;
-        size_t len = 0;
-        ssize_t nread;
-        int current_proc = -1;
-        f = fopen("/proc/cpuinfo", "r");
-        assert(f && "/proc must be mounted for proper operation");
-
-        auto extract_integer_from_line = [](const char *line, const char *header, uint64_t *number) {
-            if (strncmp(line, header, strlen(header)) != 0)
-                return false;
-
-            // decode using strtoull, which skips spaces and decodes numbers with 0x prefix
-            const char *colon = strchr(line + strlen(header), ':');
-            char *endptr = nullptr;
-            uint64_t value = strtoull(colon + 1, &endptr, 0);
-            if (endptr == colon + 1)
-                return false;
-            *number = value;
-            return true;
-        };
-
-        while ((nread = getline(&line, &len, f)) != -1) {
-            uint64_t value;
-            if (extract_integer_from_line(line, "processor\t", &value)) {
-                if (current_proc == info->cpu_number) {
-                    // we're the end of the processor we're interested in...
-                    break;
-                }
-                current_proc = int(value);
-            } else if (current_proc == info->cpu_number &&
-                    extract_integer_from_line(line, "microcode\t", &info->microcode)) {
-                // Found it!
-                break;
-            }
-        }
-        free(line);
-        fclose(f);
+        if (auto opt = proc_cpuinfo().number(info->cpu_number, "microcode"))
+            info->microcode = *opt;
     }
     return info->microcode == 0 ? 0 : 1;
 #elif defined(_WIN32)
