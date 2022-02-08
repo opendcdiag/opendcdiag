@@ -186,7 +186,7 @@ thread_local int thread_num = 0;
 
 static span<struct test> test_set = regular_tests;
 
-#ifdef __linux__
+#if defined(__linux__) && defined(__x86_64__)
 extern struct test mce_test;
 #else
 // no MCE test outside Linux
