@@ -789,18 +789,22 @@ extern "C" {
 
 static void __attribute__((noinline)) test_start()
 {
+#ifdef __x86_64__
     __asm__("xchg   %%rbx, %%rbx\n"
             "xchg   %%rcx, %%rcx\n"
             "xchg   %%rdx, %%rdx"
             : : "D" (thread_running));
+#endif
 }
 
 static void __attribute__((noinline)) test_end(ThreadState state)
 {
+#ifdef __x86_64__
     __asm__("xchg   %%rdx, %%rdx\n"
             "xchg   %%rcx, %%rcx\n"
             "xchg   %%rbx, %%rbx\n"
             : : "D" (state));
+#endif
 }
 
 // This wrapper function is needed by emulation to be able to identify
