@@ -5,6 +5,7 @@
 #include "sandstone_context_dump.h"
 #include "sandstone.h"
 
+#ifdef __x86_64__
 #include "amx_common.h"
 #include "cpu_features.h"
 #include "fp_vectors/Floats.h"
@@ -475,3 +476,5 @@ void dump_xsave(FILE *f, const void *xsave_area, size_t xsave_size, int xsave_du
     if (mask & XSave_AmxState)
         print_amx_state(f, state, mask);
 }
+
+#endif // x86-64

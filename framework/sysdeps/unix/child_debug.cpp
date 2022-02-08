@@ -260,8 +260,9 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
         { &fixed, sizeof(fixed) }
     };
 
+#ifdef __x86_64__
     auto ctx = static_cast<ucontext_t *>(ucontext);
-#ifdef __linux__
+#  ifdef __linux__
     // On Linux, the XSAVE area is pointed by the mcontext::fpregs pointer
     size_t n = xsave_size;
     mcontext_t *mc = &ctx->uc_mcontext;
@@ -273,7 +274,7 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     fixed.error_code = mc->gregs[REG_ERR];
     fixed.trap_nr = mc->gregs[REG_TRAPNO];
     count = 3;
-#elif defined(__FreeBSD__)
+#  elif defined(__FreeBSD__)
     // On FreeBSD, the XSAVE area is split into two chunks, so we transfer
     // everything, including pointers. We put it together in the parent process.
     mcontext_t *mc = &ctx->uc_mcontext;
@@ -283,7 +284,7 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     fixed.error_code = mc->mc_err;
     fixed.trap_nr = mc->mc_trapno;
     count = 3;
-#elif defined(__APPLE__)
+#  elif defined(__APPLE__)
     // We're not transferring the XSAVE state...
     vec[1] = { ctx->uc_mcontext, ctx->uc_mcsize };
     mcontext_t mc = ctx->uc_mcontext;
@@ -291,7 +292,8 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     fixed.rip = reinterpret_cast<void *>(mc->__ss.__rip);
     fixed.trap_nr = mc->__es.__trapno;
     count = 2;
-#endif
+#  endif
+#endif // x86-64
 
     if ((on_crash_action & backtrace_on_crash) == 0)
         count = 1;
@@ -312,17 +314,19 @@ void CrashContext::receive_internal(int sockfd)
 
     // transfer our state to the parent process
     if (on_crash_action & backtrace_on_crash) {
-#ifdef __linux__
+#ifdef __x86_64__
+#  ifdef __linux__
         gpr_size = sizeof(mc.gregs);
         vec[1] = { &mc.gregs, gpr_size };
         vec[2] = { xsave_buffer.data(), xsave_buffer.size() };
         count = 3;
-#elif defined(__FreeBSD__)
+#  elif defined(__FreeBSD__)
         // not tested
         gpr_size = sizeof(mc);
         vec[1] = { &mc, gpr_size };
         vec[2] = { xsave_buffer.data() + FXSAVE_SIZE, xsave_buffer.size() - FXSAVE_SIZE };
         count = 3;
+#  endif
 #endif
     }
 
@@ -832,8 +836,10 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
         FILE *log = logging_stream_open(cpu, LOG_LEVEL_VERBOSE(2));
         fprintf(log, "Registers:\n");
 
+#ifdef __x86_64__
         dump_gprs(log, &ctx.mc);
         dump_xsave(log, ctx.xsave_buffer.data(), ctx.xsave_buffer.size(), -1);
+#endif
 
         logging_stream_close(log);
     }
@@ -909,12 +915,14 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
     }
 
     if (on_crash_action & (backtrace_on_crash | attach_gdb_on_crash)) {
+#  ifdef __x86_64
         // get the size of the context to transfer
         uint32_t eax, ebx, ecx, edx;
         if (__get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx))
             xsave_size = ebx;
         else
             xsave_size = FXSAVE_SIZE;
+#  endif
 
         create_crash_pipe(xsave_size);
     }
