@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifdef __x86_64__
 static void splitlock_signal_handler(int signum)
 {
     _exit(signum);
@@ -51,3 +52,9 @@ bool splitlock_enforcement_enabled()
     cached_result = enforced ? 1 : -1;
     return enforced;
 }
+#else
+bool splitlock_enforcement_enabled()
+{
+    return false;
+}
+#endif
