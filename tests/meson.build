@@ -27,6 +27,12 @@ tests_common_incdirs = [
 	framework_incdir,
 ]
 
+if target_machine.cpu_family() != 'x86_64'
+	# non-x86 Eigen does not get as much attention so this annoying
+	# warning was left behind
+	tests_common_cpp_args += '-Wno-deprecated-copy'
+endif
+
 eigen3_dep = dependency('eigen3', static : dep_static)
 tests_base_set.add(
 	when : eigen3_dep,
@@ -89,52 +95,57 @@ tests_base_a = static_library(
 	],
 )
 
-tests_hsw_config = tests_hsw_set.apply(tests_config_data)
-
-tests_hsw_a = static_library(
-	'tests_hsw',
-	sources : tests_hsw_config.sources(),
-	dependencies : tests_hsw_config.dependencies(),
-	build_by_default: false,
-	include_directories : [
-		tests_common_incdirs,
-	],
-	c_args : [
-		'-march=haswell',
-		'-mrtm',
-		tests_common_c_args,
-	],
-	cpp_args : [
-		'-march=haswell',
-		'-mrtm',
-		'-DEigen=EigenAVX2',
-		tests_common_cpp_args,
-	],
-)
-
-tests_skx_config = tests_skx_set.apply(tests_config_data)
-
-tests_skx_a = static_library(
-	'tests_skx',
-	sources : tests_skx_config.sources(),
-	dependencies : tests_skx_config.dependencies(),
-	build_by_default: false,
-	include_directories : [
-		tests_common_incdirs,
-	],
-	c_args : [
-		'-march=skylake-avx512',
-		tests_common_c_args,
-	],
-	cpp_args : [
-		'-march=skylake-avx512',
-		'-DEigen=EigenAVX512',
-		tests_common_cpp_args,
-	],
-)
-
 sandstone_tests += [
 	tests_base_a,
-	tests_hsw_a,
-	tests_skx_a,
 ]
+
+if host_machine.cpu_family() == 'x86_64'
+	tests_hsw_config = tests_hsw_set.apply(tests_config_data)
+
+	tests_hsw_a = static_library(
+		'tests_hsw',
+		sources : tests_hsw_config.sources(),
+		dependencies : tests_hsw_config.dependencies(),
+		build_by_default: false,
+		include_directories : [
+			tests_common_incdirs,
+		],
+		c_args : [
+			tests_common_c_args,
+			'-march=haswell',
+			'-mrtm',
+		],
+		cpp_args : [
+			tests_common_cpp_args,
+			'-march=haswell',
+			'-mrtm',
+			'-DEigen=EigenAVX2',
+		],
+	)
+
+	tests_skx_config = tests_skx_set.apply(tests_config_data)
+
+	tests_skx_a = static_library(
+		'tests_skx',
+		sources : tests_skx_config.sources(),
+		dependencies : tests_skx_config.dependencies(),
+		build_by_default: false,
+		include_directories : [
+			tests_common_incdirs,
+		],
+		c_args : [
+			tests_common_c_args,
+			'-march=skylake-avx512',
+		],
+		cpp_args : [
+			tests_common_cpp_args,
+			'-march=skylake-avx512',
+			'-DEigen=EigenAVX512',
+		],
+	)
+
+	sandstone_tests += [
+		tests_hsw_a,
+		tests_skx_a,
+	]
+endif

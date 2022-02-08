@@ -29,22 +29,29 @@ if cpp.get_linker_id() != 'ld.bfd' or cc.get_linker_id() != 'ld.bfd'
 	warning('We recommend linking OpenDCDiag with the binutils linker (ld). Your build may fail or your executable may not behave as expected.')
 endif
 
+march_generic_flags = []
+march_flags = []
 march_base = get_option('march_base')
-if march_base == ''
-	march_base='haswell'
+if march_base != ''
+	march_flags += '-march=' + march_base
 endif
-march_generic_flags = [
-	'-march=core2',
-	'-mno-sse3',
-]
-march_flags = [
-	'-march=' + march_base,
-	'-mtune=skylake',
-	'-maes',
-	'-mpclmul',
-	'-mno-rdrnd',
-	'-falign-loops=32',
-]
+if host_machine.cpu_family() == 'x86_64'
+	if march_base == ''
+		march_base='haswell'
+	endif
+	march_generic_flags = [
+		'-march=core2',
+		'-mno-sse3',
+	]
+	march_flags = [
+		'-march=' + march_base,
+		'-mtune=skylake',
+		'-maes',
+		'-mpclmul',
+		'-mno-rdrnd',
+		'-falign-loops=32',
+	]
+endif
 
 debug_nasm_flags = ''
 if get_option('buildtype') == 'debug'

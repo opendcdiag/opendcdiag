@@ -2,8 +2,8 @@
 
 option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'none'], value : 'yaml',
 	description : 'Set build-time default logging format to "none", "yaml" (default), or "tap".')
-option('march_base', type : 'combo', choices : ['', 'haswell', 'westmere'], value : '',
-	description : 'Build framework with this base optimization -march= value (valid are "haswell" (default) and "westmere").')
+option('march_base', type : 'string', value : '',
+	description : 'Build framework with this base optimization -march= value (default: "haswell").')
 option('tests_options', type : 'array', value : [],
 	description : 'Pass strings to flag test content build options.')
 option('dependency_link', type : 'combo', choices : ['dynamic', 'static'], value : 'dynamic',
