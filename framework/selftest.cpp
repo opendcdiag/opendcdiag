@@ -332,6 +332,7 @@ static int selftest_crash_run(struct test *test, int cpu)
 static void cause_sigill()
 {
     // some values for us to see in the register dump
+#ifdef __x86_64__
     uint32_t random = random32();
     int *errno_location = &errno;
     int local_thread_num = thread_num;
@@ -379,12 +380,20 @@ static void cause_sigill()
                 "x" (f),
                 "x" (one)
                 );
+#else
+    __builtin_trap();
+#endif
 }
 
 static void cause_sigfpe()
 {
+#ifdef __x86_64__
     int r = 0;
     asm volatile ("idivl %0, %0" : "+a" (r));
+#else
+    volatile int r = 0;
+    r = r/r;
+#endif
 }
 
 __attribute__((__no_sanitize_address__))
@@ -453,7 +462,10 @@ static void cause_sigsegv_instruction()
 
 static void cause_sigtrap_int3()
 {
+#ifdef __x86_64__
     asm volatile("int3");
+#endif
+    raise(SIGTRAP);
 }
 
 #ifdef _WIN32
@@ -490,7 +502,7 @@ static int selftest_libc_fatal_run(struct test *, int)
 }
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) && defined(__x86_64__)
 BEGIN_ASM_FUNCTION(payload_long_64bit)
     asm("movabs $0x1234deadbeaf5678, %rax\n"
         "mov    $0x12345, %ebx\n"
@@ -573,7 +585,7 @@ static const kvm_config_t *selftest_kvm_config_real_16bit_fail()
 {
     return &kvm_config_real_16bit_fail;
 }
-#endif // __linux__
+#endif // __linux__ && x86-64
 
 const static test_group group_positive = {
     .id = "positive",
@@ -703,7 +715,7 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 
-#ifdef __linux__
+#if defined(__linux__) && defined(__x86_64__)
 {
     .id = "kvm_long_64bit",
     .description = "Runs simple 64-bit KVM workload successfully",
@@ -957,7 +969,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .desired_duration = -1,
 },
 
-#ifdef __linux__
+#if defined(__linux__) && defined(__x86_64__)
 {
     .id = "kvm_prot_64bit_fail",
     .description = "Runs simple 64-bit KVM workload that fails",
