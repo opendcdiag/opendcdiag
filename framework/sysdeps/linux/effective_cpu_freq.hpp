@@ -5,6 +5,10 @@
 #ifndef LINUX_EFFECTIVE_FREQ_HPP
 #define LINUX_EFFECTIVE_FREQ_HPP
 
+#ifndef __x86_64__
+#  include "../generic/effective_cpu_freq.hpp"
+#else
+
 #include <limits>
 #include <x86intrin.h>
 #include "sandstone_p.h"
@@ -54,5 +58,7 @@ private:
     uint32_t tsc_aux;
     uint64_t aperf, mperf;
 };
+
+#endif // __x86_64__
 
 #endif // LINUX_EFFECTIVE_FREQ_HPP
