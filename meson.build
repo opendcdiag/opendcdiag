@@ -64,6 +64,7 @@ elif get_option('buildtype') == 'debugoptimized'
 else
 	debug_c_flags = [
 		'-DNDEBUG',
+		'-O3',
                 '-g'
 	]
 endif
