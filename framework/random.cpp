@@ -36,7 +36,9 @@ DECLSPEC_IMPORT BOOLEAN WINAPI SystemFunction036(PVOID RandomBuffer, ULONG Rando
 }
 #endif
 
-#include <immintrin.h>
+#ifdef __x86_64__
+#  include <immintrin.h>
+#endif
 
 #ifndef O_CLOEXEC
 #  define O_CLOEXEC 0

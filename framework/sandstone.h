@@ -6,12 +6,15 @@
 #define __INCLUDE_GUARD_SANDSTONE_H_
 
 #include <errno.h>
-#include <immintrin.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#ifdef __x86_64__
+#include <immintrin.h>
+#endif
 
 #include "cpu_features.h"
 #include "sandstone_config.h"

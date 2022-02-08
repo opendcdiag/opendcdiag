@@ -10,13 +10,15 @@
 #include <vector>
 
 #include <assert.h>
-#include <cpuid.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef __x86_64__
+#  include <cpuid.h>
+#endif
 #if defined(_WIN32)
 #   include <windows.h>
 #endif
