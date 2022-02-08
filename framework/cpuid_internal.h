@@ -16,6 +16,22 @@
 #include "cpu_features.h"
 #include "sandstone_p.h"
 
+struct cpu_basic_info;
+
+/**
+ * Called from detect_cpu(). The default weak implementation performs no
+ * checks, just returns. Feel free to implement a strong version elsewhere if
+ * you prefer the framework to check for system or CPU criteria and exit() if
+ * those criteria are not met.
+ */
+void is_system_supported(const struct cpu_basic_info *);
+
+__attribute__((weak))
+void is_system_supported(const struct cpu_basic_info *basic_info) { }
+
+
+#ifdef __x86_64__
+
 #ifndef signature_INTEL_ebx     /* cpuid.h lacks include guards */
 #  include <cpuid.h>
 #endif
@@ -31,17 +47,6 @@ struct cpu_basic_info {
     uint16_t model;         ///! CPU model
     char brand[(CPU_BASIC_INFO_MAX_BRAND * 16) + 1];
 };
-
-/**
- * Called from detect_cpu(). The default weak implementation performs no
- * checks, just returns. Feel free to implement a strong version elsewhere if
- * you prefer the framework to check for system or CPU criteria and exit() if
- * those criteria are not met.
- */
-void is_system_supported(const struct cpu_basic_info *);
-
-__attribute__((weak))
-void is_system_supported(const struct cpu_basic_info *basic_info) { }
 
 #ifdef __APPLE__
 /*
@@ -277,3 +282,22 @@ static void check_missing_features(uint64_t features, uint64_t minimum_cpu_featu
 }
 
 #undef cpuid_errmsg
+
+#else // ! x86-64
+struct cpu_basic_info
+{
+    uint64_t features;
+};
+
+static void detect_cpu(struct cpu_basic_info *basic_info)
+{
+    basic_info->features = 0;
+}
+
+static void check_missing_features(uint64_t features, uint64_t minimum_cpu_features)
+{
+    (void) features;
+    (void) minimum_cpu_features;
+}
+
+#endif // ! x86-64
