@@ -5,12 +5,15 @@
 #ifndef SANDSTONE_DATA_H
 #define SANDSTONE_DATA_H
 
-#include <immintrin.h>
 #include <float.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
+#ifdef __F16C__
+#  include <immintrin.h>
+#endif
 
 #ifndef __FLT16_DECIMAL_DIG__
 #  define __FLT16_DECIMAL_DIG__ 5

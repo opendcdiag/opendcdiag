@@ -6,7 +6,6 @@
 #  define _XOPEN_SOURCE 1
 #endif
 
-#include "sandstone.h"
 #include "sandstone_p.h"
 #include "sandstone_context_dump.h"
 #include "sandstone_iovec.h"
@@ -17,7 +16,6 @@
 #include <type_traits>
 
 #include <sys/types.h>
-#include <cpuid.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <paths.h>
@@ -30,6 +28,10 @@
 #include <sys/wait.h>
 #include <ucontext.h>
 #include <unistd.h>
+
+#ifdef __x86_64__
+#  include <cpuid.h>
+#endif
 
 #ifdef __FreeBSD__
 #  include <sys/thr.h>
