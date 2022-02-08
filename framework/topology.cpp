@@ -327,6 +327,7 @@ static int fill_topo_sysfs(struct cpu_info *info)
 
 }
 
+#ifdef __x86_64__
 static int fill_family_cpuid(struct cpu_info *info)
 {
     /*
@@ -430,6 +431,11 @@ static int fill_ucode_msr(struct cpu_info *info)
 
     return 0;
 }
+#else
+constexpr auto fill_family_cpuid = nullptr;
+constexpr auto fill_ucode_msr = nullptr;
+constexpr auto fill_topo_cpuid = nullptr;
+#endif // x86-64
 
 static int fill_ucode_sysfs(struct cpu_info *info)
 {
@@ -500,6 +506,7 @@ static int fill_ucode_sysfs(struct cpu_info *info)
 #endif /* __linux__ */
 }
 
+#ifdef __x86_64__
 static int fill_ppin_msr(struct cpu_info *info)
 {
     info->ppin = 0;
@@ -554,11 +561,15 @@ static int fill_cache_info_cpuid(struct cpu_info *info) {
 
     return 0;
 }
+#else
+constexpr auto fill_ppin_msr = nullptr;
+constexpr auto fill_cache_info_cpuid = nullptr;
+#endif // __x86_64__
 
 static int fill_ppin_sysfs(struct cpu_info *info)
 {
     int ret = 1;
-#if defined(__linux__)
+#if defined(__linux__) && defined(__x86_64__)
     auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
     if (cpufd < 0)
         return 1;
