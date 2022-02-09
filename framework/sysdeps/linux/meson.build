@@ -2,6 +2,7 @@
 
 if (host_machine.cpu_family() == 'x86_64')
         sysdeps_arch_files = files(
+		'interrupt_monitor.cpp',
                 'kvm.c',
                 'msr.c',
         )
@@ -18,7 +19,6 @@ _sysdeps_a = static_library(
 	sysdeps_arch_files,
 	files(
 		'cpu_affinity.cpp',
-		'interrupt_monitor.cpp',
 		'malloc.cpp',
 		'memfpt.cpp',
 	        'physicaladdress.cpp',
