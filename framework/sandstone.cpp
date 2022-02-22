@@ -1439,7 +1439,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
         TerminateProcess(HANDLE(child), TestTimedOut);
 
         // wait for termination
-        result = WaitForSingleObject(HANDLE(child), (20s).count());
+        result = WaitForSingleObject(HANDLE(child), (20000ms).count());
         if (result == WAIT_TIMEOUT) {
             log_platform_message(SANDSTONE_LOG_ERROR "# Child %td is hung and won't exit even after TerminateProcess()",
                                  child);
