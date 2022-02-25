@@ -149,6 +149,8 @@ int system_forkfd(int flags, pid_t *ppid, int *system)
     *system = 1;
     unsigned long cloneflags = CLONE_PIDFD | SIGCHLD;
     pid = sys_clone(cloneflags, &pidfd);
+    if (pid < 0)
+        return pid;
     if (ppid)
         *ppid = pid;
 
