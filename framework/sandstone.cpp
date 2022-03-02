@@ -1665,10 +1665,8 @@ static int call_forkfd(intptr_t *child)
         *child = pid;
 
         if (ffd == -1) {
-            int saved_errno = errno;
-            close(efd);
-            errno = saved_errno;
-            return -1;
+            // forkfd failed (probably CLONE_PIDFD rejected)
+            ffd_extra_flags = FFD_USE_FORK;
         } else if (ffd == FFD_CHILD_PROCESS) {
             // child side - confirm that the PID updated
             bool pid_updated = (getpid() != parentpid);
@@ -1679,24 +1677,24 @@ static int call_forkfd(intptr_t *child)
 
             // no problems seen, return to caller as child process
             return FFD_CHILD_PROCESS;
+        } else {
+            // parent side
+            int ret;
+            eventfd_t result;
+            EINTR_LOOP(ret, eventfd_read(efd, &result));
+            close(efd);
+
+            if (result == PidProperlyUpdated) {
+                // no problems seen, return to caller as parent process
+                ffd_extra_flags = 0;
+                return ffd;
+            }
+
+            // found a problem, wait for the child and try again
+            EINTR_LOOP(ret, forkfd_wait(ffd, nullptr, nullptr));
+            forkfd_close(ffd);
+            ffd_extra_flags = FFD_USE_FORK;
         }
-
-        // parent side
-        int ret;
-        eventfd_t result;
-        EINTR_LOOP(ret, eventfd_read(efd, &result));
-        close(efd);
-
-        if (result == PidProperlyUpdated) {
-            // no problems seen, return to caller as parent process
-            ffd_extra_flags = 0;
-            return ffd;
-        }
-
-        // found a problem, wait for the child and try again
-        EINTR_LOOP(ret, forkfd_wait(ffd, nullptr, nullptr));
-        forkfd_close(ffd);
-        ffd_extra_flags = FFD_USE_FORK;
     }
 #endif
 
