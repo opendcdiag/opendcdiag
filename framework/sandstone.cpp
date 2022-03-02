@@ -1636,7 +1636,9 @@ static SandstoneApplication::ExecState read_app_state(int fd)
 
 static int call_forkfd(intptr_t *child)
 {
+    static int ffd_extra_flags = -1;
     pid_t pid;
+
 #ifdef __linux__
     /*
      * glibc up until release 2.25 used to cache the process's PID in each thread's
@@ -1653,7 +1655,6 @@ static int call_forkfd(intptr_t *child)
         PidProperlyUpdated = 2,
         PidIncorrectlyCached = 1
     };
-    static int ffd_extra_flags = -1;
     if (__builtin_expect(ffd_extra_flags < 0, false)) {
         // determine if we need to pass FFD_USE_FORK
         pid_t parentpid = getpid();
@@ -1697,9 +1698,8 @@ static int call_forkfd(intptr_t *child)
         forkfd_close(ffd);
         ffd_extra_flags = FFD_USE_FORK;
     }
-#else
-    static const int ffd_extra_flags = 0;
 #endif
+
     int ffd = forkfd(FFD_CLOEXEC | ffd_extra_flags, &pid);
     *child = pid;
     return ffd;
