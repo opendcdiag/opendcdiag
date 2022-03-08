@@ -33,6 +33,12 @@ if target_machine.cpu_family() != 'x86_64'
 	tests_common_cpp_args += '-Wno-deprecated-copy'
 endif
 
+tests_base_set.add(
+	files(
+		'ifs/ifs.c',
+	)
+)
+
 eigen3_dep = dependency('eigen3', static : dep_static)
 tests_base_set.add(
 	when : eigen3_dep,
