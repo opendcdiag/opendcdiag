@@ -623,7 +623,11 @@ static Duration test_timeout(Duration regular_duration)
 
     Duration result = regular_duration * 5 + 30s;
     if (result < 300s)
-        return 300s;
+        result = 300s;
+
+    // Multiply by the number of slices needed to run on all cpus.
+    result = result * sApp->current_slice_count;
+
     return result;
 }
 
