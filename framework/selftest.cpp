@@ -714,6 +714,13 @@ static struct test selftests_array[] = {
     .test_run = selftest_uses_too_much_mem_run,
     .desired_duration = -1,
 },
+{
+    .id = "selftest_timedpass_maxthreads1",
+    .description = "Runs for the requested time, but on single thread",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_timedpass_run<(50000us).count()>,
+    .max_threads = 1,
+},
 
 #if defined(__linux__) && defined(__x86_64__)
 {
