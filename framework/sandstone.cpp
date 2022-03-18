@@ -2245,8 +2245,6 @@ static void add_test(/*nonconst*/ struct test *test)
                 test->test_init = kvm_generic_init;
                 test->test_run = kvm_generic_run;
                 test->test_cleanup = kvm_generic_cleanup;
-            } else {
-                log_debug("KVM test '%s' provides its own init function.", test->description);
             }
         }
     }
