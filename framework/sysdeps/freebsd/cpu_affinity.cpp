@@ -27,10 +27,6 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     CPU_ZERO(&cpu_set);
     CPU_SET(int(n), &cpu_set);
 
-    if (cpuset_setaffinity(CPU_LEVEL_WHICH, CPU_WHICH_TID, -1, sizeof(cpu_set), &cpu_set)) {
-        perror("cpuset_setaffinity");
-        return false;
-    }
-    return true;
+    return cpuset_setaffinity(CPU_LEVEL_WHICH, CPU_WHICH_TID, -1, sizeof(cpu_set), &cpu_set) == 0;
 }
 
