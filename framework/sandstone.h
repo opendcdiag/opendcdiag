@@ -306,6 +306,8 @@ struct test_data_per_thread
     void *data;
 };
 
+struct kvm_ctx;
+typedef struct kvm_ctx kvm_ctx_t;
 struct kvm_config;
 typedef struct kvm_config kvm_config_t;
 typedef const kvm_config_t *(*kvmconfigfunc)(void);

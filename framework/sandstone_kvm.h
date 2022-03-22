@@ -38,6 +38,18 @@ struct kvm_config {
     kvmexitfunc exit_handler;
 };
 
+/* kvm context for 1 thread - 1 vm - 1 cpu topology which each sandstone thread
+ * carries around for the duration of the test. */
+struct kvm_ctx {
+    int vm_fd;
+    int cpu_fd;
+    const kvm_config_t *config;
+    uint8_t *ram;
+    struct kvm_run *runs;
+    uint32_t ram_sz;
+    int run_sz;
+};
+
 int kvm_generic_init(struct test *);
 int kvm_generic_run(struct test *, int cpu);
 int kvm_generic_cleanup(struct test *);
