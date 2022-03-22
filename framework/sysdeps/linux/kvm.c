@@ -524,7 +524,7 @@ int kvm_generic_run(struct test *test, int cpu)
             }
 
             if (ctx.config->exit_handler != NULL) {
-                switch (ctx.config->exit_handler(ctx.cpu_fd, ctx.runs)) {
+                switch (ctx.config->exit_handler(&ctx, test, cpu)) {
                 case KVM_EXIT_FAILURE:
                     result = EXIT_FAILURE;
                     log_error("KVM exit handler for VM-Exit %d failed", ctx.runs->exit_reason);

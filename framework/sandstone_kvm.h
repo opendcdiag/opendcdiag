@@ -28,7 +28,7 @@ typedef enum {
     KVM_EXIT_FAILURE,
 } kvm_exit_code_t;
 
-typedef kvm_exit_code_t(*kvmexitfunc)(int vcpu_fd, void *kvm_ctx);
+typedef kvm_exit_code_t(*kvmexitfunc)(kvm_ctx_t *ctx, struct test *test, int cpu);
 
 struct kvm_config {
     kvm_addr_mode_t addr_mode;
