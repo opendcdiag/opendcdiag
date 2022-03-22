@@ -89,18 +89,6 @@ int kvm_fd = -1;
     (((base)  & UINT64_C(0x00ffffff)) << 16) |      \
     (((limit) & UINT64_C(0x0000ffff))))
 
-/* kvm context for 1 thread - 1 vm - 1 cpu topology which each sandstone thread
- * carries around for the duration of the test. */
-typedef struct kvm_ctx {
-    int vm_fd;
-    int cpu_fd;
-    const kvm_config_t *config;
-    uint8_t *ram;
-    struct kvm_run *runs;
-    uint32_t ram_sz;
-    int run_sz;
-} kvm_ctx_t;
-
 
 static int kvm_generic_create_vm(int kvm_fd)
 {
