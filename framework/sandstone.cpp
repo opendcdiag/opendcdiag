@@ -619,7 +619,7 @@ static Duration test_timeout(Duration regular_duration)
 {
     // use the override value if there is one
     if (sApp->max_test_time != Duration::zero())
-        return sApp->max_test_time;
+        return sApp->max_test_time * sApp->current_slice_count;
 
     Duration result = regular_duration * 5 + 30s;
     if (result < 300s)

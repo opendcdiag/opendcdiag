@@ -312,7 +312,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     int max_concurrent_thread_count = 0;
     int current_max_loop_count;
     int current_max_threads;
-    int current_slice_count;
+    int current_slice_count = 1;
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
     MonotonicTimePoint starttime;
     MonotonicTimePoint endtime;
