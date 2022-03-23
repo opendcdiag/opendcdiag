@@ -517,6 +517,12 @@ int kvm_generic_run(struct test *test, int cpu)
             goto epilogue;
         }
 
+        if (ctx.config->setup_handler != NULL) {
+                result = ctx.config->setup_handler(&ctx, test, cpu);
+                if (result != EXIT_SUCCESS)
+                        goto epilogue;
+        }
+
         do {
             if (ioctl(ctx.cpu_fd, KVM_RUN, 0) == -1) {
                 result = EXIT_FAILURE;
@@ -563,6 +569,9 @@ int kvm_generic_run(struct test *test, int cpu)
             }
 
         } while (!stop);
+
+        if ((result == EXIT_SUCCESS) && (ctx.config->check_handler != NULL))
+                result = ctx.config->check_handler(&ctx, test, cpu);
 
         count++;
 

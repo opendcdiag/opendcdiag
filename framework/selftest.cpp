@@ -14,6 +14,11 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#ifdef __linux__
+#include <linux/kvm.h>
+#include <sys/ioctl.h>
+#endif
+
 #include "sandstone.h"
 #ifndef _WIN32
 #include "sandstone_asm.h"
@@ -552,6 +557,60 @@ static const kvm_config_t *selftest_kvm_config_real_16bit()
     return &kvm_config_real_16bit;
 }
 
+BEGIN_ASM16_FUNCTION(payload_real_setup_check)
+    asm("mov $2, %bx\n"
+        "mov (%bx), %dx\n"
+        "mov $0, %ax\n"
+        "hlt");
+END_ASM_FUNCTION()
+
+static int selftest_kvm_setup_check_setup(kvm_ctx_t *ctx, struct test *test, int cpu)
+{
+    struct kvm_sregs sregs;
+    uint16_t ints[2] = { 0xffff, static_cast<uint16_t>(cpu) };
+
+    if (ioctl(ctx->cpu_fd, KVM_GET_SREGS, &sregs) == -1)
+        return -errno;
+    sregs.ds.base = 0x10000;
+    sregs.ds.selector = 0x1000;
+    if (ioctl(ctx->cpu_fd, KVM_SET_SREGS, &sregs) == -1)
+        return -errno;
+
+    memcpy(ctx->ram + sregs.ds.base, ints, sizeof(ints));
+
+    return EXIT_SUCCESS;
+}
+
+static int selftest_kvm_setup_check_check(kvm_ctx_t *ctx, struct test *test, int cpu)
+{
+    struct kvm_regs regs;
+
+    if (ioctl(ctx->cpu_fd, KVM_GET_REGS, &regs) == -1)
+        return -errno;
+
+    if (static_cast<uint16_t>(regs.rdx) != static_cast<uint16_t>(cpu)) {
+        log_error("Expected %d got %d\n", static_cast<uint16_t>(cpu),
+                      static_cast<uint16_t>(regs.rdx));
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+static const kvm_config_t kvm_config_real_setup_check = {
+    .addr_mode = KVM_ADDR_MODE_REAL_16BIT,
+    .ram_size = 2 * 1024 * 1024,
+    .payload = &payload_real_setup_check,
+    .payload_end = &payload_real_setup_check_end,
+    .setup_handler = selftest_kvm_setup_check_setup,
+    .check_handler = selftest_kvm_setup_check_check,
+};
+
+static const kvm_config_t *selftest_kvm_config_real_setup_check()
+{
+    return &kvm_config_real_setup_check;
+}
+
 BEGIN_ASM_FUNCTION(payload_prot_64bit_fail)
     asm("mov $1, %eax\n"
         "hlt");
@@ -735,6 +794,13 @@ static struct test selftests_array[] = {
     .description = "Runs simple 16-bit KVM workload successfully",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_kvm),
     .test_kvm_config = selftest_kvm_config_real_16bit,
+    .flags = test_type_kvm,
+},
+{
+    .id = "kvm_real_setup_check",
+    .description = "Checks the setup and check handlers are called correctly",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_kvm),
+    .test_kvm_config = selftest_kvm_config_real_setup_check,
     .flags = test_type_kvm,
 },
 #endif // __linux__

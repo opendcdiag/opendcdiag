@@ -30,12 +30,28 @@ typedef enum {
 
 typedef kvm_exit_code_t(*kvmexitfunc)(kvm_ctx_t *ctx, struct test *test, int cpu);
 
+/* Called just before the framework executes the kvm payload.  This
+ * callback is optional.  Test writers can use it to initialise the VM
+ * state, e.g., set up segment registers, populate memory, before the
+ * payload is run.
+ */
+typedef int (*kvmvcpusetup)(kvm_ctx_t *ctx, struct test *test, int cpu);
+
+/* Called just after the kvm payload finishes executing.  This callback
+ * is optional.  Test writers can use it to verify the state of the executed
+ * VM is correct.  An error can be signalled by returning a value other than
+ * EXIT_SUCCESS.
+ */
+typedef int (*kvmvcpucheck)(kvm_ctx_t *ctx, struct test *test, int cpu);
+
 struct kvm_config {
     kvm_addr_mode_t addr_mode;
     size_t ram_size;
     const void *payload;
     const void *payload_end;
     kvmexitfunc exit_handler;
+    kvmvcpusetup setup_handler;
+    kvmvcpucheck check_handler;
 };
 
 /* kvm context for 1 thread - 1 vm - 1 cpu topology which each sandstone thread
