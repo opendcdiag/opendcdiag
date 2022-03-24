@@ -555,7 +555,7 @@ int kvm_generic_run(struct test *test, int cpu)
                                 break;
                             default:
                                 kvm_log_registers(SANDSTONE_LOG_INFO, &cregs);
-                                report_fail_msg("KVM test reported exit code %lld", cregs.rax);
+                                log_error("KVM test reported exit code %lld", cregs.rax);
                                 result = EXIT_FAILURE;
                                 break;
                         }
