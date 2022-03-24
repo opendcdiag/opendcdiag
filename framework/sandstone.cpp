@@ -2971,8 +2971,6 @@ int main(int argc, char **argv)
                 fprintf(stderr, "%s: --selftest is incompatible with --beta or --quality.\n", argv[0]);
                 return EX_USAGE;
             }
-            if (sApp->max_test_time == Duration::zero())
-                sApp->max_test_time = 2s;
             sApp->requested_quality = 0;
             test_set = selftests;
             break;
