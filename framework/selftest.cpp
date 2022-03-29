@@ -776,7 +776,7 @@ static struct test selftests_array[] = {
 {
     .id = "selftest_timedpass_maxthreads1",
     .description = "Runs for the requested time, but on single thread",
-    .test_run = selftest_timedpass_run<(50000us).count()>,
+    .test_run = selftest_timedpass_noloop_run<(50000us).count()>,
     .max_threads = 1,
 },
 
