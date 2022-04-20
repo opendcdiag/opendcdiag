@@ -5,6 +5,7 @@
 
 #include <vector>
 #include "gtest/gtest.h"
+#include "sandstone_data.h"
 #include "sandstone_utils.h"
 
 #include <limits.h>
@@ -277,7 +278,7 @@ TEST(DataCompare, Float16)
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::min()), "0400 (0x1p-14)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::denorm_min()), "0001 (0x1p-24)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::epsilon()), "1400 (0x1p-10)");
-    EXPECT_EQ(format_type_helper(Float16(1 + __FLT16_EPSILON__)), "3c01 (0x1.004p+0)");
+    EXPECT_EQ(format_type_helper(Float16(1 + FP16_EPSILON)), "3c01 (0x1.004p+0)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::infinity()), "7c00 (inf)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::neg_infinity()), "fc00 (-inf)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::quiet_NaN()), "7e00 (nan)");

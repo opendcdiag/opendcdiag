@@ -7,6 +7,164 @@
 
 
 //======================================================
+Float16  simple_vectors_float16[] = {
+    // Walk 1
+    {.sign=0, .exponent=0x1f, .mantissa=0x001},
+    {.sign=0, .exponent=0x1f, .mantissa=0x002},
+    {.sign=0, .exponent=0x1f, .mantissa=0x004},
+    {.sign=0, .exponent=0x1f, .mantissa=0x008},
+    {.sign=0, .exponent=0x1f, .mantissa=0x010},
+    {.sign=0, .exponent=0x1f, .mantissa=0x020},
+    {.sign=0, .exponent=0x1f, .mantissa=0x040},
+    {.sign=0, .exponent=0x1f, .mantissa=0x080},
+    {.sign=0, .exponent=0x1f, .mantissa=0x100},
+    {.sign=0, .exponent=0x1f, .mantissa=0x200},
+
+    // Walk 1 with lsb set
+    {.sign=0, .exponent=0x1f, .mantissa=0x001},
+    {.sign=0, .exponent=0x1f, .mantissa=0x003},
+    {.sign=0, .exponent=0x1f, .mantissa=0x005},
+    {.sign=0, .exponent=0x1f, .mantissa=0x009},
+    {.sign=0, .exponent=0x1f, .mantissa=0x011},
+    {.sign=0, .exponent=0x1f, .mantissa=0x021},
+    {.sign=0, .exponent=0x1f, .mantissa=0x041},
+    {.sign=0, .exponent=0x1f, .mantissa=0x081},
+    {.sign=0, .exponent=0x1f, .mantissa=0x101},
+    {.sign=0, .exponent=0x1f, .mantissa=0x201},
+
+    // Walk 0
+    {.sign=0, .exponent=0x1f, .mantissa=0x3fe},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3fd},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3fb},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3f7},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3ef},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3df},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3bf},
+    {.sign=0, .exponent=0x1f, .mantissa=0x37f},
+    {.sign=0, .exponent=0x1f, .mantissa=0x2ff},
+    {.sign=0, .exponent=0x1f, .mantissa=0x1ff},
+
+    // Walk 0 with lsb cleared
+    {.sign=0, .exponent=0x1f, .mantissa=0x3fe},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3fc},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3fa},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3f6},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3ee},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3de},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3be},
+    {.sign=0, .exponent=0x1f, .mantissa=0x37e},
+    {.sign=0, .exponent=0x1f, .mantissa=0x2fe},
+    {.sign=0, .exponent=0x1f, .mantissa=0x1fe},
+
+    // March 1
+    {.sign=0, .exponent=0x1f, .mantissa=0x001},
+    {.sign=0, .exponent=0x1f, .mantissa=0x003},
+    {.sign=0, .exponent=0x1f, .mantissa=0x007},
+    {.sign=0, .exponent=0x1f, .mantissa=0x00f},
+    {.sign=0, .exponent=0x1f, .mantissa=0x01f},
+    {.sign=0, .exponent=0x1f, .mantissa=0x03f},
+    {.sign=0, .exponent=0x1f, .mantissa=0x07f},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0ff},
+    {.sign=0, .exponent=0x1f, .mantissa=0x1ff},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3ff},
+
+    // March 0
+    {.sign=0, .exponent=0x1f, .mantissa=0x3fe},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3fc},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3f8},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3f0},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3e0},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3c0},
+    {.sign=0, .exponent=0x1f, .mantissa=0x380},
+    {.sign=0, .exponent=0x1f, .mantissa=0x300},
+    {.sign=0, .exponent=0x1f, .mantissa=0x100},
+    {.sign=0, .exponent=0x1f, .mantissa=0x000},
+
+    // Close ranks from edges
+    {.sign=0, .exponent=0x1f, .mantissa=0x101},
+    {.sign=0, .exponent=0x1f, .mantissa=0x183},
+    {.sign=0, .exponent=0x1f, .mantissa=0x1C7},
+    {.sign=0, .exponent=0x1f, .mantissa=0x1EF},
+
+    // Close ranks from middle
+    {.sign=0, .exponent=0x1f, .mantissa=0x1fe},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0fc},
+    {.sign=0, .exponent=0x1f, .mantissa=0x078},
+    {.sign=0, .exponent=0x1f, .mantissa=0x030},
+
+    // 2-bit patterns
+    {.sign=0, .exponent=0x1f, .mantissa=0x155},
+    {.sign=0, .exponent=0x1f, .mantissa=0x2aa},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3ff},
+
+    // 3-bit patterns
+    {.sign=0, .exponent=0x1f, .mantissa=0x249},
+    {.sign=0, .exponent=0x1f, .mantissa=0x092},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0db},
+    {.sign=0, .exponent=0x1f, .mantissa=0x124},
+    {.sign=0, .exponent=0x1f, .mantissa=0x36d},
+    {.sign=0, .exponent=0x1f, .mantissa=0x2b6},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3ff},
+
+    // 4-bit patterns
+    {.sign=0, .exponent=0x1f, .mantissa=0x111},
+    {.sign=0, .exponent=0x1f, .mantissa=0x222},
+    {.sign=0, .exponent=0x1f, .mantissa=0x333},
+    {.sign=0, .exponent=0x1f, .mantissa=0x044},
+    {.sign=0, .exponent=0x1f, .mantissa=0x055},
+    {.sign=0, .exponent=0x1f, .mantissa=0x066},
+    {.sign=0, .exponent=0x1f, .mantissa=0x077},
+    {.sign=0, .exponent=0x1f, .mantissa=0x088},
+    {.sign=0, .exponent=0x1f, .mantissa=0x099},
+    {.sign=0, .exponent=0x1f, .mantissa=0x2aa},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3bb},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0cc},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0dd},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0ee},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3ff},
+
+    // 5-bit patterns
+    {.sign=0, .exponent=0x1f, .mantissa=0x021},
+    {.sign=0, .exponent=0x1f, .mantissa=0x042},
+    {.sign=0, .exponent=0x1f, .mantissa=0x063},
+    {.sign=0, .exponent=0x1f, .mantissa=0x084},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0a5},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0c6},
+    {.sign=0, .exponent=0x1f, .mantissa=0x0e7},
+    {.sign=0, .exponent=0x1f, .mantissa=0x108},
+    {.sign=0, .exponent=0x1f, .mantissa=0x129},
+    {.sign=0, .exponent=0x1f, .mantissa=0x24a},
+    {.sign=0, .exponent=0x1f, .mantissa=0x16b},
+    {.sign=0, .exponent=0x1f, .mantissa=0x18c},
+    {.sign=0, .exponent=0x1f, .mantissa=0x1ad},
+    {.sign=0, .exponent=0x1f, .mantissa=0x1ce},
+    {.sign=0, .exponent=0x1f, .mantissa=0x1ef},
+    {.sign=0, .exponent=0x1f, .mantissa=0x210},
+    {.sign=0, .exponent=0x1f, .mantissa=0x231},
+    {.sign=0, .exponent=0x1f, .mantissa=0x252},
+    {.sign=0, .exponent=0x1f, .mantissa=0x273},
+    {.sign=0, .exponent=0x1f, .mantissa=0x294},
+    {.sign=0, .exponent=0x1f, .mantissa=0x2b5},
+    {.sign=0, .exponent=0x1f, .mantissa=0x2d6},
+    {.sign=0, .exponent=0x1f, .mantissa=0x2f7},
+    {.sign=0, .exponent=0x1f, .mantissa=0x318},
+    {.sign=0, .exponent=0x1f, .mantissa=0x339},
+    {.sign=0, .exponent=0x1f, .mantissa=0x35a},
+    {.sign=0, .exponent=0x1f, .mantissa=0x37b},
+    {.sign=0, .exponent=0x1f, .mantissa=0x39c},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3bd},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3de},
+    {.sign=0, .exponent=0x1f, .mantissa=0x3ff},
+
+   // special data
+    {.sign=0, .exponent=0x1f, .mantissa=0x000},
+    {.sign=0, .exponent=0, .mantissa=0},
+};
+const int num_simple_vectors_float16 = 126;
+
+
+
+//======================================================
 Float32  simple_vectors_float32[] = {
     // Walk 1
     {.sign=0, .exponent=0x7f, .mantissa=0x000001},

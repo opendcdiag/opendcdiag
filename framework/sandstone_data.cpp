@@ -57,7 +57,7 @@ template <typename T> static inline uint16_t ieee754_downconvert(T f)
 #endif
     } else if (exp >= OutputLimits::max_exponent) {
         /* overflow, make it FLT16_MAX or -FLT16_MAX */
-        return Float16::max().payload | sign;
+        return Float16::max().as_hex | sign;
     } else if (exp >= OutputLimits::min_exponent - 1) {
         /* regular normal */
         exp += OutputLimits::max_exponent - 1;      // apply outgoing exponent bias
@@ -132,7 +132,7 @@ static float decode_half(uint16_t half)
 Float16 tofp16_emulated(float f)
 {
     Float16 r;
-    r.payload = ieee754_downconvert(f);
+    r.as_hex = ieee754_downconvert(f);
     return r;
 }
 
@@ -140,18 +140,18 @@ float fromfp16_emulated(Float16 f)
 {
     // is it a NaN?
     auto isnan = [](uint16_t v) {
-        uint16_t inf = Float16::infinity().payload;
-        if (v == inf || v == Float16::neg_infinity().payload)
+        uint16_t inf = Float16::infinity().as_hex;
+        if (v == inf || v == Float16::neg_infinity().as_hex)
             return false;
         if ((v & inf) != inf)
             return false;
         return true;
     };
-    if (__builtin_expect(!isnan(f.payload), 1))
-        return decode_half(f.payload);
+    if (__builtin_expect(!isnan(f.as_hex), 1))
+        return decode_half(f.as_hex);
 
     // preserve NaN's bit pattern
-    uint32_t p = f.payload & ~Float16::infinity().payload;
+    uint32_t p = f.as_hex & ~Float16::infinity().as_hex;
 
 #if defined(__i386__) || defined(__x86_64__)
     /* x86 always quiets any SNaN, so do the same */
@@ -166,6 +166,6 @@ float fromfp16_emulated(Float16 f)
 BFloat16 tobf16_emulated(float f)
 {
     BFloat16 r;
-    r.payload = to_bfloat16(f);
+    r.as_hex = to_bfloat16(f);
     return r;
 }

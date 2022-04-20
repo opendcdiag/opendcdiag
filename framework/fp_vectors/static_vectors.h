@@ -15,15 +15,31 @@ extern "C" {
 // ================================================
 // Use these to get interesting pure random values:
 // ================================================
+Float16 random_float16(int pct_fixed);
 Float32 random_float32(int pct_fixed);
 Float64 random_float64(int pct_fixed);
 Float80 random_float80(int pct_fixed);
 
+Float16 new_random_float16();
 Float32 new_random_float32();
 Float64 new_random_float64();
 Float80 new_random_float80();
 
 
+
+// =================================
+// Float 16 static vector interface
+// =================================
+extern Float16  simple_vectors_float16[];
+extern int num_simple_vectors_float16;
+
+int num_float16_vectors();
+Float16 get_float16_vector(int idx);
+Float16 pick_float16_vector();
+Float16 randomize_sign_and_exponent_float16(Float16 f);
+Float16 randomize_sign_and_exponent_in_range_float16(Float16 f, int low_expon, int high_expon);
+Float16 get_randomized_float16_vector(int idx);
+Float16 pick_randomized_float16_vector();
 
 // =================================
 // Float 32 static vector interface

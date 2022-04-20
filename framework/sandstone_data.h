@@ -12,86 +12,16 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "fp_vectors/Floats.h"
+
 #ifdef __F16C__
 #  include <immintrin.h>
 #endif
-
-#ifndef __FLT16_DECIMAL_DIG__
-#  define __FLT16_DECIMAL_DIG__ 5
-#endif
-#ifndef __FLT16_DENORM_MIN__
-#  define __FLT16_DENORM_MIN__ 5.96046447753906250000000000000000000e-8f
-#endif
-#ifndef __FLT16_DIG__
-#  define __FLT16_DIG__ 3
-#endif
-#ifndef __FLT16_EPSILON__
-#  define __FLT16_EPSILON__ 9.76562500000000000000000000000000000e-4f
-#endif
-#ifndef __FLT16_HAS_DENORM__
-#  define __FLT16_HAS_DENORM__ 1
-#endif
-#ifndef __FLT16_HAS_INFINITY__
-#  define __FLT16_HAS_INFINITY__ 1
-#endif
-#ifndef __FLT16_HAS_QUIET_NAN__
-#  define __FLT16_HAS_QUIET_NAN__ 1
-#endif
-#ifndef __FLT16_MANT_DIG__
-#  define __FLT16_MANT_DIG__ 11
-#endif
-#ifndef __FLT16_MAX_10_EXP__
-#  define __FLT16_MAX_10_EXP__ 4
-#endif
-#ifndef __FLT16_MAX__
-#  define SANDSTONE_FLOAT16_EMULATED
-#  define __FLT16_MAX__ 6.55040000000000000000000000000000000e+4f
-#endif
-#ifndef __FLT16_MAX_EXP__
-#  define __FLT16_MAX_EXP__ 16
-#endif
-#ifndef __FLT16_MIN_10_EXP__
-#  define __FLT16_MIN_10_EXP__ (-4)
-#endif
-#ifndef __FLT16_MIN__
-#  define __FLT16_MIN__ 6.10351562500000000000000000000000000e-5f
-#endif
-#ifndef __FLT16_MIN_EXP__
-#  define __FLT16_MIN_EXP__ (-13)
-#endif
-#ifndef __FLT16_NORM_MAX__
-#  define __FLT16_NORM_MAX__ 6.55040000000000000000000000000000000e+4f
-#endif
-#ifndef __FLT128_DECIMAL_DIG__
-#  define __FLT128_DECIMAL_DIG__ 36
-#endif
-#ifndef __FLT128_DENORM_MIN__
-#  define __FLT128_DENORM_MIN__ 6.47517511943802511092443895822764655e-4966F128
-#endif
-
-#define BFLT16_DECIMAL_DIG      3
-#define BFLT16_DENORM_MIN       (0x1p-133)
-#define BFLT16_DIG              2
-#define BFLT16_EPSILON          (FLT_EPSILON * 65536)
-#define BFLT16_HAS_DENORM       1
-#define BFLT16_HAS_INFINITY     1
-#define BFLT16_HAS_QUIET_NAN    1
-#define BFLT16_MANT_DIG         (FLT_MANT_DIG - 16)
-#define BFLT16_MAX_10_EXP       FLT_MAX_10_EXP
-#define BFLT16_MAX_EXP          FLT_MAX_EXP
-#define BFLT16_MAX              (0x1.fep+127f)
-#define BFLT16_MIN_10_EXP       FLT_MIN_10_EXP
-#define BFLT16_MIN_EXP          FLT_MIN_EXP
-#define BFLT16_MIN              (0x1p-126f)
-#define BFLT16_NORM_MAX         BFLT16_MAX
 
 #ifdef __cplusplus
 #include <limits>
 extern "C" {
 #endif
-
-typedef struct Float16 Float16;
-typedef struct BFloat16 BFloat16;
 
 enum DataType {
     //SizeMask = 0x3f,
@@ -115,109 +45,6 @@ enum DataType {
     Float64Data = UInt64Data | DataIsFloatingPoint,
     Float80Data = 9 | DataIsFloatingPoint,
     Float128Data = UInt128Data | DataIsFloatingPoint
-};
-
-struct Float16
-{
-    uint16_t payload;
-
-#ifdef __cplusplus
-    Float16() = default;
-    inline Float16(float f);
-
-    static constexpr int digits = __FLT16_MANT_DIG__;
-    static constexpr int digits10 = __FLT16_DIG__;
-    static constexpr int max_digits10 = 6;  // log2(digits)
-    static constexpr int min_exponent = __FLT16_MIN_EXP__;
-    static constexpr int min_exponent10 = __FLT16_MIN_10_EXP__;
-    static constexpr int max_exponent = __FLT16_MAX_EXP__;
-    static constexpr int max_exponent10 = __FLT16_MAX_10_EXP__;
-
-    static constexpr bool radix = 2;
-    static constexpr bool is_signed = true;
-    static constexpr bool is_integer = false;
-    static constexpr bool is_exact = false;
-    static constexpr bool has_infinity = __FLT16_HAS_INFINITY__;
-    static constexpr bool has_quiet_NaN = __FLT16_HAS_QUIET_NAN__;
-    static constexpr bool has_signaling_NaN = has_quiet_NaN;
-    static constexpr std::float_denorm_style has_denorm = std::denorm_present;
-    static constexpr bool has_denorm_loss = false;
-    static constexpr bool is_iec559 = true;
-    static constexpr bool is_bounded = true;
-    static constexpr bool is_modulo = false;
-    static constexpr bool traps = false;
-    static constexpr bool tinyness_before = false;
-    static constexpr std::float_round_style round_style =
-            std::round_toward_zero;   // unlike std::numeric_limits<float>::round_style
-
-    static constexpr Float16 min()              { return Float16(Holder{0x0400}); }
-    static constexpr Float16 max()              { return Float16(Holder{0x7bff}); }
-    static constexpr Float16 lowest()           { return Float16(Holder{0xfbff}); }
-    static constexpr Float16 denorm_min()       { return Float16(Holder{0x0001}); }
-    static constexpr Float16 epsilon()          { return Float16(Holder{0x1400}); }
-    static constexpr Float16 round_error()      { return Float16(Holder{0x3800}); }
-    static constexpr Float16 infinity()         { return Float16(Holder{0x7c00}); }
-    static constexpr Float16 neg_infinity()     { return Float16(Holder{0xfc00}); }
-    static constexpr Float16 quiet_NaN()        { return Float16(Holder{0x7e00}); }
-    static constexpr Float16 signaling_NaN()    { return Float16(Holder{0x7d00}); }
-
-private:
-    struct Holder { uint16_t payload; };
-    explicit constexpr Float16(Holder h) : payload(h.payload) {}
-#endif
-};
-
-struct BFloat16
-{
-    uint16_t payload;
-
-#ifdef __cplusplus
-    BFloat16() = default;
-    inline BFloat16(float f);
-
-    // same API as std::numeric_limits:
-    static constexpr int digits = BFLT16_MANT_DIG;
-    static constexpr int digits10 = BFLT16_DIG;
-    static constexpr int max_digits10 = 3;  // log2(digits)
-    static constexpr int min_exponent = std::numeric_limits<float>::min_exponent;
-    static constexpr int min_exponent10 = std::numeric_limits<float>::min_exponent10;
-    static constexpr int max_exponent = std::numeric_limits<float>::max_exponent;
-    static constexpr int max_exponent10 = std::numeric_limits<float>::max_exponent10;
-
-    static constexpr bool radix = 2;
-    static constexpr bool is_signed = true;
-    static constexpr bool is_integer = false;
-    static constexpr bool is_exact = false;
-    static constexpr bool has_infinity = std::numeric_limits<float>::has_infinity;
-    static constexpr bool has_quiet_NaN = std::numeric_limits<float>::has_quiet_NaN;
-    static constexpr bool has_signaling_NaN = has_quiet_NaN;
-    static constexpr std::float_denorm_style has_denorm = std::denorm_present;
-    static constexpr bool has_denorm_loss = false;
-    static constexpr bool is_iec559 = true;
-    static constexpr bool is_bounded = true;
-    static constexpr bool is_modulo = false;
-    static constexpr bool traps = false;
-    static constexpr bool tinyness_before = false;
-    static constexpr std::float_round_style round_style =
-            std::round_toward_zero;   // unlike std::numeric_limits<float>::round_style
-
-    static constexpr BFloat16 max()           { return BFloat16(Holder{0x7f7f}); }
-    static constexpr BFloat16 min()           { return BFloat16(Holder{0x0080}); }
-    static constexpr BFloat16 lowest()        { return BFloat16(Holder{0xff7f}); }
-    static constexpr BFloat16 denorm_min()    { return BFloat16(Holder{0x0001}); }
-    static constexpr BFloat16 epsilon()       { return BFloat16(Holder{0x3c00}); }
-    static constexpr BFloat16 round_error()   { return BFloat16(Holder{0x3f00}); }
-    static constexpr BFloat16 infinity()      { return BFloat16(Holder{0x7f80}); }
-    static constexpr BFloat16 neg_infinity()  { return BFloat16(Holder{0xff80}); }
-    static constexpr BFloat16 quiet_NaN()     { return BFloat16(Holder{0x7fc0}); }
-    static constexpr BFloat16 signaling_NaN() { return BFloat16(Holder{0x7fa0}); }
-
-    // extra
-    static constexpr float epsilon_v()        { return std::numeric_limits<float>::epsilon() * 65536; }
-private:
-    struct Holder { uint16_t payload; };
-    explicit constexpr BFloat16(Holder h) : payload(h.payload) {}
-#endif
 };
 
 #ifdef __SIZEOF_FLOAT128__
@@ -289,7 +116,7 @@ static inline Float16 tofp16(float f)
 {
 #ifdef __F16C__
     Float16 r;
-    r.payload = _cvtss_sh(f, _MM_FROUND_TRUNC);
+    r.as_hex = _cvtss_sh(f, _MM_FROUND_TRUNC);
     return r;
 #else
     return tofp16_emulated(f);
@@ -299,7 +126,7 @@ static inline Float16 tofp16(float f)
 static inline float fromfp16(Float16 f)
 {
 #ifdef __F16C__
-    return _cvtsh_ss(f.payload);
+    return _cvtsh_ss(f.as_hex);
 #else
     return fromfp16_emulated(f);
 #endif
@@ -309,7 +136,7 @@ static inline float frombf16_emulated(BFloat16 r)
 {
     // we zero-extend, shamelessly
     float f;
-    uint32_t x = r.payload;
+    uint32_t x = r.as_hex;
     x <<= 16;
     memcpy(&f, &x, sizeof(f));
 
@@ -396,7 +223,12 @@ template<> struct TypeToDataType<long double> :
 template<> struct TypeToDataType<Float128> : TypeToDataType_helper<Float128Data> {};
 template<> struct TypeToDataType<__float128> : TypeToDataType_helper<Float128Data> {};
 #endif
-#ifndef SANDSTONE_FLOAT16_EMULATED
+#if  defined(SANDSTONE_HAS_FLOAT16_TYPE) && \
+    !defined(SANDSTONE_FLOAT16_EMULATED)
+template<> struct TypeToDataType<_Float16> : TypeToDataType_helper<Float16Data> {};
+#endif
+#if  defined(SANDSTONE_HAS__FP16_TYPE) && \
+    !defined(SANDSTONE_FLOAT16_EMULATED)
 template<> struct TypeToDataType<__fp16> : TypeToDataType_helper<Float16Data> {};
 #endif
 

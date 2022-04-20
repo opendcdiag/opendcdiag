@@ -7,6 +7,9 @@
 #include "fp_vectors/static_vectors.h"
 #include <sandstone.h>
 
+Float16 random_float16(int pct_fixed){
+    return (random32() % 100 < pct_fixed) ? pick_randomized_float16_vector() : new_random_float16();
+}
 
 Float32 random_float32(int pct_fixed){
     return (random32() % 100 < pct_fixed) ? pick_randomized_float32_vector() : new_random_float32();
@@ -20,6 +23,45 @@ Float80 random_float80(int pct_fixed){
     return (random32() % 100 < pct_fixed) ? pick_randomized_float80_vector() : new_random_float80();
 }
 
+
+
+//-------------------------------------------------
+// FLOAT 16 region
+//-------------------------------------------------
+int num_float16_vectors(){
+    return num_simple_vectors_float16;
+}
+
+Float16 randomize_sign_and_exponent_float16(Float16 f) {
+    Float16 f2 = f;
+    f2.sign = random32() % 2;
+    f2.exponent = (random32() % FLOAT16_EXPONENT_BIAS) + (random32() % FLOAT16_EXPONENT_BIAS);  // bell curve around bias
+    return f2;
+}
+
+Float16 randomize_sign_and_exponent_in_range_float16(Float16 f, int low_expon, int high_expon) {
+    Float16 f2 = f;
+    f2.sign = random32() % 2;
+    f2.exponent = ((random32() % (high_expon - low_expon + 1)) + low_expon) & FLOAT16_EXPONENT_MASK;
+    return f2;
+}
+
+Float16 get_float16_vector(int idx){
+    return simple_vectors_float16[idx];
+}
+
+Float16 get_randomized_float16_vector(int idx){
+    return randomize_sign_and_exponent_float16(get_float16_vector(idx));
+}
+
+Float16 pick_float16_vector(){
+    return get_float16_vector(random32() % num_simple_vectors_float16);
+}
+
+Float16 pick_randomized_float16_vector(){
+    Float16 f16 = pick_float16_vector();
+    return randomize_sign_and_exponent_float16(f16);
+}
 
 
 //-------------------------------------------------

@@ -136,15 +136,15 @@ TEST(Float16, FiniteConversions)
     fp16_check(0x1p-15, 0x0200);
 
     // underflow and overflow
-    fp16_check_full(0x1p16, Float16::max().payload, __FLT16_MAX__);
+    fp16_check_full(0x1p16, Float16::max().payload, FP16_MAX);
     fp16_check_full(0x1p-25, 0x0000, 0);
 
     // check constants
-    fp16_check(__FLT16_MAX__, Float16::max().payload);
-    fp16_check(__FLT16_MIN__, Float16::min().payload);
-    fp16_check(-__FLT16_MAX__, Float16::lowest().payload);
-    fp16_check(__FLT16_DENORM_MIN__, Float16::denorm_min().payload);
-    fp16_check(__FLT16_EPSILON__, Float16::epsilon().payload);
+    fp16_check(FP16_MAX, Float16::max().payload);
+    fp16_check(FP16_MIN, Float16::min().payload);
+    fp16_check(-FP16_MAX, Float16::lowest().payload);
+    fp16_check(FP16_DENORM_MIN, Float16::denorm_min().payload);
+    fp16_check(FP16_EPSILON, Float16::epsilon().payload);
     fp16_check(std::numeric_limits<float>::round_error(), Float16::round_error().payload);
 }
 
