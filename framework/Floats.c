@@ -8,6 +8,15 @@
 #include "fp_vectors/Floats.h"
 #include <sandstone.h>
 
+Float16 new_float16(unsigned sign, unsigned exponent, unsigned mantissa)
+{
+    Float16 f;
+    f.sign = sign & 1u;
+    f.exponent = exponent & FLOAT16_EXPONENT_MASK;
+    f.mantissa = mantissa & FLOAT16_MANTISSA_MASK;
+    return f;
+}
+
 Float32 new_float32(unsigned sign, unsigned exponent, unsigned mantissa)
 {
     Float32 f;
@@ -33,6 +42,15 @@ Float80 new_float80(unsigned sign, uint32_t exponent, unsigned jbit, uint64_t ma
     f.jbit = jbit & 1u;
     f.exponent = exponent & FLOAT80_EXPONENT_MASK;
     f.mantissa = mantissa & FLOAT80_MANTISSA_MASK;
+    return f;
+}
+
+Float16 new_random_float16(){
+    Float16  f;
+    f.sign = random32() % 2;
+    f.exponent = random32() & FLOAT16_EXPONENT_MASK;
+    f.mantissa = set_random_bits((random32() % 9) + 1, 10); // set between 1 and 9 bits of the mantissa
+
     return f;
 }
 

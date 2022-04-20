@@ -47,6 +47,16 @@ generated_weighted_runs = configure_file(
 	]
 )
 
+if cc.has_type('_Float16') and cpp.has_type('_Float16')
+	default_c_flags   += ['-DSANDSTONE_HAS_FLOAT16_TYPE']
+	default_cpp_flags += ['-DSANDSTONE_HAS_FLOAT16_TYPE']
+endif
+
+if cc.has_type('__fp16') and cpp.has_type('__fp16')
+	default_c_flags   += ['-DSANDSTONE_HAS__FP16_TYPE']
+	default_cpp_flags += ['-DSANDSTONE_HAS__FP16_TYPE']
+endif
+
 framework_main_a = static_library(
 	'framework_main',
 	files(
