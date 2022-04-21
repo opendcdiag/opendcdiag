@@ -513,7 +513,7 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
             if (ret <= 0)
                 return;
 
-            ret = read(in, buf, sizeof(buf));
+            ret = read(in, buf, sizeof(buf) - 1);
             if (ret <= 0)
                 return;
             buf[ret] = '\0';
