@@ -1,4 +1,5 @@
 # -*- indent-tabs-mode: t -*-
+# Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
 sysdeps_dir = 'sysdeps/' + target_machine.system()

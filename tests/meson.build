@@ -1,3 +1,4 @@
+# Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
 dep_static = get_option('dependency_link') == 'static'

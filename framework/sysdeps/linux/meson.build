@@ -1,3 +1,4 @@
+# Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
 if (host_machine.cpu_family() == 'x86_64')
