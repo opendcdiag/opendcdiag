@@ -14,6 +14,7 @@ A [very simple test](../tests/examples/simple_add.c) is presented below
 ```c
 /**
  * @copyright
+ * Copyright 2022 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  *
  * @test @b simple_add
@@ -267,6 +268,7 @@ addition using SIMD instructions. Here's our [new test](../tests/examples/simple
 ```c
 /**
  * @copyright
+ * Copyright 2022 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  *
  * @test @b vector_add

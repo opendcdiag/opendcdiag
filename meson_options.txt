@@ -1,3 +1,4 @@
+# Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
 option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'none'], value : 'yaml',
