@@ -58,6 +58,9 @@ LogicalProcessorSet ambient_logical_processor_set()
 
 bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
 {
+    if (n == LogicalProcessor(-1))
+        return true;            // don't change affinity
+
     PROCESSOR_NUMBER processorNumber = {};
     GROUP_AFFINITY groupAffinity = {};
     processorNumber.Group = processor_group_for(n);

@@ -23,6 +23,8 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
 {
     if (thread_name)
         prctl(PR_SET_NAME, thread_name);
+    if (n == LogicalProcessor(-1))
+        return true;            // don't change affinity
 
     cpu_set_t cpu_set;
     CPU_ZERO(&cpu_set);
