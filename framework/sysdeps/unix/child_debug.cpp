@@ -371,22 +371,21 @@ void CrashContext::receive_internal(int sockfd)
 #if SANDSTONE_CHILD_BACKTRACE
 static bool check_gdb_available()
 {
-    pid_t child = vfork();
-    if (child == 0) {
-        // child process
-        int devnull = open(_PATH_DEVNULL, O_RDWR | O_CLOEXEC);
-        dup2(devnull, STDOUT_FILENO);
-        execlp("gdb", "gdb", "--version", nullptr);
-        _exit(EXIT_NOTINSTALLED);
-    } else if (child < 0) {
-        /* failed to fork, silently accept but we'll likely have problems later... */
-        return false;
+    std::string path;
+    if (const char *env = getenv("PATH"); env && *env)
+        path = env;
+    else
+        path = _PATH_DEFPATH;
+
+    std::string candidate;
+    for (const char *dir = strtok(path.data(), ":"); dir; dir = strtok(nullptr, ":")) {
+        candidate = dir;
+        candidate += "/gdb";
+        if (access(candidate.data(), X_OK) == 0)
+            return true;
     }
 
-    int status;
-    int ret;
-    EINTR_LOOP(ret, waitpid(child, &status, 0));
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    return false;
 }
 
 static void create_crash_pipe(int xsave_size)
