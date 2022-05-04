@@ -692,9 +692,6 @@ static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
 
 void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
 {
-    int curr_cpu,
-        i;
-
     if (!sApp->thread_count)
         sApp->thread_count = enabled_cpus.count();
     assert(sApp->thread_count);
@@ -709,22 +706,30 @@ void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
             return apply_mock_topology(mock_topology, enabled_cpus);
     }
 
-    // ### start a thread with this code
-    for (i = 0, curr_cpu = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
-        auto lp = LogicalProcessor(curr_cpu);
-        while (!enabled_cpus.is_set(lp)) {
-            lp = LogicalProcessor(++curr_cpu);
-            assert(curr_cpu != MAX_THREADS);
-        }
+    auto detect = [](void *ptr) -> void * {
+        auto enabled_cpus = *static_cast<const LogicalProcessorSet *>(ptr);
+        int curr_cpu = 0;
+        for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
+            auto lp = LogicalProcessor(curr_cpu);
+            while (!enabled_cpus.is_set(lp)) {
+                lp = LogicalProcessor(++curr_cpu);
+                assert(curr_cpu != MAX_THREADS);
+            }
 
-        pin_to_logical_processor(lp);
-        init_cpu_info(&cpu_info[i], curr_cpu);
-        try_detection<family_impls>(&cpu_info[i]);
-        try_detection<ppin_impls>(&cpu_info[i]);
-        try_detection<ucode_impls>(&cpu_info[i]);
-        try_detection<cache_info_impls>(&cpu_info[i]);
-        try_detection<topo_impls>(&cpu_info[i]);
-    }
+            pin_to_logical_processor(lp);
+            init_cpu_info(&cpu_info[i], curr_cpu);
+            try_detection<family_impls>(&cpu_info[i]);
+            try_detection<ppin_impls>(&cpu_info[i]);
+            try_detection<ucode_impls>(&cpu_info[i]);
+            try_detection<cache_info_impls>(&cpu_info[i]);
+            try_detection<topo_impls>(&cpu_info[i]);
+        }
+        return nullptr;
+    };
+
+    pthread_t detection_thread;
+    pthread_create(&detection_thread, nullptr, detect, const_cast<LogicalProcessorSet *>(&enabled_cpus));
+    pthread_join(detection_thread, nullptr);
 
     if (sApp->schedule_by == SandstoneApplication::ScheduleBy::Core)
         reorder_cpus();
