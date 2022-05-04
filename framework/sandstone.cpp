@@ -1789,7 +1789,7 @@ static TestResult run_child(/*nonconst*/ struct test *test, SharedMemorySynchron
                             const SandstoneApplication::ExecState *app_state = nullptr)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
-        pin_to_logical_processor(LogicalProcessor(cpu_info[0].cpu_number), "control");
+        pin_to_logical_processor(LogicalProcessor(-1), "control");
         setup_child_signals();
         debug_init_child();
         shmemsync.prepare_child();
