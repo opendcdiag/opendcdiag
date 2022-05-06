@@ -1533,8 +1533,22 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
 
         sApp->test_tests_init(test);
-        if (test->test_init)
-            ret = test->test_init(test);
+        if (test->test_init) {
+            // ensure the init function is run pinned to a specific logical
+            // processor but its pinning doesn't affect this control thread
+            auto init_thread_runner = [](void *testptr) {
+                auto test = static_cast</*nonconst*/ struct test *>(testptr);
+                pin_to_logical_processor(LogicalProcessor(cpu_info[0].cpu_number));
+                thread_num = -1;
+                intptr_t ret = test->test_init(test);
+                return reinterpret_cast<void *>(ret);
+            };
+            pthread_t init_thread;
+            void *retptr;
+            pthread_create(&init_thread, nullptr, init_thread_runner, test);
+            pthread_join(init_thread, &retptr);
+            ret = intptr_t(retptr);
+        }
 
         if (ret > 0 || sApp->shmem->main_thread_data.has_failed()) {
             logging_mark_thread_failed(-1);
