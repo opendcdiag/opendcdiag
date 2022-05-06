@@ -1,3 +1,4 @@
+# -*- indent-tabs-mode: t -*-
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -12,14 +13,12 @@ tests_skx_set = setmod.source_set()
 
 tests_common_c_args = [
 	debug_c_flags,
-	march_flags,
 	default_c_warn,
 	default_c_flags,
 ]
 
 tests_common_cpp_args = [
 	debug_c_flags,
-	march_flags,
 	default_cpp_warn,
 	default_cpp_flags,
 ]
@@ -96,9 +95,11 @@ tests_base_a = static_library(
 	],
 	c_args : [
 		tests_common_c_args,
+		march_flags,
 	],
 	cpp_args : [
 		tests_common_cpp_args,
+		march_flags,
 	],
 )
 
@@ -120,11 +121,13 @@ if host_machine.cpu_family() == 'x86_64'
 		c_args : [
 			tests_common_c_args,
 			'-march=haswell',
+			'-mtune=skylake',
 			'-mrtm',
 		],
 		cpp_args : [
 			tests_common_cpp_args,
 			'-march=haswell',
+			'-mtune=skylake',
 			'-mrtm',
 			'-DEigen=EigenAVX2',
 		],
