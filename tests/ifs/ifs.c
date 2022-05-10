@@ -13,15 +13,18 @@
  *
  */
 
-#include <limits.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <pthread.h>
-
 #include <sandstone.h>
 
 #if defined(__x86_64__) && defined(__linux__)
+
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <paths.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 static pthread_mutex_t scanmutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -46,7 +49,24 @@ static int scan_init(struct test *test)
 {
         if (access("/sys/devices/system/cpu/cpu0/ifs/status", R_OK) != 0) {
                 /* modprobe kernel driver, ignore errors entirely here */
-                IGNORE_RETVAL(system("/sbin/modprobe intel_ifs"));
+                pid_t pid = fork();
+                if (pid == 0) {
+                        execl("/sbin/modprobe", "/sbin/modprobe", "intel_ifs", NULL);
+
+                        /* don't print an error if /sbin/modprobe wasn't found, but
+                           log_debug() is fine (since the parent is waiting, we can
+                           write to the FILE* because it's unbuffered) */
+                        log_debug("Failed to run modprobe: %s", strerror(errno));
+                        _exit(errno);
+                } else if (pid > 0) {
+                        /* wait for child */
+                        int status, ret;
+                        do {
+                            ret = waitpid(pid, &status, 0);
+                        } while (ret < 0 && errno == EINTR);
+                } else {
+                        /* ignore failure to fork() -- extremely unlikely */
+                }
         }
 
         /* first check if there is basic kernel support with the API we support */
