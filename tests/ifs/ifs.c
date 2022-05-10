@@ -134,8 +134,8 @@ static int scan_run(struct test *test, int cpu)
         return 0;
 }
 
-DECLARE_TEST(ifs, "IFS hardware selftest")
-    .quality_level = TEST_QUALITY_BETA,
+DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
+    .quality_level = TEST_QUALITY_PROD,
     .test_init = scan_init,
     .test_run = scan_run,
     .desired_duration = -1,
