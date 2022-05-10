@@ -155,6 +155,26 @@ static int selftest_logs_options_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int log_stack_and_heap_address()
+{
+    alignas(4096) char i;
+    void *ptr = aligned_alloc(4096, 4096);
+    log_info("stack: %p heap: %p", &i, ptr);
+    usleep(5000);   // 5 ms
+    free(ptr);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_logs_stackandheap_init(struct test *test)
+{
+    return log_stack_and_heap_address();
+}
+
+static int selftest_logs_stackandheap_run(struct test *test, int cpu)
+{
+    return log_stack_and_heap_address();
+}
+
 static int selftest_skip_init(struct test *test)
 {
     log_info("Requesting skip (this message should be visible)");
@@ -716,6 +736,13 @@ static struct test selftests_array[] = {
     .test_init = selftest_logs_options_init,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+},
+{
+    .id = "selftest_logs_stackandheap",
+    .description = "Logs the thread's stack and heap pointers",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_logs_stackandheap_init,
+    .test_run = selftest_logs_stackandheap_run,
 },
 {
     .id = "selftest_skip",
