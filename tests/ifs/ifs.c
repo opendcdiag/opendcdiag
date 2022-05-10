@@ -21,6 +21,8 @@
 
 #include <sandstone.h>
 
+#if defined(__x86_64__) && defined(__linux__)
+
 static pthread_mutex_t scanmutex = PTHREAD_MUTEX_INITIALIZER;
 
 // static because we only every want to do this once per machine
@@ -127,3 +129,5 @@ DECLARE_TEST(ifs, "IFS hardware selftest")
     .fracture_loop_count = -1,
     .max_threads = 1,
 END_DECLARE_TEST
+
+#endif // __x86_64__ && __linux__
