@@ -25,9 +25,6 @@
 
 static pthread_mutex_t scanmutex = PTHREAD_MUTEX_INITIALIZER;
 
-// static because we only every want to do this once per machine
-static bool initialized = false;
-
 #define BUFLEN 256 // kernel module prints at most a 64bit value
 
 static bool write_file(const char* filename, const char* value)
@@ -47,12 +44,6 @@ static bool write_file(const char* filename, const char* value)
 
 static int scan_init(struct test *test)
 {
-        // fracture may cause this function to be called several times.
-        if (initialized)
-                return 0;
-
-        initialized = true;
-
         /* modprobe kernel driver, ignore errors entirely here */
         IGNORE_RETVAL(system("/sbin/modprobe intel_ifs"));
 
