@@ -44,8 +44,10 @@ static bool write_file(const char* filename, const char* value)
 
 static int scan_init(struct test *test)
 {
-        /* modprobe kernel driver, ignore errors entirely here */
-        IGNORE_RETVAL(system("/sbin/modprobe intel_ifs"));
+        if (access("/sys/devices/system/cpu/cpu0/ifs/status", R_OK) != 0) {
+                /* modprobe kernel driver, ignore errors entirely here */
+                IGNORE_RETVAL(system("/sbin/modprobe intel_ifs"));
+        }
 
         /* first check if there is basic kernel support with the API we support */
         if ((access("/sys/devices/system/cpu/ifs/run_test", W_OK) != 0) ||
