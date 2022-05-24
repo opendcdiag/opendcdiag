@@ -295,7 +295,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 
     bool fatal_skips = false;
     bool use_strict_runtime = false;
-
     ScheduleBy schedule_by = ScheduleBy::Thread;
     ForkMode fork_mode =
 #ifdef _WIN32
@@ -314,6 +313,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool force_test_time = false;
     bool ud_on_failure = false;
     bool service_background_scan = false;
+    bool alternate_frequency = false;
     static constexpr int MaxRetestCount = 64;
     int retest_count = 10;
     int total_retest_count = -2;
@@ -324,6 +324,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     int current_max_threads;
     int current_slice_count = 1;
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
+    int fixed_frequency = -1;
     MonotonicTimePoint starttime;
     MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;

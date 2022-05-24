@@ -121,10 +121,12 @@ enum {
     two_min_option,
     five_min_option,
 
+    alternate_frequency,
     cpuset_option,
     disable_option,
     dump_cpu_info_option,
     fatal_skips_option,
+    set_fixed_frequency,
     ignore_os_errors_option,
     is_asan_option,
     is_debug_option,
@@ -2854,6 +2856,7 @@ int main(int argc, char **argv)
         { "2min", no_argument, nullptr, two_min_option },
         { "5min", no_argument, nullptr, five_min_option },
         { "alpha", no_argument, &sApp->requested_quality, INT_MIN },
+        { "alternate-frequency", no_argument, nullptr, alternate_frequency},
         { "beta", no_argument, &sApp->requested_quality, 0 },
         { "cpuset", required_argument, nullptr, cpuset_option },
         { "disable", required_argument, nullptr, disable_option },
@@ -2861,6 +2864,7 @@ int main(int argc, char **argv)
         { "enable", required_argument, nullptr, 'e' },
         { "fatal-errors", no_argument, nullptr, 'F'},
         { "fatal-skips", no_argument, nullptr, fatal_skips_option },
+        { "fixed-frequency", required_argument, nullptr, set_fixed_frequency},
         { "fork-mode", required_argument, nullptr, 'f' },
         { "help", no_argument, nullptr, 'h' },
         { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
@@ -3060,6 +3064,18 @@ int main(int argc, char **argv)
                         .max = 160,     // arbitrary
                 }();
             break;
+        case alternate_frequency:
+            if (getuid() != 0) {
+                fprintf(stderr, "--alternate-frequency needs to be run as root\n");
+                return EX_USAGE;
+            }
+            else if (sApp->fixed_frequency != -1) {
+                fprintf(stderr, "--fixed-frequency and --alternate_frequency cannot be used together\n");
+                return EX_USAGE;
+            }
+            else
+                sApp->alternate_frequency=true;
+            break;
         case cpuset_option:
             sApp->enabled_cpus = parse_cpuset_param(optarg);
             sApp->thread_count = sApp->enabled_cpus.count();
@@ -3073,6 +3089,18 @@ int main(int argc, char **argv)
             return EXIT_SUCCESS;
         case fatal_skips_option:
             sApp->fatal_skips = true;
+            break;
+        case set_fixed_frequency:
+            if (getuid() != 0) {
+                fprintf(stderr, "--fixed-frequency needs to be run as root\n");
+                return EX_USAGE;
+            }
+            else if (sApp->alternate_frequency) {
+                fprintf(stderr, "--fixed-frequency and --alternate_frequency cannot be used together\n");
+                return EX_USAGE;
+            }
+            else
+                sApp->fixed_frequency=set_fixed_frequency; // Do ParseInt
             break;
         case ignore_os_errors_option:
             sApp->ignore_os_errors = true;
