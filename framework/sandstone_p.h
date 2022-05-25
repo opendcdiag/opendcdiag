@@ -35,6 +35,7 @@
 #include <sandstone_utils.h>
 
 #include "effective_cpu_freq.hpp"
+#include "frequency_manager.hpp"
 #include "topology.h"
 #include "interrupt_monitor.hpp"
 #include "thermal_monitor.hpp"
@@ -335,6 +336,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     Duration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
+    FrequencyManager frequency_manager;
 
     LogicalProcessorSet enabled_cpus;
     int thread_count;
