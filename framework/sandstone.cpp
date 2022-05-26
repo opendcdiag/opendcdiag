@@ -2024,6 +2024,19 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         sApp->current_max_loop_count = test->fracture_loop_count;
     }
 
+    // Apply frequency changes if needed
+    if (sApp->fixed_frequency != -1 && test->variable_frequencies == 1) {
+        // Set fixed frequency
+    }
+    else if (sApp->alternate_frequency && test->variable_frequencies == 1) {
+        // Alternate frequency
+    }
+    else if (sApp->alternate_frequency || sApp->fixed_frequency != -1) {
+        if (test->variable_frequencies == 0) {
+            // Set max frequency back to normal
+        }
+    }
+
     assert(sApp->retest_count >= 0);
 
     /* First we go to do our -- possibly fractured -- normal run, we'll do retries after */

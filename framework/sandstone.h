@@ -387,6 +387,11 @@ struct test {
     /// free them in the test_cleanup function.
     void *data;
     struct test_data_per_thread *per_thread;
+
+    /// wheter frequency flags apply to this test or not.
+    /// 0       default (for now). Ignore frequency flags
+    /// 1       Honor frequency flags
+    int variable_frequencies;
 };
 
 /* internal function; see C macro and C++ templates at the end of this file */
