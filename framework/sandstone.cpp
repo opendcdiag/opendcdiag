@@ -290,6 +290,7 @@ static void signal_handler(int signum)
     uint32_t expected = 0;
     if (signal_control.compare_exchange_strong(expected, W_EXITCODE(1, signum), std::memory_order_relaxed)) {
         // initial clean up
+        //FrequencyManager::restore_max_frequency();
     } else {
         // just increment the counter
         signal_control.fetch_add(W_EXITCODE(1, 0), std::memory_order_relaxed);
@@ -3113,7 +3114,10 @@ int main(int argc, char **argv)
                 return EX_USAGE;
             }
             else
-                sApp->fixed_frequency=set_fixed_frequency; // Do ParseInt
+                sApp->fixed_frequency=ParseIntArgument<>{
+                        .min = sApp->frequency_manager.get_min_supported_freq(),
+                        .max = sApp->frequency_manager.get_max_supported_freq(),
+                }();
             break;
         case ignore_os_errors_option:
             sApp->ignore_os_errors = true;
