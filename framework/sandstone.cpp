@@ -290,7 +290,7 @@ static void signal_handler(int signum)
     uint32_t expected = 0;
     if (signal_control.compare_exchange_strong(expected, W_EXITCODE(1, signum), std::memory_order_relaxed)) {
         // initial clean up
-        //FrequencyManager::restore_max_frequency();
+        sApp->frequency_manager.restore_max_frequency(sApp->enabled_cpus.count());
     } else {
         // just increment the counter
         signal_control.fetch_add(W_EXITCODE(1, 0), std::memory_order_relaxed);
@@ -2028,13 +2028,16 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     // Apply frequency changes if needed
     if (sApp->fixed_frequency != -1 && test->variable_frequencies == 1) {
         // Set fixed frequency
+        sApp->frequency_manager.set_fixed_frequency(sApp->enabled_cpus.count(), sApp->fixed_frequency);
     }
     else if (sApp->alternate_frequency && test->variable_frequencies == 1) {
         // Alternate frequency
+        sApp->frequency_manager.alternate_frequency();
     }
     else if (sApp->alternate_frequency || sApp->fixed_frequency != -1) {
         if (test->variable_frequencies == 0) {
             // Set max frequency back to normal
+            sApp->frequency_manager.restore_max_frequency(sApp->enabled_cpus.count());
         }
     }
 

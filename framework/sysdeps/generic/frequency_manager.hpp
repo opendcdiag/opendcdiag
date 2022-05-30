@@ -16,8 +16,8 @@ class FrequencyManager
 public:
     FrequencyManager() { }
     void alternate_frequency() { }
-    void set_fixed_frequency() { }
-    void restore_max_frequency() { }
+    void set_fixed_frequency(int cpu_number, int max_freq_i) { }
+    void restore_max_frequency(int cpu_number) { }
     int get_min_supported_freq() { }
     int get_max_supported_freq() { }
 };
