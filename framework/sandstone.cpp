@@ -2032,7 +2032,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     }
     else if (sApp->alternate_frequency && test->variable_frequencies == 1) {
         // Alternate frequency
-        sApp->frequency_manager.alternate_frequency();
+        sApp->frequency_manager.alternate_frequency(sApp->enabled_cpus.count());
     }
     else if (sApp->alternate_frequency || sApp->fixed_frequency != -1) {
         if (test->variable_frequencies == 0) {

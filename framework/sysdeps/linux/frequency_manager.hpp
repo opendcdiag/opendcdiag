@@ -13,6 +13,7 @@
 #include <limits>
 #include <fstream>
 #include <filesystem>
+#include <sandstone.h>
 
 #define DEFAULT_SYS_PATH        "/sys/devices/system/cpu/cpu"
 #define CPUINFO_MAX_FREQ_F      "cpuinfo_max_freq"
@@ -37,16 +38,19 @@ public:
         max_freq_current = max_freq_initial;
     }
 
-    void alternate_frequency()
+    void alternate_frequency(int cpu_number)
     {
         /* Based on max current frequency, set low value when current is high,
          * or set high if current is low. */
-        // If current is between max and max - 10
-        //  - return random(min, min+10)
-        // If current is between min and min + 10
-        //  - return random(max, max-10)
-        // Otherwise, could mean we are having a random one,
-        // we can either chose high or low
+        int middle_freq = max_freq_supported;
+        int deviation = random32() % 10;
+        int alternating_freq;
+        if (max_freq_current >= middle_freq)
+            alternating_freq = max_freq_supported - deviation;
+        else
+            alternating_freq = min_freq_supported + deviation;
+
+        set_fixed_frequency(cpu_number, alternating_freq);
     }
 
     void set_fixed_frequency(int cpu_number, int max_freq_i)
