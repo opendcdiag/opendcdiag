@@ -2,21 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 if (host_machine.cpu_family() == 'x86_64')
-        sysdeps_arch_files = files(
+	sysdeps_arch_files = files(
 		'interrupt_monitor.cpp',
-                'kvm.c',
-                'msr.c',
-        )
+		'kvm.c',
+		'msr.c',
+	)
 else
-        sysdeps_arch_files = files(
-                '../generic/kvm.c',
-                '../generic/msr.c',
-        )
+	sysdeps_arch_files = files(
+		'../generic/kvm.c',
+		'../generic/msr.c',
+	)
 endif
 
 _sysdeps_a = static_library(
 	'sysdeps_linux',
-        sysdeps_unix_files,
+	sysdeps_unix_files,
 	sysdeps_arch_files,
 	files(
 		'cpu_affinity.cpp',
