@@ -5,10 +5,10 @@ dep_static = get_option('dependency_link') == 'static'
 
 setmod = import('sourceset')
 
-tests_config_data = configuration_data()
-tests_base_set = setmod.source_set()
-tests_hsw_set = setmod.source_set()
-tests_skx_set = setmod.source_set()
+tests_config = configuration_data()
+tests_set_base = setmod.source_set()
+tests_set_hsw = setmod.source_set()
+tests_set_skx = setmod.source_set()
 
 tests_common_c_args = [
 	debug_c_flags,
@@ -32,14 +32,14 @@ if target_machine.cpu_family() != 'x86_64'
 	tests_common_cpp_args += '-Wno-deprecated-copy'
 endif
 
-tests_base_set.add(
+tests_set_base.add(
 	files(
 		'ifs/ifs.c',
 	)
 )
 
 eigen3_dep = dependency('eigen3', static : dep_static)
-tests_base_set.add(
+tests_set_base.add(
 	when : eigen3_dep,
 	if_true : files(
 		'eigen_gemm/double14.cpp',
@@ -58,7 +58,7 @@ tests_base_set.add(
 	)
 )
 
-tests_skx_set.add(
+tests_set_skx.add(
 	when : eigen3_dep,
 	if_true : files(
 		'eigen_svd/svd_cdouble.cpp',
@@ -66,7 +66,7 @@ tests_skx_set.add(
 )
 
 zstd_dep = dependency('libzstd', static : dep_static)
-tests_base_set.add(
+tests_set_base.add(
 	when : zstd_dep,
 	if_true : files(
 		'zstd/test.c',
@@ -74,7 +74,7 @@ tests_base_set.add(
 )
 
 zlib_dep = dependency('zlib', static : dep_static)
-tests_base_set.add(
+tests_set_base.add(
 	when : zlib_dep,
 	if_true : files(
 		'zlib/fuzz.c',
@@ -82,12 +82,12 @@ tests_base_set.add(
 	)
 )
 
-tests_base_config = tests_base_set.apply(tests_config_data)
+tests_config_base = tests_set_base.apply(tests_config)
 
 tests_base_a = static_library(
 	'tests_base',
-	sources : tests_base_config.sources(),
-	dependencies : tests_base_config.dependencies(),
+	sources : tests_config_base.sources(),
+	dependencies : tests_config_base.dependencies(),
 	build_by_default: false,
 	include_directories : [
 		tests_common_incdirs,
@@ -107,12 +107,12 @@ sandstone_tests += [
 ]
 
 if host_machine.cpu_family() == 'x86_64'
-	tests_hsw_config = tests_hsw_set.apply(tests_config_data)
+	tests_config_hsw = tests_set_hsw.apply(tests_config)
 
 	tests_hsw_a = static_library(
 		'tests_hsw',
-		sources : tests_hsw_config.sources(),
-		dependencies : tests_hsw_config.dependencies(),
+		sources : tests_config_hsw.sources(),
+		dependencies : tests_config_hsw.dependencies(),
 		build_by_default: false,
 		include_directories : [
 			tests_common_incdirs,
@@ -132,12 +132,12 @@ if host_machine.cpu_family() == 'x86_64'
 		],
 	)
 
-	tests_skx_config = tests_skx_set.apply(tests_config_data)
+	tests_config_skx = tests_set_skx.apply(tests_config)
 
 	tests_skx_a = static_library(
 		'tests_skx',
-		sources : tests_skx_config.sources(),
-		dependencies : tests_skx_config.dependencies(),
+		sources : tests_config_skx.sources(),
+		dependencies : tests_config_skx.dependencies(),
 		build_by_default: false,
 		include_directories : [
 			tests_common_incdirs,
