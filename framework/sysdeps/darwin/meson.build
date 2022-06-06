@@ -1,4 +1,3 @@
-# -*- indent-tabs-mode: t -*-
 sysdeps_a = static_library(
 	'sysdeps_darwin',
         sysdeps_unix_files,

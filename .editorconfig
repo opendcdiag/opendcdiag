@@ -1,0 +1,17 @@
+# See: https://editorconfig.org/
+
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+
+[*.{c,cpp,h,hpp}]
+indent_style = space
+tab_width = 4
+
+[{meson.build,meson_options.txt}]
+indent_style = tab
+
+[simd*.conf]
+indent_style = tab
