@@ -72,7 +72,7 @@ else
 	debug_c_flags = [
 		'-DNDEBUG',
 		'-O3',
-                '-g'
+		'-g'
 	]
 endif
 
@@ -129,7 +129,7 @@ nasm_system_flags = [
 	'-Xgnu',
 	'-DAPPLE',
 	'-D__APPLE__',
-        '--prefix=_'
+	'--prefix=_'
 ]
 else
 if get_option('buildtype') == 'debug'
@@ -165,7 +165,7 @@ endif
 default_c_warn = [
 	'-Wall',
 	'-Wextra',
-        '-Werror=discarded-qualifiers',
+	'-Werror=discarded-qualifiers',
 	'-Werror=incompatible-pointer-types',
 	'-Werror=implicit-function-declaration',
 	'-Werror=int-conversion',
@@ -209,9 +209,9 @@ if target_machine.system() != 'windows'
 endif
 
 target_deps += [
-        boost_dep,
-        dl_dep,
-        pthread_dep,
+	boost_dep,
+	dl_dep,
+	pthread_dep,
 ]
 
 generated_gitid_h = configure_file(

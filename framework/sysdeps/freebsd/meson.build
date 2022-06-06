@@ -1,6 +1,6 @@
 sysdeps_a = static_library(
 	'sysdeps_freebsd',
-        sysdeps_unix_files,
+	sysdeps_unix_files,
 	files(
 		'cpu_affinity.cpp',
 		'malloc.cpp',

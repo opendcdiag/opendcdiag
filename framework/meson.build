@@ -4,7 +4,7 @@
 sysdeps_dir = 'sysdeps/' + target_machine.system()
 
 if target_machine.system() == 'cygwin'
-  sysdeps_dir = 'sysdeps/windows'
+	sysdeps_dir = 'sysdeps/windows'
 endif
 
 framework_incdir = [
@@ -25,8 +25,8 @@ generated_cpu_features_h = configure_file(
 	output : 'cpu_features.h',
 	encoding : 'ascii',
 	input : [
-		 'scripts/x86simd_generate.pl',
-		 'simd.conf',
+		'scripts/x86simd_generate.pl',
+		'simd.conf',
 	],
 	capture : true,
 	command : [
