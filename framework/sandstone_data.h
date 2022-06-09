@@ -19,7 +19,6 @@
 #endif
 
 #ifdef __cplusplus
-#include <limits>
 extern "C" {
 #endif
 
