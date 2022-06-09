@@ -6,8 +6,12 @@
 #ifndef __FP_VECTORS_H
 #define __FP_VECTORS_H
 
-#include <assert.h>
 #include <stdint.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+#include <limits>
+#endif
 
 // GCC supports _Float16 on x86 and __fp16 on AArch64, in both cases it
 // only supports IEEE-754 format.
@@ -26,34 +30,72 @@ typedef SANDSTONE_FP16_TYPE fp16_t;
 #endif
 
 #define FLOAT16_EXPONENT_MASK  0x1fu
+#define BFLOAT16_EXPONENT_MASK 0xffu
 #define FLOAT32_EXPONENT_MASK  0xffu
 #define FLOAT64_EXPONENT_MASK  0x7ffu
 #define FLOAT80_EXPONENT_MASK  0x7fffu
 
 #define FLOAT16_INFINITY_EXPONENT  0x1fu
+#define BFLOAT16_INFINITY_EXPONENT 0xffu
 #define FLOAT32_INFINITY_EXPONENT  0xffu
 #define FLOAT64_INFINITY_EXPONENT  0x7ffu
 #define FLOAT80_INFINITY_EXPONENT  0x7fffu
 
 #define FLOAT16_NAN_EXPONENT  0x1fu
+#define BFLOAT16_NAN_EXPONENT 0xffu
 #define FLOAT32_NAN_EXPONENT  0xffu
 #define FLOAT64_NAN_EXPONENT  0x7ffu
 #define FLOAT80_NAN_EXPONENT  0x7fffu
 
+#define FLOAT16_DENORM_EXPONENT  0x00
+#define BFLOAT16_DENORM_EXPONENT 0x00
+#define FLOAT32_DENORM_EXPONENT  0x00
+#define FLOAT64_DENORM_EXPONENT  0x00
+#define FLOAT80_DENORM_EXPONENT  0x00
+
 #define FLOAT16_EXPONENT_BIAS  0x0fu
+#define BFLOAT16_EXPONENT_BIAS 0x7fu
 #define FLOAT32_EXPONENT_BIAS  0x7fu
 #define FLOAT64_EXPONENT_BIAS  0x3ffu
 #define FLOAT80_EXPONENT_BIAS  0x3fffu
 
 #define FLOAT16_MANTISSA_MASK  0x3ffu
+#define BFLOAT16_MANTISSA_MASK 0x7fu
 #define FLOAT32_MANTISSA_MASK  0x7fffffu
 #define FLOAT64_MANTISSA_MASK  0xfffffffffffffu
-#define FLOAT80_MANTISSA_MASK  0xffffffffffffffffu
+#define FLOAT80_MANTISSA_MASK  0x7fffffffffffffffu
 
 #define FLOAT16_MANTISSA_QUIET_NAN_MASK  0x200u
+#define BFLOAT16_MANTISSA_QUIET_NAN_MASK 0x40u
 #define FLOAT32_MANTISSA_QUIET_NAN_MASK  0x400000u
 #define FLOAT64_MANTISSA_QUIET_NAN_MASK  0x8000000000000u
-#define FLOAT80_MANTISSA_QUIET_NAN_MASK  0x8000000000000000u
+#define FLOAT80_MANTISSA_QUIET_NAN_MASK  0x4000000000000000u
+
+#define FP16_SIGN_BITS        1
+#define FP16_EXPONENT_BITS    5
+#define FP16_MANTISSA_BITS    10
+#define FP16_QUIET_BITS       1
+
+#define BFLT16_SIGN_BITS      1
+#define BFLT16_EXPONENT_BITS  8
+#define BFLT16_MANTISSA_BITS  7
+#define BFLT16_QUIET_BITS     1
+
+#define FLOAT32_SIGN_BITS     1
+#define FLOAT32_EXPONENT_BITS 8
+#define FLOAT32_MANTISSA_BITS 23
+#define FLOAT32_QUIET_BITS    1
+
+#define FLOAT64_SIGN_BITS     1
+#define FLOAT64_EXPONENT_BITS 11
+#define FLOAT64_MANTISSA_BITS 52
+#define FLOAT64_QUIET_BITS    1
+
+#define FLOAT80_SIGN_BITS     1
+#define FLOAT80_EXPONENT_BITS 15
+#define FLOAT80_JBIT_BITS     1
+#define FLOAT80_MANTISSA_BITS 63
+#define FLOAT80_QUIET_BITS    1
 
 #define FP16_DECIMAL_DIG        5
 #define FP16_DENORM_MIN         5.96046447753906250000000000000000000e-8
@@ -94,25 +136,30 @@ extern "C" {
 struct Float16
 {
     union {
+        struct __attribute__((packed)) {
+            uint16_t mantissa : FP16_MANTISSA_BITS;
+            uint16_t exponent : FP16_EXPONENT_BITS;
+            uint16_t sign     : FP16_SIGN_BITS;
+        };
+        struct __attribute__((packed)) {
+            uint16_t payload  : FP16_MANTISSA_BITS - FP16_QUIET_BITS;
+            uint16_t quiet    : FP16_QUIET_BITS;
+            uint16_t exponent : FP16_EXPONENT_BITS;
+            uint16_t sign     : FP16_SIGN_BITS;
+        } as_nan;
+
+        uint16_t as_hex;
 #ifdef SANDSTONE_FP16_TYPE
         fp16_t as_float;
 #endif
-
-        union {
-            uint16_t as_hex;
-            uint16_t payload;
-        };
-
-        struct __attribute__((packed)) {
-            uint16_t mantissa : 10;
-            uint16_t exponent : 5;
-            uint16_t sign : 1;
-        };
+        uint16_t payload;
     };
 
 #ifdef __cplusplus
-    Float16() = default;
+    inline Float16() = default;
     inline Float16(float f);
+
+    constexpr inline Float16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
 
     static constexpr int digits = FP16_MANT_DIG;
     static constexpr int digits10 = FP16_DIG;
@@ -150,32 +197,62 @@ struct Float16
     static constexpr Float16 quiet_NaN()        { return Float16(Holder{0x7e00}); }
     static constexpr Float16 signaling_NaN()    { return Float16(Holder{0x7d00}); }
 
+    constexpr inline bool     is_negative() const         { return sign != 0; }
+    constexpr inline bool     is_zero() const             { return (exponent == FLOAT16_DENORM_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool     is_denormal() const         { return (exponent == FLOAT16_DENORM_EXPONENT) && (mantissa != 0); }
+
+    // NaNs
+    constexpr inline bool     is_general_nan() const      { return exponent == FLOAT16_NAN_EXPONENT; }
+    constexpr inline bool     is_inf() const              { return is_general_nan() && (mantissa == 0); }
+    constexpr inline bool     is_nan() const              { return is_general_nan() && (mantissa != 0); }
+    constexpr inline bool     is_snan() const             { return is_nan() && ((mantissa & FLOAT16_MANTISSA_QUIET_NAN_MASK) == 0); }
+    constexpr inline bool     is_qnan() const             { return is_nan() && ((mantissa & FLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
+
+    constexpr inline uint16_t get_nan_payload() const     { return mantissa & (~FLOAT16_MANTISSA_QUIET_NAN_MASK); }
+
 private:
     struct Holder { uint16_t payload; };
     explicit constexpr Float16(Holder h) : as_hex(h.payload) {}
 #endif
 };
-static_assert(sizeof(struct Float16) == 2, "Float16 structure is not of the correct size");
+typedef struct Float16 Float16;
+
+// C interface
+static inline bool     Float16_is_negative(Float16 f)         { return f.sign != 0; }
+static inline bool     Float16_is_zero(Float16 f)             { return (f.exponent == FLOAT16_DENORM_EXPONENT) && (f.mantissa == 0); }
+static inline bool     Float16_is_denormal(Float16 f)         { return (f.exponent == FLOAT16_DENORM_EXPONENT) && (f.mantissa != 0); }
+
+static inline bool     Float16_is_general_nan(Float16 f)      { return f.exponent == FLOAT16_NAN_EXPONENT; }
+static inline bool     Float16_is_inf(Float16 f)              { return Float16_is_general_nan(f) && (f.mantissa == 0); }
+static inline bool     Float16_is_nan(Float16 f)              { return Float16_is_general_nan(f) && (f.mantissa != 0); }
+static inline bool     Float16_is_snan(Float16 f)             { return Float16_is_nan(f) && (f.as_nan.quiet == 0); }
+static inline bool     Float16_is_qnan(Float16 f)             { return Float16_is_nan(f) && (f.as_nan.quiet != 0); }
+
+static inline uint16_t Float16_get_nan_payload(Float16 f)     { return f.as_nan.payload; }
+
 
 struct BFloat16
 {
     union {
-
-        union {
-            uint16_t as_hex;
-            uint16_t payload;
-        };
-
         struct __attribute__((packed)) {
-            uint16_t mantissa : 10;
-            uint16_t exponent : 5;
-            uint16_t sign : 1;
+            uint16_t mantissa : BFLT16_MANTISSA_BITS;
+            uint16_t exponent : BFLT16_EXPONENT_BITS;
+            uint16_t sign     : BFLT16_SIGN_BITS;
         };
+        struct __attribute__((packed)) {
+            uint16_t payload  : BFLT16_MANTISSA_BITS - BFLT16_QUIET_BITS;
+            uint16_t quiet    : BFLT16_QUIET_BITS;
+            uint16_t exponent : BFLT16_EXPONENT_BITS;
+            uint16_t sign     : BFLT16_SIGN_BITS;
+        } as_nan;
+        uint16_t as_hex;
+        uint16_t payload;
     };
 
 #ifdef __cplusplus
-    BFloat16() = default;
+    inline BFloat16() = default;
     inline BFloat16(float f);
+    constexpr inline BFloat16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
 
     // same API as std::numeric_limits:
     static constexpr int digits = BFLT16_MANT_DIG;
@@ -216,65 +293,237 @@ struct BFloat16
 
     // extra
     static constexpr float epsilon_v()        { return std::numeric_limits<float>::epsilon() * 65536; }
+
+    constexpr inline bool     is_negative() const       { return sign != 0; }
+    constexpr inline bool     is_zero() const           { return (exponent == BFLOAT16_DENORM_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool     is_denormal() const       { return (exponent == BFLOAT16_DENORM_EXPONENT) && (mantissa != 0); }
+
+    // NaNs
+    constexpr inline bool     is_general_nan() const    { return exponent == FLOAT32_NAN_EXPONENT; }
+    constexpr inline bool     is_inf() const            { return is_general_nan() && (mantissa == 0); }
+    constexpr inline bool     is_nan() const            { return is_general_nan() && (mantissa != 0); }
+    constexpr inline bool     is_snan() const           { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) == 0); }
+    constexpr inline bool     is_qnan() const           { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
+
+    constexpr inline uint16_t get_nan_payload() const   { return mantissa & (~BFLOAT16_MANTISSA_QUIET_NAN_MASK); }
+
 private:
     struct Holder { uint16_t payload; };
     explicit constexpr BFloat16(Holder h) : as_hex(h.payload) {}
 #endif
 };
-static_assert(sizeof(struct BFloat16) == 2, "BFloat16 structure is not of the correct size");
-
-typedef struct Float16 Float16;
 typedef struct BFloat16 BFloat16;
 
-typedef union {
-    float as_float;
-    uint32_t as_hex;
-    struct {
-        unsigned mantissa : 23;
-        unsigned exponent : 8;
-        unsigned sign : 1;
-    };
-} Float32;
-static_assert(sizeof(Float32) == sizeof(float), "Float32 structure is not of the correct size");
+// C interface
+static inline bool     BFloat16_is_negative(BFloat16 f)         { return f.sign != 0; }
+static inline bool     BFloat16_is_zero(BFloat16 f)             { return (f.exponent == BFLOAT16_DENORM_EXPONENT) && (f.mantissa == 0); }
+static inline bool     BFloat16_is_denormal(BFloat16 f)         { return (f.exponent == BFLOAT16_DENORM_EXPONENT) && (f.mantissa != 0); }
 
-typedef union {
-    double as_float;
-    uint64_t as_hex;
-    struct {
-        unsigned long long mantissa : 52;
-        unsigned long long exponent : 11;
-        unsigned long long sign : 1;
-    };
-} Float64;
-static_assert(sizeof(Float64) == sizeof(double), "Float64 structure is not of the correct size");
+static inline bool     BFloat16_is_general_nan(BFloat16 f)      { return f.exponent == FLOAT32_NAN_EXPONENT; }
+static inline bool     BFloat16_is_inf(BFloat16 f)              { return BFloat16_is_general_nan(f) && (f.mantissa == 0); }
+static inline bool     BFloat16_is_nan(BFloat16 f)              { return BFloat16_is_general_nan(f) && (f.mantissa != 0); }
+static inline bool     BFloat16_is_snan(BFloat16 f)             { return BFloat16_is_nan(f) && (f.as_nan.quiet == 0); }
+static inline bool     BFloat16_is_qnan(BFloat16 f)             { return BFloat16_is_nan(f) && (f.as_nan.quiet != 0); }
 
-typedef union {
-    struct {
+static inline uint16_t BFloat16_get_nan_payload(BFloat16 f)     { return f.as_nan.payload; }
+
+
+struct Float32 {
+    union {
+        struct {
+            uint32_t mantissa : FLOAT32_MANTISSA_BITS;
+            uint32_t exponent : FLOAT32_EXPONENT_BITS;
+            uint32_t sign     : FLOAT32_SIGN_BITS;
+        };
+        struct {
+            uint32_t payload  : FLOAT32_MANTISSA_BITS - FLOAT32_QUIET_BITS;
+            uint32_t quiet    : FLOAT32_QUIET_BITS;
+            uint32_t exponent : FLOAT32_EXPONENT_BITS;
+            uint32_t sign     : FLOAT32_SIGN_BITS;
+        } as_nan;
+        float as_float;
+        uint32_t as_hex;
+    };
+
+#ifdef __cplusplus
+    inline Float32() = default;
+    constexpr inline Float32(float f) : as_float(f) { }
+    constexpr inline Float32(uint32_t s, uint32_t e, uint32_t m): mantissa(m), exponent(e), sign(s) { }
+#endif
+};
+typedef struct Float32 Float32;
+
+struct Float64 {
+    union {
+        struct {
+            uint64_t mantissa : FLOAT64_MANTISSA_BITS;
+            uint64_t exponent : FLOAT64_EXPONENT_BITS;
+            uint64_t sign     : FLOAT64_SIGN_BITS;
+        };
+        struct {
+            uint64_t payload  : FLOAT64_MANTISSA_BITS - FLOAT64_QUIET_BITS;
+            uint64_t quiet    : FLOAT64_QUIET_BITS;
+            uint64_t exponent : FLOAT64_EXPONENT_BITS;
+            uint64_t sign     : FLOAT64_SIGN_BITS;
+        } as_nan;
+        struct {
+            uint32_t low32;
+            uint32_t high32;
+        } as_hex32;
+        double as_float;
+        uint64_t as_hex;
+    };
+
+#ifdef __cplusplus
+    inline Float64() = default;
+    constexpr inline Float64(float f) : as_float(f) { }
+    constexpr inline Float64(uint64_t s, uint64_t e, uint64_t m): mantissa(m), exponent(e), sign(s) { }
+#endif
+};
+typedef struct Float64 Float64;
+
+struct Float80 {
+    union {
+        struct {
+            uint64_t mantissa : FLOAT80_MANTISSA_BITS;
+            uint64_t jbit     : FLOAT80_JBIT_BITS;
+            uint64_t exponent : FLOAT80_EXPONENT_BITS;
+            uint64_t sign     : FLOAT80_SIGN_BITS;
+        };
+        struct {
+            uint64_t payload  : FLOAT80_MANTISSA_BITS - FLOAT80_QUIET_BITS;
+            uint64_t quiet    : FLOAT80_QUIET_BITS;
+            uint64_t jbit     : FLOAT80_JBIT_BITS;
+            uint64_t exponent : FLOAT80_EXPONENT_BITS;
+            uint64_t sign     : FLOAT80_SIGN_BITS;
+        } as_nan;
+        struct {
+            uint64_t low64;
+            uint16_t high16;
+        } as_hex;
+        struct {
+            uint32_t low32;
+            uint32_t high32;
+            uint16_t extra16;
+        } as_hex32;
         long double as_float;
     };
-    struct {
-        unsigned long long mantissa : 63;
-        unsigned long jbit : 1;
-        unsigned exponent : 15;
-        unsigned sign : 1;
-    };
-    struct {
-        uint64_t low64;
-        uint16_t high16;
-    } as_hex;
-} Float80;
-static_assert(sizeof(double) < sizeof(long double), "Compiler does not support long double");
-static_assert(sizeof(Float80) == sizeof(long double), "Float80 structure is not of the correct size");
 
-Float16 new_float16(unsigned sign, unsigned exponent, unsigned mantissa);
-Float32 new_float32(uint32_t sign, uint32_t exponent, uint32_t mantissa);
-Float64 new_float64(uint32_t sign, uint32_t exponent, uint64_t mantissa);
-Float80 new_float80(uint32_t sign, uint32_t exponent, uint32_t jbit, uint64_t mantissa);
+#ifdef __cplusplus
+    inline Float80() = default;
+    constexpr inline Float80(long double f) : as_float(f) { }
+    constexpr inline Float80(uint64_t s, uint64_t e, uint64_t j, uint64_t m): mantissa(m), jbit(j), exponent(e), sign(s) { }
+#endif
+};
+typedef struct Float80 Float80;
+
+/**
+ * @brief C/C++ builders (inlined)
+ *
+ * "variadic" C/C++ builders, either constructor (C++) or direct struct initialization (C)
+ *
+ * @{
+ */
+
+#ifdef __cplusplus
+#define STATIC_INLINE static inline constexpr
+#else
+#define STATIC_INLINE static inline
+#endif
+
+STATIC_INLINE Float16 new_float16(uint16_t sign, uint16_t exponent, uint16_t mantissa)
+{
+#ifdef __cplusplus
+    return Float16(sign, exponent, mantissa);
+#else
+    return (Float16) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
+#endif
+}
+
+STATIC_INLINE BFloat16 new_bfloat16(uint16_t sign, uint16_t exponent, uint16_t mantissa)
+{
+#ifdef __cplusplus
+    return BFloat16(sign, exponent, mantissa);
+#else
+    return (BFloat16) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
+#endif
+}
+
+STATIC_INLINE Float32 new_float32(uint32_t sign, uint32_t exponent, uint32_t mantissa)
+{
+#ifdef __cplusplus
+    return Float32(sign, exponent, mantissa);
+#else
+    return (Float32) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
+#endif
+}
+
+STATIC_INLINE Float64 new_float64(uint64_t sign, uint64_t exponent, uint64_t mantissa)
+{
+#ifdef __cplusplus
+    return Float64(sign, exponent, mantissa);
+#else
+    return (Float64) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
+#endif
+}
+
+STATIC_INLINE Float80 new_float80(uint64_t sign, uint64_t exponent, uint64_t jbit, uint64_t mantissa)
+{
+#ifdef __cplusplus
+    return Float80(sign, exponent, jbit, mantissa);
+#else
+    return (Float80) {{{ .sign = sign, .exponent = exponent, .jbit = jbit, .mantissa = mantissa }}};
+#endif
+}
+/** @} */
 
 Float16 new_random_float16();
+BFloat16 new_random_bfloat16();
 Float32 new_random_float32();
 Float64 new_random_float64();
 Float80 new_random_float80();
+
+// __builtins
+#define IS_NEGATIVE(v) \
+    _Generic((v),\
+        Float16: Float16_is_negative,\
+        BFloat16: BFloat16_is_negative\
+    )(v)
+#define IS_ZERO(v) \
+    _Generic((v),\
+        Float16: Float16_is_zero,\
+        BFloat16: BFloat16_is_zero\
+    )(v)
+#define IS_DENORMAL(v) \
+    _Generic((v),\
+        Float16: Float16_is_denormal,\
+        BFloat16: BFloat16_is_denormal\
+    )(v)
+#define IS_INF(v) \
+    _Generic((v),\
+        Float16: Float16_is_inf,\
+        BFloat16: BFloat16_is_inf\
+    )(v)
+#define IS_NAN(v) \
+    _Generic((v),\
+        Float16: Float16_is_nan,\
+        BFloat16: BFloat16_is_nan\
+    )(v)
+#define IS_SNAN(v) \
+    _Generic((v),\
+        Float16: Float16_is_snan,\
+        BFloat16: BFloat16_is_snan\
+    )(v)
+#define IS_QNAN(v) \
+    _Generic((v),\
+        Float16: Float16_is_qnan,\
+        BFloat16: BFloat16_is_qnan\
+    )(v)
+#define GET_NAN_PAYLOAD(v) \
+    _Generic((v),\
+        Float16: Float16_get_nan_payload,\
+        BFloat16: BFloat16_get_nan_payload\
+    )(v)
 
 #ifdef __cplusplus
 } // extern "C"

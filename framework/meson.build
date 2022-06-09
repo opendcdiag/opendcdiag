@@ -99,7 +99,7 @@ framework_main_a = static_library(
 )
 
 framework_files = files(
-	'Floats.c',
+	'Floats.cpp',
 	'generated_vectors.c',
 	'logging.cpp',
 	'mmap_region.c',
