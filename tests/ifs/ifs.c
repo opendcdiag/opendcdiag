@@ -31,6 +31,26 @@
 
 #define BUFLEN 256 // kernel module prints at most a 64bit value
 
+/* from linux/ifs/ifs.h: */
+/*
+ * Driver populated error-codes
+ * 0xFD: Test timed out before completing all the chunks.
+ * 0xFE: not all scan chunks were executed. Maximum forward progress retries exceeded.
+ */
+#define IFS_SW_TIMEOUT                          0xFD
+#define IFS_SW_PARTIAL_COMPLETION               0xFE
+
+static bool is_result_code_skip(unsigned long long code)
+{
+    switch (code) {
+    case IFS_SW_TIMEOUT:
+    case IFS_SW_PARTIAL_COMPLETION:
+        return true;
+    }
+
+    return false;
+}
+
 static bool write_file(int dfd, const char *filename, const char* value)
 {
         size_t l = strlen(value);
@@ -160,11 +180,18 @@ static int scan_run(struct test *test, int cpu)
 
                 if (memcmp(result, "fail", strlen("fail")) == 0) {
                         /* failed, get status code */
+                        unsigned long long code;
                         ssize_t n = read_file(ifsfd, "details", result);
                         close(ifsfd);
+
                         if (n < 0) {
                                 log_error("Test \"%s\" failed but could not retrieve error condition", d_name);
                         } else {
+                                if (sscanf(result, "%llx", &code) == 1 && is_result_code_skip(code)) {
+                                        log_warning("Test \"%s\" did not run to completion, code: %s",
+                                                    d_name, result);
+                                        continue;       // not a failure condition
+                                }
                                 log_error("Test \"%s\" failed with condition: %s", d_name, result);
                         }
                         break;
