@@ -51,7 +51,7 @@ static int scan_init(struct test *test)
                 /* modprobe kernel driver, ignore errors entirely here */
                 pid_t pid = fork();
                 if (pid == 0) {
-                        execl("/sbin/modprobe", "/sbin/modprobe", "intel_ifs", NULL);
+                        execl("/sbin/modprobe", "/sbin/modprobe", "-q", "intel_ifs", NULL);
 
                         /* don't print an error if /sbin/modprobe wasn't found, but
                            log_debug() is fine (since the parent is waiting, we can
