@@ -88,6 +88,9 @@ static int scan_run(struct test *test, int cpu)
         char filename[PATH_MAX];
         char result[BUFLEN];
 
+        if (cpu_info[cpu].thread_id != 0)
+                return EXIT_SKIP;
+
         sprintf(filename, "/sys/devices/system/cpu/cpu%d/ifs/status", cpu_info[cpu].cpu_number);
 
         for (;;) {
