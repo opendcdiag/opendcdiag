@@ -21,12 +21,10 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <paths.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-static pthread_mutex_t scanmutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define BUFLEN 256 // kernel module prints at most a 64bit value
 
@@ -90,8 +88,6 @@ static int scan_run(struct test *test, int cpu)
         char filename[PATH_MAX];
         char result[BUFLEN];
 
-        pthread_mutex_lock(&scanmutex);
-
         sprintf(filename, "/sys/devices/system/cpu/cpu%d/ifs/status", cpu_info[cpu].cpu_number);
 
         for (;;) {
@@ -99,14 +95,12 @@ static int scan_run(struct test *test, int cpu)
 
                 file = fopen(filename, "r");
                 if (!file) {
-                        pthread_mutex_unlock(&scanmutex);
                         log_info("status fopen(): %m");
                         return EXIT_SKIP;
                 }
                 result[0] = 0;
                 if (!fgets(result, sizeof(result), file)) {
                         int e = errno;
-                        pthread_mutex_unlock(&scanmutex);
                         if (e == EBUSY) {
                                 if (r++ > 80) { // 2sec max
                                         log_warning("timed out waiting for test to complete");
@@ -124,8 +118,6 @@ static int scan_run(struct test *test, int cpu)
                 fclose(file);
                 break;
         }
-
-        pthread_mutex_unlock(&scanmutex);
 
         if (strncmp(result, "fail", BUFLEN) == 0)
                 // core is defective, should be offlined by user
