@@ -13,6 +13,7 @@
  *
  */
 
+#define _GNU_SOURCE 1
 #include <sandstone.h>
 
 #if defined(__x86_64__) && defined(__linux__)
@@ -25,14 +26,14 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define PATH_SYS_IFS_BASE "/sys/devices/virtual/misc/"
 
 #define BUFLEN 256 // kernel module prints at most a 64bit value
 
-static bool write_file(const char* filename, const char* value)
+static bool write_file(int dfd, const char *filename, const char* value)
 {
         size_t l = strlen(value);
-
-        int fd = open(filename, O_WRONLY);
+        int fd = openat(dfd, filename, O_WRONLY | O_CLOEXEC);
         if (fd == -1)
                 return false;
         if (write(fd, value, l) != l) {
@@ -43,9 +44,27 @@ static bool write_file(const char* filename, const char* value)
         return true;
 }
 
+static ssize_t read_file(int dfd, const char *filename, char buf[static restrict BUFLEN])
+{
+        int fd = openat(dfd, filename, O_RDONLY | O_CLOEXEC);
+        if (fd < 0)
+            return fd;
+
+        ssize_t n = read(fd, buf, BUFLEN);
+        close(fd);
+
+        /* trim newlines */
+        while (n > 0 && buf[n - 1] == '\n') {
+                buf[n - 1] = '\0';
+                --n;
+        }
+        return n;
+}
+
 static int scan_init(struct test *test)
 {
-        if (access("/sys/devices/system/cpu/cpu0/ifs/status", R_OK) != 0) {
+        int ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
+        if (ifs0 < 0) {
                 /* modprobe kernel driver, ignore errors entirely here */
                 pid_t pid = fork();
                 if (pid == 0) {
@@ -65,68 +84,92 @@ static int scan_init(struct test *test)
                 } else {
                         /* ignore failure to fork() -- extremely unlikely */
                 }
+
+                /* try opening again now that we've potentially modprobe'd */
+                ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
         }
 
-        /* first check if there is basic kernel support with the API we support */
-        if ((access("/sys/devices/system/cpu/ifs/run_test", W_OK) != 0) ||
-            (access("/sys/devices/system/cpu/cpu0/ifs/status", R_OK) != 0) != 0 ) {
+
+        if (ifs0 < 0 || faccessat(ifs0, "run_test", R_OK, 0) < 0 ||
+                faccessat(ifs0, "status", R_OK, 0) < 0 || faccessat(ifs0, "details", R_OK, 0) < 0) {
                 log_info("not supported (missing kernel module, firmware, or invalid HW)");
-                return EXIT_SKIP;
+                close(ifs0);
+                return -EOPNOTSUPP;
         }
 
-        if (!write_file("/sys/devices/system/cpu/ifs/run_test", "1\n")) {
-                log_info("run_test write failed");
-                return EXIT_SKIP;
+        /* see if we can open run_test for writing */
+        int fd = openat(ifs0, "run_test", O_WRONLY);
+        int saved_errno = errno;
+        close(fd);
+        close(ifs0);
+        if (fd < 0) {
+                log_info("could not open intel_ifs_0/run_test for writing (not running as root?): %m");
+                close(fd);
+                return -saved_errno;
         }
 
-        return 0;
+        return EXIT_SUCCESS;
 }
 
 static int scan_run(struct test *test, int cpu)
 {
-        FILE *file;
-        char filename[PATH_MAX];
-        char result[BUFLEN];
+        char result[BUFLEN], my_cpu[BUFLEN];
+        int basefd;
+        bool any_test_succeded = false;
 
         if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
 
-        sprintf(filename, "/sys/devices/system/cpu/cpu%d/ifs/status", cpu_info[cpu].cpu_number);
+        basefd = open(PATH_SYS_IFS_BASE, O_DIRECTORY | O_PATH);
+        if (basefd < 0)
+                return -errno;      // shouldn't happen
 
-        for (;;) {
-                int r = 0;
+        snprintf(my_cpu, sizeof(my_cpu), "%d\n", cpu_info[cpu].cpu_number);
 
-                file = fopen(filename, "r");
-                if (!file) {
-                        log_info("status fopen(): %m");
-                        return EXIT_SKIP;
+        do {
+                /* FIXME: use opendir()/readdir() */
+                const char *d_name = "intel_ifs0";
+
+                int ifsfd = openat(basefd, d_name, O_DIRECTORY | O_PATH);
+                if (ifsfd < 0) {
+                        log_warning("Could not start test for \"%s\": %m", d_name);
+                        continue;
                 }
-                result[0] = 0;
-                if (!fgets(result, sizeof(result), file)) {
-                        int e = errno;
-                        if (e == EBUSY) {
-                                if (r++ > 80) { // 2sec max
-                                        log_warning("timed out waiting for test to complete");
-                                        return EXIT_SKIP;
-                                }
-                                fclose(file);
-                                usleep(25000); // 25ms
-                                continue;
+
+                /* start the test; this blocks until the test has finished */
+                if (!write_file(ifsfd, "run_test", my_cpu)) {
+                        log_warning("Could not start test for \"%s\": %m", d_name);
+                        close(ifsfd);
+                        continue;
+                }
+
+                /* read result */
+                if (read_file(ifsfd, "status", result) < 0) {
+                        log_warning("Could not obtain result for \"%s\": %m", d_name);
+                        close(ifsfd);
+                        continue;
+                }
+
+                if (memcmp(result, "fail", strlen("fail")) == 0) {
+                        /* failed, get status code */
+                        ssize_t n = read_file(ifsfd, "details", result);
+                        close(ifsfd);
+                        if (n < 0) {
+                                log_error("Test \"%s\" failed but could not retrieve error condition", d_name);
+                        } else {
+                                log_error("Test \"%s\" failed with condition: %s", d_name, result);
                         }
-
-                        log_info("status fgets(): %m");
-                        return EXIT_SKIP;
+                        break;
+                } else if (memcmp(result, "pass", strlen("pass")) == 0) {
+                        log_debug("Test \"%s\" passed", d_name);
+                        any_test_succeded = true;
                 }
 
-                fclose(file);
-                break;
-        }
+                close(ifsfd);
+        } while (0);
 
-        if (strncmp(result, "fail", BUFLEN) == 0)
-                // core is defective, should be offlined by user
-                report_fail_msg("IFS: cpu failed self-test");
-
-        return 0;
+        close(basefd);
+        return any_test_succeded ? EXIT_SUCCESS : EXIT_SKIP;
 }
 
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
