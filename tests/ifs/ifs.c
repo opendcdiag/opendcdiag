@@ -18,6 +18,7 @@
 
 #if defined(__x86_64__) && defined(__linux__)
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -114,23 +115,30 @@ static int scan_init(struct test *test)
 static int scan_run(struct test *test, int cpu)
 {
         char result[BUFLEN], my_cpu[BUFLEN];
+        DIR *base;
         int basefd;
         bool any_test_succeded = false;
 
         if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
 
-        basefd = open(PATH_SYS_IFS_BASE, O_DIRECTORY | O_PATH);
+        basefd = open(PATH_SYS_IFS_BASE, O_DIRECTORY | O_CLOEXEC);
         if (basefd < 0)
                 return -errno;      // shouldn't happen
+        base = fdopendir(basefd);
+        if (base == NULL)
+            return -errno;          // shouldn't happen
 
         snprintf(my_cpu, sizeof(my_cpu), "%d\n", cpu_info[cpu].cpu_number);
 
-        do {
-                /* FIXME: use opendir()/readdir() */
-                const char *d_name = "intel_ifs0";
+        struct dirent *ent;
+        while ((ent = readdir(base)) != NULL) {
+                static const char prefix[] = "intel_ifs_";
+                const char *d_name = ent->d_name;
+                if (ent->d_type != DT_DIR || memcmp(ent->d_name, prefix, strlen(prefix)) != 0)
+                        continue;
 
-                int ifsfd = openat(basefd, d_name, O_DIRECTORY | O_PATH);
+                int ifsfd = openat(basefd, d_name, O_DIRECTORY | O_PATH | O_CLOEXEC);
                 if (ifsfd < 0) {
                         log_warning("Could not start test for \"%s\": %m", d_name);
                         continue;
@@ -166,9 +174,9 @@ static int scan_run(struct test *test, int cpu)
                 }
 
                 close(ifsfd);
-        } while (0);
+        }
 
-        close(basefd);
+        closedir(base);
         return any_test_succeded ? EXIT_SUCCESS : EXIT_SKIP;
 }
 
