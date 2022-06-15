@@ -364,7 +364,7 @@ it. This can be done by adding the following lines to the
 [meson.build](../tests/meson.build) file in the tests directory and rebuilding.
 
 ```
-tests_base_skx_set.add(
+tests_skx_set.add(
         'examples/vector_add.c'
 )
 ```
