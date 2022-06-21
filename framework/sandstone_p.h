@@ -299,7 +299,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 #ifdef NDEBUG
     static constexpr
 #endif
-    bool use_predictable_file_names = !SandstoneConfig::SecureTempFiles;
+    bool use_predictable_file_names = false;
     bool log_test_knobs = false;
     bool slicing = true;
     bool ignore_os_errors = false;

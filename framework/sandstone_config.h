@@ -28,10 +28,6 @@
 #  define SANDSTONE_GA_DEV              SANDSTONE_DEBUG
 #endif
 
-#ifndef SANDSTONE_SECURE_TMPFILES
-#  define SANDSTONE_SECURE_TMPFILES   1
-#endif
-
 #ifndef SANDSTONE_NO_LOGGING
 #  define SANDSTONE_NO_LOGGING          (SANDSTONE_GA && !SANDSTONE_GA_DEV)
 #endif
@@ -59,7 +55,6 @@ static constexpr bool ChildBacktrace = SANDSTONE_CHILD_BACKTRACE;
 static constexpr bool I18nLogging = SANDSTONE_I18N_LOGGING;
 static constexpr bool NoLogging = SANDSTONE_NO_LOGGING;
 static constexpr bool RestrictedCommandLine = SANDSTONE_RESTRICTED_CMDLINE;
-static constexpr bool SecureTempFiles = SANDSTONE_SECURE_TMPFILES;
 } // namespace SandstoneConfig
 
 #endif /* __cplusplus */
