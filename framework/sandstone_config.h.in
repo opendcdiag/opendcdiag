@@ -6,20 +6,7 @@
 #ifndef SANDSTONE_CONFIG_H
 #define SANDSTONE_CONFIG_H
 
-// Make sure only one of DEBUG / NDEBUG is defined
-#if !defined(DEBUG) && !defined(NDEBUG)
-#  define DEBUG 1
-#endif
-#if defined(DEBUG) && defined(NDEBUG)
-#  undef NDEBUG
-#elif defined(NDEBUG)
-#  define DEBUG 0
-#endif
-#if DEBUG
-#  define SANDSTONE_DEBUG       1
-#else
-#  define SANDSTONE_DEBUG       0
-#endif
+#mesondefine SANDSTONE_DEBUG
 
 #ifndef SANDSTONE_GA
 #  define SANDSTONE_GA 0
