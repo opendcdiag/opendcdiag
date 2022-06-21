@@ -19,3 +19,5 @@ option('fallback_exec', type : 'string', value : '',
 	description : 'Executable to run if processor does not support required features (e.g. AVX2)')
 option('selftests', type : 'boolean', value : true,
 	description : 'Build in selftests (default true)')
+option('flavor', type : 'combo', choices : ['default', 'ga', 'ga-dev'], value : 'default',
+	description : 'Select one of the novel build flavors (ga, ga-dev) or the default')
