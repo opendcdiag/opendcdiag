@@ -21,3 +21,5 @@ option('selftests', type : 'boolean', value : true,
 	description : 'Build in selftests (default true)')
 option('flavor', type : 'combo', choices : ['default', 'ga', 'ga-dev'], value : 'default',
 	description : 'Select one of the novel build flavors (ga, ga-dev) or the default')
+option('cmdline', type : 'combo', choices : ['full', 'restricted'], value : 'full',
+	description : 'Build in full command line options (default) or a restricted set')
