@@ -6,6 +6,7 @@ project(
 	'dcdiag',
 	['c', 'cpp'],
 	default_options : [
+		'b_ndebug=if-release',
 		'c_std=gnu17',
 		'cpp_std=gnu++17',
 	],
@@ -59,21 +60,18 @@ endif
 debug_nasm_flags = ''
 if get_option('buildtype') == 'debug'
 	debug_c_flags = [
-		'-DDEBUG',
 		'-ggdb3',
 		'-O0',
 		'-U_FORTIFY_SOURCE'
 	]
 elif get_option('buildtype') == 'debugoptimized'
 	debug_c_flags = [
-		'-DDEBUG',
 		'-ggdb3',
 		'-O3',
 		'-U_FORTIFY_SOURCE'
 	]
 else
 	debug_c_flags = [
-		'-DNDEBUG',
 		'-O3',
                 '-g'
 	]
