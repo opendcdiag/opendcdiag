@@ -8,12 +8,8 @@
 
 #mesondefine SANDSTONE_DEBUG
 
-#ifndef SANDSTONE_GA
-#  define SANDSTONE_GA 0
-#endif
-#ifndef SANDSTONE_GA_DEV
-#  define SANDSTONE_GA_DEV              SANDSTONE_DEBUG
-#endif
+#mesondefine SANDSTONE_GA
+#mesondefine SANDSTONE_GA_DEV
 
 #ifndef SANDSTONE_NO_LOGGING
 #  define SANDSTONE_NO_LOGGING          (SANDSTONE_GA && !SANDSTONE_GA_DEV)

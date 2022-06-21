@@ -57,6 +57,9 @@ if cc.has_type('__fp16') and cpp.has_type('__fp16')
 	default_cpp_flags += ['-DSANDSTONE_HAS__FP16_TYPE']
 endif
 
+framework_config.set10('SANDSTONE_GA', get_option('flavor') == 'ga')
+framework_config.set10('SANDSTONE_GA_DEV', get_option('flavor') == 'ga-dev')
+
 framework_config.set10('SANDSTONE_DEBUG', get_option('b_ndebug') == 'false')
 
 framework_config_h = configure_file(
