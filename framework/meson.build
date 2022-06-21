@@ -61,6 +61,10 @@ endif
 framework_config.set10('SANDSTONE_GA', get_option('flavor') == 'ga')
 framework_config.set10('SANDSTONE_GA_DEV', get_option('flavor') == 'ga-dev')
 
+framework_config.set10('SANDSTONE_NO_LOGGING', get_option('flavor') == 'ga')
+framework_config.set10('SANDSTONE_I18N_LOGGING', get_option('flavor') == 'ga')
+framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('cmdline') == 'restricted')
+
 framework_config.set10('SANDSTONE_DEBUG', get_option('b_ndebug') == 'false')
 
 framework_config_h = configure_file(
