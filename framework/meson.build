@@ -66,6 +66,8 @@ framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('cmdline') == 
 
 framework_config.set10('SANDSTONE_DEBUG', get_option('b_ndebug') == 'false')
 
+framework_config.set10('SANDSTONE_CHILD_BACKTRACE', get_option('child_backtrace'))
+
 framework_config_h = configure_file(
 	input : 'sandstone_config.h.in',
 	output : 'sandstone_config.h',
