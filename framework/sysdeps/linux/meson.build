@@ -22,7 +22,7 @@ _sysdeps_a = static_library(
 		'cpu_affinity.cpp',
 		'malloc.cpp',
 		'memfpt.cpp',
-	        'physicaladdress.cpp',
+		'physicaladdress.cpp',
 	),
 	build_by_default: false,
 	include_directories : [
