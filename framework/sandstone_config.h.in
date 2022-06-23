@@ -12,7 +12,6 @@
 #mesondefine SANDSTONE_GA_DEV
 
 #mesondefine SANDSTONE_NO_LOGGING
-#mesondefine SANDSTONE_I18N_LOGGING
 #mesondefine SANDSTONE_RESTRICTED_CMDLINE
 
 #mesondefine SANDSTONE_CHILD_BACKTRACE
@@ -26,7 +25,6 @@ static constexpr bool GeneralAvailability = SANDSTONE_GA;
 
 // keep alphabetical order, please
 static constexpr bool ChildBacktrace = SANDSTONE_CHILD_BACKTRACE;
-static constexpr bool I18nLogging = SANDSTONE_I18N_LOGGING;
 static constexpr bool NoLogging = SANDSTONE_NO_LOGGING;
 static constexpr bool RestrictedCommandLine = SANDSTONE_RESTRICTED_CMDLINE;
 } // namespace SandstoneConfig
