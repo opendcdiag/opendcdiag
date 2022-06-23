@@ -85,22 +85,6 @@ void clear_test_knobs(){
 
 // external interface methods
 
-const char *get_testspecific_knob_value_string(const struct test *test, const char *key,
-                                               const char *value_if_not_present)
-{
-    TestKeyWrapper k(test, key);
-    std::string_view s = TestKnobSingleton::get_knob(k);
-    if (s.data()) {
-        logging_mark_knob_used(k, s, KnobOrigin::Options);
-        return s.data();
-    }
-    std::string_view v;
-    if (value_if_not_present)
-        v = value_if_not_present;
-    logging_mark_knob_used(k, v, KnobOrigin::Defaulted);
-    return value_if_not_present;
-}
-
 template <typename Int> static
 Int knob_value_integer(const struct test *test, const char *k, Int value_if_not_present)
 {
@@ -117,6 +101,23 @@ Int knob_value_integer(const struct test *test, const char *k, Int value_if_not_
         };
     }
     logging_mark_knob_used(key, value_if_not_present, KnobOrigin::Defaulted);
+    return value_if_not_present;
+}
+
+#if !SANDSTONE_RESTRICTED_CMDLINE
+const char *get_testspecific_knob_value_string(const struct test *test, const char *key,
+                                               const char *value_if_not_present)
+{
+    TestKeyWrapper k(test, key);
+    std::string_view s = TestKnobSingleton::get_knob(k);
+    if (s.data()) {
+        logging_mark_knob_used(k, s, KnobOrigin::Options);
+        return s.data();
+    }
+    std::string_view v;
+    if (value_if_not_present)
+        v = value_if_not_present;
+    logging_mark_knob_used(k, v, KnobOrigin::Defaulted);
     return value_if_not_present;
 }
 
@@ -146,3 +147,4 @@ bool set_knob_from_key_value_string(const char *key_value_pair) {
 }
 
 
+#endif /* !SANDSTONE_RESTRICTED_CMDLINE */
