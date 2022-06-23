@@ -760,10 +760,10 @@ static __attribute__((cold)) void log_message_to_syslog(const char *msg)
 #endif
 }
 
-#ifndef logging_i18n
+#if SANDSTONE_NO_LOGGING
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
-void logging_i18n(int level, const char *fmt, ...)
+void logging_restricted(int level, const char *fmt, ...)
 {
     va_list va;
     va_start(va, fmt);
@@ -785,9 +785,9 @@ void logging_i18n(int level, const char *fmt, ...)
         log_message_to_syslog(msg.c_str());
 }
 #pragma GCC diagnostic pop
-#endif
 
-#ifndef logging_printf
+#else
+
 void logging_printf(int level, const char *fmt, ...)
 {
     va_list va;
@@ -827,7 +827,7 @@ void logging_printf(int level, const char *fmt, ...)
     if (level < 0)
         log_message_to_syslog(msg.c_str());
 }
-#endif
+#endif /* SANDSTONE_NO_LOGGING */
 
 static std::string os_info()
 {

@@ -150,7 +150,7 @@ static uint64_t parse_register(enum X86CpuidLeaves leaf, uint32_t reg)
 };
 
 #if SANDSTONE_NO_LOGGING
-#  define cpuid_errmsg(msg)             logging_i18n(LOG_LEVEL_QUIET, msg)
+#  define cpuid_errmsg(msg)             logging_restricted(LOG_LEVEL_QUIET, msg)
 #else
 #  define cpuid_errmsg(msg)             fputs(msg, stderr)
 #endif

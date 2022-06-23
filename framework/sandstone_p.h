@@ -490,7 +490,7 @@ void logging_init_global(void);
 void logging_init_global_child();
 int logging_close_global(int exitcode);
 void logging_print_log_file_name();
-void logging_i18n(int level, const char *fmt, ...);
+void logging_restricted(int level, const char *fmt, ...);
 void logging_printf(int level, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
 void logging_mark_thread_failed(int thread_num);
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,
@@ -535,9 +535,8 @@ void setup_stack_size(int argc, char **argv);
 
 #if SANDSTONE_NO_LOGGING
 #  define logging_printf(...)           __extension__({ if (false) logging_printf(__VA_ARGS__); })
-#endif
-#if !SANDSTONE_I18N_LOGGING
-#  define logging_i18n(...)             (void)0
+#else
+#  define logging_restricted(...)  (void)0
 #endif
 
 #endif /* INC_SANDSTONE_P_H */
