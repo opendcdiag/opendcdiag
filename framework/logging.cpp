@@ -763,11 +763,14 @@ static __attribute__((cold)) void log_message_to_syslog(const char *msg)
 #ifndef logging_i18n
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
-void logging_i18n(int level, MSGID msgid, ...)
+void logging_i18n(int level, const char *fmt, ...)
 {
-    extern const char *const *active_translation;
-    const char *msg = active_translation[msgid];
-    if (!msg)
+    va_list va;
+    va_start(va, fmt);
+    std::string msg = vstdprintf(fmt, va);
+    va_end(va);
+
+    if (msg.empty())
         return;
 
     progress_bar_flush();
@@ -776,21 +779,10 @@ void logging_i18n(int level, MSGID msgid, ...)
     if (level < 0)
         fd = STDERR_FILENO;
 
-    if (strchr(msg, '%') == NULL) {
-        writeln(fd, msg);
+    writeln(fd, msg.c_str());
 
-        if (level < 0)
-            log_message_to_syslog(msg);
-    } else {
-        va_list va;
-        va_start(va, msgid);
-        std::string formatted = vstdprintf(msg, va);
-        va_end(va);
-        writeln(fd, formatted.c_str());
-
-        if (level < 0)
-            log_message_to_syslog(formatted.c_str());
-    }
+    if (level < 0)
+        log_message_to_syslog(msg.c_str());
 }
 #pragma GCC diagnostic pop
 #endif

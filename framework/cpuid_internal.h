@@ -150,15 +150,15 @@ static uint64_t parse_register(enum X86CpuidLeaves leaf, uint32_t reg)
 };
 
 #if SANDSTONE_NO_LOGGING
-#  define cpuid_errmsg(id, msg)         logging_i18n(LOG_LEVEL_QUIET, id)
+#  define cpuid_errmsg(msg)             logging_i18n(LOG_LEVEL_QUIET, msg)
 #else
-#  define cpuid_errmsg(id, msg)         fputs(msg, stderr)
+#  define cpuid_errmsg(msg)             fputs(msg, stderr)
 #endif
 
 __attribute__((cold, noreturn))
 static void detect_cpu_not_supported(const char *msg)
 {
-    cpuid_errmsg(MSG_OS_Not_Supported, msg);
+    cpuid_errmsg(msg);
     exit(EX_CONFIG);
 }
 
@@ -271,8 +271,7 @@ static void check_missing_features(uint64_t features, uint64_t minimum_cpu_featu
         return;
 
     size_t i;
-    cpuid_errmsg(MSG_Processor_Required_Features,
-                 "Cannot run on this CPU.\n"
+    cpuid_errmsg("Cannot run on this CPU.\n"
                  "This application requires certain features not found in your CPU:");
     for (i = 0; i < x86_locator_count; ++i) {
         if (missing & (UINT64_C(1) << i))

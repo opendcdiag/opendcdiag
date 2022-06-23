@@ -64,12 +64,6 @@ extern "C" {
 #define LOG_LEVEL_QUIET         0
 #define LOG_LEVEL_VERBOSE(n)    (n)
 
-#if SANDSTONE_I18N_LOGGING
-#  include "l10n.h"
-#else
-enum MSGID { MSG_Dummy };
-#endif
-
 extern char *program_invocation_name;       // also in glibc's <errno.h>
 
 struct per_thread_data;
@@ -496,7 +490,7 @@ void logging_init_global(void);
 void logging_init_global_child();
 int logging_close_global(int exitcode);
 void logging_print_log_file_name();
-void logging_i18n(int level, enum MSGID msgid, ...);
+void logging_i18n(int level, const char *fmt, ...);
 void logging_printf(int level, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
 void logging_mark_thread_failed(int thread_num);
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,

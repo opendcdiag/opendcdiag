@@ -1883,7 +1883,7 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
     logging_printf(LOG_LEVEL_VERBOSE(1), "# Test failed %d out of %d times"
                                          " (%.1f%%)\n", fail_count, attempt_count,
                    fail_count * 100.0 / attempt_count);
-    logging_i18n(LOG_LEVEL_QUIET, MSG_Test_Failure_ID, test->id, fail_count - 1);
+    logging_i18n(LOG_LEVEL_QUIET, "Test failed (#%s%x).", test->id, fail_count - 1);
 
     // First, determine if all CPUs failed the exact same way
     bool all_cpus_failed_equally = true;
