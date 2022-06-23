@@ -159,6 +159,7 @@ enum {
     test_delay_option,
     test_index_range_option,
     test_list_file_option,
+    test_list_builtin_option,
     test_list_randomize_option,
     test_tests_option,
     timeout_option,
@@ -1102,24 +1103,29 @@ Common command-line options are:
      Display program version information.
  --1sec, --30sec, --2min, --5min
      Run for the specified amount of time in the option. In this mode, the program
-     prioritizes test execution based on prior detections. 
+     prioritizes test execution based on prior detections.
      These options are intended to drive coverage over multiple runs.
-     Test priority is ignored when running in combination with the
-     --test-list-file option.
+     Test priority is ignored when running in combination with one of the
+     --test-list-file or --test-list-builtin options.
+ --test-list-builtin
+     Built-in list of tests ("best known list") is used to specify the list
+     of the tests to run.
  --test-list-file <file path>
      Specifies the tests to run in a text file.  This will run the tests
      in the order they appear in the file and also allows you to vary the
-     individual test durations.  See the User Guide for details.
+     individual test durations.
  --test-range A-B
-     Run tests from test number A to test number B based on their list location 
-     in an input file specified using --test-list-file <inputfile>.
+     Run tests from test number A to test number B based on their list location
+     in an input file specified using --test-list-file <inputfile> or built-in
+     list when --test-list-builtin is specified.
+     This option is ignored if neither --test-list-file nor --test-list-builtin
+     is provided.
      For example: --test-list-file mytests.list -test-range 6-10
                   runs tests 6 through 10 from the file mytests.list.
-     See User Guide for more details.
  --test-list-randomize
      Randomizes the order in which tests specified with the --test-list-file
-     option are run.  This option is ignored if --test-list-file is not
-     provided.
+     option are run. This option is ignored if neither --test-list-file nor
+     --test-list-builtin is provided.
  --test-delay <time in ms>
      Delay between individual test executions in milliseconds.
  --schedule-by <selection>
@@ -2745,6 +2751,7 @@ int main(int argc, char **argv)
         { "temperature-threshold", required_argument, nullptr, temperature_threshold_option },
         { "test-delay", required_argument, nullptr, test_delay_option },
         { "test-list-file", required_argument, nullptr, test_list_file_option },
+        { "test-list-builtin", no_argument, nullptr, test_list_builtin_option },
         { "test-range", required_argument, nullptr, test_index_range_option },
         { "test-list-randomize", no_argument, nullptr, test_list_randomize_option },
         { "test-time", required_argument, nullptr, 't' },   // repeated below
@@ -3049,14 +3056,23 @@ int main(int argc, char **argv)
             } else if (strncasecmp(optarg, "priority", 3) == 0) {
                 sApp->test_selection_strategy = Prioritized;
             } else {
-                fprintf(stderr, "Cannot determine weighted testrunner type (%s is invalid - use repeat/non-repeat)", optarg);
+                fprintf(stderr, "%s: Cannot determine weighted testrunner type (%s is invalid - use repeat/non-repeat)", argv[0], optarg);
                 return EX_USAGE;
             }
             sApp->weighted_testrunner_runtimes = NormalTestrunTimes;
             break;
 
         case test_list_file_option:
+            // builtin list is used when test_list_file_path is empty
+            if (strlen(optarg) == 0) {
+                fprintf(stderr, "%s: Empty file name given\n", argv[0]);
+                return EX_USAGE;
+            }
             test_list_file_path = optarg;
+            break;
+
+        case test_list_builtin_option:
+            test_list_file_path = "";
             break;
 
         case test_index_range_option:
@@ -3220,18 +3236,22 @@ int main(int argc, char **argv)
     // If we want to use the weighted testrunner we need to initialize it
 
     if (test_list_file_path) {
-        test_selector = create_list_file_test_selector(sApp->test_list, test_list_file_path,
-                                                       sApp->starting_test_number, sApp->ending_test_number,
-                                                       sApp->test_list_randomize);
+        if (*test_list_file_path) {
+            test_selector = create_list_file_test_selector(sApp->test_list, test_list_file_path,
+                                                           sApp->starting_test_number, sApp->ending_test_number,
+                                                           sApp->test_list_randomize);
+        } else {
+            test_selector =  create_builtin_test_selector(sApp->test_list,
+                                                          sApp->starting_test_number, sApp->ending_test_number,
+                                                          sApp->test_list_randomize);
+        }
+        if (test_selector->get_test_count() == 0) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "THE LIST OF TESTS IS EMTPY!\n");
+        }
     } else {
         struct weighted_run_info *weighted_test_list = all_weighted_runinfo;
-        if (sApp->test_list_randomize) {
-            test_selector =  create_builtin_test_selector(sApp->test_list, sApp->starting_test_number, sApp->ending_test_number);
-            sApp->use_strict_runtime = true;
-        }
-        if (!test_selector)
-                test_selector = setup_test_selector(sApp->test_selection_strategy, sApp->weighted_testrunner_runtimes,
-                                            sApp->test_list, weighted_test_list);
+        test_selector = setup_test_selector(sApp->test_selection_strategy, sApp->weighted_testrunner_runtimes,
+                                    sApp->test_list, weighted_test_list);
     }
 
     if (sApp->verbosity == -1)

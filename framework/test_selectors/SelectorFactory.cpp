@@ -54,7 +54,7 @@ extern TestrunSelector * setup_test_selector(
     return selector;
 }
 
-// TODO: Next cleanup - change this from test selector to simply a test_list fileter
+// TODO: Next cleanup - change this from test selector to simply a test_list filter
 //       That way it can be used with any selector :-)
 extern TestrunSelector * create_list_file_test_selector(std::vector<struct test *> tests, string file_path, int first_index, int last_index, bool randomize){
     auto selector = new ListFileTestSelector();
@@ -64,12 +64,12 @@ extern TestrunSelector * create_list_file_test_selector(std::vector<struct test 
     return selector;
 }
 
-extern TestrunSelector * create_builtin_test_selector(std::vector<struct test *> tests, int first_index, int last_index)
+extern TestrunSelector * create_builtin_test_selector(std::vector<struct test *> tests, int first_index, int last_index, bool randomize)
 {
     auto selector = new ListFileTestSelector();
     selector->set_test_list(std::move(tests));
     selector->load_from_array(weighted_testlist);
-    selector->set_selection_range(first_index, last_index, true);
+    selector->set_selection_range(first_index, last_index, randomize);
     return selector;
 }
 
