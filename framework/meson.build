@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 framework_config = configuration_data()
+framework_config.set10('SANDSTONE_STATIC', 0) # sysdeps may override
 
 sysdeps_dir = 'sysdeps/' + target_machine.system()
 

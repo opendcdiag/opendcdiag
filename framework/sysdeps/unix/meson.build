@@ -7,3 +7,8 @@ sysdeps_unix_files = files(
 	'stacksize.cpp',
 	'tmpfile.c',
 )
+
+# same check as linux/meson.build
+if get_option('cpp_link_args').contains('-static')
+	framework_config.set10('SANDSTONE_STATIC', 1)
+endif

@@ -7,6 +7,7 @@
 #define SANDSTONE_CONFIG_H
 
 #mesondefine SANDSTONE_DEBUG
+#mesondefine SANDSTONE_STATIC
 
 #mesondefine SANDSTONE_GA
 #mesondefine SANDSTONE_GA_DEV
@@ -20,6 +21,7 @@
 
 namespace SandstoneConfig {
 static constexpr bool Debug = SANDSTONE_DEBUG;
+static constexpr bool StaticLink = SANDSTONE_STATIC;
 
 static constexpr bool GeneralAvailability = SANDSTONE_GA;
 
