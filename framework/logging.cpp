@@ -1825,7 +1825,7 @@ std::string TapFormatLogger::fail_info_details()
     assert(status.result != TestInterrupted);
 #ifdef _WIN32
     switch (status.extra) {
-    case STATUS_FAIL_FAST_EXCEPTION:
+    case static_cast<unsigned>(STATUS_FAIL_FAST_EXCEPTION):
         return "Aborted";
     case STATUS_ACCESS_VIOLATION:
         return "Access violation";
