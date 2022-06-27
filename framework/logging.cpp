@@ -86,6 +86,10 @@ RtlGetVersion(
 #  include <syslog.h>
 #endif
 
+#if __has_include(<gnu/libc-version.h>)
+#  include <gnu/libc-version.h>
+#endif
+
 static int real_stdout_fd = STDOUT_FILENO;
 static int tty = -1;
 static int file_log_fd = -1;
@@ -837,7 +841,7 @@ void logging_printf(int level, const char *fmt, ...)
 }
 #endif
 
-static std::string os_info()
+static std::string kernel_info()
 {
 #ifdef _WIN32
     OSVERSIONINFOEXW osver = { .dwOSVersionInfoSize = sizeof(osver) };
@@ -860,7 +864,38 @@ static std::string os_info()
     if (uname(&u) == 0)
         return stdprintf("%s %s", u.sysname, u.release);
 #endif
-    return "<unknown>";
+    return {};
+}
+
+static std::string libc_info()
+{
+    std::string result;
+#if __has_include(<gnu/libc-version.h>)
+    result = std::string("glibc ") + gnu_get_libc_version();
+#elif defined(_UCRT)
+    // UCRT comes with Windows 10, so its version should match the OS
+    result = "UCRT";
+#elif defined(_WIN32)
+    // I don't think MSVCRT has changed in since 1995
+    result = "MSVCRT";
+#else
+    // on all other OSes, the libc comes with the OS, so its version should suffice
+#endif
+
+    if constexpr (SandstoneConfig::StaticLink)
+        result += " (statically linked)";
+    return result;
+}
+
+static std::string os_info()
+{
+    std::string kernel = kernel_info();
+    std::string libc = libc_info();
+    if (kernel.empty())
+        return "<unknown>";
+    if (libc.empty())
+        return kernel;
+    return kernel + ", " + libc;
 }
 
 static void print_reproduction_details()
