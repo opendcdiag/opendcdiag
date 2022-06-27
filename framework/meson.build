@@ -1,6 +1,8 @@
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
+framework_config = configuration_data()
+
 sysdeps_dir = 'sysdeps/' + target_machine.system()
 
 if target_machine.system() == 'cygwin'

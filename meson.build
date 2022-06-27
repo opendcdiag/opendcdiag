@@ -22,8 +22,6 @@ perl = find_program('perl')
 python = pymod.find_installation()
 shell = find_program('sh')
 
-framework_config = configuration_data()
-
 if cpp.get_id() != 'gcc' or cc.get_id() != 'gcc'
 	warning('We recommend building OpenDCDiag with the GNU Compiler Collection (gcc). Your build may fail or your executable may not behave as expected.')
 endif
