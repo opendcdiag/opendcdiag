@@ -2423,6 +2423,30 @@ static void wait_delay_between_tests(bool skip_wait)
     usleep(useconds);
 }
 
+//we take here walue from delay_between_tests and we make it deviate in given range
+// i.e +/- 10%.
+static void wait_delay_between_tests_with_deviation(double deviation_percentage, bool skip_wait)
+{
+    double random_factor = 0.0;
+    useconds_t sleep_time = 0;
+
+    if (!skip_wait) {
+        random_factor = frandom_scale(2.0) - 1.0; // get a random number from -1.0 to 1.0
+        random_factor = random_factor * deviation_percentage / 100;
+        
+        sleep_time = duration_cast<microseconds>(sApp->delay_between_tests).count();
+
+        Duration deviation =
+            duration_cast<microseconds>(sApp->delay_between_tests * random_factor);
+        sleep_time =
+            duration_cast<microseconds>(sApp->delay_between_tests + deviation).count();
+    }       
+
+    logging_printf(LOG_LEVEL_VERBOSE(2), "# Sleep time %" PRId32"\n", sleep_time);
+    // make the system call even if useconds == 0
+    usleep(sleep_time);
+}
+
 static int run_tests_on_cpu_set(vector<const struct test *> &tests, const LogicalProcessorSet &set)
 {
     SandstoneApplication::PerCpuFailures per_cpu_failures;
@@ -2683,6 +2707,118 @@ static void warn_deprecated_opt(const char *opt)
 {
     fprintf(stderr, "%s: option '%s' is ignored and will be removed in a future version.\n",
             program_invocation_name, opt);
+}
+
+
+static bool system_is_idle(float idle_threshold)
+{
+    #ifdef __linux__
+
+    FILE *loadavg;
+    float load_1, load_5, load_15;
+    int ret;
+
+    // Look at loadavg for hints whether the system is reasonably idle or not
+    // any error and we assume it's busy/under load for simplicity
+
+    loadavg = fopen("/proc/loadavg", "r");
+    if (!loadavg)
+        return false;
+
+    ret = fscanf(loadavg, "%f %f %f", &load_1, &load_5, &load_15);
+    fclose(loadavg);
+
+    if (ret != 3)
+       return false;
+
+    if (load_5 <= idle_threshold)
+       return true;
+    #else //__linux__
+    return true;//TO DO implement idle trigger for Windows
+    #endif
+
+    return false;
+}
+
+static void background_scan_init(void)
+{
+    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+
+    // init timestamps to 1day old - this quickstarts testing on first run
+    if ((sApp->background_scan.init_timestamp == true) && (sApp->service_background_scan == true)) {
+        sApp->background_scan.timestamp.fill(now - sApp->background_scan.time_to_run_next_batch_of_tests);
+    }
+}
+
+static void background_scan_update_load_threshold(void)
+{
+    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+
+    hours time_from_last_test = 
+        duration_cast<hours>(now - sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest]);
+    // scale our idle threshold value from 0.2 base, to 0.8 after 12h
+    // every hour adds 0.05 to the threshold value
+    sApp->background_scan.load_idle_threshold = 
+        sApp->background_scan.load_idle_threshold_init +
+        (time_from_last_test.count() * sApp->background_scan.load_idle_threshold_inc_val);
+
+    // prevent the idle threshold form rising above 0.8
+    if(sApp->background_scan.load_idle_threshold > sApp->background_scan.load_idle_threshold_max)
+        sApp->background_scan.load_idle_threshold = sApp->background_scan.load_idle_threshold_max;
+}
+
+static void background_scan_wait(void) 
+{
+    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+    // Don't run tests unless load is low or it's time to run a test anyway
+    while(1) {
+        // wait ~5 mins no matter what
+        sApp->delay_between_tests = sApp->background_scan.minimum_delay_between_tests;
+
+        double wait_deviation_percent = 10.0;
+
+        wait_delay_between_tests_with_deviation(
+                wait_deviation_percent,
+                false);
+
+        now = MonotonicTimePoint::clock::now();
+
+        // If all the last 24 tests ran in less than the last 24h, don't run
+        // any tests at all
+        if (now < (sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest] + sApp->background_scan.time_to_run_next_batch_of_tests)) {
+            sApp->delay_between_tests = sApp->background_scan.time_to_run_next_batch_of_tests;
+
+            double wait_deviation_percent = 0.1;
+            wait_delay_between_tests_with_deviation(
+                    wait_deviation_percent,
+                    false);
+        }
+
+        background_scan_update_load_threshold();
+
+        // if the system is idle, run a test
+        if (system_is_idle(sApp->background_scan.load_idle_threshold))
+            break;
+
+        // if we haven't run *any* tests in the last x hours, run a test
+        // because of day/night cycles, 12 hours should help typical data center
+        // duty cycles.
+        if (now > (sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest] + sApp->background_scan.time_to_force_next_test_running))
+            break;
+    }
+}
+
+static void background_scan_update_timestamps(void)
+{
+    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+
+    //move all timestaps execpt the oldest one
+    memmove(
+            &(sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest]), 
+            &(sApp->background_scan.timestamp[sApp->background_scan.timestamp_second]),
+            (sApp->background_scan.number_of_timestamps - 1));
+    
+    sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest] = now;
 }
 
 extern constexpr const uint64_t minimum_cpu_features = _compilerCpuFeatures;
@@ -2993,7 +3129,7 @@ int main(int argc, char **argv)
         case service_option:
             fatal_errors = true;
             sApp->endtime = MonotonicTimePoint::max();
-            sApp->delay_between_tests = std::chrono::milliseconds(3599000);
+            sApp->service_background_scan = true;
             break;
         case ud_on_failure_option:
             sApp->ud_on_failure = true;
@@ -3250,6 +3386,10 @@ int main(int argc, char **argv)
 
     bool restarting = true;
     int total_tests_run = 0;
+
+    if(sApp->service_background_scan == true)
+        background_scan_init();
+
     // TODO: Cleanup - this loop is inside-out.  Should iterate
     //       on the get_next_test call and break on errors not
     //       iterate on !errors and break on get_next_test result
@@ -3260,9 +3400,11 @@ int main(int argc, char **argv)
             initialize_smi_counts();  // used by smi_count test
         }
 
-        wait_delay_between_tests(restarting);
+        if(sApp->service_background_scan == false)
+            wait_delay_between_tests(restarting);
 
         struct test *test = get_next_test(tc);
+            
         if (test == nullptr) break;
 
         // Note temporal coupling here with restarting
@@ -3279,13 +3421,18 @@ int main(int argc, char **argv)
         }
 
         TestResult r = run_one_test(&tc, test, per_cpu_failures);
+
+        if(sApp->service_background_scan == true)
+            background_scan_update_timestamps();
+
         if (r == TestFailed)
             ++total_failures;
         else if (r == TestPassed)
             ++total_successes;
         else if (r == TestSkipped)
             ++total_skips;
-        total_tests_run++;
+
+        total_tests_run++;      
 
         // keep the record of failures to triage later
         if (total_failures > triage_tests.size()) {
@@ -3295,6 +3442,10 @@ int main(int argc, char **argv)
 
         if (total_tests_run >= sApp->max_test_count)
             break;
+
+        //don't wait when the test failed or it was skipped.
+        if(sApp->service_background_scan == true && (r != TestFailed || r != TestSkipped))
+            background_scan_wait(); 
     }
 
     // Run the mce_test at the end of all tests to make sure no MCE errors fired
@@ -3324,7 +3475,9 @@ int main(int argc, char **argv)
     delete[] cpu_info;
 
     int exit_code = EXIT_SUCCESS;
+
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
+
     return logging_close_global(exit_code);
 }

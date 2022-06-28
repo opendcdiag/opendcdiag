@@ -215,6 +215,28 @@ template <> struct test_the_test_data<true>
     void test_tests_finish(const struct test *);
 };
 
+struct SandstoneBackgroundScan
+{
+    static constexpr Duration minimum_delay_between_tests = std::chrono::minutes(5);
+    static constexpr Duration time_to_run_next_batch_of_tests = std::chrono::hours(24);
+    static constexpr Duration time_to_force_next_test_running = (time_to_run_next_batch_of_tests / 2);
+
+    static constexpr bool init_timestamp = true;
+    static constexpr uint32_t number_of_timestamps = 24;
+
+    static constexpr uint32_t timestamp_newest = 0;
+    static constexpr uint32_t timestamp_second = 1;
+    static constexpr uint32_t timestamp_oldest = (number_of_timestamps - 1);
+
+    std::array<MonotonicTimePoint, number_of_timestamps> timestamp;
+
+    static constexpr float load_idle_threshold_init = 0.2;
+    static constexpr float load_idle_threshold_inc_val = 0.05;
+    static constexpr float load_idle_threshold_max = 0.8;
+
+    float load_idle_threshold = 0.0;
+};
+
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
     enum class ScheduleBy : int8_t {
@@ -299,6 +321,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool ignore_os_errors = false;
     bool force_test_time = false;
     bool ud_on_failure = false;
+    bool service_background_scan = false;
     static constexpr int MaxRetestCount = 64;
     int retest_count = 10;
     int total_retest_count = -2;
@@ -348,6 +371,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 #endif
         return fork_mode;
     }
+
+    SandstoneBackgroundScan background_scan;
 
 private:
     SandstoneApplication() = default;
