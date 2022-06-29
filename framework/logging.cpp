@@ -90,6 +90,8 @@ RtlGetVersion(
 #  include <gnu/libc-version.h>
 #endif
 
+#define PROGRAM_VERSION         EXECUTABLE_NAME "-" GIT_ID
+
 static int real_stdout_fd = STDOUT_FILENO;
 static int tty = -1;
 static int file_log_fd = -1;
@@ -894,18 +896,18 @@ static void print_reproduction_details()
 {
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value:
-        logging_printf(LOG_LEVEL_QUIET, "version = " EXECUTABLE_NAME "-" GIT_ID "\n");
+        logging_printf(LOG_LEVEL_QUIET, "version = " PROGRAM_VERSION "\n");
         logging_printf(LOG_LEVEL_QUIET, "current_time = %s\n", iso8601_time_now(Iso8601Format::WithMs));
         logging_printf(LOG_LEVEL_VERBOSE(1), "os = %s\n", os_info().c_str());
         return;
 
     case SandstoneApplication::OutputFormat::tap:
-        logging_printf(LOG_LEVEL_QUIET, "# Built from git commit: " GIT_ID "\n");
+        logging_printf(LOG_LEVEL_QUIET, "# Built from git commit: " PROGRAM_VERSION "\n");
         logging_printf(LOG_LEVEL_QUIET, "# Current time: %s\n", iso8601_time_now(Iso8601Format::WithMs));
         break;
 
     case SandstoneApplication::OutputFormat::yaml:
-        logging_printf(LOG_LEVEL_QUIET, "version: " EXECUTABLE_NAME "-" GIT_ID "\n");
+        logging_printf(LOG_LEVEL_QUIET, "version: " PROGRAM_VERSION "\n");
         // timestamp in the iteration start
         break;
 
@@ -914,6 +916,11 @@ static void print_reproduction_details()
         __builtin_unreachable();
         break;
     }
+}
+
+void logging_print_version()
+{
+    printf(PROGRAM_VERSION "\n");
 }
 
 void logging_print_header(int argc, char **argv, Duration test_duration, Duration test_timeout)
@@ -1917,7 +1924,7 @@ void TapFormatLogger::maybe_print_yaml_marker(int fd)
     std::string_view nothing;
     terminator = yamlseparator;
     writeln(fd, yamlseparator,
-            "\n  info: {version: " GIT_ID
+            "\n  info: {version: " PROGRAM_VERSION
             ", timestamp: ", iso8601_time_now(Iso8601Format::WithoutMs),
             cpu_has_feature(cpu_feature_hypervisor) ? ", virtualized: true" : nothing,
             "}");
