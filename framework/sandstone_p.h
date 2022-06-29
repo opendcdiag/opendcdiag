@@ -499,6 +499,7 @@ void logging_print_header(int argc, char **argv, Duration test_duration, Duratio
 void logging_print_iteration_start();
 void logging_print_footer();
 void logging_print_triage_results(const std::vector<int> &sockets);
+void logging_print_version(void);
 void logging_flush(void);
 void logging_init(const struct test *test);
 void logging_init_child_prefork(SandstoneApplication::ExecState *state);

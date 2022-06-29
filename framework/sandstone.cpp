@@ -3109,7 +3109,7 @@ int main(int argc, char **argv)
             break;
 
         case version_option:
-            printf(EXECUTABLE_NAME "-" GIT_ID "\n");
+            logging_print_version();
             return EXIT_SUCCESS;
         case one_sec_option:
             sApp->test_list_randomize = true;
