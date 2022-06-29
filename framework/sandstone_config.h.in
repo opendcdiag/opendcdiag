@@ -6,7 +6,17 @@
 #ifndef SANDSTONE_CONFIG_H
 #define SANDSTONE_CONFIG_H
 
-#mesondefine SANDSTONE_DEBUG
+#if !defined(DEBUG) && !defined(NDEBUG)
+#  define DEBUG 1
+#endif
+
+#if defined(DEBUG) && defined(NDEBUG)
+#  pragma message "DEBUG and NDEBUG macros were both defined. Defining DEBUG macro only."
+#  undef NDEBUG
+#elif defined(NDEBUG)
+#  define DEBUG 0
+#endif
+
 #mesondefine SANDSTONE_STATIC
 
 #mesondefine SANDSTONE_GA
@@ -20,7 +30,7 @@
 #ifdef __cplusplus
 
 namespace SandstoneConfig {
-static constexpr bool Debug = SANDSTONE_DEBUG;
+static constexpr bool Debug = DEBUG;
 static constexpr bool StaticLink = SANDSTONE_STATIC;
 
 static constexpr bool GeneralAvailability = SANDSTONE_GA;
