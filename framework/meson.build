@@ -63,9 +63,10 @@ endif
 framework_config.set10('SANDSTONE_GA', get_option('flavor') == 'ga')
 framework_config.set10('SANDSTONE_GA_DEV', get_option('flavor') == 'ga-dev')
 
-framework_config.set10('SANDSTONE_NO_LOGGING', get_option('flavor') == 'ga')
-framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('cmdline') == 'restricted')
+framework_config.set10('SANDSTONE_NO_LOGGING', get_option('logging_format') == 'none')
+framework_config.set('SANDSTONE_DEFAULT_LOGGING', 'SandstoneApplication::OutputFormat::' + get_option('logging_format'))
 
+framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('cmdline') == 'restricted')
 framework_config.set10('SANDSTONE_CHILD_BACKTRACE', get_option('child_backtrace'))
 if get_option('version_suffix') != ''
 	framework_config.set_quoted('SANDSTONE_VERSION_SUFFIX', get_option('version_suffix'),
@@ -132,19 +133,6 @@ framework_files += [
 ]
 endif
 
-# Default logging options
-logging_c_flags = []
-
-if get_option('logging_format') == 'tap'
-	logging_c_flags += '-DSANDSTONE_TAP_LOGGING'
-elif get_option('logging_format') == 'yaml'
-	logging_c_flags += '-DSANDSTONE_YAML_LOGGING'
-elif get_option('logging_format') == 'none'
-	logging_c_flags += '-DSANDSTONE_NO_LOGGING'
-else
-	warning('Requested logging_format unknown, using hard-coded default format')
-endif
-
 framework_a = static_library(
 	'framework',
 	framework_files,
@@ -161,14 +149,12 @@ framework_a = static_library(
 		march_flags,
 		default_c_flags,
 		default_c_warn,
-		logging_c_flags,
 	],
 	cpp_args : [
 		debug_c_flags,
 		march_flags,
 		default_cpp_flags,
 		default_cpp_warn,
-		logging_c_flags,
 	],
 )
 
