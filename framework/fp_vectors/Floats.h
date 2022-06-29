@@ -12,13 +12,9 @@
 // GCC supports _Float16 on x86 and __fp16 on AArch64, in both cases it
 // only supports IEEE-754 format.
 // https://gcc.gnu.org/onlinedocs/gcc/Half-Precision.html
-#if defined(SANDSTONE_HAS_FLOAT16_TYPE)
-typedef _Float16 fp16_t;
-#elif defined(SANDSTONE_HAS__FP16_TYPE)
-typedef __fp16 fp16_t;
-#endif
-
-#if !defined(SANDSTONE_HAS_FLOAT16_TYPE) && !defined(SANDSTONE_HAS__FP16_TYPE)
+#ifdef SANDSTONE_FP16_TYPE
+typedef SANDSTONE_FP16_TYPE fp16_t;
+#else
 #  define SANDSTONE_FLOAT16_EMULATED
 #endif
 
@@ -98,11 +94,8 @@ extern "C" {
 struct Float16
 {
     union {
-#if defined(SANDSTONE_HAS_FLOAT16_TYPE) || \
-    defined(SANDSTONE_HAS__FP16_TYPE)
-
+#ifdef SANDSTONE_FP16_TYPE
         fp16_t as_float;
-
 #endif
 
         union {
