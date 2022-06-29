@@ -1148,7 +1148,17 @@ Common command-line options are:
 For more options and information, please see the User Reference
 Guide.
 )";
-    printf(usageText, argv[0]);
+
+    static const char restrictedUsageText[] = R"(%s [options]
+
+Available command-line options are:
+ -h, --help         Print help.
+ -q, --query        Reports whether a scan service found an issue and exits.
+ -s, --service      Run as a slow scan service.
+     --version      Display version number.
+)";
+
+    printf(SandstoneConfig::RestrictedCommandLine ? restrictedUsageText : usageText, argv[0]);
 }
 
 // Called every time we restart the tests
@@ -2916,6 +2926,7 @@ int main(int argc, char **argv)
 #endif
         { nullptr, 0, nullptr, 0 }
     };
+
     const char *seed = nullptr;
     int opt;
     int tc = 0;
@@ -3135,6 +3146,7 @@ int main(int argc, char **argv)
             break;
 #endif
         case service_option:
+            // keep in sync with RestrictedCommandLine below
             fatal_errors = true;
             sApp->endtime = MonotonicTimePoint::max();
             sApp->service_background_scan = true;
@@ -3303,7 +3315,37 @@ int main(int argc, char **argv)
     }
 
     if (SandstoneConfig::RestrictedCommandLine) {
-        // Default options for Sandstone GA build
+        // Default options for the simplified OpenDCDiag cmdline
+        static struct option restricted_long_options[] = {
+            { "help", no_argument, nullptr, 'h' },
+            { "query", no_argument, nullptr, 'q' },
+            { "service", no_argument, nullptr, 's' },
+            { "version", no_argument, nullptr, version_option },
+            { nullptr, 0, nullptr, 0 }
+        };
+
+        while ((opt = simple_getopt(argc, argv, restricted_long_options)) != -1) {
+            switch (opt) {
+            case 'q':
+                // ### FIXME
+                fprintf(stderr, "%s: --query not implemented yet\n", argv[0]);
+                abort();
+            case 's':
+                // keep in sync above
+                sApp->endtime = MonotonicTimePoint::max();
+                sApp->service_background_scan = true;
+                break;
+            case version_option:
+                logging_print_version();
+                return EXIT_SUCCESS;
+
+            default:
+            case 'h':
+                usage(argv);
+                return opt == 'h' ? EXIT_SUCCESS : EX_USAGE;
+            }
+        }
+
         if (SandstoneConfig::NoLogging) {
             sApp->output_format = SandstoneApplication::OutputFormat::no_output;
         } else  {
@@ -3319,10 +3361,9 @@ int main(int argc, char **argv)
         sApp->thermal_throttle_temp = INT_MIN;
         sApp->verbosity = -1;
         fatal_errors = true;
-    } else if (optind < argc) {
-        fprintf(stderr, "%s: extra parameters in the command-line (old test specification in the\n"
-                        "command-line is no longer supported). Please use -e option to select tests to run.\n",
-                argv[0]);
+    }
+
+    if (optind < argc) {
         usage(argv);
         return EX_USAGE;
     }
