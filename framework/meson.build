@@ -63,8 +63,8 @@ framework_config.set10('SANDSTONE_GA_DEV', get_option('flavor') == 'ga-dev')
 framework_config.set10('SANDSTONE_NO_LOGGING', get_option('logging_format') == 'none')
 framework_config.set('SANDSTONE_DEFAULT_LOGGING', 'SandstoneApplication::OutputFormat::' + get_option('logging_format'))
 
-framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('cmdline') == 'restricted')
-framework_config.set10('SANDSTONE_CHILD_BACKTRACE', get_option('child_backtrace'))
+framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('framework_options').contains('restricted-cmdline'))
+framework_config.set10('SANDSTONE_CHILD_BACKTRACE', get_option('framework_options').contains('no-child-backtrace'))
 
 framework_config_h = configure_file(
 	input : 'sandstone_config.h.in',
