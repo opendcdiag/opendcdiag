@@ -10,5 +10,5 @@ sysdeps_unix_files = files(
 
 # same check as linux/meson.build
 if get_option('cpp_link_args').contains('-static')
-	framework_config.set10('SANDSTONE_STATIC', 1)
+	framework_config.set10('SANDSTONE_STATIC', true)
 endif
