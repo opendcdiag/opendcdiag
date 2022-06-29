@@ -24,8 +24,9 @@
 
 #mesondefine SANDSTONE_NO_LOGGING
 #mesondefine SANDSTONE_RESTRICTED_CMDLINE
-
 #mesondefine SANDSTONE_CHILD_BACKTRACE
+
+#mesondefine SANDSTONE_VERSION_SUFFIX
 
 #ifdef __cplusplus
 
