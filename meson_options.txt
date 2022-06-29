@@ -5,8 +5,9 @@ option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'none'], valu
 	description : 'Set build-time default logging format to "none", "yaml" (default), or "tap".')
 option('march_base', type : 'string', value : '',
 	description : 'Build framework with this base optimization -march= value (default: "haswell").')
-option('tests_options', type : 'array', value : [],
-	description : 'Pass strings to flag test content build options.')
+option('framework_options', type : 'array', value : [],
+	description : 'Configuration options for the framework. ' +
+	'Possible options: restricted-cmdline, no-child-backtrace')
 option('dependency_link', type : 'combo', choices : ['dynamic', 'static'], value : 'dynamic',
 	description : 'Link preference for dependencies: dynamic (default) or static')
 option('docdir', type : 'string', value : 'doc/dcdiag',
@@ -23,7 +24,3 @@ option('version_suffix', type : 'string', value: '',
 	description : 'Suffix to be added to the version number (e.g., build variant)')
 option('flavor', type : 'combo', choices : ['default', 'ga', 'ga-dev'], value : 'default',
 	description : 'Select one of the novel build flavors (ga, ga-dev) or the default')
-option('cmdline', type : 'combo', choices : ['full', 'restricted'], value : 'full',
-	description : 'Build in full command line options (default) or a restricted set')
-option('child_backtrace', type : 'boolean', value : true,
-	description : 'Print child backtraces on test failure or error (default true)')
