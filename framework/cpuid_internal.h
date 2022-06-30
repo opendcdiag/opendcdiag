@@ -17,20 +17,6 @@
 #include "cpu_features.h"
 #include "sandstone_p.h"
 
-struct cpu_basic_info;
-
-/**
- * Called from detect_cpu(). The default weak implementation performs no
- * checks, just returns. Feel free to implement a strong version elsewhere if
- * you prefer the framework to check for system or CPU criteria and exit() if
- * those criteria are not met.
- */
-void is_system_supported(const struct cpu_basic_info *);
-
-__attribute__((weak))
-void is_system_supported(const struct cpu_basic_info *basic_info) { }
-
-
 #ifdef __x86_64__
 
 #ifndef signature_INTEL_ebx     /* cpuid.h lacks include guards */
@@ -38,16 +24,6 @@ void is_system_supported(const struct cpu_basic_info *basic_info) { }
 #endif
 
 static const size_t x86_locator_count = sizeof(x86_locators) / sizeof(x86_locators[0]);
-
-#define CPU_BASIC_INFO_MAX_BRAND ((0x80000004 - 0x80000002) + 1)
-
-struct cpu_basic_info {
-    uint64_t features;
-    uint8_t family;         ///! CPU family (usually 6)
-    uint8_t stepping;       ///! CPU stepping
-    uint16_t model;         ///! CPU model
-    char brand[(CPU_BASIC_INFO_MAX_BRAND * 16) + 1];
-};
 
 #ifdef __APPLE__
 /*
@@ -163,7 +139,7 @@ static void detect_cpu_not_supported(const char *msg)
 }
 
 __attribute__((noinline))
-static void detect_cpu(struct cpu_basic_info *basic_info)
+static uint64_t detect_cpu()
 {
     uint32_t eax, ebx, ecx, edx;
     uint32_t max_level = 0;
@@ -175,9 +151,6 @@ static void detect_cpu(struct cpu_basic_info *basic_info)
     __cpuid(1, eax, ebx, ecx, edx);
     features |= parse_register(Leaf01ECX, ecx);
     features |= parse_register(Leaf01EDX, edx);
-    unsigned family = ((eax >> 8) & 0xf) | ((eax >> (20-4)) & 0xff0);
-    unsigned model = ((eax >> 4) & 0xf) | ((eax >> (16-4)) & 0xf0);
-    unsigned stepping = eax & 0xf;
 
     bool osxsave = false;
     if (ecx & (1<<26)) {
@@ -237,30 +210,7 @@ static void detect_cpu(struct cpu_basic_info *basic_info)
 
     }
 
-    __cpuid(0x80000000, eax, ebx, ecx, edx);
-    if ((eax & 0x80000000) && (eax >= 0x80000004)) {
-        uint32_t *ptr = (uint32_t*) &basic_info->brand[0];
-        uint32_t i;
-        for (i = 0; i < CPU_BASIC_INFO_MAX_BRAND; i++) {
-            __cpuid(0x80000002 + i, eax, ebx, ecx, edx);
-            *ptr++ = eax;
-            *ptr++ = ebx;
-            *ptr++ = ecx;
-            *ptr++ = edx;
-        }
-
-        // Strictly speaking this isn't needed as CPUID should include a 0 at
-        // the end of the brand string, but just to be absolutely sure, we add
-        // an extra zero here (space has been reserved for it).
-        *ptr++ = 0;
-    } else {
-        basic_info->brand[0] = 0;
-    }
-
-    basic_info->features = features;
-    basic_info->family = family;
-    basic_info->model = model;
-    basic_info->stepping = stepping;
+    return features;
 }
 
 __attribute__((unused))
@@ -284,14 +234,9 @@ static void check_missing_features(uint64_t features, uint64_t minimum_cpu_featu
 #undef cpuid_errmsg
 
 #else // ! x86-64
-struct cpu_basic_info
+static uint64_t detect_cpu()
 {
-    uint64_t features;
-};
-
-static void detect_cpu(struct cpu_basic_info *basic_info)
-{
-    basic_info->features = 0;
+    return 0;
 }
 
 static void check_missing_features(uint64_t features, uint64_t minimum_cpu_features)

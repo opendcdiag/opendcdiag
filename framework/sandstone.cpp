@@ -59,7 +59,6 @@
 
 #include "sandstone.h"
 #include "cpu_features.h"
-#include "gitid.h"
 #include "sandstone_p.h"
 #include "sandstone_iovec.h"
 #include "sandstone_kvm.h"
@@ -979,6 +978,15 @@ static void init_shmem(ShmemMode mode, int fd = -1)
 
     // this is just to cause a crash if the mmap failed and we're in release mode
     (void) sApp->shmem->per_thread[0].thread_state.load(std::memory_order_relaxed);
+}
+
+__attribute__((weak, noclone, noinline)) void cpu_specific_init()
+{
+}
+
+__attribute__((weak, noclone, noinline)) int cpu_specific_finish(int exit_code)
+{
+    return exit_code;
 }
 
 static std::string cpu_features_to_string(uint64_t f)
@@ -3330,6 +3338,7 @@ int main(int argc, char **argv)
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
 
     logging_init_global();
+    cpu_specific_init();
     random_global_init(seed);
 
     if (InterruptMonitor::InterruptMonitorWorks) {
@@ -3479,5 +3488,6 @@ int main(int argc, char **argv)
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
 
+    exit_code = cpu_specific_finish(exit_code);
     return logging_close_global(exit_code);
 }
