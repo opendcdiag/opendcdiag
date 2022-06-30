@@ -1961,9 +1961,12 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     TestResult state = TestSkipped;
     int fail_count = 0;
     int iterations;
-    std::unique_ptr<char[]> random_allocation;
     MonotonicTimePoint current_test_endtime, first_iteration_target;
     bool auto_fracture = false;
+
+    // munmap requires that we remember the allocation size from mmap, so
+    // we need a non-default deleter
+    std::unique_ptr<void, std::function<void (void *)>> random_allocation;
 
     // resize and zero the storage
     if (per_cpu_fails.size() == num_cpus()) {
@@ -2023,9 +2026,15 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
                 || wallclock_deadline_has_expired(current_test_endtime))
             goto out;
 
+        // Advance the random seed
+        int n = rand();
+
         // For improved randomization of addresses, we are going to do a random
-        // malloc between 0 and 4095 bytes. This also advances the random seed.
-        random_allocation.reset(new char[rand() & 4095]);
+        // malloc between 0 and 65535 pages (0 to 256 MB).
+        random_allocation.reset();  // munmap() previous region, if any
+        size_t map_size = size_t(4096) * (n & 65535);
+        void *ptr = mmap(nullptr, map_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        random_allocation = { ptr, [map_size](void *ptr) { munmap(ptr, map_size); } };
     }
 
     /* now we process retries */
