@@ -219,7 +219,7 @@ generated_gitid_h = configure_file(
 	output : 'gitid.h',
 	encoding : 'ascii',
 	command : [
-		perl, '@INPUT0@', '@OUTPUT@', 'opendcdiag',
+		perl, '@INPUT0@', '@OUTPUT@', 'opendcdiag', get_option('version_suffix')
 	],
 )
 top_incdir = include_directories('.')
