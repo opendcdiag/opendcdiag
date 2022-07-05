@@ -38,19 +38,6 @@ generated_cpu_features_h = configure_file(
 	],
 )
 
-generated_weighted_runs = configure_file(
-	input : [
-		'scripts/weighted_runs_list2header.py',
-		'weighted_runs.list',
-	],
-	output : 'weighted_runs.h',
-	encoding : 'ascii',
-	capture : true,
-	command : [
-		python, '@INPUT0@', '@INPUT1@',
-	]
-)
-
 if cc.has_type('_Float16') and cpp.has_type('_Float16')
         framework_config.set('SANDSTONE_FP16_TYPE', '_Float16')
 elif cc.has_type('__fp16') and cpp.has_type('__fp16')

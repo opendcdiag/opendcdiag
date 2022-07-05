@@ -60,6 +60,9 @@ void WeightedTestrunSelector::create_testid_to_index_map()
 
 void WeightedTestrunSelector::add_all_weights(weighted_run_info *runinfo)
 {
+    if (!runinfo)
+        return;
+
     // We need to create runinfo entries for tests that are not listed in the test weights list
     // We do this because unspecified tests still need to be run - we just weight them low
     // We start off by saying all tests are unspecified and remove them from the list as we go

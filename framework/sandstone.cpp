@@ -104,8 +104,6 @@ using AutoClosingHandle = std::unique_ptr<void, HandleCloser>;
 #  define fileno_unlocked   fileno
 #endif
 
-#include "test_weights.c"
-
 using namespace std;
 using namespace std::chrono;
 
@@ -3416,7 +3414,6 @@ int main(int argc, char **argv)
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
     } else {
-        struct weighted_run_info *weighted_test_list = all_weighted_runinfo;
         if (test_list_randomize) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: --test-list-randomize used without "
                                             "--test-list-file. Ignored.\n");
@@ -3424,7 +3421,7 @@ int main(int argc, char **argv)
 
         if (!test_selector)
             test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
-                                                std::move(test_list), weighted_test_list);
+                                                std::move(test_list), nullptr);
     }
 
     if (sApp->verbosity == -1)
