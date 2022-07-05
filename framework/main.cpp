@@ -60,7 +60,7 @@ static unsigned long getauxval(int type)
 
 static void fallback_exec(char **argv)
 {
-    static const char fallback[] = FALLBACK_EXEC;
+    static const char fallback[] = SANDSTONE_FALLBACK_EXEC;
     char buf[PATH_MAX];
 
     if (strlen(fallback) == 0)

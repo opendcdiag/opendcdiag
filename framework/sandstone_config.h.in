@@ -17,6 +17,8 @@
 #  define DEBUG 0
 #endif
 
+#mesondefine SANDSTONE_EXECUTABLE_NAME
+#mesondefine SANDSTONE_FALLBACK_EXEC
 #mesondefine SANDSTONE_STATIC
 
 #mesondefine SANDSTONE_GA

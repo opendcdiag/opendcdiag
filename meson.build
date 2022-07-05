@@ -136,14 +136,12 @@ endif
 endif
 
 default_c_flags += [
-	'-DEXECUTABLE_NAME="' + get_option('executable_name') + '"',
 	'-DSANDSTONE',
 	'-fno-associative-math',
 	'-fno-asynchronous-unwind-tables',
 ]
 
 default_cpp_flags += [
-	'-DEXECUTABLE_NAME="' + get_option('executable_name') + '"',
 	'-DSANDSTONE',
 	'-fno-associative-math',
 	'-fvisibility-inlines-hidden',

@@ -90,7 +90,7 @@ RtlGetVersion(
 #  include <gnu/libc-version.h>
 #endif
 
-#define PROGRAM_VERSION         EXECUTABLE_NAME "-" GIT_ID
+#define PROGRAM_VERSION         SANDSTONE_EXECUTABLE_NAME "-" GIT_ID
 
 static int real_stdout_fd = STDOUT_FILENO;
 static int tty = -1;
