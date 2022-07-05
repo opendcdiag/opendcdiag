@@ -60,6 +60,9 @@ endif
 framework_config.set10('SANDSTONE_GA', get_option('flavor') == 'ga')
 framework_config.set10('SANDSTONE_GA_DEV', get_option('flavor') == 'ga-dev')
 
+framework_config.set_quoted('SANDSTONE_EXECUTABLE_NAME', get_option('executable_name'))
+framework_config.set_quoted('SANDSTONE_FALLBACK_EXEC', get_option('fallback_exec'))
+
 framework_config.set10('SANDSTONE_NO_LOGGING', get_option('logging_format') == 'none')
 framework_config.set('SANDSTONE_DEFAULT_LOGGING', 'SandstoneApplication::OutputFormat::' + get_option('logging_format'))
 
@@ -82,7 +85,6 @@ framework_main_a = static_library(
 		framework_incdir,
 	],
 	cpp_args : [
-		'-DFALLBACK_EXEC="' + get_option('fallback_exec') + '"',
 		debug_c_flags,
 		march_generic_flags,
 		default_cpp_flags,
