@@ -2305,7 +2305,7 @@ void YamlLogger::print(int, ChildExitStatus status)
 void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout)
 {
     logging_printf(LOG_LEVEL_QUIET, "command-line: '%s'\n", cmdline.data());
-    logging_printf(LOG_LEVEL_QUIET, "version: " EXECUTABLE_NAME "-" GIT_ID "\n");
+    logging_printf(LOG_LEVEL_QUIET, "version: " PROGRAM_VERSION "\n");
     logging_printf(LOG_LEVEL_VERBOSE(1), "os: %s\n", os_info().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "timing: { duration: %s, timeout: %s }\n",
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str(),
