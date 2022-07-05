@@ -127,7 +127,6 @@ enum {
     test_knob_option,
     longer_runtime_option,
     max_concurrent_threads_option,
-    max_test_count_option,
     max_test_loop_count_option,
     max_messages_option,
     max_logdata_option,
@@ -2850,7 +2849,6 @@ int main(int argc, char **argv)
         { "list-groups", no_argument, nullptr, raw_list_groups },
         { "longer-runtime", required_argument, nullptr, longer_runtime_option },
         { "max-concurrent-threads", required_argument, nullptr, max_concurrent_threads_option },
-        { "max-test-count", required_argument, nullptr, max_test_count_option },
         { "max-test-loop-count", required_argument, nullptr, max_test_loop_count_option },
         { "mce-check-every", required_argument, nullptr, mce_check_period_option },
         { "max-logdata", required_argument, nullptr, max_logdata_option },
@@ -3268,10 +3266,6 @@ int main(int argc, char **argv)
             sApp->endtime = calculate_wallclock_deadline(5min, &sApp->starttime);
             break;
 
-        case max_test_count_option:
-            sApp->max_test_count = ParseIntArgument<>{"--max-test-count"}();
-            break;
-
         case max_test_loop_count_option:
             sApp->max_test_loop_count = ParseIntArgument<>{"--max-test-loop-count"}();
             if (sApp->max_test_loop_count == 0)
@@ -3439,9 +3433,6 @@ int main(int argc, char **argv)
             // ### use per_cpu_fails??
             triage_tests.push_back(test);
         }
-
-        if (total_tests_run >= sApp->max_test_count)
-            break;
 
         //don't wait when the test failed or it was skipped.
         if(sApp->service_background_scan == true && (r != TestFailed || r != TestSkipped))

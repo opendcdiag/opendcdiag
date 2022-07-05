@@ -320,7 +320,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     static constexpr int MaxRetestCount = 64;
     int retest_count = 10;
     int total_retest_count = -2;
-    int max_test_count = INT_MAX;
     int max_test_loop_count = 0;
     int max_concurrent_thread_count = 0;
     int current_max_loop_count;
