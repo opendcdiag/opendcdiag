@@ -16,8 +16,6 @@
 #include "sandstone.h"
 #include "sandstone_p.h"
 
-#include "weighted_runs.h"
-
 using namespace std;
 
 // TODO: Next steps are to relocate this functionality so this file is nothing but #include statements
