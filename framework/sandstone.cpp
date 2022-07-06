@@ -2695,14 +2695,14 @@ template <typename Integer = int> struct ParseIntArgument
 };
 } // unnamed namespace
 
-static int parse_testrun_range(const char *arg)
+static auto parse_testrun_range(const char *arg, int &starting_test_number, int &ending_test_number)
 {
     char *end;
     errno = 0;
-    sApp->starting_test_number = strtoul(arg, &end, 10);
+    starting_test_number = strtoul(arg, &end, 10);
     if (errno == 0) {
         if (*end == '-')
-            sApp->ending_test_number = strtoul(end + 1, &end, 10);
+            ending_test_number = strtoul(end + 1, &end, 10);
         else
             errno = EINVAL;
     }
@@ -2711,11 +2711,11 @@ static int parse_testrun_range(const char *arg)
                 program_invocation_name);
         return EXIT_FAILURE;
     }
-    if (sApp->starting_test_number > sApp->ending_test_number)
-        std::swap(sApp->starting_test_number, sApp->ending_test_number);
-    if (sApp->starting_test_number < 1) {
+    if (starting_test_number > ending_test_number)
+        std::swap(starting_test_number, ending_test_number);
+    if (starting_test_number < 1) {
         fprintf(stderr, "%s: error: The lower bound of the test range must be >= 1, %d specified\n",
-                program_invocation_name, sApp->starting_test_number);
+                program_invocation_name, starting_test_number);
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;
@@ -2933,9 +2933,16 @@ int main(int argc, char **argv)
     int total_skips = 0;
     bool fatal_errors = false;
     bool do_not_triage = false;
-    const char *test_list_file_path = nullptr;
     const char *on_hang_arg = nullptr;
     const char *on_crash_arg = nullptr;
+
+    // test selection
+    const char *test_list_file_path = nullptr;
+    bool test_list_randomize = false;
+    int starting_test_number = 1;  // One based count for user interface, not zero based
+    int ending_test_number = INT_MAX;
+    WeightedTestScheme test_selection_strategy = Alphabetical;
+    WeightedTestLength weighted_testrunner_runtimes = NormalTestrunTimes;
 
     thread_num = -1;            /* indicate main thread */
     find_thyself(argv[0]);
@@ -2962,7 +2969,7 @@ int main(int argc, char **argv)
             break;
         case 'e':
             add_tests(optarg);
-            sApp->test_selection_strategy = Ordered;
+            test_selection_strategy = Ordered;
             break;
         case 'f':
             if (strcmp(optarg, "no") == 0 || strcmp(optarg, "no-fork") == 0) {
@@ -3068,7 +3075,7 @@ int main(int argc, char **argv)
             // corresponding functionality is active
             return EXIT_SUCCESS;
         case longer_runtime_option:
-            sApp->weighted_testrunner_runtimes = LongerTestrunTimes;
+            weighted_testrunner_runtimes = LongerTestrunTimes;
             break;
         case mce_check_period_option:
             sApp->mce_check_period = ParseIntArgument<>{"--mce-check-every"}();
@@ -3125,7 +3132,7 @@ int main(int argc, char **argv)
             }();
             break;
         case shortened_runtime_option:
-            sApp->weighted_testrunner_runtimes = ShortenedTestrunTimes;
+            weighted_testrunner_runtimes = ShortenedTestrunTimes;
             break;
         case strict_runtime_option:
             sApp->use_strict_runtime = true;
@@ -3197,16 +3204,16 @@ int main(int argc, char **argv)
         case weighted_testrun_option:
             // Warning: Only looking at first 3 characters of each of these
             if (strncasecmp(optarg, "repeat", 3) == 0) {
-                sApp->test_selection_strategy = Repeating;
+                test_selection_strategy = Repeating;
             } else if (strncasecmp(optarg, "non-repeat", 3) == 0) {
-                sApp->test_selection_strategy = NonRepeating;
+                test_selection_strategy = NonRepeating;
             } else if (strncasecmp(optarg, "priority", 3) == 0) {
-                sApp->test_selection_strategy = Prioritized;
+                test_selection_strategy = Prioritized;
             } else {
                 fprintf(stderr, "Cannot determine weighted testrunner type (%s is invalid - use repeat/non-repeat)", optarg);
                 return EX_USAGE;
             }
-            sApp->weighted_testrunner_runtimes = NormalTestrunTimes;
+            weighted_testrunner_runtimes = NormalTestrunTimes;
             break;
 
         case test_list_file_option:
@@ -3214,12 +3221,12 @@ int main(int argc, char **argv)
             break;
 
         case test_index_range_option:
-            if (parse_testrun_range(optarg) == EXIT_FAILURE)
+            if (parse_testrun_range(optarg, starting_test_number, ending_test_number) == EXIT_FAILURE)
                 return EX_USAGE;
             break;
 
         case test_list_randomize_option:
-            sApp->test_list_randomize = true;
+            test_list_randomize = true;
             break;
 
         case max_concurrent_threads_option:
@@ -3266,22 +3273,22 @@ int main(int argc, char **argv)
             logging_print_version();
             return EXIT_SUCCESS;
         case one_sec_option:
-            sApp->test_list_randomize = true;
+            test_list_randomize = true;
             sApp->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(1s, &sApp->starttime);
             break;
         case thirty_sec_option:
-            sApp->test_list_randomize = true;
+            test_list_randomize = true;
             sApp->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(30s, &sApp->starttime);
             break;
         case two_min_option:
-            sApp->test_list_randomize = true;
+            test_list_randomize = true;
             sApp->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(2min, &sApp->starttime);
             break;
         case five_min_option:
-            sApp->test_list_randomize = true;
+            test_list_randomize = true;
             sApp->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(5min, &sApp->starttime);
             break;
@@ -3351,7 +3358,7 @@ int main(int argc, char **argv)
             sApp->output_format = SandstoneApplication::OutputFormat::yaml;
         }
         do_not_triage = true;
-        sApp->test_selection_strategy = Ordered;
+        test_selection_strategy = Ordered;
         sApp->ud_on_failure = false;
         sApp->ignore_os_errors = false;
         sApp->retest_count = 10;
@@ -3405,16 +3412,16 @@ int main(int argc, char **argv)
 
     if (test_list_file_path) {
         test_selector = create_list_file_test_selector(sApp->test_list, test_list_file_path,
-                                                       sApp->starting_test_number, sApp->ending_test_number,
-                                                       sApp->test_list_randomize);
+                                                       starting_test_number, ending_test_number,
+                                                       test_list_randomize);
     } else {
         struct weighted_run_info *weighted_test_list = all_weighted_runinfo;
-        if (sApp->test_list_randomize) {
-            test_selector =  create_builtin_test_selector(sApp->test_list, sApp->starting_test_number, sApp->ending_test_number);
+        if (test_list_randomize) {
+            test_selector =  create_builtin_test_selector(sApp->test_list, starting_test_number, ending_test_number);
             sApp->use_strict_runtime = true;
         }
         if (!test_selector)
-                test_selector = setup_test_selector(sApp->test_selection_strategy, sApp->weighted_testrunner_runtimes,
+                test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
                                             sApp->test_list, weighted_test_list);
     }
 
