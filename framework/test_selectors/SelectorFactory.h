@@ -10,7 +10,6 @@
 #include "TestrunSelectorBase.h"
 
 // Individual selector types
-#include "AlphabeticalSelector.h"
 #include "OrderedSelector.h"
 #include "ListFileSelector.h"
 #include "PrioritizedSelector.h"
@@ -20,7 +19,6 @@
 
 #include "TestrunSelectorBase.h"
 #include "WeightedSelectorBase.h"
-#include "AlphabeticalSelector.h"
 #include "ListFileSelector.h"
 #include "WeightedNonRepeatingSelector.h"
 

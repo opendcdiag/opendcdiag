@@ -23,9 +23,8 @@ extern TestrunSelector * setup_test_selector(
 {
     switch (selectScheme) {
     case Alphabetical:
-        return new AlphabeticalTestSelector(std::move(tests));
     case Ordered:
-        return new OrderedTestSelector(std::move(tests));
+        return new OrderedTestSelector(std::move(tests), selectScheme);
     default:
         break;
     }
