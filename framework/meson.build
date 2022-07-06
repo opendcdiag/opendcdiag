@@ -24,16 +24,17 @@ if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
 endif
 subdir(sysdeps_dir)
 
+# Must be a configure_file, not custom_target, so it's created at
+# meson time and thus before everything
 generated_cpu_features_h = configure_file(
 	output : 'cpu_features.h',
 	encoding : 'ascii',
-	input : [
-		'scripts/x86simd_generate.pl',
+	input : files(
 		'simd.conf',
-	],
+	),
 	capture : true,
 	command : [
-		perl, '@INPUT0@', '@INPUT1@', '@OUTPUT@',
+		perl, files('scripts/x86simd_generate.pl'), '@INPUT@', '@OUTPUT@',
 	],
 )
 
