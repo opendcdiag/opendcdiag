@@ -25,8 +25,6 @@ protected:
     WeightedTestLength  test_length_scheme;
 
 public:
-
-
     struct test * get_next_test() override{
         auto weighted_info = this->select_test();
         test * next_test = testinfo[weighted_info->test_index];
@@ -35,8 +33,9 @@ public:
         return next_test;
 
     }
-    void set_test_list(std::vector<struct test *> _tests) override {
-        TestrunSelector::set_test_list(_tests);
+    WeightedTestrunSelector(std::vector<struct test *> _tests)
+        : TestrunSelector(std::move(_tests))
+    {
         create_testid_to_index_map();
     }
 

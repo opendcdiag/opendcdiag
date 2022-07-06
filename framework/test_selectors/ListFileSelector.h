@@ -16,8 +16,13 @@
 #include "TestrunSelectorBase.h"
 #include <fstream>
 
-class ListFileTestSelector : public TestrunSelector {
+class ListFileTestSelector : public TestrunSelector
+{
 public:
+    ListFileTestSelector(std::vector<test *> _tests)
+        : TestrunSelector(std::move(_tests))
+    {
+    }
 
     class listfile_rec {  // Inner class
     public:

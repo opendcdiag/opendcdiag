@@ -24,13 +24,19 @@
 //       before coming back around and allowing a duplicate test to be selected
 //
 // ===================================================================================================================
-class NonRepeatingWeightedTestrunSelector : public WeightedTestrunSelector {
+class NonRepeatingWeightedTestrunSelector : public WeightedTestrunSelector
+{
 protected:
     std::list<weighted_run_info *> saved_weighted_runinfo;
     int saved_sum_of_weights = -1;
 
 
 public:
+    NonRepeatingWeightedTestrunSelector(std::vector<test *> _tests)
+        : WeightedTestrunSelector(std::move(_tests))
+    {
+    }
+
     void load_weights(weighted_run_info *runinfo, WeightedTestLength length_adjustment) override {
         general_setup_from_structs(runinfo, length_adjustment);
         saved_weighted_runinfo = weighted_runinfo;

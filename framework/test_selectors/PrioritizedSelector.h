@@ -27,11 +27,16 @@
 //       high priority tests before it begins randomly picking tests
 //
 // ===================================================================================================================
-class PrioritizedTestrunSelector : public NonRepeatingWeightedTestrunSelector {
+class PrioritizedTestrunSelector : public NonRepeatingWeightedTestrunSelector
+{
 protected:
     std::list<weighted_run_info *> high_priority_tests;
 
 public:
+    PrioritizedTestrunSelector(std::vector<test *> _tests)
+        : NonRepeatingWeightedTestrunSelector(std::move(_tests))
+    {
+    }
 
     void load_weights(weighted_run_info *runinfo, WeightedTestLength length_adjustment) override {
         NonRepeatingWeightedTestrunSelector::load_weights(runinfo, length_adjustment);

@@ -17,11 +17,9 @@
 
 class AlphabeticalTestSelector : public TestrunSelector {
 public:
-    int current_test_index = 0;
-
-
-    void set_test_list(std::vector<struct test *> _tests) override {
-        TestrunSelector::set_test_list(_tests);
+    AlphabeticalTestSelector(std::vector<struct test *> _tests)
+        : OrderedTestSelector(std::move(_tests))
+    {
         sort(testinfo.begin(), testinfo.end(), sortByID);
     }
 

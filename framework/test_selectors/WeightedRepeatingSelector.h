@@ -25,8 +25,14 @@
 //       to be selected without regard to repeated selections
 //
 // ===================================================================================================================
-class RepeatingWeightedTestrunSelector : public WeightedTestrunSelector {
+class RepeatingWeightedTestrunSelector : public WeightedTestrunSelector
+{
 public:
+    RepeatingWeightedTestrunSelector(std::vector<test *> _tests)
+        : WeightedTestrunSelector(std::move(_tests))
+    {
+    }
+
     weighted_run_info *select_test() override {
         if (sum_of_weights == 0) {
             fprintf(stderr, "SANITY ERROR: Should Never get here - weighted test selector failed to find test to run"
