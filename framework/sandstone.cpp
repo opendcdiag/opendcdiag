@@ -57,12 +57,14 @@
 
 #include <math.h>
 
-#include "sandstone.h"
 #include "cpu_features.h"
+#include "forkfd.h"
+
+#include "sandstone.h"
 #include "sandstone_p.h"
 #include "sandstone_iovec.h"
 #include "sandstone_kvm.h"
-#include "forkfd.h"
+#include "test_selectors/SelectorFactory.h"
 
 #include "sandstone_tests.h"
 #include "sandstone_utils.h"

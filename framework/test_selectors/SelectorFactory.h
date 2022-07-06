@@ -9,20 +9,6 @@
 // Include base class
 #include "TestrunSelectorBase.h"
 
-// Individual selector types
-#include "OrderedSelector.h"
-#include "ListFileSelector.h"
-#include "PrioritizedSelector.h"
-#include "WeightedRepeatingSelector.h"
-#include "WeightedNonRepeatingSelector.h"
-
-
-#include "TestrunSelectorBase.h"
-#include "WeightedSelectorBase.h"
-#include "ListFileSelector.h"
-#include "WeightedNonRepeatingSelector.h"
-
-
 extern TestrunSelector * setup_test_selector(
         WeightedTestScheme         selectScheme,
         WeightedTestLength         lengthScheme,

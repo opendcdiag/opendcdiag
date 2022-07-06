@@ -13,11 +13,11 @@
 extern "C" unsigned int  random32(){ return random(); }  // Mocked
 
 #include "test_selectors/SelectorFactory.h"
-#include "sandstone_utils.h"
 #include "ListFileSelector.h"
+#include "OrderedSelector.h"
+#include "PrioritizedSelector.h"
 #include "WeightedRepeatingSelector.h"
 #include "WeightedNonRepeatingSelector.h"
-#include "TestrunSelectorBase.h"
 
 using namespace std;
 

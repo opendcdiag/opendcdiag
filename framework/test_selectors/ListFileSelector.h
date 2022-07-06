@@ -15,6 +15,7 @@
 
 #include "TestrunSelectorBase.h"
 #include <fstream>
+#include <stddef.h>
 
 class ListFileTestSelector : public TestrunSelector
 {
