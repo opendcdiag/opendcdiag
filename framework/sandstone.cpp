@@ -70,6 +70,12 @@
 #include "sandstone_utils.h"
 #include "topology.h"
 
+#if SANDSTONE_BUILTIN_TEST_LIST
+#  include "sandstone_ordered_test_list.h"
+#else
+static constexpr struct test *ordered_test_list[] = { nullptr };
+#endif
+
 #ifdef _WIN32
 #  include <ntstatus.h>
 #  include <shlwapi.h>
@@ -163,6 +169,7 @@ enum {
     timeout_option,
     total_retest_on_failure,
     ud_on_failure_option,
+    use_builtin_test_list_option,
     use_predictable_file_names_option,
     version_option,
     weighted_testrun_option,
@@ -2909,6 +2916,7 @@ int main(int argc, char **argv)
         { "total-retest-on-failure", required_argument, nullptr, total_retest_on_failure },
         { "total-time", required_argument, nullptr, 'T' },
         { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
+        { "use-builtin-test-list", no_argument, nullptr, use_builtin_test_list_option },
         { "verbose", no_argument, nullptr, 'v' },
         { "version", no_argument, nullptr, version_option },
         { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
@@ -2940,6 +2948,7 @@ int main(int argc, char **argv)
     // test selection
     const char *test_list_file_path = nullptr;
     bool test_list_randomize = false;
+    bool use_builtin_test_list = false;
     int starting_test_number = 1;  // One based count for user interface, not zero based
     int ending_test_number = INT_MAX;
     WeightedTestScheme test_selection_strategy = Alphabetical;
@@ -3161,6 +3170,15 @@ int main(int argc, char **argv)
         case ud_on_failure_option:
             sApp->ud_on_failure = true;
             break;
+        case use_builtin_test_list_option:
+            if (SandstoneConfig::HasBuiltinTestList) {
+                use_builtin_test_list = true;
+            } else {
+                fprintf(stderr, "%s: --use-builtin-test-list specified but this build does not "
+                                "have a built-in test list.", argv[0]);
+                return EX_USAGE;
+            }
+            break;
         case use_predictable_file_names_option:
 #ifndef NDEBUG
             sApp->use_predictable_file_names = true;
@@ -3368,6 +3386,9 @@ int main(int argc, char **argv)
         sApp->thermal_throttle_temp = INT_MIN;
         sApp->verbosity = -1;
         fatal_errors = true;
+        use_builtin_test_list = true;
+        static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,
+                "Restricted command-line build must have a built-in test list");
     }
 
     if (optind < argc) {
@@ -3409,6 +3430,10 @@ int main(int argc, char **argv)
 
     // If we want to use the weighted testrunner we need to initialize it
     if (test_list_file_path) {
+        if (use_builtin_test_list)
+            logging_printf(LOG_LEVEL_QUIET,
+                           "# WARNING: both --test-list-file and --use-builtin-test-list "
+                           "specified, using test file \"%s\".\n", test_list_file_path);
         if (test_list.size()) {
             logging_printf(LOG_LEVEL_QUIET,
                            "# WARNING: both --test-list-file and --enable specified, using only "
@@ -3420,10 +3445,20 @@ int main(int argc, char **argv)
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
     } else {
-        generate_test_list(test_list);
         if (test_list_randomize) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: --test-list-randomize used without "
                                             "--test-list-file. Ignored.\n");
+        }
+
+        if (use_builtin_test_list) {
+            if (!SandstoneConfig::RestrictedCommandLine && test_list.size()) {
+                logging_printf(LOG_LEVEL_QUIET,
+                               "# WARNING: both --enable and --use-builtin-test-list specified, "
+                               "the built-in test list.\n");
+            }
+            test_list = { std::begin(ordered_test_list), std::end(ordered_test_list) };
+        } else {
+            generate_test_list(test_list);
         }
 
         if (!test_selector)

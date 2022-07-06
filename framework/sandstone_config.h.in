@@ -20,6 +20,7 @@
 #mesondefine SANDSTONE_EXECUTABLE_NAME
 #mesondefine SANDSTONE_FALLBACK_EXEC
 #mesondefine SANDSTONE_STATIC
+#mesondefine SANDSTONE_BUILTIN_TEST_LIST
 
 #mesondefine SANDSTONE_GA
 #mesondefine SANDSTONE_GA_DEV
@@ -43,6 +44,7 @@ static constexpr bool GeneralAvailability = SANDSTONE_GA;
 static constexpr bool ChildBacktrace = SANDSTONE_CHILD_BACKTRACE;
 static constexpr bool NoLogging = SANDSTONE_NO_LOGGING;
 static constexpr bool RestrictedCommandLine = SANDSTONE_RESTRICTED_CMDLINE;
+static constexpr bool HasBuiltinTestList = SANDSTONE_BUILTIN_TEST_LIST;
 } // namespace SandstoneConfig
 
 #endif /* __cplusplus */
