@@ -3423,9 +3423,10 @@ int main(int argc, char **argv)
             test_selector =  create_builtin_test_selector(std::move(test_list), starting_test_number, ending_test_number);
             sApp->use_strict_runtime = true;
         }
+
         if (!test_selector)
-                test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
-                                                    test_list, weighted_test_list);
+            test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
+                                                std::move(test_list), weighted_test_list);
     }
 
     if (sApp->verbosity == -1)

@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 #include "sandstone.h"
+#include "sandstone_p.h"
 #include "SelectorFactory.h"
 
 #include "weighted_runs.h"
@@ -21,6 +22,23 @@ extern TestrunSelector * setup_test_selector(
         struct weighted_run_info * weight_info)
 {
     TestrunSelector * selector;
+    switch (selectScheme) {
+    case Alphabetical:
+        selector = new AlphabeticalTestSelector();
+        selector->set_test_list(std::move(tests));
+        break;
+    case Ordered:
+        selector = new OrderedTestSelector();
+        selector->set_test_list(std::move(tests));
+        break;
+    default:
+        break;
+    }
+
+    if constexpr (SandstoneConfig::RestrictedCommandLine) {
+        SANDSTONE_UNREACHABLE("Should not have reached here");
+        return nullptr;
+    }
 
     switch (selectScheme){
         case Repeating:
@@ -38,14 +56,6 @@ extern TestrunSelector * setup_test_selector(
             selector->set_test_list(tests);
             ((WeightedTestrunSelector *) selector)->load_weights(weight_info, lengthScheme);
             break;
-        case Alphabetical:
-            selector = new AlphabeticalTestSelector();
-            selector->set_test_list(tests);
-            break;
-        case Ordered:
-            selector = new OrderedTestSelector();
-            selector->set_test_list(tests);
-            break;
         default:
             fprintf(stderr, "ERROR: Cannot run with testrunner type (%d)", selectScheme);
             exit(EX_USAGE);
@@ -56,7 +66,14 @@ extern TestrunSelector * setup_test_selector(
 
 // TODO: Next cleanup - change this from test selector to simply a test_list fileter
 //       That way it can be used with any selector :-)
-extern TestrunSelector * create_list_file_test_selector(std::vector<struct test *> tests, string file_path, int first_index, int last_index, bool randomize){
+TestrunSelector *create_list_file_test_selector(std::vector<struct test *> tests, string file_path,
+                                                int first_index, int last_index, bool randomize)
+{
+    if constexpr (SandstoneConfig::RestrictedCommandLine) {
+        SANDSTONE_UNREACHABLE("Should not have reached here");
+        return nullptr;
+    }
+
     auto selector = new ListFileTestSelector();
     selector->set_test_list(std::move(tests));
     selector->load_from_file(file_path);
