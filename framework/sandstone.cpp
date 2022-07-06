@@ -3393,7 +3393,9 @@ int main(int argc, char **argv)
         sApp->last_thermal_event_count = sApp->count_thermal_events();
         sApp->mce_counts_start = sApp->get_mce_interrupt_counts();
 
-        if (sApp->mce_counts_start.empty()) {
+        if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
+            disable_test(&mce_test);
+        } else if (sApp->mce_counts_start.empty()) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: Cannot detect MCE events - you may be running in a VM - MCE checking disabled\n");
             disable_test(&mce_test);
         }
@@ -3405,17 +3407,20 @@ int main(int argc, char **argv)
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
 #endif
 
-    generate_test_list(test_list);
-    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        disable_test(&mce_test);
-    }
-
     // If we want to use the weighted testrunner we need to initialize it
     if (test_list_file_path) {
+        if (test_list.size()) {
+            logging_printf(LOG_LEVEL_QUIET,
+                           "# WARNING: both --test-list-file and --enable specified, using only "
+                           "the test list file \"%s\".\n", test_list_file_path);
+            test_list = {};
+            generate_test_list(test_list);
+        }
         test_selector = create_list_file_test_selector(std::move(test_list), test_list_file_path,
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
     } else {
+        generate_test_list(test_list);
         if (test_list_randomize) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: --test-list-randomize used without "
                                             "--test-list-file. Ignored.\n");
