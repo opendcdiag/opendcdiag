@@ -28,8 +28,6 @@ struct test mce_test = {
 
 class WeightedTestSelectorFixture : public ::testing::Test {
 protected:
-    RepeatingWeightedTestrunSelector   repeating_selector;
-    NonRepeatingWeightedTestrunSelector nonrepeating_selector;
     unordered_map<string, int> counts;
     unordered_map<string, int> expected_counts;
 
@@ -122,6 +120,7 @@ protected:
 
 TEST_F(WeightedTestSelectorFixture, assertionKillsRunWhenNoWeightsLoaded)
 {
+    RepeatingWeightedTestrunSelector repeating_selector({});
     EXPECT_DEATH(repeating_selector.select_test(), "");
 }
 
@@ -372,8 +371,7 @@ TEST_F(WeightedTestSelectorFixture, assertionKillsRunWhenBadTestExists)
 {
     stringstream  file_contents( "foo : 100\n" );
 
-    auto selector = new ListFileTestSelector();
-    selector->set_test_list(four_tests);
+    auto selector = new ListFileTestSelector(four_tests);
     EXPECT_DEATH(selector->load_from_stream(file_contents), "");
 }
 
@@ -381,8 +379,7 @@ TEST_F(WeightedTestSelectorFixture, assertionKillsRunWhenDurationStringIsBad)
 {
     stringstream  file_contents( "test0_id : bad_value\n" );
 
-    auto selector = new ListFileTestSelector();
-    selector->set_test_list(four_tests);
+    auto selector = new ListFileTestSelector(four_tests);
     EXPECT_DEATH(selector->load_from_stream(file_contents), "");
 }
 
@@ -398,8 +395,7 @@ TEST_F(WeightedTestSelectorFixture, GivenInputFileForTestList_SelectAllTestsInOr
             "# comment line\n"
             );
 
-    auto selector = new ListFileTestSelector();
-    selector->set_test_list(four_tests);
+    auto selector = new ListFileTestSelector(four_tests);
     selector->load_from_stream(file_contents);
     for (int i=0; i<5; i++) {
         ASSERT_STREQ(selector->get_next_test()->id, "test1_id");
@@ -418,8 +414,7 @@ TEST_F(WeightedTestSelectorFixture, GivenInputFileForTestList_CheckDurationsAreC
             "test2_id : default\n"   // explicit default - should be original default (500)
             );
 
-    auto selector = new ListFileTestSelector();
-    selector->set_test_list(four_tests);
+    auto selector = new ListFileTestSelector(four_tests);
     selector->load_from_stream(file_contents);
     ASSERT_EQ(selector->get_next_test()->desired_duration, 200);
     ASSERT_EQ(selector->get_next_test()->desired_duration, 250 * 1000);
@@ -443,8 +438,7 @@ TEST_F(WeightedTestSelectorFixture, GivenARangeOfTEstsToRun_WeOnlyRunThoseTests)
             "test0_id\n"
     );
 
-    auto selector = new ListFileTestSelector();
-    selector->set_test_list(four_tests);
+    auto selector = new ListFileTestSelector(four_tests);
     selector->load_from_stream(file_contents);
     selector->set_selection_range(2, 3, false);
     for (int i=0; i<5; i++) {
@@ -464,8 +458,7 @@ TEST_F(WeightedTestSelectorFixture, GivenARangeThatIsTooBig_WeResetSelectorAtEnd
             "test0_id\n"
     );
 
-    auto selector = new ListFileTestSelector();
-    selector->set_test_list(four_tests);
+    auto selector = new ListFileTestSelector(four_tests);
     selector->load_from_stream(file_contents);
     selector->set_selection_range(2, 30, false);
     for (int i=0; i<5; i++) {

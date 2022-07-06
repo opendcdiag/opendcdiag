@@ -7,12 +7,13 @@
 #define SANDSTONE_ORDEREDSELECTOR_H
 #include "TestrunSelectorBase.h"
 
-class OrderedTestSelector : public TestrunSelector {
-public:
+class OrderedTestSelector : public TestrunSelector
+{
     int current_test_index = 0;
-
-    void set_test_list(std::vector<struct test *> _tests) override {
-        TestrunSelector::set_test_list(_tests);
+public:
+    OrderedTestSelector(std::vector<struct test *> _tests)
+        : TestrunSelector(std::move(_tests))
+    {
     }
 
     struct test *get_next_test() override {
