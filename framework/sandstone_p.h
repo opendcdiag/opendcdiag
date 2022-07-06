@@ -298,17 +298,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool fatal_skips = false;
     bool use_strict_runtime = false;
 
-    // Weighted testrun selector section ============================================ //
-    // see also in sandstone.cpp:
-    //static TestrunSelector *test_selector;
-    int starting_test_number = 1;  // One based count for user interface, not zero based
-    int ending_test_number = INT_MAX;
-    WeightedTestScheme test_selection_strategy = Alphabetical;
-    WeightedTestLength weighted_testrunner_runtimes = NormalTestrunTimes;
-
-    bool test_list_randomize = false;
-    // Weighted testrun selector section ============================================ //
-
     ScheduleBy schedule_by = ScheduleBy::Thread;
     ForkMode fork_mode =
 #ifdef _WIN32
