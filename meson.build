@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 project(
-	'dcdiag',
+	'OpenDCDiag',
 	['c', 'cpp'],
 	default_options : [
 		'b_ndebug=if-release',
