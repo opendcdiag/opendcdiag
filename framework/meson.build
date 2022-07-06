@@ -38,6 +38,24 @@ generated_cpu_features_h = configure_file(
 	],
 )
 
+generated_builtin_test_list = []
+builtin_test_list_inputs = []
+foreach f : get_option('builtin_test_list')
+	builtin_test_list_inputs += meson.project_source_root() / f
+endforeach
+if builtin_test_list_inputs.length() != 0
+	generated_builtin_test_list = custom_target(
+		'sandstone_ordered_test_list.h',
+		input : builtin_test_list_inputs,
+		output : [
+			'sandstone_ordered_test_list.h'
+		],
+		command : [
+			perl, files('scripts/generate-test-list.pl'), '@OUTPUT@', '@INPUT@',
+		],
+	)
+endif
+
 if cc.has_type('_Float16') and cpp.has_type('_Float16')
         framework_config.set('SANDSTONE_FP16_TYPE', '_Float16')
 elif cc.has_type('__fp16') and cpp.has_type('__fp16')
@@ -47,6 +65,7 @@ endif
 framework_config.set10('SANDSTONE_GA', get_option('flavor') == 'ga')
 framework_config.set10('SANDSTONE_GA_DEV', get_option('flavor') == 'ga-dev')
 
+framework_config.set10('SANDSTONE_BUILTIN_TEST_LIST', get_option('builtin_test_list').length() != 0)
 framework_config.set_quoted('SANDSTONE_EXECUTABLE_NAME', get_option('executable_name'))
 framework_config.set_quoted('SANDSTONE_FALLBACK_EXEC', get_option('fallback_exec'))
 
@@ -119,6 +138,8 @@ endif
 framework_a = static_library(
 	'framework',
 	framework_files,
+	generated_builtin_test_list,
+	generated_cpu_features_h,
 	build_by_default: false,
 	include_directories : [
 		framework_incdir,

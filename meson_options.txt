@@ -22,5 +22,7 @@ option('selftests', type : 'boolean', value : true,
 	description : 'Build in selftests (default true)')
 option('version_suffix', type : 'string', value: '',
 	description : 'Suffix to be added to the version number (e.g., build variant)')
+option('builtin_test_list', type : 'array', value : [],
+	description : 'List of files that specify the built-in test list to be run by default')
 option('flavor', type : 'combo', choices : ['default', 'ga', 'ga-dev'], value : 'default',
 	description : 'Select one of the novel build flavors (ga, ga-dev) or the default')
