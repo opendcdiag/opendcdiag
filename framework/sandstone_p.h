@@ -353,7 +353,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     std::vector<uint32_t> mce_counts_start;
     std::map<int, uint64_t> smi_counts_start;
 
-    std::vector<struct test *>  test_list;
     int thread_offset;
 
     ForkMode current_fork_mode() const

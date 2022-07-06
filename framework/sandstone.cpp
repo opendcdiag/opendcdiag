@@ -2272,7 +2272,7 @@ static void run_test_preinit(/*nonconst*/ struct test *test)
         apply_group_inits(test);
 }
 
-static void add_test(/*nonconst*/ struct test *test)
+static void add_test(std::vector<struct test *> &test_list, /*nonconst*/ struct test *test)
 {
     if (test) {
         run_test_preinit(test);
@@ -2285,7 +2285,7 @@ static void add_test(/*nonconst*/ struct test *test)
             }
         }
     }
-    sApp->test_list.push_back(test);
+    test_list.push_back(test);
 }
 
 static void disable_test(struct test *test)
@@ -2319,7 +2319,7 @@ static NameMatchingStatus test_matches_name(const struct test *test, const char 
     return NameDoesNotMatch;
 }
 
-static void add_tests(const char *name)
+static void add_tests(std::vector<struct test *> &test_list, const char *name)
 {
     int count = 0;
     for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
@@ -2330,10 +2330,10 @@ static void add_tests(const char *name)
         run_test_preinit(test);
         ++count;
         if (test->quality_level >= sApp->requested_quality) {
-            add_test(test);
-        } else if (sApp->test_list.empty()) {
+            add_test(test_list, test);
+        } else if (test_list.empty()) {
             // add a dummy entry just so the list isn't empty
-            add_test(nullptr);
+            test_list.push_back(nullptr);
         }
     }
 
@@ -2364,20 +2364,20 @@ static void disable_tests(const char *name)
     }
 }
 
-static void generate_test_list()
+static void generate_test_list(std::vector<struct test *> &test_list)
 {
-    if (SandstoneConfig::RestrictedCommandLine || sApp->test_list.empty()) {
+    if (SandstoneConfig::RestrictedCommandLine || test_list.empty()) {
         if (!SandstoneConfig::RestrictedCommandLine && sApp->fatal_skips)
             fprintf(stderr, "# WARNING: --fatal-skips used with full test suite. This will probably fail.\n"
                             "# You may want to specify a controlled list of tests to run.\n");
         /* generate test list based on quality levels only */
         for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
             if (test->quality_level >= sApp->requested_quality)
-                add_test(test);
+                add_test(test_list, test);
         }
-    } else if (sApp->test_list.front() == nullptr) {
+    } else if (test_list.front() == nullptr) {
         /* remove the dummy entry we added (see add_tests()) */
-        sApp->test_list.erase(sApp->test_list.begin());
+        test_list.erase(test_list.begin());
     }
 }
 
@@ -2532,7 +2532,8 @@ static int exec_mode_run(int argc, char **argv)
     logging_init_global_child();
     random_global_init(argv[1]);
 
-    add_test(test_to_run);
+    std::vector<struct test *> test_list;
+    add_test(test_list, test_to_run);
     random_init();
     return run_child(test_to_run, shmemsync, &app_state);
 }
@@ -2943,6 +2944,7 @@ int main(int argc, char **argv)
     int ending_test_number = INT_MAX;
     WeightedTestScheme test_selection_strategy = Alphabetical;
     WeightedTestLength weighted_testrunner_runtimes = NormalTestrunTimes;
+    std::vector<struct test *> test_list;
 
     thread_num = -1;            /* indicate main thread */
     find_thyself(argv[0]);
@@ -2968,7 +2970,7 @@ int main(int argc, char **argv)
             disable_tests(optarg);
             break;
         case 'e':
-            add_tests(optarg);
+            add_tests(test_list, optarg);
             test_selection_strategy = Ordered;
             break;
         case 'f':
@@ -3403,26 +3405,25 @@ int main(int argc, char **argv)
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
 #endif
 
-    generate_test_list();
+    generate_test_list(test_list);
     if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
         disable_test(&mce_test);
     }
 
     // If we want to use the weighted testrunner we need to initialize it
-
     if (test_list_file_path) {
-        test_selector = create_list_file_test_selector(sApp->test_list, test_list_file_path,
+        test_selector = create_list_file_test_selector(std::move(test_list), test_list_file_path,
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
     } else {
         struct weighted_run_info *weighted_test_list = all_weighted_runinfo;
         if (test_list_randomize) {
-            test_selector =  create_builtin_test_selector(sApp->test_list, starting_test_number, ending_test_number);
+            test_selector =  create_builtin_test_selector(std::move(test_list), starting_test_number, ending_test_number);
             sApp->use_strict_runtime = true;
         }
         if (!test_selector)
                 test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
-                                            sApp->test_list, weighted_test_list);
+                                                    test_list, weighted_test_list);
     }
 
     if (sApp->verbosity == -1)
