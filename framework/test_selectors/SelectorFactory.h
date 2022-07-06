@@ -16,7 +16,6 @@ extern TestrunSelector * setup_test_selector(
         struct weighted_run_info * weight_info);
 
 extern TestrunSelector * create_list_file_test_selector(std::vector<struct test *> tests, std::string file_path, int first_index, int last_index, bool randomize);
-extern TestrunSelector * create_builtin_test_selector(std::vector<struct test *> tests, int first_index, int last_index);
 
 #endif //__WEIGHTEDTESTRUNSELECTOR_H
 
