@@ -47,7 +47,9 @@ if get_option('cpp_link_args').contains('-static')
 
 	# Need to extract malloc.o from libc.a and transform it
 	# Step 1: extract it:
-	libc_a = run_command(cc.cmd_array(), '-print-file-name=libc.a')
+	libc_a = run_command(cc.cmd_array(), '-print-file-name=libc.a',
+	       check: true
+	)
 
 	orig_glibc_malloc_o = custom_target(
 		'extract-malloc.o',
