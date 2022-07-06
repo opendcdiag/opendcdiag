@@ -987,11 +987,15 @@ static void init_shmem(ShmemMode mode, int fd = -1)
     (void) sApp->shmem->per_thread[0].thread_state.load(std::memory_order_relaxed);
 }
 
+__attribute__((weak, noclone, noinline)) void print_application_banner()
+{
+}
+
 __attribute__((weak, noclone, noinline)) void cpu_specific_init()
 {
 }
 
-__attribute__((weak, noclone, noinline)) int cpu_specific_finish(int exit_code)
+__attribute__((weak, noclone, noinline)) int print_application_footer(int exit_code)
 {
     return exit_code;
 }
@@ -3399,6 +3403,7 @@ int main(int argc, char **argv)
     debug_init_global(on_hang_arg, on_crash_arg);
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
 
+    print_application_banner();
     logging_init_global();
     cpu_specific_init();
     random_global_init(seed);
@@ -3555,6 +3560,6 @@ int main(int argc, char **argv)
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
 
-    exit_code = cpu_specific_finish(exit_code);
+    exit_code = print_application_footer(exit_code);
     return logging_close_global(exit_code);
 }
