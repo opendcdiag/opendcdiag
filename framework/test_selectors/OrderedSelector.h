@@ -7,6 +7,8 @@
 #define SANDSTONE_ORDEREDSELECTOR_H
 
 #include "TestrunSelectorBase.h"
+#include "sandstone_tests.h"
+
 #include <algorithm>
 
 class OrderedTestSelector : public TestrunSelector

@@ -36,8 +36,6 @@
 #include "effective_cpu_freq.hpp"
 #include "topology.h"
 #include "interrupt_monitor.hpp"
-#include "SelectorFactory.h"
-#include "TestrunSelectorBase.h"
 #include "thermal_monitor.hpp"
 
 #ifndef O_NOSIGPIPE

@@ -3,11 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "SelectorFactory.h"
+
+#include "ListFileSelector.h"
+#include "OrderedSelector.h"
+#include "PrioritizedSelector.h"
+#include "WeightedNonRepeatingSelector.h"
+#include "WeightedRepeatingSelector.h"
+
 #include <unordered_map>
 #include <vector>
 #include "sandstone.h"
 #include "sandstone_p.h"
-#include "SelectorFactory.h"
 
 #include "weighted_runs.h"
 
