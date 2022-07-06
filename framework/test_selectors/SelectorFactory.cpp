@@ -76,12 +76,3 @@ TestrunSelector *create_list_file_test_selector(std::vector<struct test *> tests
     selector->set_selection_range(first_index, last_index, randomize);
     return selector;
 }
-
-extern TestrunSelector * create_builtin_test_selector(std::vector<struct test *> tests, int first_index, int last_index)
-{
-    auto selector = new ListFileTestSelector(std::move(tests));
-    selector->load_from_array(weighted_testlist);
-    selector->set_selection_range(first_index, last_index, true);
-    return selector;
-}
-

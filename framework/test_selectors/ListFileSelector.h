@@ -81,18 +81,6 @@ public:
         }
     }
 
-    void load_from_array(const char * const array[]) {
-        int i = 0;
-
-        while (array[i]) {
-            listfile_rec rec{};
-            if (line_parsed_into_record(array[i], rec, true)) {
-                listfile_recs.push_back(rec);
-            }
-            i++;
-        }
-    }
-
 
     bool line_parsed_into_record(std::string line, listfile_rec &rec, bool silent) {
         std::vector<std::string> values = split_line(line.c_str(), ": \t");

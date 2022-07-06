@@ -3422,8 +3422,8 @@ int main(int argc, char **argv)
     } else {
         struct weighted_run_info *weighted_test_list = all_weighted_runinfo;
         if (test_list_randomize) {
-            test_selector =  create_builtin_test_selector(std::move(test_list), starting_test_number, ending_test_number);
-            sApp->use_strict_runtime = true;
+            logging_printf(LOG_LEVEL_QUIET, "# WARNING: --test-list-randomize used without "
+                                            "--test-list-file. Ignored.\n");
         }
 
         if (!test_selector)
