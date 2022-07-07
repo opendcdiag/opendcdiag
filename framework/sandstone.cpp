@@ -2772,25 +2772,16 @@ static void background_scan_wait()
 {
     auto as_seconds = [](Duration d) -> int { return duration_cast<seconds>(d).count(); };
 
-    //we take here walue from delay_between_tests and we make it deviate in given range
-    // i.e +/- 10%.
-    auto do_wait = [](double deviation_percentage) {
-        double random_factor = 0.0;
-        useconds_t sleep_time = 0;
+    auto do_wait = [](Duration base_wait, Duration variable) {
+        microseconds ubase = duration_cast<microseconds>(base_wait);
+        microseconds uvar = duration_cast<microseconds>(variable);
 
-        random_factor = frandom_scale(2.0) - 1.0; // get a random number from -1.0 to 1.0
-        random_factor = random_factor * deviation_percentage / 100;
+        // randomize the delay by multiplying it between -1.0 and 1.0
+        float random_factor = frandomf_scale(2.0) - 1.0f;
+        auto deviation = duration_cast<microseconds>(uvar * random_factor);
+        microseconds sleep_time = ubase + deviation;
 
-        sleep_time = duration_cast<microseconds>(sApp->delay_between_tests).count();
-
-        Duration deviation =
-                duration_cast<microseconds>(sApp->delay_between_tests * random_factor);
-        sleep_time =
-                duration_cast<microseconds>(sApp->delay_between_tests + deviation).count();
-
-        logging_printf(LOG_LEVEL_VERBOSE(2), "# Sleep time %" PRId32"\n", sleep_time);
-        // make the system call even if useconds == 0
-        usleep(sleep_time);
+        usleep(sleep_time.count());
     };
     using namespace SandstoneBackgroundScanConstants;
 
@@ -2805,12 +2796,7 @@ static void background_scan_wait()
                    as_seconds(MinimumDelayBetweenTests));
     while(1) {
         // wait ~5 mins no matter what
-        sApp->delay_between_tests = MinimumDelayBetweenTests;
-
-        double wait_deviation_percent = 10.0;
-
-        do_wait(wait_deviation_percent);
-
+        do_wait(MinimumDelayBetweenTests, MinimumDelayBetweenTests / 10);
         now = MonotonicTimePoint::clock::now();
 
         // Don't run too many tests in a short period of time
@@ -2820,10 +2806,7 @@ static void background_scan_wait()
                                                  "%d s, waiting %d +/- 0.1%% s\n",
                            sApp->background_scan.timestamp.size(),
                            as_seconds(elapsed), as_seconds(DelayBetweenTestBatch));
-            sApp->delay_between_tests = DelayBetweenTestBatch;
-
-            double wait_deviation_percent = 0.1;
-            do_wait(wait_deviation_percent);
+            do_wait(DelayBetweenTestBatch, DelayBetweenTestBatch / 1000);
             now = MonotonicTimePoint::clock::now();
         }
 
