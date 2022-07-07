@@ -3439,10 +3439,7 @@ int main(int argc, char **argv)
     if(sApp->service_background_scan == true)
         background_scan_init();
 
-    // TODO: Cleanup - this loop is inside-out.  Should iterate
-    //       on the get_next_test call and break on errors not
-    //       iterate on !errors and break on get_next_test result
-    while (!fatal_errors || (total_failures == 0 && (!sApp->fatal_skips || total_skips == 0))) {
+    for (struct test *test = get_next_test(tc); test; test = get_next_test(tc)) {
         if (restarting){
             tc = 0;
             logging_print_iteration_start();
@@ -3454,14 +3451,9 @@ int main(int argc, char **argv)
                 wait_delay_between_tests();
         }
 
-        struct test *test = get_next_test(tc);
-            
-        if (test == nullptr) break;
-
         // Note temporal coupling here with restarting
         // it is assigned here but used above in the next iteration
         restarting = (test == RESTART_OF_TESTS);
-
         if (restarting) {
             if constexpr (InterruptMonitor::InterruptMonitorWorks) {
                 if (mce_test.quality_level != TEST_QUALITY_SKIP)
@@ -3476,21 +3468,24 @@ int main(int argc, char **argv)
         if(sApp->service_background_scan == true)
             background_scan_update_timestamps();
 
-        if (lastTestResult == TestFailed)
-            ++total_failures;
-        else if (lastTestResult == TestPassed)
-            ++total_successes;
-        else if (lastTestResult == TestSkipped)
-            ++total_skips;
-
-        total_tests_run++;      
-
         // keep the record of failures to triage later
+        total_tests_run++;
         if (total_failures > triage_tests.size()) {
             // ### use per_cpu_fails??
             triage_tests.push_back(test);
         }
 
+        if (lastTestResult == TestFailed) {
+            ++total_failures;
+            if (fatal_errors)
+                break;
+        } else if (lastTestResult == TestPassed) {
+            ++total_successes;
+        } else if (lastTestResult == TestSkipped) {
+            ++total_skips;
+            if (sApp->fatal_skips)
+                break;
+        }
         if (total_tests_run >= sApp->max_test_count)
             break;
     }
