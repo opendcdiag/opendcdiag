@@ -2764,7 +2764,7 @@ static bool system_is_idle(float idle_threshold)
     return false;
 }
 
-static void background_scan_init(void)
+static void background_scan_init()
 {
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
 
@@ -2774,7 +2774,7 @@ static void background_scan_init(void)
     }
 }
 
-static void background_scan_update_load_threshold(void)
+static void background_scan_update_load_threshold()
 {
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
 
@@ -2791,7 +2791,7 @@ static void background_scan_update_load_threshold(void)
         sApp->background_scan.load_idle_threshold = sApp->background_scan.load_idle_threshold_max;
 }
 
-static void background_scan_wait(void) 
+static void background_scan_wait()
 {
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
     // Don't run tests unless load is low or it's time to run a test anyway
@@ -2832,7 +2832,7 @@ static void background_scan_wait(void)
     }
 }
 
-static void background_scan_update_timestamps(void)
+static void background_scan_update_timestamps()
 {
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
 
