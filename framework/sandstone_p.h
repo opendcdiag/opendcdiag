@@ -228,13 +228,7 @@ struct SandstoneBackgroundScan
     static constexpr Duration time_to_run_next_batch_of_tests = std::chrono::hours(24);
     static constexpr Duration time_to_force_next_test_running = (time_to_run_next_batch_of_tests / 2);
 
-    static constexpr uint32_t number_of_timestamps = 24;
-
-    static constexpr uint32_t timestamp_newest = 0;
-    static constexpr uint32_t timestamp_second = 1;
-    static constexpr uint32_t timestamp_oldest = (number_of_timestamps - 1);
-
-    std::array<MonotonicTimePoint, number_of_timestamps> timestamp;
+    std::array<MonotonicTimePoint, 24> timestamp;
 
     static constexpr float load_idle_threshold_init = 0.2;
     static constexpr float load_idle_threshold_inc_val = 0.05;

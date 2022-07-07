@@ -2773,7 +2773,8 @@ static void background_scan_init()
 static void background_scan_update_load_threshold(MonotonicTimePoint now)
 {
     hours time_from_last_test = 
-        duration_cast<hours>(now - sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest]);
+        duration_cast<hours>(now - sApp->background_scan.timestamp.front());
+
     // scale our idle threshold value from 0.2 base, to 0.8 after 12h
     // every hour adds 0.05 to the threshold value
     sApp->background_scan.load_idle_threshold = 
@@ -2809,7 +2810,7 @@ static void background_scan_wait()
 
         // If all the last N tests ran within the last batch time set, don't
         // run anything at all.
-        if (now < (sApp->background_scan.timestamp[sApp->background_scan.timestamp_oldest] + sApp->background_scan.time_to_run_next_batch_of_tests)) {
+        if (now < (sApp->background_scan.timestamp.back() + sApp->background_scan.time_to_run_next_batch_of_tests)) {
             sApp->delay_between_tests = sApp->background_scan.time_to_run_next_batch_of_tests;
 
             double wait_deviation_percent = 0.1;
@@ -2828,7 +2829,7 @@ static void background_scan_wait()
         // if we haven't run *any* tests in the last x hours, run a test
         // because of day/night cycles, 12 hours should help typical data center
         // duty cycles.
-        if (now > (sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest] + sApp->background_scan.time_to_force_next_test_running))
+        if (now > (sApp->background_scan.timestamp.front() + sApp->background_scan.time_to_force_next_test_running))
             break;
     }
 }
