@@ -2446,30 +2446,6 @@ static void wait_delay_between_tests()
     usleep(useconds);
 }
 
-//we take here walue from delay_between_tests and we make it deviate in given range
-// i.e +/- 10%.
-static void wait_delay_between_tests_with_deviation(double deviation_percentage, bool skip_wait)
-{
-    double random_factor = 0.0;
-    useconds_t sleep_time = 0;
-
-    if (!skip_wait) {
-        random_factor = frandom_scale(2.0) - 1.0; // get a random number from -1.0 to 1.0
-        random_factor = random_factor * deviation_percentage / 100;
-        
-        sleep_time = duration_cast<microseconds>(sApp->delay_between_tests).count();
-
-        Duration deviation =
-            duration_cast<microseconds>(sApp->delay_between_tests * random_factor);
-        sleep_time =
-            duration_cast<microseconds>(sApp->delay_between_tests + deviation).count();
-    }       
-
-    logging_printf(LOG_LEVEL_VERBOSE(2), "# Sleep time %" PRId32"\n", sleep_time);
-    // make the system call even if useconds == 0
-    usleep(sleep_time);
-}
-
 static int run_tests_on_cpu_set(vector<const struct test *> &tests, const LogicalProcessorSet &set)
 {
     SandstoneApplication::PerCpuFailures per_cpu_failures;
@@ -2791,9 +2767,31 @@ static void background_scan_update_load_threshold(MonotonicTimePoint now)
         sApp->background_scan.load_idle_threshold = sApp->background_scan.load_idle_threshold_max;
 }
 
+// Don't run tests unless load is low or it's time to run a test anyway
 static void background_scan_wait()
 {
     auto as_seconds = [](Duration d) -> int { return duration_cast<seconds>(d).count(); };
+
+    //we take here walue from delay_between_tests and we make it deviate in given range
+    // i.e +/- 10%.
+    auto do_wait = [](double deviation_percentage) {
+        double random_factor = 0.0;
+        useconds_t sleep_time = 0;
+
+        random_factor = frandom_scale(2.0) - 1.0; // get a random number from -1.0 to 1.0
+        random_factor = random_factor * deviation_percentage / 100;
+
+        sleep_time = duration_cast<microseconds>(sApp->delay_between_tests).count();
+
+        Duration deviation =
+                duration_cast<microseconds>(sApp->delay_between_tests * random_factor);
+        sleep_time =
+                duration_cast<microseconds>(sApp->delay_between_tests + deviation).count();
+
+        logging_printf(LOG_LEVEL_VERBOSE(2), "# Sleep time %" PRId32"\n", sleep_time);
+        // make the system call even if useconds == 0
+        usleep(sleep_time);
+    };
     using namespace SandstoneBackgroundScanConstants;
 
     // move all timestaps except the oldest one
@@ -2803,7 +2801,6 @@ static void background_scan_wait()
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
     sApp->background_scan.timestamp.front() = now;
 
-    // Don't run tests unless load is low or it's time to run a test anyway
     logging_printf(LOG_LEVEL_VERBOSE(3), "# Background scan: waiting %d +/- 10%% s\n",
                    as_seconds(MinimumDelayBetweenTests));
     while(1) {
@@ -2812,9 +2809,7 @@ static void background_scan_wait()
 
         double wait_deviation_percent = 10.0;
 
-        wait_delay_between_tests_with_deviation(
-                wait_deviation_percent,
-                false);
+        do_wait(wait_deviation_percent);
 
         now = MonotonicTimePoint::clock::now();
 
@@ -2828,9 +2823,7 @@ static void background_scan_wait()
             sApp->delay_between_tests = DelayBetweenTestBatch;
 
             double wait_deviation_percent = 0.1;
-            wait_delay_between_tests_with_deviation(
-                    wait_deviation_percent,
-                    false);
+            do_wait(wait_deviation_percent);
             now = MonotonicTimePoint::clock::now();
         }
 
