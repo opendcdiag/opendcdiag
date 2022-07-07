@@ -5,6 +5,7 @@
 
 #include <vector>
 #include "gtest/gtest.h"
+#include "sandstone_chrono.h"
 #include "sandstone_data.h"
 #include "sandstone_utils.h"
 

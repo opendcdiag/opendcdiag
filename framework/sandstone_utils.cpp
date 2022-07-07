@@ -8,10 +8,10 @@
 //     Please do not add anything to this file unless it is unit tested.
 //     All unit tests should be put in framework/unit-tests/sandstone_utils_tests.cpp
 
-#include <charconv>
+#include "sandstone_utils.h"
+
 #include <stdexcept>
 #include <string>
-#include "sandstone_utils.h"
 
 #include <math.h>
 #include <string.h>
@@ -153,53 +153,6 @@ string format_single_type(DataType type, int typeSize, const uint8_t *data, bool
     return result;
 }
 
-std::chrono::milliseconds string_to_millisecs(const string &in_string)
-{
-    std::size_t next_char_ptr;
-    if (in_string == "")
-        return {};
-    try {
-        auto value = stoi(in_string, &next_char_ptr, 0);
-
-        if (in_string.substr(next_char_ptr, 2) == "ms")
-            return std::chrono::milliseconds(value);
-        if (in_string[next_char_ptr] == 's')
-            return std::chrono::seconds(value);
-        if (in_string[next_char_ptr] == 'm')
-            return std::chrono::minutes(value);
-        if (in_string[next_char_ptr] == 'h')
-            return std::chrono::hours(value);
-        return std::chrono::milliseconds(value);
-    } catch (const std::exception &) {
-        fprintf(stderr, "Invalid time: \"%s\"\n", in_string.c_str());
-        exit(EX_USAGE);
-    }
-}
-
-string format_duration(std::chrono::nanoseconds ns, FormatDurationOptions opts)
-{
-    using namespace std::chrono;
-    std::string result;
-
-    auto us = duration_cast<microseconds>(ns);
-    milliseconds ms = duration_cast<milliseconds>(us);
-    us -= ms;
-
-    result = std::to_string(ms.count());
-    size_t i = result.size();
-    result.reserve(i + 7);
-    result.resize(i + 4);
-    result[i++] = '.';
-    if (us.count() < 100)
-        result[i++] = '0';
-    if (us.count() < 10)
-        result[i++] = '0';
-    std::to_chars(result.data() + i, result.data() + result.size(), us.count(), 10);
-    if (unsigned(opts) & unsigned(FormatDurationOptions::WithUnit))
-        result += " ms";
-    return result;
-}
-
 std::string vstdprintf(const char *fmt, va_list va)
 {
     // estimate how big the string needs to be
@@ -233,19 +186,4 @@ std::string vstdprintf(const char *fmt, va_list va)
 std::string stdprintf(const char *fmt, ...)
 {
     return va_start_and_stdprintf(fmt);
-}
-
-
-coarse_steady_clock::time_point coarse_steady_clock::now() noexcept
-{
-#ifdef CLOCK_MONOTONIC_COARSE
-    using namespace std::chrono;
-    struct timespec ts;
-    clock_t clk = CLOCK_MONOTONIC;
-    clk = CLOCK_MONOTONIC_COARSE;
-    clock_gettime(clk, &ts);
-    return time_point(seconds(ts.tv_sec) + nanoseconds(ts.tv_nsec));
-#else
-    return time_point(std::chrono::steady_clock::now().time_since_epoch());
-#endif
 }

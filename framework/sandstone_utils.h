@@ -13,7 +13,6 @@
 
 #include "sandstone.h"
 
-#include <chrono>
 #include <string>
 
 #include <stdarg.h>
@@ -35,28 +34,8 @@
         std::move(r);                                   \
     })
 
-enum class FormatDurationOptions {
-    WithoutUnit     = 0x00,
-    WithUnit        = 0x01,
-};
-
-std::chrono::milliseconds string_to_millisecs(const std::string &in_string);
-std::string format_duration(std::chrono::nanoseconds ns,
-                            FormatDurationOptions options = FormatDurationOptions::WithUnit);
 std::string format_single_type(DataType type, int typeSize, const uint8_t *data, bool detailed);
 std::string stdprintf(const char *fmt, ...) ATTRIBUTE_PRINTF(1, 2);
 std::string vstdprintf(const char *fmt, va_list va);
-
-struct coarse_steady_clock
-{
-    using duration = std::chrono::nanoseconds;
-    using time_point = std::chrono::time_point<coarse_steady_clock, duration>;
-    using rep = duration::rep;
-    using period = duration::period;
-
-    static constexpr bool is_steady = true;
-
-    static time_point now() noexcept;
-};
 
 #endif //SANDSTONE_UTILS_H_INCLUDED
