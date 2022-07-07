@@ -2774,10 +2774,8 @@ static void background_scan_init()
     }
 }
 
-static void background_scan_update_load_threshold()
+static void background_scan_update_load_threshold(MonotonicTimePoint now)
 {
-    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
-
     hours time_from_last_test = 
         duration_cast<hours>(now - sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest]);
     // scale our idle threshold value from 0.2 base, to 0.8 after 12h
@@ -2816,9 +2814,10 @@ static void background_scan_wait()
             wait_delay_between_tests_with_deviation(
                     wait_deviation_percent,
                     false);
+            now = MonotonicTimePoint::clock::now();
         }
 
-        background_scan_update_load_threshold();
+        background_scan_update_load_threshold(now);
 
         // if the system is idle, run a test
         if (system_is_idle(sApp->background_scan.load_idle_threshold))
