@@ -2773,7 +2773,7 @@ static void background_scan_init()
     // init timestamps to more than the batch testing time - this quickstarts
     // testing on first run
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
-    sApp->background_scan.timestamp.fill(now - time_to_run_next_batch_of_tests);
+    sApp->background_scan.timestamp.fill(now - MaximumDelayBetweenTests);
 }
 
 static void background_scan_update_load_threshold(MonotonicTimePoint now)
@@ -2808,7 +2808,7 @@ static void background_scan_wait()
     // Don't run tests unless load is low or it's time to run a test anyway
     while(1) {
         // wait ~5 mins no matter what
-        sApp->delay_between_tests = minimum_delay_between_tests;
+        sApp->delay_between_tests = MinimumDelayBetweenTests;
 
         double wait_deviation_percent = 10.0;
 
@@ -2820,8 +2820,8 @@ static void background_scan_wait()
 
         // If all the last N tests ran within the last batch time set, don't
         // run anything at all.
-        if (now < (sApp->background_scan.timestamp.back() + time_to_run_next_batch_of_tests)) {
-            sApp->delay_between_tests = time_to_run_next_batch_of_tests;
+        if (now < (sApp->background_scan.timestamp.back() + DelayBetweenTestBatch)) {
+            sApp->delay_between_tests = DelayBetweenTestBatch;
 
             double wait_deviation_percent = 0.1;
             wait_delay_between_tests_with_deviation(
@@ -2839,7 +2839,7 @@ static void background_scan_wait()
         // if we haven't run *any* tests in the last x hours, run a test
         // because of day/night cycles, 12 hours should help typical data center
         // duty cycles.
-        if (now > (sApp->background_scan.timestamp.front() + time_to_force_next_test_running))
+        if (now > (sApp->background_scan.timestamp.front() + MaximumDelayBetweenTests))
             break;
     }
 }
