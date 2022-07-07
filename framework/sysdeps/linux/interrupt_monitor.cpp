@@ -15,6 +15,7 @@ constexpr const char * const proc_interrupts_file = "/proc/interrupts";
 std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
 {
     static_assert(InterruptMonitorWorks);
+    static AutoClosingFile f = { fopen(proc_interrupts_file, "r") };
 
     const char *hdr = [type] {
         switch (type) {
@@ -33,7 +34,6 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
     char *line = nullptr;
     size_t len = 0;
     ssize_t nread;
-    AutoClosingFile f = { fopen(proc_interrupts_file, "r") };
     if (!f)
         return result;
 
@@ -58,6 +58,9 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
         break;
     }
     free(line);
+
+    // reset the file pointer for the next time we get called
+    fseek(f, 0, SEEK_SET);
     return result;
 }
 
