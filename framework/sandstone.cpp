@@ -2431,13 +2431,11 @@ static struct test *get_next_test(int tc)
     return test;
 }
 
-static void wait_delay_between_tests(bool skip_wait)
+static void wait_delay_between_tests()
 {
-    useconds_t useconds = 0;
-    if (!skip_wait)
-        useconds = std::chrono::duration_cast<std::chrono::microseconds>(sApp->delay_between_tests).count();
+    useconds_t useconds = duration_cast<microseconds>(sApp->delay_between_tests).count();
 
-    // make the system call even if useconds == 0
+    // make the system call even if delay_between_tests == 0
     usleep(useconds);
 }
 
@@ -3436,6 +3434,7 @@ int main(int argc, char **argv)
 
     bool restarting = true;
     int total_tests_run = 0;
+    TestResult lastTestResult = TestSkipped;
 
     if(sApp->service_background_scan == true)
         background_scan_init();
@@ -3448,10 +3447,12 @@ int main(int argc, char **argv)
             tc = 0;
             logging_print_iteration_start();
             initialize_smi_counts();  // used by smi_count test
+        } else if (lastTestResult != TestSkipped) {
+            if (sApp->service_background_scan)
+                background_scan_wait();
+            else
+                wait_delay_between_tests();
         }
-
-        if(sApp->service_background_scan == false)
-            wait_delay_between_tests(restarting);
 
         struct test *test = get_next_test(tc);
             
@@ -3470,16 +3471,16 @@ int main(int argc, char **argv)
                 continue;
         }
 
-        TestResult r = run_one_test(&tc, test, per_cpu_failures);
+        lastTestResult = run_one_test(&tc, test, per_cpu_failures);
 
         if(sApp->service_background_scan == true)
             background_scan_update_timestamps();
 
-        if (r == TestFailed)
+        if (lastTestResult == TestFailed)
             ++total_failures;
-        else if (r == TestPassed)
+        else if (lastTestResult == TestPassed)
             ++total_successes;
-        else if (r == TestSkipped)
+        else if (lastTestResult == TestSkipped)
             ++total_skips;
 
         total_tests_run++;      
@@ -3492,10 +3493,6 @@ int main(int argc, char **argv)
 
         if (total_tests_run >= sApp->max_test_count)
             break;
-
-        //don't wait when the test failed or it was skipped.
-        if(sApp->service_background_scan == true && (r != TestFailed || r != TestSkipped))
-            background_scan_wait(); 
     }
 
     // Run the mce_test at the end of all tests to make sure no MCE errors fired
