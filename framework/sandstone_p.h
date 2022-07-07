@@ -47,6 +47,8 @@
 extern "C" {
 #endif
 
+#define SANDSTONE_UNREACHABLE(msg)          ({ assert(false && msg); __builtin_unreachable(); })
+
 #ifdef _WIN32
 #define EINTR_LOOP(ret, stmt)               ret = stmt
 #else
