@@ -99,6 +99,7 @@ framework_files = files(
 	'mmap_region.c',
 	'random.cpp',
 	'sandstone.cpp',
+	'sandstone_chrono.cpp',
 	'sandstone_data.cpp',
 	'sandstone_test_groups.cpp',
 	'sandstone_utils.cpp',
@@ -154,6 +155,7 @@ framework_a = static_library(
 )
 
 unittests_sources += files(
+	'sandstone_chrono.cpp',
 	'sandstone_data.cpp',
 	'sandstone_utils.cpp',
 	'test_knobs.cpp',

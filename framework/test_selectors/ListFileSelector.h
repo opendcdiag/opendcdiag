@@ -14,6 +14,8 @@
 #define SANDSTONE_LISTFILESELECTOR_H
 
 #include "TestrunSelectorBase.h"
+#include "sandstone_chrono.h"
+
 #include <fstream>
 #include <stddef.h>
 

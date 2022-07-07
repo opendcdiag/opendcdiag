@@ -31,6 +31,7 @@
 #include <map>
 
 #include <sandstone_config.h>
+#include <sandstone_chrono.h>
 #include <sandstone_utils.h>
 
 #include "effective_cpu_freq.hpp"
@@ -106,8 +107,6 @@ int open_memfd(enum MemfdCloexecFlag);
 
 #ifdef __cplusplus
 }
-using Duration = std::chrono::steady_clock::duration;
-using MonotonicTimePoint = std::chrono::steady_clock::time_point;
 struct RandomEngineWrapper;
 struct RandomEngineDeleter { void operator()(RandomEngineWrapper *) const; };
 
@@ -500,7 +499,6 @@ static_assert(std::is_trivially_copyable_v<SandstoneApplication::ExecState>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::ExecState>);
 
 /* logging.cpp */
-int get_monotonic_time_now(struct timespec *tv);
 int logging_stdout_fd(void);
 void logging_init_global(void);
 void logging_init_global_child();
