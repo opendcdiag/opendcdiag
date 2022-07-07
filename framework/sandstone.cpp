@@ -2766,12 +2766,13 @@ static bool system_is_idle(float idle_threshold)
 
 static void background_scan_init()
 {
-    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+    if (!sApp->service_background_scan)
+        return;
 
-    // init timestamps to 1day old - this quickstarts testing on first run
-    if ((sApp->background_scan.init_timestamp == true) && (sApp->service_background_scan == true)) {
-        sApp->background_scan.timestamp.fill(now - sApp->background_scan.time_to_run_next_batch_of_tests);
-    }
+    // init timestamps to more than the batch testing time - this quickstarts
+    // testing on first run
+    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+    sApp->background_scan.timestamp.fill(now - sApp->background_scan.time_to_run_next_batch_of_tests);
 }
 
 static void background_scan_update_load_threshold(MonotonicTimePoint now)
@@ -3401,6 +3402,7 @@ int main(int argc, char **argv)
     logging_init_global();
     cpu_specific_init();
     random_global_init(seed);
+    background_scan_init();
 
     if (InterruptMonitor::InterruptMonitorWorks) {
         sApp->last_thermal_event_count = sApp->count_thermal_events();
@@ -3475,9 +3477,6 @@ int main(int argc, char **argv)
     bool restarting = true;
     int total_tests_run = 0;
     TestResult lastTestResult = TestSkipped;
-
-    if(sApp->service_background_scan == true)
-        background_scan_init();
 
     for (struct test *test = get_next_test(tc); test; test = get_next_test(tc)) {
         if (restarting){
