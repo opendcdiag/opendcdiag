@@ -2830,13 +2830,11 @@ static void background_scan_update_timestamps(void)
 {
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
 
-    //move all timestaps execpt the oldest one
-    memmove(
-            &(sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest]), 
-            &(sApp->background_scan.timestamp[sApp->background_scan.timestamp_second]),
-            (sApp->background_scan.number_of_timestamps - 1));
+    // move all timestaps except the oldest one
+    auto array_data = sApp->background_scan.timestamp.data();
+    std::move(array_data + 1, sApp->background_scan.timestamp.end(), array_data);
     
-    sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest] = now;
+    sApp->background_scan.timestamp.front() = now;
 }
 
 extern constexpr const uint64_t minimum_cpu_features = _compilerCpuFeatures;
