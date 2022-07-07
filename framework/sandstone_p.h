@@ -223,9 +223,9 @@ template <> struct test_the_test_data<true>
 };
 
 namespace SandstoneBackgroundScanConstants {
-    static constexpr Duration minimum_delay_between_tests = std::chrono::minutes(5);
-    static constexpr Duration time_to_run_next_batch_of_tests = std::chrono::hours(24);
-    static constexpr Duration time_to_force_next_test_running = (time_to_run_next_batch_of_tests / 2);
+static constexpr Duration MinimumDelayBetweenTests = std::chrono::minutes(5);
+static constexpr Duration DelayBetweenTestBatch = std::chrono::hours(24);
+static constexpr Duration MaximumDelayBetweenTests = (DelayBetweenTestBatch / 2);
 }
 
 struct SandstoneBackgroundScan
