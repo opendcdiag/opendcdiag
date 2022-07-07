@@ -2801,9 +2801,9 @@ static void background_scan_wait(void)
 
         now = MonotonicTimePoint::clock::now();
 
-        // If all the last 24 tests ran in less than the last 24h, don't run
-        // any tests at all
-        if (now < (sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest] + sApp->background_scan.time_to_run_next_batch_of_tests)) {
+        // If all the last N tests ran within the last batch time set, don't
+        // run anything at all.
+        if (now < (sApp->background_scan.timestamp[sApp->background_scan.timestamp_oldest] + sApp->background_scan.time_to_run_next_batch_of_tests)) {
             sApp->delay_between_tests = sApp->background_scan.time_to_run_next_batch_of_tests;
 
             double wait_deviation_percent = 0.1;
