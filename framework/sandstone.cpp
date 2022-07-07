@@ -2791,7 +2791,13 @@ static void background_scan_update_load_threshold(MonotonicTimePoint now)
 
 static void background_scan_wait()
 {
+    // move all timestaps except the oldest one
+    auto array_data = sApp->background_scan.timestamp.data();
+    std::move(array_data + 1, sApp->background_scan.timestamp.end(), array_data);
+
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+    sApp->background_scan.timestamp.front() = now;
+
     // Don't run tests unless load is low or it's time to run a test anyway
     while(1) {
         // wait ~5 mins no matter what
@@ -2829,17 +2835,6 @@ static void background_scan_wait()
         if (now > (sApp->background_scan.timestamp[sApp->background_scan.timestamp_newest] + sApp->background_scan.time_to_force_next_test_running))
             break;
     }
-}
-
-static void background_scan_update_timestamps()
-{
-    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
-
-    // move all timestaps except the oldest one
-    auto array_data = sApp->background_scan.timestamp.data();
-    std::move(array_data + 1, sApp->background_scan.timestamp.end(), array_data);
-    
-    sApp->background_scan.timestamp.front() = now;
 }
 
 extern constexpr const uint64_t minimum_cpu_features = _compilerCpuFeatures;
@@ -3509,9 +3504,6 @@ int main(int argc, char **argv)
         }
 
         lastTestResult = run_one_test(&tc, test, per_cpu_failures);
-
-        if(sApp->service_background_scan == true)
-            background_scan_update_timestamps();
 
         // keep the record of failures to triage later
         total_tests_run++;
