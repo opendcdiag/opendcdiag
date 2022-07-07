@@ -2766,18 +2766,21 @@ static bool system_is_idle(float idle_threshold)
 
 static void background_scan_init()
 {
+    using namespace SandstoneBackgroundScanConstants;
     if (!sApp->service_background_scan)
         return;
 
     // init timestamps to more than the batch testing time - this quickstarts
     // testing on first run
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
-    sApp->background_scan.timestamp.fill(now - sApp->background_scan.time_to_run_next_batch_of_tests);
+    sApp->background_scan.timestamp.fill(now - time_to_run_next_batch_of_tests);
 }
 
 static void background_scan_update_load_threshold(MonotonicTimePoint now)
 {
-    hours time_from_last_test = 
+    using namespace SandstoneBackgroundScanConstants;
+
+    hours time_from_last_test =
         duration_cast<hours>(now - sApp->background_scan.timestamp.front());
 
     // scale our idle threshold value from 0.2 base, to 0.8 after 12h
@@ -2793,6 +2796,8 @@ static void background_scan_update_load_threshold(MonotonicTimePoint now)
 
 static void background_scan_wait()
 {
+    using namespace SandstoneBackgroundScanConstants;
+
     // move all timestaps except the oldest one
     auto array_data = sApp->background_scan.timestamp.data();
     std::move(array_data + 1, sApp->background_scan.timestamp.end(), array_data);
@@ -2803,7 +2808,7 @@ static void background_scan_wait()
     // Don't run tests unless load is low or it's time to run a test anyway
     while(1) {
         // wait ~5 mins no matter what
-        sApp->delay_between_tests = sApp->background_scan.minimum_delay_between_tests;
+        sApp->delay_between_tests = minimum_delay_between_tests;
 
         double wait_deviation_percent = 10.0;
 
@@ -2815,8 +2820,8 @@ static void background_scan_wait()
 
         // If all the last N tests ran within the last batch time set, don't
         // run anything at all.
-        if (now < (sApp->background_scan.timestamp.back() + sApp->background_scan.time_to_run_next_batch_of_tests)) {
-            sApp->delay_between_tests = sApp->background_scan.time_to_run_next_batch_of_tests;
+        if (now < (sApp->background_scan.timestamp.back() + time_to_run_next_batch_of_tests)) {
+            sApp->delay_between_tests = time_to_run_next_batch_of_tests;
 
             double wait_deviation_percent = 0.1;
             wait_delay_between_tests_with_deviation(
@@ -2834,7 +2839,7 @@ static void background_scan_wait()
         // if we haven't run *any* tests in the last x hours, run a test
         // because of day/night cycles, 12 hours should help typical data center
         // duty cycles.
-        if (now > (sApp->background_scan.timestamp.front() + sApp->background_scan.time_to_force_next_test_running))
+        if (now > (sApp->background_scan.timestamp.front() + time_to_force_next_test_running))
             break;
     }
 }
