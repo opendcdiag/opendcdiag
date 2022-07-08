@@ -2773,7 +2773,7 @@ static void background_scan_init()
     // init timestamps to more than the batch testing time - this quickstarts
     // testing on first run
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
-    sApp->background_scan.timestamp.fill(now - MaximumDelayBetweenTests);
+    sApp->background_scan.timestamp.fill(now - DelayBetweenTestBatch);
 }
 
 static void background_scan_update_load_threshold(MonotonicTimePoint now)
