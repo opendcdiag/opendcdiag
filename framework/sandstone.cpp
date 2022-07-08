@@ -2800,7 +2800,7 @@ static void background_scan_wait()
 
     // move all timestaps except the oldest one
     auto array_data = sApp->background_scan.timestamp.data();
-    std::move(array_data + 1, sApp->background_scan.timestamp.end(), array_data);
+    std::move(array_data, sApp->background_scan.timestamp.end() - 1, array_data + 1);
 
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
     sApp->background_scan.timestamp.front() = now;
