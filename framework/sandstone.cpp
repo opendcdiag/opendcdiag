@@ -2733,13 +2733,11 @@ static void warn_deprecated_opt(const char *opt)
             program_invocation_name, opt);
 }
 
-
-static bool system_is_idle(float idle_threshold)
+static float system_idle_load()
 {
-    #ifdef __linux__
-
+#ifdef __linux__
     FILE *loadavg;
-    float load_1, load_5, load_15;
+    float load_5;
     int ret;
 
     // Look at loadavg for hints whether the system is reasonably idle or not
@@ -2749,19 +2747,18 @@ static bool system_is_idle(float idle_threshold)
     if (!loadavg)
         return false;
 
-    ret = fscanf(loadavg, "%f %f %f", &load_1, &load_5, &load_15);
+    ret = fscanf(loadavg, "%*f %f %*f", &load_5);
     fclose(loadavg);
 
-    if (ret != 3)
-       return false;
+    if (ret == 1)
+       return load_5;
+#else //__linux__
+    return std::numeric_limits<float>::lowest();
+#endif
 
-    if (load_5 <= idle_threshold)
-       return true;
-    #else //__linux__
-    return true;//TO DO implement idle trigger for Windows
-    #endif
-
-    return false;
+    // this shouldn't happen!
+    // assume the system isn't idle
+    return std::numeric_limits<float>::infinity();
 }
 
 static void background_scan_init()
@@ -2840,10 +2837,11 @@ static void background_scan_wait()
         background_scan_update_load_threshold(now);
 
         // if the system is idle, run a test
-        if (system_is_idle(sApp->background_scan.load_idle_threshold)) {
+        float idle_load = system_idle_load();
+        if (idle_load < sApp->background_scan.load_idle_threshold) {
             logging_printf(LOG_LEVEL_VERBOSE(2), "# Background scan: system is sufficiently idle "
-                                                 "(below %.2f), executing next test\n",
-                           sApp->background_scan.load_idle_threshold);
+                                                 "(%.2f; below %.2f), executing next test\n",
+                           idle_load, sApp->background_scan.load_idle_threshold);
             break;
         }
 
@@ -2857,8 +2855,8 @@ static void background_scan_wait()
         }
 
         logging_printf(LOG_LEVEL_VERBOSE(3), "# Background scan: system is not idle "
-                                             "(above %.2f), waiting %d +/- 10%% s\n",
-                       sApp->background_scan.load_idle_threshold,
+                                             "(%.2f; above %.2f), waiting %d +/- 10%% s\n",
+                       idle_load, sApp->background_scan.load_idle_threshold,
                        as_seconds(MinimumDelayBetweenTests));
     }
 }
