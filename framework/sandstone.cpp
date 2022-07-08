@@ -76,6 +76,10 @@
 static constexpr struct test *ordered_test_list[] = { nullptr };
 #endif
 
+#if SANDSTONE_SSL_BUILD
+#  include "sandstone_ssl.h"
+#endif
+
 #ifdef _WIN32
 #  include <ntstatus.h>
 #  include <shlwapi.h>
@@ -3549,6 +3553,10 @@ int main(int argc, char **argv)
             test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
                                                 std::move(test_list), nullptr);
     }
+
+#if SANDSTONE_SSL_BUILD
+    sandstone_ssl_init();
+#endif
 
     logging_print_header(argc, argv, test_duration(0, 0, 0), test_timeout(test_duration(0, 0, 0)));
 
