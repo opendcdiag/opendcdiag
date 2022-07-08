@@ -38,6 +38,14 @@ tests_set_base.add(
 	)
 )
 
+crypto_dep = dependency('libcrypto', version: ['>=1.0', '<3.0'], required: false)
+tests_set_base.add(
+	when : crypto_dep,
+	if_true: files(
+		# Tests that depends on openssl
+	)
+)
+
 eigen3_dep = dependency('eigen3', static : dep_static)
 tests_set_base.add(
 	when : eigen3_dep,

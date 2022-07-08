@@ -117,6 +117,11 @@ framework_files = files(
 	'topology.cpp',
 )
 
+crypto_dep = dependency('libcrypto', version: ['>=1.0', '<3.0'], required: false)
+if crypto_dep.found()
+	framework_files += ['sandstone_ssl.cpp']
+endif
+
 if get_option('selftests')
 	framework_files += files('selftest.cpp')
 else
