@@ -3549,8 +3549,6 @@ int main(int argc, char **argv)
             logging_print_triage_results(sockets);
         }
         logging_print_footer();
-        if (total_failures > 127)
-            total_failures = 127;
     } else if (sApp->verbosity == 0 && sApp->output_format == SandstoneApplication::OutputFormat::tap) {
         logging_printf(LOG_LEVEL_QUIET, "Ran %d tests without error (%d skipped)\n",
                        total_successes, total_tests_run - total_successes);
