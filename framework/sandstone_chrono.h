@@ -40,7 +40,7 @@ enum class FormatDurationOptions {
     WithUnit        = 0x01,
 };
 
-std::chrono::milliseconds string_to_millisecs(const std::string &in_string);
+std::chrono::milliseconds string_to_millisecs(std::string_view in_string);
 std::string format_duration(std::chrono::nanoseconds ns,
                             FormatDurationOptions options = FormatDurationOptions::WithUnit);
 
