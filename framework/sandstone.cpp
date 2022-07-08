@@ -3372,18 +3372,15 @@ int main(int argc, char **argv)
             sApp->output_format = SandstoneApplication::OutputFormat::no_output;
         } else  {
             sApp->verbosity = 1;
-            sApp->output_format = SandstoneApplication::OutputFormat::yaml;
         }
-        do_not_triage = true;
-        test_selection_strategy = Ordered;
-        sApp->ud_on_failure = false;
-        sApp->ignore_os_errors = false;
-        sApp->retest_count = 10;
-        sApp->slicing = true;
+
+        sApp->delay_between_tests = 50ms;
         sApp->thermal_throttle_temp = INT_MIN;
-        sApp->verbosity = -1;
+        do_not_triage = true;
         fatal_errors = true;
+        test_selection_strategy = Ordered;
         use_builtin_test_list = true;
+
         static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,
                 "Restricted command-line build must have a built-in test list");
     }
