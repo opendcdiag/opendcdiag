@@ -4,34 +4,34 @@
  */
 
 #include "sandstone_chrono.h"
-#include "sandstone_utils.h"
+#include "sandstone_p.h"
 
 #include <charconv>
 
 using namespace std;
 using namespace std::chrono;
 
-std::chrono::milliseconds string_to_millisecs(const string &in_string)
+milliseconds string_to_millisecs(string_view in_string)
 {
-    std::size_t next_char_ptr;
-    if (in_string == "")
+    if (in_string.size() == 0)
         return {};
-    try {
-        auto value = stoi(in_string, &next_char_ptr, 0);
 
-        if (in_string.substr(next_char_ptr, 2) == "ms")
+    milliseconds::rep value;
+    std::from_chars_result r = std::from_chars(in_string.begin(), in_string.end(), value, 10);
+    if (r.ec == std::errc{}) {
+        string_view suffix = in_string.substr(r.ptr - in_string.data());
+        if (suffix == "ms" || suffix.size() == 0)
             return std::chrono::milliseconds(value);
-        if (in_string[next_char_ptr] == 's')
+        if (suffix == "s")
             return std::chrono::seconds(value);
-        if (in_string[next_char_ptr] == 'm')
+        if (suffix == "m" || suffix == "min")
             return std::chrono::minutes(value);
-        if (in_string[next_char_ptr] == 'h')
+        if (suffix == "h")
             return std::chrono::hours(value);
-        return std::chrono::milliseconds(value);
-    } catch (const std::exception &) {
-        fprintf(stderr, "Invalid time: \"%s\"\n", in_string.c_str());
-        exit(EX_USAGE);
     }
+    fprintf(stderr, "%s: Invalid time: \"%.*s\"\n", program_invocation_name,
+            int(in_string.size()), in_string.data());
+    exit(EX_USAGE);
 }
 
 string format_duration(std::chrono::nanoseconds ns, FormatDurationOptions opts)
