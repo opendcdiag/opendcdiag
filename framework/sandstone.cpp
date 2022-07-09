@@ -2796,6 +2796,7 @@ static void background_scan_update_load_threshold(MonotonicTimePoint now)
 
 static void background_scan_wait()
 {
+    auto as_seconds = [](Duration d) -> int { return duration_cast<seconds>(d).count(); };
     using namespace SandstoneBackgroundScanConstants;
 
     // move all timestaps except the oldest one
@@ -2806,6 +2807,8 @@ static void background_scan_wait()
     sApp->background_scan.timestamp.front() = now;
 
     // Don't run tests unless load is low or it's time to run a test anyway
+    logging_printf(LOG_LEVEL_VERBOSE(3), "# Background scan: waiting %d +/- 10%% s\n",
+                   as_seconds(MinimumDelayBetweenTests));
     while(1) {
         // wait ~5 mins no matter what
         sApp->delay_between_tests = MinimumDelayBetweenTests;
@@ -2818,9 +2821,13 @@ static void background_scan_wait()
 
         now = MonotonicTimePoint::clock::now();
 
-        // If all the last N tests ran within the last batch time set, don't
-        // run anything at all.
-        if (now < (sApp->background_scan.timestamp.back() + DelayBetweenTestBatch)) {
+        // Don't run too many tests in a short period of time
+        Duration elapsed = now - sApp->background_scan.timestamp.back();
+        if (elapsed < DelayBetweenTestBatch) {
+            logging_printf(LOG_LEVEL_VERBOSE(2), "# Background scan: %zu tests completed in "
+                                                 "%d s, waiting %d +/- 0.1%% s\n",
+                           sApp->background_scan.timestamp.size(),
+                           as_seconds(elapsed), as_seconds(DelayBetweenTestBatch));
             sApp->delay_between_tests = DelayBetweenTestBatch;
 
             double wait_deviation_percent = 0.1;
@@ -2833,14 +2840,26 @@ static void background_scan_wait()
         background_scan_update_load_threshold(now);
 
         // if the system is idle, run a test
-        if (system_is_idle(sApp->background_scan.load_idle_threshold))
+        if (system_is_idle(sApp->background_scan.load_idle_threshold)) {
+            logging_printf(LOG_LEVEL_VERBOSE(2), "# Background scan: system is sufficiently idle "
+                                                 "(below %.2f), executing next test\n",
+                           sApp->background_scan.load_idle_threshold);
             break;
+        }
 
         // if we haven't run *any* tests in the last x hours, run a test
         // because of day/night cycles, 12 hours should help typical data center
         // duty cycles.
-        if (now > (sApp->background_scan.timestamp.front() + MaximumDelayBetweenTests))
+        if (now > (sApp->background_scan.timestamp.front() + MaximumDelayBetweenTests)) {
+            logging_printf(LOG_LEVEL_VERBOSE(2), "# Background scan: system has gone too long"
+                                                 " without a test -- forcing one now\n");
             break;
+        }
+
+        logging_printf(LOG_LEVEL_VERBOSE(3), "# Background scan: system is not idle "
+                                             "(above %.2f), waiting %d +/- 10%% s\n",
+                       sApp->background_scan.load_idle_threshold,
+                       as_seconds(MinimumDelayBetweenTests));
     }
 }
 
