@@ -2792,24 +2792,24 @@ static void background_scan_wait()
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
     sApp->background_scan.timestamp.front() = now;
 
+    // Don't run too many tests in a short period of time
+    Duration elapsed = now - sApp->background_scan.timestamp.back();
+    if (elapsed < DelayBetweenTestBatch) {
+        logging_printf(LOG_LEVEL_VERBOSE(2), "# Background scan: %zu tests completed in "
+                                             "%d s, waiting %d +/- 0.1%% s\n",
+                       sApp->background_scan.timestamp.size(),
+                       as_seconds(elapsed), as_seconds(DelayBetweenTestBatch));
+        do_wait(DelayBetweenTestBatch, DelayBetweenTestBatch / 1000);
+        goto skip_wait;
+    }
+
     logging_printf(LOG_LEVEL_VERBOSE(3), "# Background scan: waiting %d +/- 10%% s\n",
                    as_seconds(MinimumDelayBetweenTests));
-    while(1) {
-        // wait ~5 mins no matter what
-        do_wait(MinimumDelayBetweenTests, MinimumDelayBetweenTests / 10);
+    while (1) {
+        do_wait(MinimumDelayBetweenTests, MinimumDelayBetweenTests / 15);
+
+skip_wait:
         now = MonotonicTimePoint::clock::now();
-
-        // Don't run too many tests in a short period of time
-        Duration elapsed = now - sApp->background_scan.timestamp.back();
-        if (elapsed < DelayBetweenTestBatch) {
-            logging_printf(LOG_LEVEL_VERBOSE(2), "# Background scan: %zu tests completed in "
-                                                 "%d s, waiting %d +/- 0.1%% s\n",
-                           sApp->background_scan.timestamp.size(),
-                           as_seconds(elapsed), as_seconds(DelayBetweenTestBatch));
-            do_wait(DelayBetweenTestBatch, DelayBetweenTestBatch / 1000);
-            now = MonotonicTimePoint::clock::now();
-        }
-
         background_scan_update_load_threshold(now);
 
         // if the system is idle, run a test
