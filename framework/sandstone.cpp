@@ -3439,8 +3439,8 @@ int main(int argc, char **argv)
                            "# WARNING: both --test-list-file and --enable specified, using only "
                            "the test list file \"%s\".\n", test_list_file_path);
             test_list = {};
-            generate_test_list(test_list);
         }
+        generate_test_list(test_list);
         test_selector = create_list_file_test_selector(std::move(test_list), test_list_file_path,
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
