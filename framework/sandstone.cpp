@@ -3410,6 +3410,9 @@ int main(int argc, char **argv)
     random_global_init(seed);
     background_scan_init();
 
+    if (sApp->verbosity == -1)
+        sApp->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
+
     if (InterruptMonitor::InterruptMonitorWorks) {
         sApp->last_thermal_event_count = sApp->count_thermal_events();
         sApp->mce_counts_start = sApp->get_mce_interrupt_counts();
@@ -3465,9 +3468,6 @@ int main(int argc, char **argv)
             test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
                                                 std::move(test_list), nullptr);
     }
-
-    if (sApp->verbosity == -1)
-        sApp->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
 
     logging_print_header(argc, argv, test_duration(0, 0, 0), test_timeout(test_duration(0, 0, 0)));
 
