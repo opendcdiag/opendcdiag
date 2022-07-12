@@ -52,7 +52,7 @@ if ($? == 0) {
 
 # Check if the .hash file has useful information too
 if (open HASH, "<", ".hash") {
-    my $line = <F>;
+    my $line = <HASH>;
     chomp $line;
     close HASH;
     if ($line =~ m/^([0-9a-f]+) (.*)/) {
