@@ -10,8 +10,8 @@ my $match = shift @ARGV;
 my $suffix = shift @ARGV or "";
 my $deps = "";
 
+open F, ">", $file or die("Could not open $file for writing: $!");
 open STDERR, ">", File::Spec->devnull(); # close stderr
-open F, ">", $file;
 open DEPFILE, ">", ($file =~ s,^(.*/)([^/]+),$1.$2.d,r); # ignore error
 
 chdir($ENV{MESON_SOURCE_ROOT}) if defined($ENV{MESON_SOURCE_ROOT});
