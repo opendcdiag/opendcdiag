@@ -27,6 +27,7 @@ my $description = `git describe --always --tags --match="$match*" --abbrev=12 --
 if ($? == 0) {
     # We are, so use the output of git describe (stripped of $match)
     chomp $description;
+    print F "// git describe: $description\n";
     $description =~ s/\Q$match\E//;
     $description .= $suffix;
 
@@ -55,6 +56,7 @@ if (open HASH, "<", ".hash") {
     my $line = <HASH>;
     chomp $line;
     close HASH;
+    print F "// .hash file: $line\n";
     if ($line =~ m/^([0-9a-f]+) (.*)/) {
         # Output from a git archive
         $deps .= " .hash";
