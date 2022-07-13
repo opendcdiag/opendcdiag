@@ -121,10 +121,12 @@ enum {
     two_min_option,
     five_min_option,
 
+    alternate_frequency,
     cpuset_option,
     disable_option,
     dump_cpu_info_option,
     fatal_skips_option,
+    set_fixed_frequency,
     ignore_os_errors_option,
     is_asan_option,
     is_debug_option,
@@ -288,6 +290,7 @@ static void signal_handler(int signum)
     uint32_t expected = 0;
     if (signal_control.compare_exchange_strong(expected, W_EXITCODE(1, signum), std::memory_order_relaxed)) {
         // initial clean up
+        sApp->frequency_manager.restore_max_frequency(sApp->enabled_cpus.count());
     } else {
         // just increment the counter
         signal_control.fetch_add(W_EXITCODE(1, 0), std::memory_order_relaxed);
@@ -2022,6 +2025,22 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         sApp->current_max_loop_count = test->fracture_loop_count;
     }
 
+    // Apply frequency changes if needed
+    if (sApp->fixed_frequency != -1 && test->variable_frequencies == 1) {
+        // Set fixed frequency
+        sApp->frequency_manager.set_fixed_frequency(sApp->enabled_cpus.count(), sApp->fixed_frequency);
+    }
+    else if (sApp->alternate_frequency && test->variable_frequencies == 1) {
+        // Alternate frequency
+        sApp->frequency_manager.alternate_frequency(sApp->enabled_cpus.count());
+    }
+    else if (sApp->alternate_frequency || sApp->fixed_frequency != -1) {
+        if (test->variable_frequencies == 0) {
+            // Set max frequency back to normal
+            sApp->frequency_manager.restore_max_frequency(sApp->enabled_cpus.count());
+        }
+    }
+
     assert(sApp->retest_count >= 0);
 
     /* First we go to do our -- possibly fractured -- normal run, we'll do retries after */
@@ -2854,6 +2873,7 @@ int main(int argc, char **argv)
         { "2min", no_argument, nullptr, two_min_option },
         { "5min", no_argument, nullptr, five_min_option },
         { "alpha", no_argument, &sApp->requested_quality, INT_MIN },
+        { "alternate-frequency", no_argument, nullptr, alternate_frequency},
         { "beta", no_argument, &sApp->requested_quality, 0 },
         { "cpuset", required_argument, nullptr, cpuset_option },
         { "disable", required_argument, nullptr, disable_option },
@@ -2861,6 +2881,7 @@ int main(int argc, char **argv)
         { "enable", required_argument, nullptr, 'e' },
         { "fatal-errors", no_argument, nullptr, 'F'},
         { "fatal-skips", no_argument, nullptr, fatal_skips_option },
+        { "fixed-frequency", required_argument, nullptr, set_fixed_frequency},
         { "fork-mode", required_argument, nullptr, 'f' },
         { "help", no_argument, nullptr, 'h' },
         { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
@@ -3060,6 +3081,18 @@ int main(int argc, char **argv)
                         .max = 160,     // arbitrary
                 }();
             break;
+        case alternate_frequency:
+            if (getuid() != 0) {
+                fprintf(stderr, "--alternate-frequency needs to be run as root\n");
+                return EX_USAGE;
+            }
+            else if (sApp->fixed_frequency != -1) {
+                fprintf(stderr, "--fixed-frequency and --alternate_frequency cannot be used together\n");
+                return EX_USAGE;
+            }
+            else
+                sApp->alternate_frequency=true;
+            break;
         case cpuset_option:
             sApp->enabled_cpus = parse_cpuset_param(optarg);
             sApp->thread_count = sApp->enabled_cpus.count();
@@ -3073,6 +3106,21 @@ int main(int argc, char **argv)
             return EXIT_SUCCESS;
         case fatal_skips_option:
             sApp->fatal_skips = true;
+            break;
+        case set_fixed_frequency:
+            if (getuid() != 0) {
+                fprintf(stderr, "--fixed-frequency needs to be run as root\n");
+                return EX_USAGE;
+            }
+            else if (sApp->alternate_frequency) {
+                fprintf(stderr, "--fixed-frequency and --alternate_frequency cannot be used together\n");
+                return EX_USAGE;
+            }
+            else
+                sApp->fixed_frequency=ParseIntArgument<>{
+                        .min = sApp->frequency_manager.get_min_supported_freq(),
+                        .max = sApp->frequency_manager.get_max_supported_freq(),
+                }();
             break;
         case ignore_os_errors_option:
             sApp->ignore_os_errors = true;
