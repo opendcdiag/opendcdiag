@@ -3509,15 +3509,11 @@ int main(int argc, char **argv)
 
         lastTestResult = run_one_test(&tc, test, per_cpu_failures);
 
-        // keep the record of failures to triage later
         total_tests_run++;
-        if (total_failures > triage_tests.size()) {
-            // ### use per_cpu_fails??
-            triage_tests.push_back(test);
-        }
-
         if (lastTestResult == TestFailed) {
             ++total_failures;
+            // keep the record of failures to triage later
+            triage_tests.push_back(test);
             if (fatal_errors)
                 break;
         } else if (lastTestResult == TestPassed) {
