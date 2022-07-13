@@ -43,6 +43,10 @@ jobs:
       run: |
         ./builddir/unittests \
           --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
+    - name: confirm opendcdiag runs
+      run: |
+        builddir/opendcdiag --version
+        builddir/opendcdiag --dump-cpu-info
     - name: run selftests
       run: |
         ulimit -St 120

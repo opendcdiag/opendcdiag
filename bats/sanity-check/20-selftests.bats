@@ -106,10 +106,15 @@ test_yaml_regexp() {
     test_yaml_regexp "/command-line" ".* $args"
     test_yaml_regexp "/version" '([a-z-]+-)?(v[0-9.]+ \([0-9a-f]{40}\)|[0-9]+-[0-9]+-g[0-9a-f]+|[0-9a-f]{12}|[0-9a-f]{40})(-.*)?'
 
-    # just verify these exist
-    test_yaml_regexp "/os" '.*'
+    local os=`uname -sr`
+    if [[ "$SANDSTONE" = "wine "* ]]; then
+        os=`wine cmd /c ver | sed -n "s/\r$//;s/.*Windows /Windows v/p"`
+    fi
+    test_yaml_regexp "/os" "\\Q$os\\E\\b.*"
     test_yaml_numeric "/timing/duration" 'value == 1234'
     test_yaml_numeric "/timing/timeout" 'value == 12345'
+
+    # just verify these exist
     for ((i = 0; i < MAX_PROC; ++i)); do
         test_yaml_numeric "/cpu-info/$i/logical" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/package" 'value >= 0'
