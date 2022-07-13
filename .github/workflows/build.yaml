@@ -6,6 +6,9 @@ on:
   push:
     branches: [ main ]
 
+env:
+  GIT_CONFIG_SYSTEM: /tmp/gitconfig
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
@@ -18,6 +21,7 @@ jobs:
             bats \
             elfutils \
             file \
+            git \
             libboost-dev \
             libeigen3-dev \
             libgtest-dev \
@@ -27,6 +31,8 @@ jobs:
             python3-yaml \
             zlib1g-dev
     - uses: actions/checkout@v2
+    - name: setup Git
+      run: git config --system safe.directory '*'
     - name: meson setup -Dbuildtype=debugoptimized
       run: meson setup builddir
     - name: ninja build
@@ -61,6 +67,8 @@ jobs:
             mingw64-zstd \
             perl
     - uses: actions/checkout@v2
+    - name: setup Git
+      run: git config --system safe.directory '*'
     - name: meson setup
       run: meson setup builddir-windows-cross --cross-file meson-cross-win32.ini
     - name: ninja build
