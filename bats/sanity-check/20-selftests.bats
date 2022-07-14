@@ -641,7 +641,7 @@ selftest_crash_common() {
 
 @test "selftest_malloc_fail" {
     declare -A yamldump
-    selftest_crash_common selftest_malloc_fail 6 "Aborted" 0xC0000602 "Aborted"
+    selftest_crash_common selftest_malloc_fail 6 "Aborted" 0xC0000017 "Out of memory condition"
     test_yaml_regexp "/tests/0/stderr messages" 'Out of memory condition'
 }
 
