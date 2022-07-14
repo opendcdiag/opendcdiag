@@ -32,6 +32,7 @@
 
 #include <sandstone_config.h>
 #include <sandstone_chrono.h>
+#include <sandstone_span.h>
 #include <sandstone_utils.h>
 
 #include "effective_cpu_freq.hpp"
@@ -237,7 +238,7 @@ static constexpr Duration MaximumDelayBetweenTests = (DelayBetweenTestBatch / 2)
 
 struct SandstoneBackgroundScan
 {
-    std::array<MonotonicTimePoint, 24> timestamp;
+    span<MonotonicTimePoint> timestamp;
     float load_idle_threshold = 0.0;
 
     static constexpr float load_idle_threshold_init = 0.2;
