@@ -130,6 +130,9 @@ test_yaml_regexp() {
 }
 
 @test "obey taskset single" {
+    if $is_windows; then
+        skip "taskset does not apply to Windows"
+    fi
     if ! type -p taskset > /dev/null; then
         skip "taskset not installed"
     fi
@@ -149,6 +152,9 @@ test_yaml_regexp() {
 }
 
 @test "obey taskset multi" {
+    if $is_windows; then
+        skip "taskset does not apply to Windows"
+    fi
     if ! type -p taskset > /dev/null; then
         skip "taskset not installed"
     fi
@@ -319,6 +325,9 @@ test_yaml_regexp() {
 }
 
 @test "selftest_logs_options" {
+    if $is_windows; then
+       skip "BROKEN on Windows / -fexec mode"
+    fi
     declare -A yamldump
     sandstone_selftest -vvv -e selftest_logs_options
     [[ "$status" -eq 0 ]]
