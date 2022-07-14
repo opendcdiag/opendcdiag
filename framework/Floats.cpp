@@ -84,7 +84,6 @@ static_assert(Float80_11_22.mantissa == 22, "Float80: Incorrect mantissa");
  *
  * @{
  */
-#define MASK(n)  (((n) == 64) ? 0xffffffffffffffffuLL : ((1uLL << (n)) - 1))
 #define QUIET(t)  ((1uLL << (t ## _MANTISSA_BITS - 1)))
 
 static_assert(BFLOAT16_EXPONENT_MASK == FLOAT32_EXPONENT_MASK, "BFloat16 is truncated Float32 (MSB only)");
@@ -93,18 +92,18 @@ static_assert(BFLOAT16_MANTISSA_MASK == (FLOAT32_MANTISSA_MASK >> 16), "BFloat16
 static_assert(sizeof(Float16) == 2, "Float16 structure is not of the correct size");
 static_assert(FLOAT16_NAN_EXPONENT == FLOAT16_EXPONENT_MASK, "Float16::NaNs have all exponent bits set");
 static_assert(FLOAT16_INFINITY_EXPONENT == FLOAT16_EXPONENT_MASK, "Float16::Inf has all exponent bits set");
-static_assert(MASK(FP16_EXPONENT_BITS) == FLOAT16_EXPONENT_MASK, "Float16 exponent mask has different size than the field");
-static_assert(MASK(FP16_MANTISSA_BITS) == FLOAT16_MANTISSA_MASK, "Float16 mantissa mask has different size than the field");
-static_assert(QUIET(FP16) == FLOAT16_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
-static_assert(FP16_SIGN_BITS + FP16_EXPONENT_BITS + FP16_MANTISSA_BITS == 16, "Bitfields sums to type size");
+static_assert(MASK(FLOAT16_EXPONENT_BITS) == FLOAT16_EXPONENT_MASK, "Float16 exponent mask has different size than the field");
+static_assert(MASK(FLOAT16_MANTISSA_BITS) == FLOAT16_MANTISSA_MASK, "Float16 mantissa mask has different size than the field");
+static_assert(QUIET(FLOAT16) == FLOAT16_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
+static_assert(FLOAT16_SIGN_BITS + FLOAT16_EXPONENT_BITS + FLOAT16_MANTISSA_BITS == 16, "Bitfields sums to type size");
 
 static_assert(sizeof(BFloat16) == 2, "BFloat16 structure is not of the correct size");
 static_assert(BFLOAT16_NAN_EXPONENT == BFLOAT16_EXPONENT_MASK, "BFloat16::NaNs have all exponent bits set");
 static_assert(BFLOAT16_INFINITY_EXPONENT == BFLOAT16_EXPONENT_MASK, "BFloat16::Inf has all exponent bits set");
-static_assert(MASK(BFLT16_EXPONENT_BITS) == BFLOAT16_EXPONENT_MASK, "BFloat16 exponent mask has different size than the field");
-static_assert(MASK(BFLT16_MANTISSA_BITS) == BFLOAT16_MANTISSA_MASK, "BFloat16 mantissa mask has different size than the field");
-static_assert(QUIET(BFLT16) == BFLOAT16_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
-static_assert(BFLT16_SIGN_BITS + BFLT16_EXPONENT_BITS + BFLT16_MANTISSA_BITS == 16, "Bitfields sums to type size");
+static_assert(MASK(BFLOAT16_EXPONENT_BITS) == BFLOAT16_EXPONENT_MASK, "BFloat16 exponent mask has different size than the field");
+static_assert(MASK(BFLOAT16_MANTISSA_BITS) == BFLOAT16_MANTISSA_MASK, "BFloat16 mantissa mask has different size than the field");
+static_assert(QUIET(BFLOAT16) == BFLOAT16_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
+static_assert(BFLOAT16_SIGN_BITS + BFLOAT16_EXPONENT_BITS + BFLOAT16_MANTISSA_BITS == 16, "Bitfields sums to type size");
 
 static_assert(sizeof(Float32) == sizeof(float), "Float32 structure is not of the correct size");
 static_assert(FLOAT32_NAN_EXPONENT == FLOAT32_EXPONENT_MASK, "Float32::NaNs have all exponent bits set");
@@ -141,52 +140,91 @@ extern "C" {
 
 Float16 new_random_float16()
 {
+    random_bits_state_t state = {};
     Float16 f;
-    f.sign = random32();
-    f.exponent = random32();
-    f.mantissa = set_random_bits(random32() % (FP16_MANTISSA_BITS + 1), FP16_MANTISSA_BITS);
 
+    f.sign = random_bits(FLOAT16_SIGN_BITS, &state);
+    f.exponent = random_bits(FLOAT16_EXPONENT_BITS, &state);
+    // special handling for 0/denorm and Inf/NaN
+    if (((f.exponent == FLOAT16_DENORM_EXPONENT) || (f.exponent == FLOAT16_NAN_EXPONENT)) && (random_bits(1, &state))) {
+        f.mantissa = 0;
+    } else {
+        f.mantissa = random_chains(8, FLOAT16_MANTISSA_BITS, &state);
+    }
     return f;
 }
 
 BFloat16 new_random_bfloat16()
 {
+    random_bits_state_t state = {};
     BFloat16 f;
-    f.sign = random32();
-    f.exponent = random32();
-    f.mantissa = set_random_bits(random32() % (BFLT16_MANTISSA_BITS + 1), BFLT16_MANTISSA_BITS);
 
+    f.sign = random_bits(BFLOAT16_SIGN_BITS, &state);
+    f.exponent = random_bits(BFLOAT16_EXPONENT_BITS, &state);
+    // special handling for 0/denorm and Inf/NaN
+    if (((f.exponent == BFLOAT16_DENORM_EXPONENT) || (f.exponent == BFLOAT16_NAN_EXPONENT)) && (random_bits(1, &state))) {
+        f.mantissa = 0;
+    } else {
+        f.mantissa = random_chains(8, BFLOAT16_MANTISSA_BITS, &state);
+    }
     return f;
 }
 
 Float32 new_random_float32()
 {
+    random_bits_state_t state = {};
     Float32 f;
-    f.sign = random32();
-    f.exponent = random32();
-    f.mantissa = set_random_bits(random32() % (FLOAT32_MANTISSA_BITS + 1), FLOAT32_MANTISSA_BITS);
 
+    f.sign = random_bits(FLOAT32_SIGN_BITS, &state);
+    f.exponent = random_bits(FLOAT32_EXPONENT_BITS, &state);
+    // special handling for 0/denorm and Inf/NaN
+    if (((f.exponent == FLOAT32_DENORM_EXPONENT) || (f.exponent == FLOAT32_NAN_EXPONENT)) && (random_bits(1, &state))) {
+        f.mantissa = 0;
+    } else {
+        f.mantissa = random_chains(16, FLOAT32_MANTISSA_BITS, &state);
+    }
     return f;
 }
 
 Float64 new_random_float64()
 {
+    random_bits_state_t state = {};
     Float64 f;
-    f.sign = random32();
-    f.exponent = random32();
-    f.mantissa = set_random_bits(random32() % (FLOAT64_MANTISSA_BITS + 1), FLOAT64_MANTISSA_BITS);
 
+    f.sign = random_bits(FLOAT64_SIGN_BITS, &state);
+    f.exponent = random_bits(FLOAT64_EXPONENT_BITS, &state);
+    // special handling for 0/denorm and Inf/NaN
+    if (((f.exponent == FLOAT64_DENORM_EXPONENT) || (f.exponent == FLOAT64_NAN_EXPONENT)) && (random_bits(1, &state))) {
+        f.mantissa = 0;
+    } else {
+        f.mantissa = random_chains(32, FLOAT64_MANTISSA_BITS, &state);
+    }
     return f;
 }
 
 Float80 new_random_float80()
 {
+    random_bits_state_t state = {};
     Float80 f;
-    f.sign = random32();
-    f.exponent = random32();
-    f.jbit = 1;
-    f.mantissa = set_random_bits(random32() % (FLOAT80_MANTISSA_BITS + 1), FLOAT80_MANTISSA_BITS);
 
+    f.sign = random_bits(FLOAT80_SIGN_BITS, &state);
+    f.exponent = random_bits(FLOAT80_EXPONENT_BITS, &state);
+
+    // jbit cleared is only allowed for 0 exponent, otherwise invalid operand execption is thrown.
+    // jbit cleared (for 0 exponent) is properly interpreted, but never generated by x87 (with the exception of
+    // "unnormal" numbers, which are not handled since 387).
+    if ((f.exponent == FLOAT80_DENORM_EXPONENT) && (random_bits(1, &state))) {
+        f.jbit = 0;
+    } else {
+        f.jbit = 1;
+    }
+
+    // special handling for 0/denorm and Inf/NaN
+    if (((f.exponent == FLOAT80_DENORM_EXPONENT) || (f.exponent == FLOAT80_NAN_EXPONENT)) && (random_bits(1, &state))) {
+        f.mantissa = 0;
+    } else {
+        f.mantissa = random_chains(64, FLOAT80_MANTISSA_BITS, &state);
+    }
     return f;
 }
 
