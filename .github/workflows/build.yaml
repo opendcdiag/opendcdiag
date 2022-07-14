@@ -55,6 +55,9 @@ jobs:
   build-windows:
     runs-on: ubuntu-latest
     container: fedora:34
+    env:
+      WINEPREFIX: /tmp/wine_root
+      WINEPATH: d:/bin
     steps:
     - name: Install distro packages
       run: |
@@ -62,12 +65,13 @@ jobs:
             cmake \
             git \
             meson \
-            mingw64-boost-static \
+            mingw64-boost \
             mingw64-eigen3 \
             mingw64-gcc-c++ \
-            mingw64-pixman-static \
+            mingw64-pixman \
             mingw64-pkg-config \
             mingw64-winpthreads-static \
+            mingw64-zlib \
             mingw64-zstd \
             perl
     - uses: actions/checkout@v2
@@ -77,3 +81,21 @@ jobs:
       run: meson setup builddir-windows-cross --cross-file meson-cross-win32.ini
     - name: ninja build
       run: ninja -C builddir-windows-cross
+    - name: install Wine
+      run: |
+        dnf install --setopt=install_weak_deps=False -y \
+            bats \
+            elfutils \
+            python3-pyyaml \
+            wine
+        # Create drive D: at MinGW's sysroot
+        winecfg
+        rpm -ql mingw64-zlib | sed -n '/bin\/zlib1.dll/s///p' | \
+            xargs -rtI@ ln -s @ $WINEPREFIX/dosdevices/d:
+    - name: confirm Wine works
+      run: |
+        wine cmd /c ver
+        wine builddir-windows-cross/opendcdiag.exe --version
+        wine builddir-windows-cross/opendcdiag.exe --dump-cpu-info
+    - name: run selftests
+      run: SANDSTONE_BIN=builddir-windows-cross/opendcdiag.exe bats -t bats/sanity-check
