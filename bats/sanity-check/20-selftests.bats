@@ -345,6 +345,62 @@ test_yaml_regexp() {
     test_yaml_regexp "/tests/0/threads/0/messages/2/text" '.*Numbers: 1 4097'
 }
 
+test_list_file() {
+    local -a list=("$@")
+    local -i count=${#list[@]}
+    declare -A yamldump
+    sandstone_selftest --test-list-file <(printf '%s\n' "${list[@]}")
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # confirm each test
+    local -i i=0
+    local entry
+    for entry in "${list[@]}"; do
+        if [[ "$entry" = "" ]] || [[ "$entry" = "#"* ]]; then
+            continue;
+        fi
+
+        test_yaml_regexp "/tests/$i/result" "pass"
+        test_yaml_regexp "/tests/$i/test" "${entry%:*}"
+
+        # was there a duration?
+        local -i duration=${entry#*:}
+        if (( duration > 0 )); then
+            test_yaml_numeric "/tests/$i/test-runtime" "value >= $duration"
+            test_yaml_numeric "/tests/$i/test-runtime" "value <= 2 * $duration"
+        fi
+
+        i=$((i + 1))
+    done
+    test_yaml_numeric "/tests@len" "value = $i"
+}
+
+@test "--test-list-file with 1 test" {
+    test_list_file selftest_pass
+}
+
+@test "--test-list-file with 3 tests" {
+    test_list_file selftest_pass selftest_logs selftest_pass
+}
+
+@test "--test-list-file with duration" {
+    test_list_file selftest_pass:default selftest_timedpass:50
+}
+
+@test "--test-list-file with comments and empty lines" {
+    test_list_file '# a file list' '' selftest_pass '' '# the end!'
+}
+
+@test "--test-list-file with unknown test name" {
+    # This doesn't produce valid YAML output, so run directly
+    local name=`mktemp -u selftest_XXXXXX`
+    run $SANDSTONE -Y -o - --selftests --test-list-file <(echo "$name")
+    echo "$output"
+    [[ $status -eq 64 ]]        # exit(EX_USAGE)
+    grep -qwF "$name" <<<"$output"
+}
+
 # -- negative tests --
 
 @test "selftest_failinit" {
