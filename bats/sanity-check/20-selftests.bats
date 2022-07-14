@@ -520,14 +520,20 @@ selftest_crash_common() {
     if ! declare -p yamldump >/dev/null 2>/dev/null; then
         declare -A yamldump
     fi
-    sandstone_selftest --on-crash=kill -vvv -e $1
+
+    local test=$1
+    if $is_windows; then
+        shift 2
+    fi
+    if [[ "$2" == "" ]]; then
+        skip "Test skipped on this platform"
+    fi
+
+    sandstone_selftest --on-crash=kill -vvv -e $test
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/result/crashed" True
     test_yaml_regexp "/tests/0/result/core-dump" '(True|False)'
-    if $is_windows; then
-        shift 2
-    fi
     test_yaml_numeric "/tests/0/result/code" 'value > 0 && value == '$2
     test_yaml_regexp "/tests/0/result/reason" "$3"
 }
@@ -549,7 +555,7 @@ selftest_crash_common() {
 }
 
 @test "selftest_sigbus" {
-    selftest_crash_common selftest_sigbus 7 "Bus error" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigbus 7 "Bus error"
 }
 
 @test "selftest_sigsegv_init" {
