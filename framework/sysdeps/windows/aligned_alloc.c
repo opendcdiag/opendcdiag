@@ -18,6 +18,7 @@ static __attribute__((noinline, noreturn)) void null_pointer_consumption(void *p
 {
     static const char msg[] = "Out of memory condition\n";
     (void) ptr;
+    write(STDERR_FILENO, msg, sizeof(msg) - 1);
     OutputDebugStringA(msg);
 
     TerminateProcess((HANDLE)-1, STATUS_NO_MEMORY);
