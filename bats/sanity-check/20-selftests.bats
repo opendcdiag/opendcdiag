@@ -169,6 +169,9 @@ test_yaml_regexp() {
 }
 
 @test "selftest_timedpass_maxthreads1 --timeout 100ms" {
+    if [[ "$SANDSTONE" = "wine "* ]] && [[ "$HOME" = /github/* ]]; then
+        skip "This test runs too slowly on GitHub runners"
+    fi
     VALIDATION=dump
     declare -A yamldump
     sandstone_selftest -e selftest_timedpass_maxthreads1 --timeout 100ms
