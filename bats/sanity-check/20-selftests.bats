@@ -537,7 +537,7 @@ function selftest_logerror_common() {
             test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/type" $type
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/offset" '\[.*\]'
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/address" '0x[0-9a-f]+'
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/address" '(0x)?[0-9a-f]+'
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/actual" "$dataregexp"
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/expected" "$dataregexp"
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/mask" '0x[0-9a-f]+'
