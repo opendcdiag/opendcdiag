@@ -614,11 +614,17 @@ selftest_crash_common() {
     selftest_crash_common selftest_sigsegv_instruction 11 "Segmentation fault" 0xC0000005 'Access violation'
 }
 
-@test "selftest_fast_fail" {
+@test "selftest_fastfail" {
     if ! $is_windows; then
         skip "Windows-only test"
     fi
-    selftest_crash_common selftest_fast_fail x x 0xC0000005 'Access violation'
+    if [[ "$SANDSTONE" = "wine "* ]]; then
+        # WINE doesn't handle __fastfail very well / at all
+        selftest_crash_common selftest_fastfail x x 0xC0000005 'Access violation'
+    else
+        # I don't know *why* we get this error, but we do
+        selftest_crash_common selftest_fastfail x x 0xC0000409 "Stack buffer overrun"
+    fi
 }
 
 @test "selftest_sigkill" {
