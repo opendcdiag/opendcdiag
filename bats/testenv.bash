@@ -69,7 +69,10 @@ function run_sandstone_yaml()
         command="taskset ${TASKSET} $command"
     fi
     local sss=$(bash -xc "$command" argv0 "$@" 3> $yamlfile)
-    mv $yamlfile output.yaml
+
+    # Strip CR from CRLF
+    sed 's/\r$//' $yamlfile > output.yaml
+    rm -- $yamlfile
     (echo ---; cat output.yaml) | \
         tee -a total_log_output.yaml # for bats' logger
 

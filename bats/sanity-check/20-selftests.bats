@@ -62,7 +62,7 @@ test_yaml_regexp() {
 }
 
 @test "TAP output @positive" {
-    local tests=`$SANDSTONE --selftests --list-group-members @positive`
+    local tests=`$SANDSTONE --selftests --list-group-members @positive | sed 's,\r$,,'`
     run $SANDSTONE --output-format=tap --selftests --timeout=15s --disable=mce_check -e @positive
     [[ "$status" -eq 0 ]]
     while read line; do
@@ -90,7 +90,8 @@ test_yaml_regexp() {
 @test "TAP output @negative" {
     # not all tests
     for test in selftest_failinit selftest_fail; do
-        bash -c "$SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 -e $test -o -; [[ $? -eq 1 ]]" | tee output.tap
+        bash -c "$SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 -e $test -o -; [[ $? -eq 1 ]]" | \
+            sed 's,\r$,,' | tee output.tap
         egrep -qx "\[[ 0-9.]+\] exit: fail" output.tap
         not_oks=`grep -E 'not ok +([0-9] )'$test output.tap`
         [[ `echo "$not_oks" | wc -l` -eq 5 ]]
@@ -514,7 +515,7 @@ function selftest_logerror_common() {
 @test "selftest_datacompare" {
     declare -A yamldump
     local dataregexp='0x[0-9a-f]+( \(([-0-9]+|[-+0-9a-fpx.]+)\))?'
-    for test in `$SANDSTONE --selftests --list-tests | grep '^selftest_datacomparefail'`; do
+    for test in `$SANDSTONE --selftests --list-tests | sed -n '/^selftest_datacomparefail/s/\r$//p'`; do
         type=${test#selftest_datacomparefail_}
         case "$type" in
             Float16)            type=_Float16;;
