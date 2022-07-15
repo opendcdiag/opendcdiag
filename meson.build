@@ -12,14 +12,12 @@ project(
 	meson_version : '>=0.56',
 )
 
-pymod = import('python')
-
 cc = meson.get_compiler('c')
 cpp = meson.get_compiler('cpp')
 
 bash = find_program('bash')
 perl = find_program('perl')
-python = pymod.find_installation()
+python = find_program('python3')
 shell = find_program('sh')
 
 if cpp.get_id() != 'gcc' or cc.get_id() != 'gcc'
