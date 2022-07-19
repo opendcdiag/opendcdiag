@@ -75,6 +75,8 @@ framework_config.set('SANDSTONE_DEFAULT_LOGGING', 'SandstoneApplication::OutputF
 framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('framework_options').contains('restricted-cmdline'))
 framework_config.set10('SANDSTONE_CHILD_BACKTRACE', not get_option('framework_options').contains('no-child-backtrace'))
 
+framework_config.set10('SANDSTONE_SSL_BUILD', get_option('ssl_link_type') != 'none')
+
 framework_config_h = configure_file(
 	input : 'sandstone_config.h.in',
 	output : 'sandstone_config.h',
@@ -117,8 +119,11 @@ framework_files = files(
 	'topology.cpp',
 )
 
-crypto_dep = dependency('libcrypto', version: ['>=1.0', '<3.0'], required: false)
-if crypto_dep.found()
+crypto_dep = dependency('libcrypto',
+                        version: ['>=1.0', '<3.0'],
+                        required: false,
+                        static: get_option('ssl_link_type') == 'static')
+if crypto_dep.found() and framework_config.get('SANDSTONE_SSL_BUILD') == true
 	framework_files += ['sandstone_ssl.cpp']
 endif
 

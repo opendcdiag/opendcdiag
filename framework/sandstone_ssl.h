@@ -1080,6 +1080,7 @@ extern bool OpenSSLWorking;
 #endif
 
 SANDSTONE_SSL_FUNCTIONS(DECLARE_FUNCTIONS)
+void sandstone_ssl_init();
 
 #undef FWD_DECLARE_FUNCTIONS
 #pragma GCC diagnostic pop

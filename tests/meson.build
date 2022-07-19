@@ -38,13 +38,14 @@ tests_set_base.add(
 	)
 )
 
-crypto_dep = dependency('libcrypto', version: ['>=1.0', '<3.0'], required: false)
-tests_set_base.add(
-	when : crypto_dep,
-	if_true: files(
-		# Tests that depends on openssl
+if framework_config.get('SANDSTONE_SSL_BUILD') == true
+	tests_set_base.add(
+		when : crypto_dep,
+		if_true: files(
+			# Tests that depends on openssl
+		)
 	)
-)
+endif
 
 eigen3_dep = dependency('eigen3', static : dep_static)
 tests_set_base.add(

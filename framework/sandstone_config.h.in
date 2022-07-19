@@ -26,6 +26,7 @@
 #mesondefine SANDSTONE_GA_DEV
 
 #mesondefine SANDSTONE_FP16_TYPE
+#mesondefine SANDSTONE_SSL_BUILD
 
 #mesondefine SANDSTONE_DEFAULT_LOGGING
 #mesondefine SANDSTONE_NO_LOGGING
