@@ -1855,6 +1855,10 @@ std::string TapFormatLogger::fail_info_details()
         return "Illegal instruction";
     case STATUS_INTEGER_DIVIDE_BY_ZERO:
         return "Integer division by zero";
+    case STATUS_NO_MEMORY:
+        return "Out of memory condition";
+    case STATUS_STACK_BUFFER_OVERRUN:
+        return "Stack buffer overrun";
     }
     return nullptr;
 #else

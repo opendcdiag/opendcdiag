@@ -62,7 +62,7 @@ test_yaml_regexp() {
 }
 
 @test "TAP output @positive" {
-    local tests=`$SANDSTONE --selftests --list-group-members @positive`
+    local tests=`$SANDSTONE --selftests --list-group-members @positive | sed 's,\r$,,'`
     run $SANDSTONE --output-format=tap --selftests --timeout=15s --disable=mce_check -e @positive
     [[ "$status" -eq 0 ]]
     while read line; do
@@ -90,7 +90,8 @@ test_yaml_regexp() {
 @test "TAP output @negative" {
     # not all tests
     for test in selftest_failinit selftest_fail; do
-        bash -c "$SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 -e $test -o -; [[ $? -eq 1 ]]" | tee output.tap
+        bash -c "$SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 -e $test -o -; [[ $? -eq 1 ]]" | \
+            sed 's,\r$,,' | tee output.tap
         egrep -qx "\[[ 0-9.]+\] exit: fail" output.tap
         not_oks=`grep -E 'not ok +([0-9] )'$test output.tap`
         [[ `echo "$not_oks" | wc -l` -eq 5 ]]
@@ -106,10 +107,15 @@ test_yaml_regexp() {
     test_yaml_regexp "/command-line" ".* $args"
     test_yaml_regexp "/version" '([a-z-]+-)?(v[0-9.]+ \([0-9a-f]{40}\)|[0-9]+-[0-9]+-g[0-9a-f]+|[0-9a-f]{12}|[0-9a-f]{40})(-.*)?'
 
-    # just verify these exist
-    test_yaml_regexp "/os" '.*'
+    local os=`uname -sr`
+    if [[ "$SANDSTONE" = "wine "* ]]; then
+        os=`wine cmd /c ver | sed -n "s/\r$//;s/.*Windows /Windows v/p"`
+    fi
+    test_yaml_regexp "/os" "\\Q$os\\E\\b.*"
     test_yaml_numeric "/timing/duration" 'value == 1234'
     test_yaml_numeric "/timing/timeout" 'value == 12345'
+
+    # just verify these exist
     for ((i = 0; i < MAX_PROC; ++i)); do
         test_yaml_numeric "/cpu-info/$i/logical" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/package" 'value >= 0'
@@ -124,6 +130,9 @@ test_yaml_regexp() {
 }
 
 @test "obey taskset single" {
+    if $is_windows; then
+        skip "taskset does not apply to Windows"
+    fi
     if ! type -p taskset > /dev/null; then
         skip "taskset not installed"
     fi
@@ -143,6 +152,9 @@ test_yaml_regexp() {
 }
 
 @test "obey taskset multi" {
+    if $is_windows; then
+        skip "taskset does not apply to Windows"
+    fi
     if ! type -p taskset > /dev/null; then
         skip "taskset not installed"
     fi
@@ -164,6 +176,9 @@ test_yaml_regexp() {
 }
 
 @test "selftest_timedpass_maxthreads1 --timeout 100ms" {
+    if [[ "$SANDSTONE" = "wine "* ]] && [[ "$HOME" = /github/* ]]; then
+        skip "This test runs too slowly on GitHub runners"
+    fi
     VALIDATION=dump
     declare -A yamldump
     sandstone_selftest -e selftest_timedpass_maxthreads1 --timeout 100ms
@@ -310,6 +325,9 @@ test_yaml_regexp() {
 }
 
 @test "selftest_logs_options" {
+    if $is_windows; then
+       skip "BROKEN on Windows / -fexec mode"
+    fi
     declare -A yamldump
     sandstone_selftest -vvv -e selftest_logs_options
     [[ "$status" -eq 0 ]]
@@ -450,7 +468,7 @@ function selftest_logerror_common() {
 @test "selftest_datacompare" {
     declare -A yamldump
     local dataregexp='0x[0-9a-f]+( \(([-0-9]+|[-+0-9a-fpx.]+)\))?'
-    for test in `$SANDSTONE --selftests --list-tests | grep '^selftest_datacomparefail'`; do
+    for test in `$SANDSTONE --selftests --list-tests | sed -n '/^selftest_datacomparefail/s/\r$//p'`; do
         type=${test#selftest_datacomparefail_}
         case "$type" in
             Float16)            type=_Float16;;
@@ -463,7 +481,7 @@ function selftest_logerror_common() {
             test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/type" $type
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/offset" '\[.*\]'
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/address" '0x[0-9a-f]+'
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/address" '(0x)?[0-9a-f]+'
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/actual" "$dataregexp"
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/expected" "$dataregexp"
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/mask" '0x[0-9a-f]+'
@@ -502,14 +520,20 @@ selftest_crash_common() {
     if ! declare -p yamldump >/dev/null 2>/dev/null; then
         declare -A yamldump
     fi
-    sandstone_selftest --on-crash=kill -vvv -e $1
+
+    local test=$1
+    if $is_windows; then
+        shift 2
+    fi
+    if [[ "$2" == "" ]]; then
+        skip "Test skipped on this platform"
+    fi
+
+    sandstone_selftest --on-crash=kill -vvv -e $test
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/result/crashed" True
     test_yaml_regexp "/tests/0/result/core-dump" '(True|False)'
-    if $is_windows; then
-        shift 2
-    fi
     test_yaml_numeric "/tests/0/result/code" 'value > 0 && value == '$2
     test_yaml_regexp "/tests/0/result/reason" "$3"
 }
@@ -531,7 +555,7 @@ selftest_crash_common() {
 }
 
 @test "selftest_sigbus" {
-    selftest_crash_common selftest_sigbus 7 "Bus error" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigbus 7 "Bus error"
 }
 
 @test "selftest_sigsegv_init" {
@@ -550,11 +574,17 @@ selftest_crash_common() {
     selftest_crash_common selftest_sigsegv_instruction 11 "Segmentation fault" 0xC0000005 'Access violation'
 }
 
-@test "selftest_fast_fail" {
+@test "selftest_fastfail" {
     if ! $is_windows; then
         skip "Windows-only test"
     fi
-    selftest_crash_common selftest_fast_fail x x 0xC0000005 'Access violation'
+    if [[ "$SANDSTONE" = "wine "* ]]; then
+        # WINE doesn't handle __fastfail very well / at all
+        selftest_crash_common selftest_fastfail x x 0xC0000005 'Access violation'
+    else
+        # I don't know *why* we get this error, but we do
+        selftest_crash_common selftest_fastfail x x 0xC0000409 "Stack buffer overrun"
+    fi
 }
 
 @test "selftest_sigkill" {
@@ -585,7 +615,7 @@ selftest_crash_common() {
 
 @test "selftest_malloc_fail" {
     declare -A yamldump
-    selftest_crash_common selftest_malloc_fail 6 "Aborted" 0xC0000602 "Aborted"
+    selftest_crash_common selftest_malloc_fail 6 "Aborted" 0xC0000017 "Out of memory condition"
     test_yaml_regexp "/tests/0/stderr messages" 'Out of memory condition'
 }
 

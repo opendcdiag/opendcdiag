@@ -18,13 +18,11 @@ static __attribute__((noinline, noreturn)) void null_pointer_consumption(void *p
 {
     static const char msg[] = "Out of memory condition\n";
     (void) ptr;
+    write(STDERR_FILENO, msg, sizeof(msg) - 1);
     OutputDebugStringA(msg);
 
-    // crtdll and ucrt call DLL destructors on abort(), so we use __fastfail
-    // https://docs.microsoft.com/en-us/cpp/intrinsics/fastfail?view=vs-2019
-    __asm__ volatile ("int $0x29" : : "c" (STATUS_NO_MEMORY));
-
-    abort();
+    TerminateProcess((HANDLE)-1, STATUS_NO_MEMORY);
+    __builtin_unreachable();
 }
 
 static inline void *check_null_pointer(void *ptr)

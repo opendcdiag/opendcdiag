@@ -141,18 +141,14 @@ static linux_cpu_info parse_proc_cpuinfo()
     free(line);
     return result;
 }
-#endif
 
 static linux_cpu_info &proc_cpuinfo()
 {
     static linux_cpu_info r =
-#ifdef __linux__
         parse_proc_cpuinfo();
-#else
-        {};
-#endif
     return r;
 }
+#endif
 
 static void reorder_cpus()
 {
