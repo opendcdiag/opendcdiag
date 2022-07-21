@@ -145,6 +145,42 @@ extern "C" {
 
 #define END_DECLARE_TEST   };
 
+/**
+ * @brief Variadic macro to build NUMBER object on various number of arguments.
+ *
+ * Macro allows to use variadic calls in C language.
+ * Example instantiation:
+ * `#define V(...) OVERLOAD(V,NARGS(__VA_ARGS__))(__VA_ARGS__)`
+ * `#define V1(a) build_float((a))`
+ * `#define V2(a, b) build_rational((a), (b))`
+ *
+ * after expansion V might be used with single (e.g. where float value is passed)
+ * or with two arguments (e.g. where number might be expressed as rational number)
+ * All possible expressions must be defined, otherwise the code won't compile.
+ * @{
+ */
+#define NARGN(\
+            __1,__2,__3,__4,__5,__6,__7,__8,__9,_10,_11,_12,_13,_14,_15,_16,_17,_18,_19,_20,_21,_22,_23,_24,_25,_26,_27,_28,_29,_30,_31,\
+            _32,_33,_34,_35,_36,_37,_38,_39,_40,_41,_42,_43,_44,_45,_46,_47,_48,_49,_50,_51,_52,_53,_54,_55,_56,_57,_58,_59,_60,_61,_62,_63,\
+            __N, ...) \
+        __N
+
+#define NARG_(...) NARGN(__VA_ARGS__)
+#define NARGS(...) NARG_( \
+            __VA_ARGS__,\
+            63,62,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,\
+            31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+
+#define OVERLOAD_(name,num) name##num
+#define OVERLOAD(name,num) OVERLOAD_(name,num)
+/** @} */
+
+#define IS_ALIGNED(ptr, a) ((((uint64_t) (ptr)) & ((a) - 1)) == 0)
+
+#define MEMBER_SIZE(type, member) sizeof(((type *)0)->member)
+
+#define MASK(bits) ((bits == 64) ? 0xffffffffffffffffULL : ((1ULL << bits) - 1))
+
 /// can be used in the clobber list of inline assembly to indicate
 /// that all the R registers have been modified by the assembly code.
 #define RCLOBBEREDLIST "r8",\
@@ -497,7 +533,35 @@ static inline void *aligned_alloc_safe(size_t alignment, size_t size)
 /// first bitwidth bits are randomly set.  For example,
 /// set_random_bits(2, 8) would return a uint64_t in which 2 of the
 /// least significant 8 bits are randomly set and all other bits are 0.
+/// @deprecated
 uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth);
+
+/** RNG state */
+typedef struct {
+    uint8_t bits_available;
+    uint32_t random_bits;
+} random_bits_state_t;
+
+/**
+ * @brief Get specified number of bits from RNG
+ *
+ * @param bits  number of bits to fetch (and to "consume" from RNG)
+ * @param state RNG state
+ * @return uint64_t
+ */
+uint64_t random_bits(uint8_t bits, random_bits_state_t* state);
+
+/**
+ * @brief Calculate random value (in the form of chains of 0/1s)
+ *
+ * @param chain_len value used to calculate chain length, it will be [0..max_chain_length)
+ * @param bitwidth  width of the output
+ * @param state     RNG state
+ * @return uint64_t calculated value with random chains
+ *
+ * Passed chain length must be 2^n
+ */
+uint64_t random_chains(unsigned chain_len, uint32_t bitwidth, random_bits_state_t* state);
 
 extern uint64_t cpu_features;
 /// thread_num always contains the integer identifier for the executing

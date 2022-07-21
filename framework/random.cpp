@@ -597,6 +597,72 @@ void *memset_random(void *buf, size_t n)
     return buf;
 }
 
+uint64_t random_bits(uint8_t bits, random_bits_state_t* state)
+{
+    if (bits > 64) {
+        assert(!"Not possible to handle more than 64 bits");
+        return 0;
+    }
+    if (!state) {
+        assert(!"No state passed, cannot fetch speficied number of bits");
+        return 0;
+    }
+
+    uint64_t r = 0;
+    while (bits) {
+        // if nothing is cached
+        if (state->bits_available == 0) {
+            state->bits_available = 32;
+            state->random_bits = random32();
+        }
+        // transfer as many bits as possible
+        uint8_t pbits = ((state->bits_available < bits) ? state->bits_available : bits);
+        if (pbits != 0) {
+            r <<= pbits;
+            r |= state->random_bits & ((0x1 << pbits) - 1);
+            state->random_bits >>= pbits;
+            state->bits_available -= pbits;
+            bits -= pbits;
+        }
+    }
+    return r;
+}
+
+uint64_t random_chains(unsigned chain_len, uint32_t bitwidth, random_bits_state_t* state)
+{
+    // each chain is max 1 bit.. just use plain random value
+    if (chain_len == 2) {
+        return random_bits(bitwidth, state);
+    }
+    if ((chain_len < 2) || ((chain_len & (chain_len - 1)) != 0)) {
+        assert(!"Unhandled chain length");
+        return 0;
+    }
+
+    // calculate number of bits to fetch from RNG at once (per chain)
+    uint32_t chain_bits = 2;
+    chain_len >>= (chain_bits + 1);
+    while (chain_len) {
+        chain_bits++;
+        chain_len >>= 1;
+    }
+
+    // start from bit 0
+    uint32_t bit = 0;
+    uint64_t ret = 0;
+    uint32_t set = random_bits(1, state);
+    while (bit < bitwidth) {
+        uint32_t bits = random_bits(chain_bits, state);
+        if (set) {
+            ret |= MASK(bits) << bit;
+        }
+        bit += bits;
+        set = !set;
+    }
+    return ret & MASK(bitwidth);
+}
+
+
 uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
     if (num_bits_to_set >= 64 && bitwidth >= 64)
         return 0xFFFFFFFFFFFFFFFF;  // can't be handled by shifting and subtracting :-(
