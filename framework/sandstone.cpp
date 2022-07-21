@@ -47,12 +47,12 @@
 #  include <sys/eventfd.h>
 #  include <sys/prctl.h>
 #  include <sys/types.h>
-#  include <sys/stat.h>
 #endif
 #ifdef __unix__
 #  include <sys/resource.h>
 #endif
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <math.h>
@@ -104,6 +104,9 @@ using AutoClosingHandle = std::unique_ptr<void, HandleCloser>;
 #endif
 #ifndef O_CLOEXEC
 #  define O_CLOEXEC     0
+#endif
+#ifndef S_IRWXU
+#  define S_IRWXU       0700
 #endif
 
 #if !defined(__GLIBC__) && !defined(fileno_unlocked)
@@ -248,6 +251,58 @@ static const char *path_to_exe()
 #else
     return sApp->path_to_self.c_str();
 #endif
+}
+
+static int open_runtime_file_internal(const char *name, int flags, int mode)
+{
+    assert(strchr(name, '/') == nullptr);
+#ifdef __unix__
+    static int dfd = []() {
+        uid_t uid = getuid();
+        if (uid != geteuid())
+            return -1;              // don't trust the environment if setuid
+
+        // open the directory pointed by $RUNTIME_DIRECTORY (see
+        // systemd.exec(5)) and confirm it belongs to us
+        const char *runtime_directory = getenv("RUNTIME_DIRECTORY");
+        if (!runtime_directory || !runtime_directory[0])
+            return -1;
+        if (runtime_directory[0] != '/') {
+            fprintf(stderr, "%s: $RUNTIME_DIRECTORY is not an absolute path; ignoring.\n",
+                    program_invocation_name);
+            return -1;
+        }
+
+        int dfd = open(runtime_directory, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        if (dfd < 0)
+            return dfd;
+
+        // confirm its ownership
+        struct stat st;
+        if (fstat(dfd, &st) == 0) {
+            if (st.st_uid == uid && S_ISDIR(st.st_mode) && (st.st_mode & ACCESSPERMS) == S_IRWXU)
+                return dfd;
+        }
+        close(dfd);
+        return -1;
+    }();
+    if (dfd < 0)
+        return -1;
+
+    // open the file
+    flags|= O_CLOEXEC;
+    return openat(dfd, name, flags, mode);
+#else
+    (void) name;
+    (void) flags;
+    (void) mode;
+    return -1;
+#endif
+}
+
+static int create_runtime_file(const char *name, int mode = S_IRWXU)
+{
+    return open_runtime_file_internal(name, O_CREAT | O_RDWR, mode);
 }
 
 template <typename Rep, typename Period>
@@ -2744,13 +2799,43 @@ static float system_idle_load()
 static void background_scan_init()
 {
     using namespace SandstoneBackgroundScanConstants;
+    struct FileLayout {
+        std::atomic<int> initialized;
+        std::atomic<int> dummy;
+        std::array<MonotonicTimePoint::rep, 24> timestamp;
+    };
+    static_assert(std::is_trivial_v<FileLayout>, "mmapped file must have trivial construction");
+
     if (!sApp->service_background_scan)
         return;
 
-    // init timestamps to more than the batch testing time - this quickstarts
-    // testing on first run
-    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
-    sApp->background_scan.timestamp.fill(now - DelayBetweenTestBatch);
+    void *memblock = MAP_FAILED;
+    int prot = PROT_READ | PROT_WRITE;
+    int fd = create_runtime_file("timestamps");
+    if (fd >= 0 && ftruncate(fd, sizeof(FileLayout)) >= 0) {
+        int flags = MAP_SHARED;
+        memblock = mmap(nullptr, sizeof(FileLayout), prot, flags, fd, 0);
+    }
+    if (memblock == MAP_FAILED) {
+        // create an anonymous block, since we can't have a file
+        int flags = MAP_ANONYMOUS | MAP_PRIVATE;
+        memblock = mmap(nullptr, sizeof(FileLayout), prot, flags, -1, 0);
+    }
+
+    auto file = new (memblock) FileLayout;
+    sApp->background_scan.timestamp = {
+        reinterpret_cast<MonotonicTimePoint *>(file->timestamp.data()), file->timestamp.size()
+    };
+    if (file->initialized.exchange(true, std::memory_order_relaxed) == false) {
+        // init timestamps to more than the batch testing time - this quickstarts
+        // testing on first run
+        MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+        std::fill(sApp->background_scan.timestamp.begin(), sApp->background_scan.timestamp.end(),
+                  now - DelayBetweenTestBatch);
+    }
+
+    if (fd >= 0)
+        close(fd);
 }
 
 static void background_scan_update_load_threshold(MonotonicTimePoint now)
