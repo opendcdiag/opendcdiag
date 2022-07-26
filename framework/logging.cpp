@@ -90,6 +90,10 @@ RtlGetVersion(
 #  include <gnu/libc-version.h>
 #endif
 
+#if SANDSTONE_SSL_BUILD
+#   include <openssl/opensslv.h>
+#endif
+
 #define PROGRAM_VERSION         SANDSTONE_EXECUTABLE_NAME "-" GIT_ID
 
 static int real_stdout_fd = STDOUT_FILENO;
@@ -871,13 +875,23 @@ static std::string libc_info()
 
 static std::string os_info()
 {
+    std::string os_info;
     std::string kernel = kernel_info();
     std::string libc = libc_info();
+#if SANDSTONE_SSL_BUILD
+    std::string libssl = OPENSSL_VERSION_TEXT;
+#endif
     if (kernel.empty())
         return "<unknown>";
-    if (libc.empty())
-        return kernel;
-    return kernel + ", " + libc;
+    os_info = kernel;
+    if (!libc.empty())
+        os_info += ", " + libc;
+#if SANDSTONE_SSL_BUILD
+    if (!libssl.empty())
+        os_info += ", " + libssl;
+#endif
+
+    return os_info;
 }
 
 static void print_reproduction_details()
