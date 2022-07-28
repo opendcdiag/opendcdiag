@@ -43,6 +43,7 @@ if framework_config.get('SANDSTONE_SSL_BUILD') == true
 		when : crypto_dep,
 		if_true: files(
 			# Tests that depends on openssl
+			'openssl/openssl_sha.cpp',
 		)
 	)
 endif
