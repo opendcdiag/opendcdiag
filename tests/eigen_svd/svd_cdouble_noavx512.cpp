@@ -12,6 +12,10 @@
  * decomposition problem on given input matrices, which involve a lot
  * of matrix multiplication operations underneath.
  *
+ * The test is intended to verify FMA feature, must be built without
+ * AVX512 features enabled (t.i with Eigen pre-3.4 or without AVX512F
+ * feature available).
+ *
  * The logic comes from the 3rd party library Eigen. The first thread
  * that gets to run computes a "golden value" of the results, those
  * being output matrices "U" and "V". Subsequent runs have results
@@ -25,6 +29,9 @@
  * @note This test requires at least 2 threads to run.
  * @endparblock
  */
+
+#define SANDSTONE_EIGEN_VECTORIZATION SANDSTONE_EIGEN_AVX2
+#include <sandstone_eigen_configurator.h>
 
 #include "sandstone_eigen_common.h"
 

@@ -58,6 +58,7 @@ tests_set_base.add(
 		'eigen_gemm/gemm_float_dynamic_square.cpp',
 		'eigen_sparse/eigen_sparse.cpp',
 		'eigen_svd/svd.cpp',
+		'eigen_svd/svd_cdouble.cpp',
 		'eigen_svd/svd_cdouble_noavx512.cpp',
 		'eigen_svd/svd_double.cpp',
 		'eigen_svd/svd_fvectors.cpp',
@@ -71,7 +72,7 @@ tests_set_base.add(
 tests_set_skx.add(
 	when : eigen3_dep,
 	if_true : files(
-		'eigen_svd/svd_cdouble.cpp',
+		'eigen_svd/svd_cdouble_avx512.cpp',
 	)
 )
 
@@ -159,7 +160,6 @@ if host_machine.cpu_family() == 'x86_64'
 		cpp_args : [
 			tests_common_cpp_args,
 			'-march=skylake-avx512',
-			'-DEigen=EigenAVX512',
 		],
 	)
 

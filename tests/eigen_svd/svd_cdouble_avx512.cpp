@@ -5,16 +5,17 @@
  * Copyright 2022 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  *
- * @test @b eigen_svd_cdouble
+ * @test @b eigen_svd_cdouble_avx512
  * @parblock
  * This piece of code aims to stress test the FMA execution units of
  * the CPU, among others, by repetitively solving the singular value
  * decomposition problem on given input matrices, which involve a lot
  * of matrix multiplication operations underneath.
  *
- * The test is intended to verify FMA feature, must be built without
- * AVX512 features enabled (t.i with Eigen pre-3.4 or without AVX512F
- * feature available).
+ * The test is intended to use AVX512 instructions, which are available
+ * with Eigen 3.4 (and up) with AVX512 enabled. The test should not be
+ * created for other configurations (Eigen 3.3.x or GCC pre-12 or below
+ * SKX target)
  *
  * The logic comes from the 3rd party library Eigen. The first thread
  * that gets to run computes a "golden value" of the results, those
@@ -30,8 +31,7 @@
  * @endparblock
  */
 
-// Test is expected *not" to test AVX2/FMA only (to follow Eigen 3.3.8)
-#define SANDSTONE_EIGEN_VECTORIZATION SANDSTONE_EIGEN_AVX2
+#define SANDSTONE_EIGEN_VECTORIZATION SANDSTONE_EIGEN_AVX512
 #include <sandstone_eigen_configurator.h>
 
 #include "sandstone_eigen_common.h"
@@ -44,11 +44,12 @@ typedef Eigen::BDCSVD < Mat > SVD;
 #define M_DIM 300               // weird dim on purpose
 
 using eigen_svd_cdouble_test = EigenSVDTest<SVD, M_DIM>;
-DECLARE_TEST(eigen_svd_cdouble, "Eigen SVD (Singular Value Decomposition) solving payload, which issues a bunch of matrix multiplies underneath, now operating on std::complex<double>")
+DECLARE_TEST(eigen_svd_cdouble_avx512, "Eigen SVD (Singular Value Decomposition) solving payload, which issues a bunch of matrix multiplies underneath, now operating on std::complex<double>")
   .groups = DECLARE_TEST_GROUPS(&group_math),
   .test_init = eigen_svd_cdouble_test::init,
   .test_run = eigen_svd_cdouble_test::run,
   .test_cleanup = eigen_svd_cdouble_test::cleanup,
+  .minimum_cpu = cpu_feature_avx512f,
   .fracture_loop_count = 5,
-  .quality_level = TEST_QUALITY_PROD,
+  .quality_level = TEST_QUALITY_BETA,
 END_DECLARE_TEST
