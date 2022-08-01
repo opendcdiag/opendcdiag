@@ -4,6 +4,15 @@
 # SPDX-License-Identifier: Apache-2.0
 load ../testenv
 
+mktempfile() {
+    # find a temporary directory for us
+    local tmpdir=$BATS_TEST_TMPDIR
+    tmpdir=${tmpdir-$BATS_TMPDIR}
+    tmpdir=${tmpdir-$TMPDIR}
+    tmpdir=${tmpdir-/tmp}
+    TMPDIR=$tmpdir mktemp --tmpdir "$@"
+}
+
 sandstone_selftest() {
     VALIDATION=dump
     run_sandstone_yaml -n$MAX_PROC --disable=mce_check --no-triage --selftests --timeout=20s --retest-on-failure=0 -Y2 "$@"
@@ -367,7 +376,14 @@ test_list_file() {
     local -a list=("$@")
     local -i count=${#list[@]}
     declare -A yamldump
-    sandstone_selftest --test-list-file <(printf '%s\n' "${list[@]}")
+
+    local testlistfile=`mktempfile list.XXXXXX`
+    echo "=== test list ==="
+    printf '%s\n' "${list[@]}" | tee "$testlistfile"
+    echo "=== ==="
+
+    sandstone_selftest --test-list-file "$testlistfile"
+    rm -f -- "$testlistfile"
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
 
@@ -413,7 +429,12 @@ test_list_file() {
 @test "--test-list-file with unknown test name" {
     # This doesn't produce valid YAML output, so run directly
     local name=`mktemp -u selftest_XXXXXX`
-    run $SANDSTONE -Y -o - --selftests --test-list-file <(echo "$name")
+    local testlistfile=`mktempfile list.XXXXXX`
+
+    echo "$name" > $testlistfile
+    run $SANDSTONE -Y -o - --selftests --test-list-file "$testlistfile"
+    rm -f -- "$testlistfile"
+
     echo "$output"
     [[ $status -eq 64 ]]        # exit(EX_USAGE)
     grep -qwF "$name" <<<"$output"
