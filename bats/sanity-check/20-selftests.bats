@@ -402,7 +402,9 @@ test_list_file() {
         local -i duration=${entry#*:}
         if (( duration > 0 )); then
             test_yaml_numeric "/tests/$i/test-runtime" "value >= $duration"
-            test_yaml_numeric "/tests/$i/test-runtime" "value <= 2 * $duration"
+            if (( 2 * duration < yamldump[/timing/duration] )); then
+               test_yaml_numeric "/tests/$i/test-runtime" "value <= "${yamldump[/timing/duration]}
+            fi
         fi
 
         i=$((i + 1))
