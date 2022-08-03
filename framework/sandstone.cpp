@@ -1054,7 +1054,7 @@ __attribute__((weak, noclone, noinline)) void cpu_specific_init()
 {
 }
 
-__attribute__((weak, noclone, noinline)) int print_application_footer(int exit_code)
+__attribute__((weak, noclone, noinline)) int print_application_footer(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures)
 {
     return exit_code;
 }
@@ -3646,6 +3646,6 @@ int main(int argc, char **argv)
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
 
-    exit_code = print_application_footer(exit_code);
+    exit_code = print_application_footer(exit_code, per_cpu_failures);
     return logging_close_global(exit_code);
 }
