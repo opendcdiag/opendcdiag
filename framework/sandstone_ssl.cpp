@@ -41,7 +41,13 @@ void sandstone_ssl_init()
     };
 #else
     void *libcrypto;
+#ifdef SHLIB_VERSION_NUMBER
+    // For openssl 1.0 and 1.1
     libcrypto = dlopen("libcrypto.so." SHLIB_VERSION_NUMBER, RTLD_NOW);
+#else
+    // For openssl 3.0 and above
+    libcrypto = dlopen("libcrypto.so." SANDSTONE_STRINGIFY(OPENSSL_SHLIB_VERSION), RTLD_NOW);
+#endif
     if (!libcrypto) {
         return;
     }

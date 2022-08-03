@@ -120,7 +120,6 @@ framework_files = files(
 )
 
 crypto_dep = dependency('libcrypto',
-                        version: ['>=1.0', '<3.0'],
                         required: false,
                         static: get_option('ssl_link_type') == 'static')
 if crypto_dep.found() and framework_config.get('SANDSTONE_SSL_BUILD') == true
