@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef __FP_VECTORS_H
-#define __FP_VECTORS_H
+#ifndef FRAMEWORK_FP_VECTORS_FLOATS_H
+#define FRAMEWORK_FP_VECTORS_FLOATS_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -71,15 +71,15 @@ typedef SANDSTONE_FP16_TYPE fp16_t;
 #define FLOAT64_MANTISSA_QUIET_NAN_MASK  0x8000000000000u
 #define FLOAT80_MANTISSA_QUIET_NAN_MASK  0x4000000000000000u
 
-#define FP16_SIGN_BITS        1
-#define FP16_EXPONENT_BITS    5
-#define FP16_MANTISSA_BITS    10
-#define FP16_QUIET_BITS       1
+#define FLOAT16_SIGN_BITS        1
+#define FLOAT16_EXPONENT_BITS    5
+#define FLOAT16_MANTISSA_BITS    10
+#define FLOAT16_QUIET_BITS       1
 
-#define BFLT16_SIGN_BITS      1
-#define BFLT16_EXPONENT_BITS  8
-#define BFLT16_MANTISSA_BITS  7
-#define BFLT16_QUIET_BITS     1
+#define BFLOAT16_SIGN_BITS      1
+#define BFLOAT16_EXPONENT_BITS  8
+#define BFLOAT16_MANTISSA_BITS  7
+#define BFLOAT16_QUIET_BITS     1
 
 #define FLOAT32_SIGN_BITS     1
 #define FLOAT32_EXPONENT_BITS 8
@@ -97,37 +97,37 @@ typedef SANDSTONE_FP16_TYPE fp16_t;
 #define FLOAT80_MANTISSA_BITS 63
 #define FLOAT80_QUIET_BITS    1
 
-#define FP16_DECIMAL_DIG        5
-#define FP16_DENORM_MIN         5.96046447753906250000000000000000000e-8
-#define FP16_DIG                3
-#define FP16_EPSILON            9.76562500000000000000000000000000000e-4
-#define FP16_HAS_DENORM         1
-#define FP16_HAS_INFINITY       1
-#define FP16_HAS_QUIET_NAN      1
-#define FP16_MANT_DIG           11
-#define FP16_MAX_10_EXP         4
-#define FP16_MAX                6.55040000000000000000000000000000000e+4
-#define FP16_MAX_EXP            16
-#define FP16_MIN_10_EXP         (-4)
-#define FP16_MIN                6.10351562500000000000000000000000000e-5
-#define FP16_MIN_EXP            (-13)
-#define FP16_NORM_MAX           6.55040000000000000000000000000000000e+4
+#define FLOAT16_DECIMAL_DIG        5
+#define FLOAT16_DENORM_MIN         5.96046447753906250000000000000000000e-8
+#define FLOAT16_DIG                3
+#define FLOAT16_EPSILON            9.76562500000000000000000000000000000e-4
+#define FLOAT16_HAS_DENORM         1
+#define FLOAT16_HAS_INFINITY       1
+#define FLOAT16_HAS_QUIET_NAN      1
+#define FLOAT16_MANT_DIG           11
+#define FLOAT16_MAX_10_EXP         4
+#define FLOAT16_MAX                6.55040000000000000000000000000000000e+4
+#define FLOAT16_MAX_EXP            16
+#define FLOAT16_MIN_10_EXP         (-4)
+#define FLOAT16_MIN                6.10351562500000000000000000000000000e-5
+#define FLOAT16_MIN_EXP            (-13)
+#define FLOAT16_NORM_MAX           6.55040000000000000000000000000000000e+4
 
-#define BFLT16_DECIMAL_DIG      3
-#define BFLT16_DENORM_MIN       (0x1p-133)
-#define BFLT16_DIG              2
-#define BFLT16_EPSILON          (FLT_EPSILON * 65536)
-#define BFLT16_HAS_DENORM       1
-#define BFLT16_HAS_INFINITY     1
-#define BFLT16_HAS_QUIET_NAN    1
-#define BFLT16_MANT_DIG         (FLT_MANT_DIG - 16)
-#define BFLT16_MAX_10_EXP       FLT_MAX_10_EXP
-#define BFLT16_MAX_EXP          FLT_MAX_EXP
-#define BFLT16_MAX              (0x1.fep+127f)
-#define BFLT16_MIN_10_EXP       FLT_MIN_10_EXP
-#define BFLT16_MIN_EXP          FLT_MIN_EXP
-#define BFLT16_MIN              (0x1p-126f)
-#define BFLT16_NORM_MAX         BFLT16_MAX
+#define BFLOAT16_DECIMAL_DIG      3
+#define BFLOAT16_DENORM_MIN       (0x1p-133)
+#define BFLOAT16_DIG              2
+#define BFLOAT16_EPSILON          (FLT_EPSILON * 65536)
+#define BFLOAT16_HAS_DENORM       1
+#define BFLOAT16_HAS_INFINITY     1
+#define BFLOAT16_HAS_QUIET_NAN    1
+#define BFLOAT16_MANT_DIG         (FLT_MANT_DIG - 16)
+#define BFLOAT16_MAX_10_EXP       FLT_MAX_10_EXP
+#define BFLOAT16_MAX_EXP          FLT_MAX_EXP
+#define BFLOAT16_MAX              (0x1.fep+127f)
+#define BFLOAT16_MIN_10_EXP       FLT_MIN_10_EXP
+#define BFLOAT16_MIN_EXP          FLT_MIN_EXP
+#define BFLOAT16_MIN              (0x1p-126f)
+#define BFLOAT16_NORM_MAX         BFLOAT16_MAX
 
 #ifdef __cplusplus
 extern "C" {
@@ -137,15 +137,15 @@ struct Float16
 {
     union {
         struct __attribute__((packed)) {
-            uint16_t mantissa : FP16_MANTISSA_BITS;
-            uint16_t exponent : FP16_EXPONENT_BITS;
-            uint16_t sign     : FP16_SIGN_BITS;
+            uint16_t mantissa : FLOAT16_MANTISSA_BITS;
+            uint16_t exponent : FLOAT16_EXPONENT_BITS;
+            uint16_t sign     : FLOAT16_SIGN_BITS;
         };
         struct __attribute__((packed)) {
-            uint16_t payload  : FP16_MANTISSA_BITS - FP16_QUIET_BITS;
-            uint16_t quiet    : FP16_QUIET_BITS;
-            uint16_t exponent : FP16_EXPONENT_BITS;
-            uint16_t sign     : FP16_SIGN_BITS;
+            uint16_t payload  : FLOAT16_MANTISSA_BITS - FLOAT16_QUIET_BITS;
+            uint16_t quiet    : FLOAT16_QUIET_BITS;
+            uint16_t exponent : FLOAT16_EXPONENT_BITS;
+            uint16_t sign     : FLOAT16_SIGN_BITS;
         } as_nan;
 
         uint16_t as_hex;
@@ -161,20 +161,20 @@ struct Float16
 
     constexpr inline Float16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
 
-    static constexpr int digits = FP16_MANT_DIG;
-    static constexpr int digits10 = FP16_DIG;
+    static constexpr int digits = FLOAT16_MANT_DIG;
+    static constexpr int digits10 = FLOAT16_DIG;
     static constexpr int max_digits10 = 6;  // log2(digits)
-    static constexpr int min_exponent = FP16_MIN_EXP;
-    static constexpr int min_exponent10 = FP16_MIN_10_EXP;
-    static constexpr int max_exponent = FP16_MAX_EXP;
-    static constexpr int max_exponent10 = FP16_MAX_10_EXP;
+    static constexpr int min_exponent = FLOAT16_MIN_EXP;
+    static constexpr int min_exponent10 = FLOAT16_MIN_10_EXP;
+    static constexpr int max_exponent = FLOAT16_MAX_EXP;
+    static constexpr int max_exponent10 = FLOAT16_MAX_10_EXP;
 
     static constexpr bool radix = 2;
     static constexpr bool is_signed = true;
     static constexpr bool is_integer = false;
     static constexpr bool is_exact = false;
-    static constexpr bool has_infinity = FP16_HAS_INFINITY;
-    static constexpr bool has_quiet_NaN = FP16_HAS_QUIET_NAN;
+    static constexpr bool has_infinity = FLOAT16_HAS_INFINITY;
+    static constexpr bool has_quiet_NaN = FLOAT16_HAS_QUIET_NAN;
     static constexpr bool has_signaling_NaN = has_quiet_NaN;
     static constexpr std::float_denorm_style has_denorm = std::denorm_present;
     static constexpr bool has_denorm_loss = false;
@@ -200,11 +200,9 @@ struct Float16
     constexpr inline bool     is_negative() const         { return sign != 0; }
     constexpr inline bool     is_zero() const             { return (exponent == FLOAT16_DENORM_EXPONENT) && (mantissa == 0); }
     constexpr inline bool     is_denormal() const         { return (exponent == FLOAT16_DENORM_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool     is_inf() const              { return (exponent == FLOAT16_INFINITY_EXPONENT) && (mantissa == 0); }
 
-    // NaNs
-    constexpr inline bool     is_general_nan() const      { return exponent == FLOAT16_NAN_EXPONENT; }
-    constexpr inline bool     is_inf() const              { return is_general_nan() && (mantissa == 0); }
-    constexpr inline bool     is_nan() const              { return is_general_nan() && (mantissa != 0); }
+    constexpr inline bool     is_nan() const              { return (exponent == FLOAT16_NAN_EXPONENT) && (mantissa != 0); }
     constexpr inline bool     is_snan() const             { return is_nan() && ((mantissa & FLOAT16_MANTISSA_QUIET_NAN_MASK) == 0); }
     constexpr inline bool     is_qnan() const             { return is_nan() && ((mantissa & FLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
 
@@ -221,10 +219,9 @@ typedef struct Float16 Float16;
 static inline bool     Float16_is_negative(Float16 f)         { return f.sign != 0; }
 static inline bool     Float16_is_zero(Float16 f)             { return (f.exponent == FLOAT16_DENORM_EXPONENT) && (f.mantissa == 0); }
 static inline bool     Float16_is_denormal(Float16 f)         { return (f.exponent == FLOAT16_DENORM_EXPONENT) && (f.mantissa != 0); }
+static inline bool     Float16_is_inf(Float16 f)              { return (f.exponent == FLOAT16_INFINITY_EXPONENT) && (f.mantissa == 0); }
 
-static inline bool     Float16_is_general_nan(Float16 f)      { return f.exponent == FLOAT16_NAN_EXPONENT; }
-static inline bool     Float16_is_inf(Float16 f)              { return Float16_is_general_nan(f) && (f.mantissa == 0); }
-static inline bool     Float16_is_nan(Float16 f)              { return Float16_is_general_nan(f) && (f.mantissa != 0); }
+static inline bool     Float16_is_nan(Float16 f)              { return (f.exponent == FLOAT16_NAN_EXPONENT) && (f.mantissa != 0); }
 static inline bool     Float16_is_snan(Float16 f)             { return Float16_is_nan(f) && (f.as_nan.quiet == 0); }
 static inline bool     Float16_is_qnan(Float16 f)             { return Float16_is_nan(f) && (f.as_nan.quiet != 0); }
 
@@ -235,15 +232,15 @@ struct BFloat16
 {
     union {
         struct __attribute__((packed)) {
-            uint16_t mantissa : BFLT16_MANTISSA_BITS;
-            uint16_t exponent : BFLT16_EXPONENT_BITS;
-            uint16_t sign     : BFLT16_SIGN_BITS;
+            uint16_t mantissa : BFLOAT16_MANTISSA_BITS;
+            uint16_t exponent : BFLOAT16_EXPONENT_BITS;
+            uint16_t sign     : BFLOAT16_SIGN_BITS;
         };
         struct __attribute__((packed)) {
-            uint16_t payload  : BFLT16_MANTISSA_BITS - BFLT16_QUIET_BITS;
-            uint16_t quiet    : BFLT16_QUIET_BITS;
-            uint16_t exponent : BFLT16_EXPONENT_BITS;
-            uint16_t sign     : BFLT16_SIGN_BITS;
+            uint16_t payload  : BFLOAT16_MANTISSA_BITS - BFLOAT16_QUIET_BITS;
+            uint16_t quiet    : BFLOAT16_QUIET_BITS;
+            uint16_t exponent : BFLOAT16_EXPONENT_BITS;
+            uint16_t sign     : BFLOAT16_SIGN_BITS;
         } as_nan;
         uint16_t as_hex;
         uint16_t payload;
@@ -255,8 +252,8 @@ struct BFloat16
     constexpr inline BFloat16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
 
     // same API as std::numeric_limits:
-    static constexpr int digits = BFLT16_MANT_DIG;
-    static constexpr int digits10 = BFLT16_DIG;
+    static constexpr int digits = BFLOAT16_MANT_DIG;
+    static constexpr int digits10 = BFLOAT16_DIG;
     static constexpr int max_digits10 = 3;  // log2(digits)
     static constexpr int min_exponent = std::numeric_limits<float>::min_exponent;
     static constexpr int min_exponent10 = std::numeric_limits<float>::min_exponent10;
@@ -297,11 +294,10 @@ struct BFloat16
     constexpr inline bool     is_negative() const       { return sign != 0; }
     constexpr inline bool     is_zero() const           { return (exponent == BFLOAT16_DENORM_EXPONENT) && (mantissa == 0); }
     constexpr inline bool     is_denormal() const       { return (exponent == BFLOAT16_DENORM_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool     is_inf() const            { return (exponent == BFLOAT16_INFINITY_EXPONENT) && (mantissa == 0); }
 
     // NaNs
-    constexpr inline bool     is_general_nan() const    { return exponent == FLOAT32_NAN_EXPONENT; }
-    constexpr inline bool     is_inf() const            { return is_general_nan() && (mantissa == 0); }
-    constexpr inline bool     is_nan() const            { return is_general_nan() && (mantissa != 0); }
+    constexpr inline bool     is_nan() const            { return  (exponent == BFLOAT16_NAN_EXPONENT) && (mantissa != 0); }
     constexpr inline bool     is_snan() const           { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) == 0); }
     constexpr inline bool     is_qnan() const           { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
 
@@ -318,10 +314,9 @@ typedef struct BFloat16 BFloat16;
 static inline bool     BFloat16_is_negative(BFloat16 f)         { return f.sign != 0; }
 static inline bool     BFloat16_is_zero(BFloat16 f)             { return (f.exponent == BFLOAT16_DENORM_EXPONENT) && (f.mantissa == 0); }
 static inline bool     BFloat16_is_denormal(BFloat16 f)         { return (f.exponent == BFLOAT16_DENORM_EXPONENT) && (f.mantissa != 0); }
+static inline bool     BFloat16_is_inf(BFloat16 f)              { return (f.exponent == BFLOAT16_INFINITY_EXPONENT) && (f.mantissa == 0); }
 
-static inline bool     BFloat16_is_general_nan(BFloat16 f)      { return f.exponent == FLOAT32_NAN_EXPONENT; }
-static inline bool     BFloat16_is_inf(BFloat16 f)              { return BFloat16_is_general_nan(f) && (f.mantissa == 0); }
-static inline bool     BFloat16_is_nan(BFloat16 f)              { return BFloat16_is_general_nan(f) && (f.mantissa != 0); }
+static inline bool     BFloat16_is_nan(BFloat16 f)              { return (f.exponent == BFLOAT16_NAN_EXPONENT) && (f.mantissa != 0); }
 static inline bool     BFloat16_is_snan(BFloat16 f)             { return BFloat16_is_nan(f) && (f.as_nan.quiet == 0); }
 static inline bool     BFloat16_is_qnan(BFloat16 f)             { return BFloat16_is_nan(f) && (f.as_nan.quiet != 0); }
 
@@ -529,4 +524,4 @@ Float80 new_random_float80();
 } // extern "C"
 #endif
 
-#endif //PROJECT_FP_VECTORS_H
+#endif //FRAMEWORK_FP_VECTORS_FLOATS_H

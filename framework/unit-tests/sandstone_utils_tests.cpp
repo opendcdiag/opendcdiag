@@ -261,7 +261,7 @@ TEST(DataCompare, BFloat16)
     EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat16>::min()), "0080 (0x1p-126)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat16>::denorm_min()), "0001 (0x1p-133)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat16>::epsilon()), "3c00 (0x1p-7)");
-    EXPECT_EQ(format_type_helper(BFloat16(1 + BFLT16_EPSILON)), "3f81 (0x1.02p+0)");
+    EXPECT_EQ(format_type_helper(BFloat16(1 + BFLOAT16_EPSILON)), "3f81 (0x1.02p+0)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat16>::infinity()), "7f80 (inf)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat16>::neg_infinity()), "ff80 (-inf)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat16>::quiet_NaN()), "7fc0 (nan)");
@@ -279,7 +279,7 @@ TEST(DataCompare, Float16)
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::min()), "0400 (0x1p-14)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::denorm_min()), "0001 (0x1p-24)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::epsilon()), "1400 (0x1p-10)");
-    EXPECT_EQ(format_type_helper(Float16(1 + FP16_EPSILON)), "3c01 (0x1.004p+0)");
+    EXPECT_EQ(format_type_helper(Float16(1 + FLOAT16_EPSILON)), "3c01 (0x1.004p+0)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::infinity()), "7c00 (inf)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::neg_infinity()), "fc00 (-inf)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::quiet_NaN()), "7e00 (nan)");
