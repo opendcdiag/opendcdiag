@@ -145,6 +145,41 @@ extern "C" {
 
 #define END_DECLARE_TEST   };
 
+/// Variadic macros to count the number of arguments passed to other macro.
+/// @see OVERLOAD()
+#define NARGN(\
+            n1, n2, n3, n4, n5, n6, n7, n8, n9, n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,\
+            n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,\
+            N, ...) \
+        N
+
+#define NARG_(...) NARGN(__VA_ARGS__)
+#define NARGS(...) NARG_( \
+            __VA_ARGS__,\
+            63,62,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,\
+            31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+
+/**
+ * Variadic macro to alias functions in C (with the use of variadic macros).
+ * Macro allows to "overload" calls in C language.
+ * Example instantiation:
+ * `#define V(...)   OVERLOAD(V,NARGS(__VA_ARGS__))(__VA_ARGS__)`
+ * with appropriate Vs() definitions:
+ * `#define V1(a)    build_float((a))`
+ * `#define V2(a, b) build_rational((a), (b))`
+ * after expansion V might be used with single (e.g. where float value is passed)
+ * or with two arguments (e.g. where number might be expressed as rational number)
+ * All possible expressions must be defined, otherwise the code won't compile.
+ */
+#define OVERLOAD_(name,num) name##num
+#define OVERLOAD(name,num) OVERLOAD_(name,num)
+
+/// Macro to check if pointer is properly aligned. Alignment must be a valid power of 2.
+#define IS_ALIGNED(ptr, alignment) ((((uint64_t) (ptr)) & ((alignment) - 1)) == 0)
+
+/// Macro to build mask value for particular number of bits.
+#define MASK(bits) (((bits) == 64) ? 0xffffffffffffffffULL : ((1ULL << ((bits == 64) ? 0 : (bits))) - 1))
+
 /// can be used in the clobber list of inline assembly to indicate
 /// that all the R registers have been modified by the assembly code.
 #define RCLOBBEREDLIST "r8",\
@@ -441,6 +476,21 @@ bool read_msr(int cpu, uint32_t msr, uint64_t *value);
 /// requires root privileges.
 bool write_msr(int cpu, uint32_t msr, uint64_t value);
 
+/// Calls aligned_alloc but first checks to see whether size is a multiple
+/// of alignment.  If it is not, the requested size of the allocation is increased
+/// so that size is a multiple of alignment ensuring that the pre-requisites of
+/// aligned_alloc are met.
+static inline void *aligned_alloc_safe(size_t alignment, size_t size)
+{
+    extern void *aligned_alloc(size_t, size_t); // in case it isn't defined
+    if (alignment < sizeof(void*))
+        alignment = sizeof(void*);
+    size_t aligned_size = (size / alignment) * alignment;
+    if (aligned_size < size)
+        aligned_size += alignment;
+    return aligned_alloc(alignment, aligned_size);
+}
+
 /// Returns a random unsigned 32 bit integer.
 extern uint32_t random32(void);
 /// Returns a random unsigned 64 bit integer.
@@ -476,21 +526,6 @@ static inline double frandom()
 static inline long double frandoml()
 {
     return frandoml_scale(1.0L);
-}
-
-/// Calls aligned_alloc but first checks to see whether size is a multiple
-/// of alignment.  If it is not, the requested size of the allocation is increased
-/// so that size is a multiple of alignment ensuring that the pre-requisites of
-/// aligned_alloc are met.
-static inline void *aligned_alloc_safe(size_t alignment, size_t size)
-{
-    extern void *aligned_alloc(size_t, size_t); // in case it isn't defined
-    if (alignment < sizeof(void*))
-        alignment = sizeof(void*);
-    size_t aligned_size = (size / alignment) * alignment;
-    if (aligned_size < size)
-        aligned_size += alignment;
-    return aligned_alloc(alignment, aligned_size);
 }
 
 /// Returns a 64 bit unsigned integer in which num_bits_to_set of the

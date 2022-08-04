@@ -5,7 +5,7 @@
 
 #include <unistd.h>
 #include <sandstone_data.h>
-#include <sandstone.h>
+#include <sandstone_p.h>
 
 /**
  * @brief C++ assertion validators
@@ -84,7 +84,6 @@ static_assert(Float80_11_22.mantissa == 22, "Float80: Incorrect mantissa");
  *
  * @{
  */
-#define MASK(n)  (((n) == 64) ? 0xffffffffffffffffuLL : ((1uLL << (n)) - 1))
 #define QUIET(t)  ((1uLL << (t ## _MANTISSA_BITS - 1)))
 
 static_assert(BFLOAT16_EXPONENT_MASK == FLOAT32_EXPONENT_MASK, "BFloat16 is truncated Float32 (MSB only)");
@@ -93,18 +92,18 @@ static_assert(BFLOAT16_MANTISSA_MASK == (FLOAT32_MANTISSA_MASK >> 16), "BFloat16
 static_assert(sizeof(Float16) == 2, "Float16 structure is not of the correct size");
 static_assert(FLOAT16_NAN_EXPONENT == FLOAT16_EXPONENT_MASK, "Float16::NaNs have all exponent bits set");
 static_assert(FLOAT16_INFINITY_EXPONENT == FLOAT16_EXPONENT_MASK, "Float16::Inf has all exponent bits set");
-static_assert(MASK(FP16_EXPONENT_BITS) == FLOAT16_EXPONENT_MASK, "Float16 exponent mask has different size than the field");
-static_assert(MASK(FP16_MANTISSA_BITS) == FLOAT16_MANTISSA_MASK, "Float16 mantissa mask has different size than the field");
-static_assert(QUIET(FP16) == FLOAT16_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
-static_assert(FP16_SIGN_BITS + FP16_EXPONENT_BITS + FP16_MANTISSA_BITS == 16, "Bitfields sums to type size");
+static_assert(MASK(FLOAT16_EXPONENT_BITS) == FLOAT16_EXPONENT_MASK, "Float16 exponent mask has different size than the field");
+static_assert(MASK(FLOAT16_MANTISSA_BITS) == FLOAT16_MANTISSA_MASK, "Float16 mantissa mask has different size than the field");
+static_assert(QUIET(FLOAT16) == FLOAT16_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
+static_assert(FLOAT16_SIGN_BITS + FLOAT16_EXPONENT_BITS + FLOAT16_MANTISSA_BITS == 16, "Bitfields sums to type size");
 
 static_assert(sizeof(BFloat16) == 2, "BFloat16 structure is not of the correct size");
 static_assert(BFLOAT16_NAN_EXPONENT == BFLOAT16_EXPONENT_MASK, "BFloat16::NaNs have all exponent bits set");
 static_assert(BFLOAT16_INFINITY_EXPONENT == BFLOAT16_EXPONENT_MASK, "BFloat16::Inf has all exponent bits set");
-static_assert(MASK(BFLT16_EXPONENT_BITS) == BFLOAT16_EXPONENT_MASK, "BFloat16 exponent mask has different size than the field");
-static_assert(MASK(BFLT16_MANTISSA_BITS) == BFLOAT16_MANTISSA_MASK, "BFloat16 mantissa mask has different size than the field");
-static_assert(QUIET(BFLT16) == BFLOAT16_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
-static_assert(BFLT16_SIGN_BITS + BFLT16_EXPONENT_BITS + BFLT16_MANTISSA_BITS == 16, "Bitfields sums to type size");
+static_assert(MASK(BFLOAT16_EXPONENT_BITS) == BFLOAT16_EXPONENT_MASK, "BFloat16 exponent mask has different size than the field");
+static_assert(MASK(BFLOAT16_MANTISSA_BITS) == BFLOAT16_MANTISSA_MASK, "BFloat16 mantissa mask has different size than the field");
+static_assert(QUIET(BFLOAT16) == BFLOAT16_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
+static_assert(BFLOAT16_SIGN_BITS + BFLOAT16_EXPONENT_BITS + BFLOAT16_MANTISSA_BITS == 16, "Bitfields sums to type size");
 
 static_assert(sizeof(Float32) == sizeof(float), "Float32 structure is not of the correct size");
 static_assert(FLOAT32_NAN_EXPONENT == FLOAT32_EXPONENT_MASK, "Float32::NaNs have all exponent bits set");
@@ -142,51 +141,51 @@ extern "C" {
 Float16 new_random_float16()
 {
     Float16 f;
+
     f.sign = random32();
     f.exponent = random32();
-    f.mantissa = set_random_bits(random32() % (FP16_MANTISSA_BITS + 1), FP16_MANTISSA_BITS);
-
+    f.mantissa = set_random_bits(random32() % (FLOAT16_MANTISSA_BITS + 1), FLOAT16_MANTISSA_BITS);
     return f;
 }
 
 BFloat16 new_random_bfloat16()
 {
     BFloat16 f;
+
     f.sign = random32();
     f.exponent = random32();
-    f.mantissa = set_random_bits(random32() % (BFLT16_MANTISSA_BITS + 1), BFLT16_MANTISSA_BITS);
-
+    f.mantissa = set_random_bits(random32() % (BFLOAT16_MANTISSA_BITS + 1), BFLOAT16_MANTISSA_BITS);
     return f;
 }
 
 Float32 new_random_float32()
 {
     Float32 f;
+
     f.sign = random32();
     f.exponent = random32();
     f.mantissa = set_random_bits(random32() % (FLOAT32_MANTISSA_BITS + 1), FLOAT32_MANTISSA_BITS);
-
     return f;
 }
 
 Float64 new_random_float64()
 {
     Float64 f;
+
     f.sign = random32();
     f.exponent = random32();
     f.mantissa = set_random_bits(random32() % (FLOAT64_MANTISSA_BITS + 1), FLOAT64_MANTISSA_BITS);
-
     return f;
 }
 
 Float80 new_random_float80()
 {
     Float80 f;
+
     f.sign = random32();
     f.exponent = random32();
     f.jbit = 1;
     f.mantissa = set_random_bits(random32() % (FLOAT80_MANTISSA_BITS + 1), FLOAT80_MANTISSA_BITS);
-
     return f;
 }
 
