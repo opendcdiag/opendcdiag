@@ -155,6 +155,7 @@ enum {
     output_format_option,
     quality_option,
     quick_run_option,
+    random_backward_compatibility,
     raw_list_tests,
     raw_list_group_members,
     raw_list_groups,
@@ -1174,13 +1175,16 @@ Common command-line options are:
  -s <STATE>, --rng-state=<STATE>
      Specify the random generator state to reload. The seed is in the form:
        Engine:engine-specific-data
+ --random-backward-compatibility
+     Enables backward compatibility mode of Random Number Generators (with
+     very intense usage for floating point numbers).
  -v, -q, --verbose, --quiet
      Set logging output verbosity level.  Default is quiet.
  --version
      Display program version information.
  --1sec, --30sec, --2min, --5min
      Run for the specified amount of time in the option. In this mode, the program
-     prioritizes test execution based on prior detections. 
+     prioritizes test execution based on prior detections.
      These options are intended to drive coverage over multiple runs.
      Test priority is ignored when running in combination with the
      --test-list-file option.
@@ -1189,7 +1193,7 @@ Common command-line options are:
      in the order they appear in the file and also allows you to vary the
      individual test durations.  See the User Guide for details.
  --test-range A-B
-     Run tests from test number A to test number B based on their list location 
+     Run tests from test number A to test number B based on their list location
      in an input file specified using --test-list-file <inputfile>.
      For example: --test-list-file mytests.list -test-range 6-10
                   runs tests 6 through 10 from the file mytests.list.
@@ -2851,7 +2855,7 @@ static void background_scan_update_load_threshold(MonotonicTimePoint now)
 
     // scale our idle threshold value from 0.2 base, to 0.8 after 12h
     // every hour adds 0.05 to the threshold value
-    sApp->background_scan.load_idle_threshold = 
+    sApp->background_scan.load_idle_threshold =
         sApp->background_scan.load_idle_threshold_init +
         (time_from_last_test.count() * sApp->background_scan.load_idle_threshold_inc_val);
 
@@ -2978,6 +2982,7 @@ int main(int argc, char **argv)
         { "quality", required_argument, nullptr, quality_option },
         { "quick", no_argument, nullptr, quick_run_option },
         { "quiet", no_argument, nullptr, 'q' },
+        { "random-backward-compatibility", no_argument, nullptr, random_backward_compatibility },
         { "retest-on-failure", required_argument, nullptr, retest_on_failure_option },
         { "rng-state", required_argument, nullptr, 's' },
         { "schedule-by", required_argument, nullptr, schedule_by_option },
@@ -3122,6 +3127,10 @@ int main(int argc, char **argv)
         case 's':
             seed = optarg;
             break;
+        case random_backward_compatibility:
+            sApp->random_backward_compatibility = true;
+            break;
+
         case 't':
             sApp->test_time = string_to_millisecs(optarg);
             break;

@@ -499,6 +499,19 @@ static inline void *aligned_alloc_safe(size_t alignment, size_t size)
 /// least significant 8 bits are randomly set and all other bits are 0.
 uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth);
 
+/// RNG state
+typedef struct {
+    uint8_t bits_available;
+    uint32_t random_bits;
+} random_bits_state_t;
+
+/// Get specified number of bits from RNG
+uint64_t random_bits(uint8_t bits, random_bits_state_t* state);
+
+/// Calculate random value in the form of chains of 0/1s with the random length of
+/// each chain (from range [1..2^chain_len_bits])
+uint64_t random_chains(unsigned chain_len_bits, uint32_t bitwidth, random_bits_state_t* state);
+
 extern uint64_t cpu_features;
 /// thread_num always contains the integer identifier for the executing
 /// thread.  It can be used to index the cpu_info array and is equivalent

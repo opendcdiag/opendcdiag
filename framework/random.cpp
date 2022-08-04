@@ -597,42 +597,123 @@ void *memset_random(void *buf, size_t n)
     return buf;
 }
 
-uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
-    if (num_bits_to_set >= 64 && bitwidth >= 64)
-        return 0xFFFFFFFFFFFFFFFF;  // can't be handled by shifting and subtracting :-(
-    else if (num_bits_to_set >= bitwidth || num_bits_to_set >= 64)
-        return (1ul << bitwidth) - 1ul;
+bool random_compatibility_mode(void)
+{
+    return sApp->random_backward_compatibility;
+}
 
-    // Create a list of all possible bits we could set (basically 1 .. bitwidth)
-    uint32_t bit_positions[64];
-    for(unsigned i=0; i < bitwidth; i++) {
-        bit_positions[i] = i;
-    }
-
-
+uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth)
+{
     uint64_t value = 0;
-    uint32_t num_unset_bits = bitwidth;
-    while (num_bits_to_set > 0) {
 
-        // pick a bit position from the bit_positions array for what
-        // we have left in the list to select as indicated by num_unset_bits
-        int idx_of_bit_to_set = random32() % num_unset_bits;
-        uint32_t bitpos_to_set = bit_positions[idx_of_bit_to_set];
+    if (random_compatibility_mode()) {
+        if (num_bits_to_set >= 64 && bitwidth >= 64)
+            return 0xFFFFFFFFFFFFFFFF;  // can't be handled by shifting and subtracting :-(
+        else if (num_bits_to_set >= bitwidth || num_bits_to_set >= 64)
+            return (1ul << bitwidth) - 1ul;
 
-        // set the bit
-        value |= UINT64_C(1) << bitpos_to_set; // set the bit
+        // Create a list of all possible bits we could set (basically 1 .. bitwidth)
+        uint32_t bit_positions[64];
+        for(unsigned i=0; i < bitwidth; i++) {
+            bit_positions[i] = i;
+        }
 
-        // remove the selected bit from the list and shorten the list by 1
-        // If we remove the last entry, shortening the list is removing it
-        // otherwise we swap the last entry in bit_positions with the one
-        // we just selected, the shorten the list
-        if (idx_of_bit_to_set < num_unset_bits - 1)
-            bit_positions[idx_of_bit_to_set] = bit_positions[num_unset_bits - 1];
+        uint32_t num_unset_bits = bitwidth;
+        while (num_bits_to_set > 0) {
 
-        num_unset_bits -= 1;  // shortens the list by 1
-        num_bits_to_set--;    // loop count
+            // pick a bit position from the bit_positions array for what
+            // we have left in the list to select as indicated by num_unset_bits
+            int idx_of_bit_to_set = random32() % num_unset_bits;
+            uint32_t bitpos_to_set = bit_positions[idx_of_bit_to_set];
+
+            // set the bit
+            value |= UINT64_C(1) << bitpos_to_set; // set the bit
+
+            // remove the selected bit from the list and shorten the list by 1
+            // If we remove the last entry, shortening the list is removing it
+            // otherwise we swap the last entry in bit_positions with the one
+            // we just selected, the shorten the list
+            if (idx_of_bit_to_set < num_unset_bits - 1)
+                bit_positions[idx_of_bit_to_set] = bit_positions[num_unset_bits - 1];
+
+            num_unset_bits -= 1;  // shortens the list by 1
+            num_bits_to_set--;    // loop count
+        }
+    } else {
+        random_bits_state_t state = {};
+        uint32_t bits = 1;
+        for (uint32_t width = 2; width < bitwidth; width <<= 1) {
+            bits++;
+        }
+
+        while (num_bits_to_set) {
+            uint32_t bit = random_bits(bits, &state);
+            do {
+                if (bit >= bitwidth) {
+                    bit -= bitwidth;
+                }
+                if ((value & (1ULL << bit)) == 0) {
+                    value |= (1ULL << bit);
+                    num_bits_to_set--;
+                    break;
+                }
+                bit++;
+            } while (true);
+        }
     }
     return value;
+}
+
+uint64_t random_bits(uint8_t bits, random_bits_state_t* state)
+{
+    if (bits > 64) {
+        assert(!"Not possible to handle more than 64 bits");
+        return 0;
+    }
+    if (!state) {
+        assert(!"No state passed, cannot fetch speficied number of bits");
+        return 0;
+    }
+
+    uint64_t r = 0;
+    while (bits) {
+        // if nothing is cached
+        if (state->bits_available == 0) {
+            state->bits_available = 32;
+            state->random_bits = random32();
+        }
+        // transfer as many bits as possible
+        uint8_t pbits = ((state->bits_available < bits) ? state->bits_available : bits);
+        if (pbits != 0) {
+            r <<= pbits;
+            r |= state->random_bits & ((0x1 << pbits) - 1);
+            state->random_bits >>= pbits;
+            state->bits_available -= pbits;
+            bits -= pbits;
+        }
+    }
+    return r;
+}
+
+uint64_t random_chains(unsigned chain_len_bits, uint32_t bitwidth, random_bits_state_t* state)
+{
+    // plain random value for chain length == 1
+    if (chain_len_bits == 1) {
+        return random_bits(bitwidth, state);
+    }
+
+    uint32_t bit = 0;
+    uint64_t ret = 0;
+    uint32_t set = random_bits(1, state);
+    while (bit < bitwidth) {
+        uint32_t bits = random_bits(chain_len_bits, state) + 1;
+        if (set) {
+            ret |= MASK(bits) << bit;
+        }
+        bit += bits;
+        set = !set;
+    }
+    return ret & MASK(bitwidth);
 }
 
 extern "C" {

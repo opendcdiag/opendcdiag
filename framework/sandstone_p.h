@@ -315,6 +315,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool force_test_time = false;
     bool ud_on_failure = false;
     bool service_background_scan = false;
+    bool random_backward_compatibility = false;
     static constexpr int MaxRetestCount = 64;
     int retest_count = 10;
     int total_retest_count = -2;
@@ -396,6 +397,7 @@ private:
     F(slicing)                              \
     F(force_test_time)                      \
     F(ud_on_failure)                        \
+    F(random_backward_compatibility)        \
     F(current_max_loop_count)               \
     F(current_max_threads)                  \
     F(current_slice_count)                  \
@@ -534,6 +536,7 @@ void random_global_init(const char *argument);
 void random_advance_seed();
 std::string random_format_seed();
 void random_init();
+bool random_compatibility_mode(void);
 
 /* sandstone.cpp */
 TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails);
