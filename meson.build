@@ -7,9 +7,9 @@ project(
 	default_options : [
 		'b_ndebug=if-release',
 		'c_std=gnu17',
-		'cpp_std=gnu++17',
+		'cpp_std=gnu++20',
 	],
-	meson_version : '>=0.56',
+	meson_version : '>=0.57',
 )
 
 cc = meson.get_compiler('c')
