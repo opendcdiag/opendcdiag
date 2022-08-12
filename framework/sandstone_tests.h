@@ -10,12 +10,7 @@
 #include "sandstone.h"
 
 #ifdef __cplusplus
-#if __cplusplus > 201703L && __has_include(<span>)
-#  include <span>
-using std::span;
-#else
-#  include "sandstone_span.h"
-#endif
+#include <span>
 
 extern "C" {
 #endif
@@ -58,8 +53,8 @@ enum WeightedTestScheme : int8_t {
 __attribute__((weak)) extern const struct test_group __start_test_group;
 __attribute__((weak)) extern const struct test_group __stop_test_group;
 
-constexpr inline span<struct test> regular_tests = { &__start_tests, &__stop_tests };
-extern const span<struct test> selftests;
+inline std::span<struct test> regular_tests = { &__start_tests, &__stop_tests };
+extern const std::span<struct test> selftests;
 
 }
 #endif

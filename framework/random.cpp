@@ -5,12 +5,12 @@
 
 #include "sandstone.h"
 #include "sandstone_p.h"
-#include "sandstone_span.h"
 
 #include <algorithm>
 #include <memory>
 #include <new>
 #include <random>
+#include <span>
 #include <sstream>
 
 #include <assert.h>
@@ -99,7 +99,7 @@ struct RandomEngineWrapper
     virtual void printGlobalState(std::ostringstream &ss) = 0;
     virtual void reloadGlobalState(const char *argument) = 0;
     virtual void seedGlobalEngine(SeedSequence &sseq) = 0;
-    virtual void createEngines(span<thread_rng> threads) = 0;
+    virtual void createEngines(std::span<thread_rng> threads) = 0;
     virtual uint32_t generate32(thread_rng *thread_buffer) = 0;
     virtual uint64_t generate48(thread_rng *thread_buffer) = 0;
     virtual uint64_t generate64(thread_rng *thread_buffer) = 0;
@@ -165,7 +165,7 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
         new (rng_for_thread(-1)->u8) engine_type(sseq);
     }
 
-    void createEngines(span<thread_rng> threads) override
+    void createEngines(std::span<thread_rng> threads) override
     {
         // copy the global engine so we don't modify it
         engine_type copy = globalEngine();
@@ -305,7 +305,7 @@ struct aes_engine
 };
 
 template<>
-void EngineWrapper<aes_engine>::createEngines(span<thread_rng> threads)
+void EngineWrapper<aes_engine>::createEngines(std::span<thread_rng> threads)
 {
     // copy the global engine so we don't modify it
     engine_type copy = globalEngine();
@@ -514,7 +514,7 @@ void random_advance_seed()
 
 void random_init()
 {
-    span threads(rng_for_thread(0), num_cpus());
+    std::span threads(rng_for_thread(0), num_cpus());
     sApp->random_engine->createEngines(threads);
 }
 
