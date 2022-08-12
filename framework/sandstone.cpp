@@ -199,7 +199,7 @@ thread_local int thread_num = 0;
 #endif
 
 
-static span<struct test> test_set = regular_tests;
+static std::span<struct test> test_set = regular_tests;
 
 #if defined(__linux__) && defined(__x86_64__)
 extern struct test mce_test;
@@ -2332,11 +2332,11 @@ static auto collate_test_groups()
         std::vector<const struct test *> entries;
     };
     std::map<std::string_view, Group> groups;
-    for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
-        for (auto ptr = test->groups; ptr && *ptr; ++ptr) {
+    for (struct test &test : test_set) {
+        for (auto ptr = test.groups; ptr && *ptr; ++ptr) {
             Group &g = groups[(*ptr)->id];
             g.definition = *ptr;
-            g.entries.push_back(test);
+            g.entries.push_back(&test);
         }
     }
 
@@ -2352,7 +2352,7 @@ static void list_tests(int opt)
     auto groups = collate_test_groups();
     int i = 0;
 
-    for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
+    for (auto test = test_set.begin(); test != test_set.end(); ++test) {
         if (test->quality_level >= sApp->requested_quality) {
             if (include_tests) {
                 if (include_descriptions) {
@@ -2410,7 +2410,7 @@ static void apply_group_inits(/*nonconst*/ struct test *test)
     // will return a pointer to a replacement function that will in turn cause
     // the test to fail or skip during test_init().
 
-    span<const struct test_group> groups = { &__start_test_group, &__stop_test_group };
+    std::span<const struct test_group> groups = { &__start_test_group, &__stop_test_group };
     static auto replacements = [=]() {
         struct Result {
             decltype(test_group::group_init) group_init;
@@ -2503,15 +2503,15 @@ static NameMatchingStatus test_matches_name(const struct test *test, const char 
 static void add_tests(std::vector<struct test *> &test_list, const char *name)
 {
     int count = 0;
-    for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
-        auto matches = test_matches_name(test, name);
+    for (struct test &test: test_set) {
+        auto matches = test_matches_name(&test, name);
         if (!matches)
             continue;
 
-        run_test_preinit(test);
+        run_test_preinit(&test);
         ++count;
-        if (test->quality_level >= sApp->requested_quality) {
-            add_test(test_list, test);
+        if (test.quality_level >= sApp->requested_quality) {
+            add_test(test_list, &test);
         } else if (test_list.empty()) {
             // add a dummy entry just so the list isn't empty
             test_list.push_back(nullptr);
@@ -2527,9 +2527,9 @@ static void add_tests(std::vector<struct test *> &test_list, const char *name)
 static void disable_tests(const char *name)
 {
     int count = 0;
-    for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
-        if (test_matches_name(test, name)) {
-            disable_test(test);
+    for (struct test &test : test_set) {
+        if (test_matches_name(&test, name)) {
+            disable_test(&test);
             ++count;
         }
     }
@@ -2553,9 +2553,9 @@ static void generate_test_list(std::vector<struct test *> &test_list,
             fprintf(stderr, "# WARNING: --fatal-skips used with full test suite. This will probably fail.\n"
                             "# You may want to specify a controlled list of tests to run.\n");
         /* generate test list based on quality levels only */
-        for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
-            if (test->quality_level >= min_quality)
-                add_test(test_list, test);
+        for (struct test &test : test_set) {
+            if (test.quality_level >= min_quality)
+                add_test(test_list, &test);
         }
     } else if (test_list.front() == nullptr) {
         /* remove the dummy entry we added (see add_tests()) */
@@ -2643,9 +2643,9 @@ static int run_tests_on_cpu_set(vector<const struct test *> &tests, const Logica
 static int exec_mode_run(int argc, char **argv)
 {
     auto find_test_by_name = [](string_view id) -> struct test * {
-        for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
-            if (id == test->id)
-                return test;
+        for (struct test &test : test_set) {
+            if (id == test.id)
+                return &test;
         }
         return nullptr;
     };
@@ -3092,7 +3092,8 @@ static void background_scan_wait()
 
     // move all timestaps except the oldest one
     auto array_data = sApp->background_scan.timestamp.data();
-    std::move(array_data, sApp->background_scan.timestamp.end() - 1, array_data + 1);
+    std::move(array_data, array_data + sApp->background_scan.timestamp.size() - 1,
+              array_data + 1);
 
     MonotonicTimePoint now = MonotonicTimePoint::clock::now();
     sApp->background_scan.timestamp.front() = now;

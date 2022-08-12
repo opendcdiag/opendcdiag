@@ -1071,4 +1071,4 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
 #endif // __linux__
 };
 
-const span<struct test> selftests = { std::begin(selftests_array), std::end(selftests_array) };
+const std::span<struct test> selftests = { std::begin(selftests_array), std::end(selftests_array) };

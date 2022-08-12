@@ -10,10 +10,10 @@
 #include "sandstone_p.h"
 #include "sandstone_context_dump.h"
 #include "sandstone_iovec.h"
-#include "sandstone_span.h"
 
 #include <initializer_list>
 #include <limits>
+#include <span>
 #include <type_traits>
 
 #include <sys/types.h>
@@ -128,7 +128,7 @@ struct CrashContext
     static_assert(std::is_trivially_copyable_v<Fixed>, "Must be trivial to transfer over sockets");
     static_assert(std::is_trivially_destructible_v<Fixed>, "Must be trivial to transfer over sockets");
 
-    span<uint8_t> xsave_buffer;
+    std::span<uint8_t> xsave_buffer;
     std::remove_pointer_t<mcontext_t> mc;
     enum Contents {
         NoContents = 0x00,
@@ -138,7 +138,7 @@ struct CrashContext
     } contents = NoContents;
 
     static void send(int sockfd, siginfo_t *si, void *ucontext);
-    static CrashContext receive(int sockfd, span<uint8_t> xsave_buffer)
+    static CrashContext receive(int sockfd, std::span<uint8_t> xsave_buffer)
     {
         CrashContext result(xsave_buffer);
         result.receive_internal(sockfd);
@@ -146,7 +146,7 @@ struct CrashContext
     }
 
 private:
-    CrashContext(span<uint8_t> xsave_buffer)
+    CrashContext(std::span<uint8_t> xsave_buffer)
         : xsave_buffer(xsave_buffer), mc{}
     { }
     void receive_internal(int sockfd);
@@ -361,7 +361,7 @@ void CrashContext::receive_internal(int sockfd)
             ret = 0;
         }
 #endif
-        xsave_buffer = span(xsave_buffer.data(), ret);
+        xsave_buffer = std::span(xsave_buffer.data(), ret);
         if (ret)
             contents = Contents(contents | MachineContext);
     } else {
