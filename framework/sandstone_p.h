@@ -496,7 +496,8 @@ private:
     }
 };
 
-static_assert(std::is_trivial_v<SandstoneApplication::SharedMemory>);
+static_assert(std::is_trivially_copyable_v<SandstoneApplication::SharedMemory>);
+static_assert(std::is_trivially_destructible_v<SandstoneApplication::SharedMemory>);
 static_assert(std::is_trivially_copyable_v<SandstoneApplication::ExecState>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::ExecState>);
 

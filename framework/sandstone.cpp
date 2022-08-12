@@ -2808,7 +2808,6 @@ static void background_scan_init()
         std::atomic<int> dummy;
         std::array<MonotonicTimePoint::rep, 24> timestamp;
     };
-    static_assert(std::is_trivial_v<FileLayout>, "mmapped file must have trivial construction");
 
     if (!sApp->service_background_scan)
         return;
