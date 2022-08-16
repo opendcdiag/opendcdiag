@@ -12,7 +12,11 @@
 #include <limits.h>
 #include <locale.h>
 #include <inttypes.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #include <immintrin.h>
+#pragma GCC diagnostic pop
 
 #ifndef __F16C__
 #  error "Please compile with F16C support"

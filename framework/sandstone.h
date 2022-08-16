@@ -14,7 +14,11 @@
 #include <time.h>
 
 #ifdef __x86_64__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #include <immintrin.h>
+#pragma GCC diagnostic pop
 #endif
 
 #include "cpu_features.h"
