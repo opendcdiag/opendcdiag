@@ -796,9 +796,9 @@ void logging_printf(int level, const char *fmt, ...)
     if (msg.empty())
         return;     // can happen if fmt was "%s" and the string ended up empty
 
-    IoVec vec[] = {
-        indent_spaces(),
-        std::string_view(msg)
+    iovec vec[] = {
+        IoVec(indent_spaces()),
+        IoVec(std::string_view(msg))
     };
 
     if (level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
@@ -814,7 +814,7 @@ void logging_printf(int level, const char *fmt, ...)
     std::string timestamp;
     if (current_output_format() != SandstoneApplication::OutputFormat::yaml) {
         timestamp = log_timestamp();
-        vec[0] = std::string_view(timestamp);
+        vec[0] = IoVec(std::string_view(timestamp));
     }
 
     int fd = file_log_fd;
@@ -1499,11 +1499,11 @@ static void print_content_indented(int fd, std::string_view indent, std::string_
         if (!newline)
             newline = end;
 
-        IoVec vec[] = {
-            indent_spaces(),
-            indent,
-            std::string_view(line, newline - line),
-            "\n"
+        iovec vec[] = {
+            IoVec(indent_spaces()),
+            IoVec(indent),
+            IoVec(std::string_view(line, newline - line)),
+            IoVec("\n")
         };
         IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
         line = newline + 1;
@@ -2120,7 +2120,7 @@ inline void YamlLogger::print_one_message(int fd, int level, std::string_view me
     }
 
     // we'll print in a single line, thank you
-    IoVec vec[] = { indent_spaces(), "    - { level: ", levels[level] };
+    iovec vec[] = { IoVec(indent_spaces()), IoVec("    - { level: "), IoVec(levels[level]) };
     IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
     print_content_single_line(fd, ", text: '", message, "' }");
 }

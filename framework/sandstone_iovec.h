@@ -13,29 +13,25 @@
 #include <unistd.h>
 
 namespace {
-struct IoVec : iovec
+[[maybe_unused]] static struct iovec IoVec(struct iovec vec)
 {
-    constexpr IoVec() : iovec{nullptr, 0} {}
-    IoVec(char &c)
-        : IoVec(std::string_view(&c, 1))
-    {
-    }
-    IoVec(const char *str)
-        : IoVec(std::string_view(str))
-    {
-    }
-    IoVec(std::string_view str)
-    {
-        iov_base = const_cast<char *>(str.data());
-        iov_len = str.size();
-    }
-};
-static_assert(sizeof(IoVec[2]) == sizeof(struct iovec[2]));
+    return vec;
+}
+
+[[maybe_unused]] static struct iovec IoVec(std::string_view str = {})
+{
+    return { .iov_base = const_cast<char *>(str.data()), .iov_len = str.size() };
+}
+
+[[maybe_unused]] static struct iovec IoVec(const char *str)
+{
+    return IoVec(std::string_view(str));
+}
 
 template <typename... Args>
 [[maybe_unused]] ssize_t writeln(int fd, Args &&... args)
 {
-    IoVec vec[] = { IoVec(args)..., "\n" };
+    iovec vec[] = { IoVec(args)..., IoVec("\n") };
     return writev(fd, vec, std::size(vec));
 }
 
