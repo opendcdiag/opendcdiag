@@ -1585,7 +1585,10 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 
 static TestResult run_thread_slices(/*nonconst*/ struct test *test)
 {
-    if (uint64_t missing = test->minimum_cpu & ~cpu_features) {
+    uint64_t required_cpu_features = test->minimum_cpu | test->compiler_minimum_cpu;
+    if (uint64_t missing = required_cpu_features & ~cpu_features) {
+        // for brevity, don't report the bits that the framework itself needs
+        missing &= ~_compilerCpuFeatures;
         log_info("SKIP reason: test requires %s\n", cpu_features_to_string(missing).c_str());
         (void) missing;
         return TestSkipped;
@@ -2260,12 +2263,16 @@ static void list_tests(int opt)
     for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
         if (test->quality_level >= sApp->requested_quality) {
             if (include_tests) {
-                if (include_descriptions)
+                if (include_descriptions) {
                     printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
-                else if (sApp->verbosity > 0)
-                    printf("%-20s %s\n", test->id, cpu_features_to_string(test->minimum_cpu).c_str());
-                else
+                } else if (sApp->verbosity > 0) {
+                    // don't report the FW minimum CPU features
+                    uint64_t cpuf = test->compiler_minimum_cpu & ~_compilerCpuFeatures;
+                    cpuf |= test->minimum_cpu;
+                    printf("%-20s %s\n", test->id, cpu_features_to_string(cpuf).c_str());
+                } else {
                     puts(test->id);
+                }
             }
         }
     }
