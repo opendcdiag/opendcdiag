@@ -135,8 +135,11 @@ extern "C" {
 #define EXIT_SKIP               -255
 
 #define DECLARE_TEST_INNER2(test_id, test_description) \
-    __attribute__((aligned(alignof(void*)), used, section(SANDSTONE_SECTION_PREFIX "tests"))) struct test _test_ ## test_id = { \
-        .id = SANDSTONE_STRINGIFY(test_id), .description = test_description,
+    __attribute__((aligned(alignof(void*)), used, section(SANDSTONE_SECTION_PREFIX "tests"))) \
+    struct test _test_ ## test_id = {                   \
+        .compiler_minimum_cpu = _compilerCpuFeatures,   \
+        .id = SANDSTONE_STRINGIFY(test_id),             \
+        .description = test_description,
 #define DECLARE_TEST_INNER(test_id, test_description)   DECLARE_TEST_INNER2(test_id, test_description)
 
 #ifndef DECLARE_TEST
@@ -354,6 +357,8 @@ typedef const kvm_config_t *(*kvmconfigfunc)(void);
 
 struct test {
     /* metadata */
+    /// filled in by the DECLARE_TEST macro
+    uint64_t compiler_minimum_cpu;
 
     /// Identifier of the test.  Each test must have a unique string identifier
     const char *id;
