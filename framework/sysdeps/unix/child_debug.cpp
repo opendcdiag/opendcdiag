@@ -17,6 +17,7 @@
 #include <type_traits>
 
 #include <sys/types.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <paths.h>
@@ -786,9 +787,20 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         return false;
     }
 
-    std::string extra_info;
+    std::string message =
+            stdprintf("Received signal %d (%s) code=%d (%s), RIP = %p", ctx.signum,
+                      strsignal(ctx.signum), ctx.signal_code,
+                      code_string_fn(ctx.signal_code), ctx.rip);
+
+    if (Dl_info info; dladdr(ctx.rip, &info) && uintptr_t(ctx.rip) > uintptr_t(info.dli_fbase)) {
+        // include the shared object's name and subtract its base address
+        if (const char *slash = strrchr(info.dli_fname, '/'))
+            info.dli_fname = slash + 1;
+        message += stdprintf(" (%s+%#tx)", info.dli_fname,
+                               uintptr_t(ctx.rip) - uintptr_t(info.dli_fbase));
+    }
     if (ctx.rip != ctx.crash_address)
-        extra_info = stdprintf(", CR2 = %p", ctx.crash_address);
+        message += stdprintf(", CR2 = %p", ctx.crash_address);
     if (ctx.trap_nr >= 0) {
         static const char trap_names[][4] = {
             "DE", "DB", "NMI", "BP",
@@ -803,13 +815,11 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         else if (size_t(ctx.trap_nr) < std::size(trap_names))
             trap_name = trap_names[ctx.trap_nr];
 
-        extra_info += stdprintf(", trap=%d (%s), error_code = 0x%lx",
-                                ctx.trap_nr, trap_name, ctx.error_code);
+        message += stdprintf(", trap=%d (%s), error_code = 0x%lx",
+                             ctx.trap_nr, trap_name, ctx.error_code);
     }
 
-    log_message(cpu, SANDSTONE_LOG_ERROR "Received signal %d (%s) code=%d (%s), RIP = %p%s",
-                ctx.signum, strsignal(ctx.signum), ctx.signal_code, code_string_fn(ctx.signal_code),
-                ctx.rip, extra_info.c_str());
+    log_message(cpu, SANDSTONE_LOG_ERROR "%s", message.c_str());
     return true;
 }
 
