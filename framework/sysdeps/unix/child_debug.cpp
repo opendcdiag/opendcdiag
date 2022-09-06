@@ -891,7 +891,7 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
         } else if (strcmp(on_crash_arg, "kill") == 0) {
             on_crash_action = kill_on_crash;
         } else {
-            fprintf(stderr, "%s: unknown action for --on-crash: %s", program_invocation_name, on_crash_arg);
+            fprintf(stderr, "%s: unknown action for --on-crash: %s\n", program_invocation_name, on_crash_arg);
             exit(EX_USAGE);
         }
 
