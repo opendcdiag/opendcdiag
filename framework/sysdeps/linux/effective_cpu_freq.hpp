@@ -10,9 +10,9 @@
 #  include "../generic/effective_cpu_freq.hpp"
 #else
 
+#include "sandstone_p.h"
 #include <limits>
 #include <x86intrin.h>
-#include "sandstone_p.h"
 
 class CPUTimeFreqStamp
 {
@@ -23,9 +23,7 @@ public:
     void Snapshot(const int thread_num)
     {
         cpu_number = cpu_info[thread_num].cpu_number;
-
-        IGNORE_RETVAL(get_monotonic_time_now(&ts));
-
+        ns = MonotonicTimePoint::clock::now();
         tsc = _rdtscp(&tsc_aux);
 
         if (!read_msr(cpu_number, APERF_MSR, &aperf))
@@ -40,10 +38,12 @@ public:
         assert(after.cpu_number == before.cpu_number);
 
         // Case of bogus data when, e.g., OpenDCDiag is run unprivileged
-        if (before.mperf >= after.mperf || before.aperf >= after.aperf || before.tsc >= after.tsc)
+        if (before.mperf >= after.mperf || before.aperf >= after.aperf || before.tsc >= after.tsc
+                || before.ns >= after.ns)
             return std::numeric_limits<double>::quiet_NaN();
 
-        const double secs = (after.ts.tv_sec - before.ts.tv_sec) + (after.ts.tv_nsec - before.ts.tv_nsec) / 1000000000.0;
+        const auto nsecs = after.ns - before.ns;
+        const double secs = std::chrono::duration_cast<std::chrono::duration<double>>(nsecs).count();
         const double tsc_freq = (after.tsc - before.tsc) / secs;
         const double perf_ratio = 1.0 * (after.aperf - before.aperf) / (after.mperf - before.mperf);
 
@@ -52,9 +52,9 @@ public:
 
 private:
     int cpu_number;
-    struct timespec ts;
-    uint64_t tsc;
     uint32_t tsc_aux;
+    MonotonicTimePoint ns;
+    uint64_t tsc;
     uint64_t aperf, mperf;
 };
 
