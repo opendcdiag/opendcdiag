@@ -1195,9 +1195,7 @@ Common command-line options are:
                   runs tests 6 through 10 from the file mytests.list.
      See User Guide for more details.
  --test-list-randomize
-     Randomizes the order in which tests specified with the --test-list-file
-     option are run.  This option is ignored if --test-list-file is not
-     provided.
+     Randomizes the order in which tests are executed.
  --test-delay <time in ms>
      Delay between individual test executions in milliseconds.
  --schedule-by <selection>
@@ -3386,21 +3384,25 @@ int main(int argc, char **argv)
             return EXIT_SUCCESS;
         case one_sec_option:
             test_list_randomize = true;
+            test_selection_strategy = Repeating;
             sApp->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(1s, &sApp->starttime);
             break;
         case thirty_sec_option:
             test_list_randomize = true;
+            test_selection_strategy = Repeating;
             sApp->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(30s, &sApp->starttime);
             break;
         case two_min_option:
             test_list_randomize = true;
+            test_selection_strategy = Repeating;
             sApp->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(2min, &sApp->starttime);
             break;
         case five_min_option:
             test_list_randomize = true;
+            test_selection_strategy = Repeating;
             sApp->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(5min, &sApp->starttime);
             break;
@@ -3430,6 +3432,13 @@ int main(int argc, char **argv)
             return EX_USAGE;
         }
     }
+
+    if (test_list_randomize) {
+        if ((test_selection_strategy == Ordered) || (test_selection_strategy == Alphabetical)) {
+            test_selection_strategy = NonRepeating;
+        }
+    }
+
 
     if (SandstoneConfig::RestrictedCommandLine) {
         // Default options for the simplified OpenDCDiag cmdline
@@ -3539,11 +3548,6 @@ int main(int argc, char **argv)
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
     } else {
-        if (test_list_randomize) {
-            logging_printf(LOG_LEVEL_QUIET, "# WARNING: --test-list-randomize used without "
-                                            "--test-list-file. Ignored.\n");
-        }
-
         if (use_builtin_test_list) {
             if (!SandstoneConfig::RestrictedCommandLine && test_list.size()) {
                 logging_printf(LOG_LEVEL_QUIET,
@@ -3554,10 +3558,11 @@ int main(int argc, char **argv)
         } else {
             generate_test_list(test_list);
         }
-
-        if (!test_selector)
+        if (!test_selector) {
+            weighted_run_info weights[] { {NULL} };
             test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
-                                                std::move(test_list), nullptr);
+                                                std::move(test_list), weights);
+        }
     }
 
 #if SANDSTONE_SSL_BUILD

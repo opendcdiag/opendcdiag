@@ -95,7 +95,11 @@ protected:
 
     void collect_distribution_counts(TestrunSelector *selector, int num_calls) {
         for (int i = 0; i < num_calls; i++) {
-            const char * selected_test_id = selector->get_next_test()->id;
+            auto test = selector->get_next_test();
+            if (test == nullptr)
+                test = selector->get_next_test();
+
+            const char *selected_test_id = test->id;
             counts[selected_test_id]++;
         }
     }
@@ -300,6 +304,8 @@ TEST_F(WeightedTestSelectorFixture, test_GivenATestIsNotInRuninfoList_WhenWeAddA
 
         for (int num_selections = 0; num_selections < 50; ++num_selections) {
             auto test = selector->get_next_test();
+            if (test == nullptr)
+                test = selector->get_next_test();
             picks.emplace_back(test->id);
             counts[test->id]++;
         }

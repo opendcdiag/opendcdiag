@@ -12,7 +12,7 @@
 
 #include "TestrunSelectorBase.h"
 
-#define WEIGHTED_TESTRUNNER_DEFAULT_DURATION  300
+#define WEIGHTED_TESTRUNNER_DEFAULT_DURATION  0   /* Use test natural duration */
 
 class WeightedTestrunSelector : public TestrunSelector {
 protected:
@@ -27,10 +27,14 @@ protected:
 public:
     struct test * get_next_test() override{
         auto weighted_info = this->select_test();
-        test * next_test = testinfo[weighted_info->test_index];
-        if (next_test != nullptr)
-            next_test->desired_duration = weighted_info->duration_ms;
-        return next_test;
+        if (weighted_info == nullptr)
+            return nullptr;   // Indicates end of test list
+        else {
+            test *next_test = testinfo[weighted_info->test_index];
+            if (next_test != nullptr)
+                next_test->desired_duration = weighted_info->duration_ms;
+            return next_test;
+        }
 
     }
     WeightedTestrunSelector(std::vector<struct test *> _tests)

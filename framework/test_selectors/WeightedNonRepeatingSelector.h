@@ -44,9 +44,10 @@ public:
     }
 
     weighted_run_info * select_test() override {
-        if (sum_of_weights <= 0)
+        if (sum_of_weights <= 0) {
             reset_selector();
-
+            return nullptr;  // Signals end of test list
+        }
         return pick_entry_using_weighted_value(random32() % sum_of_weights);
     }
 
