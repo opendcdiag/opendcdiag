@@ -45,8 +45,6 @@ public:
     virtual ~TestrunSelector() = default;
     virtual struct test * get_next_test() = 0;
     virtual void reset_selector() {};
-    virtual size_t get_test_count() const { return testinfo.size(); };
-
 };
 
 

@@ -55,11 +55,6 @@ public:
         currect_test_index = first_test_index;
     }
 
-    size_t get_test_count() const override {
-        size_t range_size = last_test_index - first_test_index;
-        return std::min(listfile_recs.size(), range_size);
-   };
-
     void load_from_file(const std::string &path) {   // WARNING: This method not covered by unit tests
         std::ifstream infile(path);
 
