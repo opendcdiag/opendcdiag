@@ -681,6 +681,14 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
+    .id = "selftest_pass_low_quality",
+    .description = "Just pass",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_SKIP,
+},
+{
     .id = "selftest_timedpass",
     .description = "Loops around usleep() for the regular test time",
     .groups = DECLARE_TEST_GROUPS(&group_positive),

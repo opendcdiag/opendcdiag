@@ -195,9 +195,9 @@ test_yaml_regexp() {
     test_yaml_numeric "/tests/0/test-runtime" 'value > 100'
 }
 
-@test "selftest_pass" {
+selftest_pass() {
     declare -A yamldump
-    sandstone_selftest -e selftest_pass
+    sandstone_selftest "$@"
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_pass
@@ -210,6 +210,20 @@ test_yaml_regexp() {
     test_yaml_numeric "/tests/0/time-at-start/elapsed" 'value >= 0'
     test_yaml_numeric "/tests/0/time-at-end/elapsed" 'value >= 0'
     test_yaml_numeric "/tests/0/test-runtime" 'value >= 0'
+}
+
+@test "selftest_pass" {
+    selftest_pass -e selftest_pass
+}
+
+@test "selftest_pass wildcard" {
+    # This should NOT run selftest_pass_low_quality
+    selftest_pass -e 'selftest_pass*'
+}
+
+@test "selftest_pass_low_quality" {
+    # This should NOT run selftest_pass_low_quality
+    selftest_pass -e 'selftest_pass_low_quality' -e selftest_pass
 }
 
 @test "selftest_skip" {
@@ -480,6 +494,38 @@ test_list_randomize() {
 
 @test "--test-list-file --test-list-randomize" {
     test_list_randomize --test-list-file
+}
+
+test_list_file_ignores_beta() {
+    declare -A yamldump
+    local -a list=(selftest_pass selftest_pass_low_quality
+                   selftest_skip selftest_pass selftest_logs)
+
+    local testlistfile=`mktempfile list.XXXXXX`
+    echo "=== test list ==="
+    printf '%s\n' ${list[@]} | tee "$testlistfile"
+    echo "=== ==="
+
+    sandstone_selftest --test-list-file "$testlistfile" "$@"
+    rm -f -- "$testlistfile"
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # confirm all but one of these tests ran
+    test_yaml_numeric "/tests@len" "${#list[@]} - 1"
+
+    # and that none of them is the low_quality one
+    for ((i = 0; i < yamldump[/tests@len]; ++i)); do
+        [[ ${yamldump[/tests/test]} != "selftest_pass_low_quality" ]]
+    done
+}
+
+@test "--test-list-file ignores beta test" {
+    test_list_file_ignores_beta
+}
+
+@test "--test-list-file --test-list-randomize ignores beta test" {
+    test_list_file_ignores_beta --test-list-randomize
 }
 
 @test "--test-list-file with unknown test name" {
