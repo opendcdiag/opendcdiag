@@ -770,11 +770,9 @@ static void log_message_preformatted(int thread_num, std::string_view msg)
     if (msg[0] == 'E')
         logging_mark_thread_failed(thread_num);
 
-    int &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
-    if (messages_logged >= sApp->max_messages_per_thread)
+    std::atomic<int> &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
+    if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread)
         return;
-
-    messages_logged++;
 
     if (msg[msg.size() - 1] == '\n')
         msg.remove_suffix(1);           // remove trailing newline
@@ -1382,14 +1380,12 @@ void log_data(const char *message, const void *data, size_t size)
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;                 // short-circuit
 
-    int &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
-    size_t &data_bytes_logged = cpu_data_for_thread(thread_num)->data_bytes_logged;
-    if ((messages_logged >= sApp->max_messages_per_thread) ||
-            (data_bytes_logged + size > sApp->max_logdata_per_thread))
+    std::atomic<int> &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
+    std::atomic<size_t> &data_bytes_logged = cpu_data_for_thread(thread_num)->data_bytes_logged;
+    if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread ||
+            (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->max_logdata_per_thread))
         return;
 
-    messages_logged++;
-    data_bytes_logged += size;
 
     log_data_common(message, static_cast<const uint8_t *>(data), size, false);
 }
