@@ -83,23 +83,26 @@ static void fallback_exec(char **argv)
     strcpy(lastslash, fallback);
 
     // Security check: only execute that binary if it is either owned by the
-    // current user, by root, or by the same user thata owns the current
+    // current user, by root, or by the same user that owns the current
     // executable.
     struct stat st;
     int fd = open(buf, O_PATH);
     if (fd == -1)
         return;
     if (fstat(fd, &st) == -1)
-        return;
+        goto noexec;
     if (st.st_uid != 0 && st.st_uid != getuid()) {
         struct stat stself;
         if (stat("/proc/self/exe", &stself) == -1)
-            return;
+            goto noexec;
         if (st.st_uid != stself.st_uid)
-            return;
+            goto noexec;
     }
 
     IGNORE_RETVAL(fexecve(fd, argv, environ));
+
+noexec:
+    close(fd);
 }
 #else
 static void fallback_exec(char **) {}
