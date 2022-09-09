@@ -2439,7 +2439,8 @@ static void disable_tests(const char *name)
     }
 }
 
-static void generate_test_list(std::vector<struct test *> &test_list)
+static void generate_test_list(std::vector<struct test *> &test_list,
+                               int min_quality = sApp->requested_quality)
 {
     if (SandstoneConfig::RestrictedCommandLine || test_list.empty()) {
         if (!SandstoneConfig::RestrictedCommandLine && sApp->fatal_skips)
@@ -2447,7 +2448,7 @@ static void generate_test_list(std::vector<struct test *> &test_list)
                             "# You may want to specify a controlled list of tests to run.\n");
         /* generate test list based on quality levels only */
         for (struct test *test = test_set.begin(); test != test_set.end(); ++test) {
-            if (test->quality_level >= sApp->requested_quality)
+            if (test->quality_level >= min_quality)
                 add_test(test_list, test);
         }
     } else if (test_list.front() == nullptr) {
@@ -3543,7 +3544,10 @@ int main(int argc, char **argv)
                            "the test list file \"%s\".\n", test_list_file_path);
             test_list = {};
         }
-        generate_test_list(test_list);
+
+        // include ALL tests in this test list, including TEST_QUALITY_SKIP;
+        // the test selector will filter those out
+        generate_test_list(test_list, INT_MIN);
         test_selector = create_list_file_test_selector(std::move(test_list), test_list_file_path,
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
@@ -3559,7 +3563,7 @@ int main(int argc, char **argv)
             generate_test_list(test_list);
         }
         if (!test_selector) {
-            weighted_run_info weights[] { {NULL} };
+            weighted_run_info weights[] = { { nullptr } };
             test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
                                                 std::move(test_list), weights);
         }

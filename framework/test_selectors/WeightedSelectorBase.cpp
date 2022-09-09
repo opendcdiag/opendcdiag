@@ -105,7 +105,7 @@ bool WeightedTestrunSelector::should_add_weight(const weighted_run_info * runinf
 {
 
     if ( ! KEY_EXISTS(testid_to_index_map, runinfo->test->id)) return false;
-    if (runinfo->test->quality_level < TEST_QUALITY_PROD) return false;
+    if (runinfo->test->quality_level < sApp->requested_quality) return false;
     if (runinfo->weight <= 0)  return false;
 
     return true;
