@@ -5,8 +5,6 @@
 
 #include "WeightedSelectorBase.h"
 
-#define KEY_EXISTS(m, key)    ( (m).find((key)) != (m).end())
-
 using namespace std;
 
 void WeightedTestrunSelector::general_setup_from_structs(weighted_run_info *weights, WeightedTestLength length_adjust) {
@@ -22,8 +20,8 @@ void WeightedTestrunSelector::adjust_runinfo() {
 }
 
 int WeightedTestrunSelector::lookup_test_index(const char * test_id_string)  {
-    if (KEY_EXISTS(testid_to_index_map, test_id_string)) {
-        return testid_to_index_map[test_id_string];
+    if (auto it = testid_to_index_map.find(test_id_string); it != testid_to_index_map.end()) {
+        return it->second;
     } else {
         fprintf(stderr, "ERROR: Attempted to access non-existent test index\n");
         exit(EX_USAGE);
@@ -104,7 +102,7 @@ weighted_run_info * WeightedTestrunSelector::create_default_runinfo_entry(int te
 bool WeightedTestrunSelector::should_add_weight(const weighted_run_info * runinfo)
 {
 
-    if ( ! KEY_EXISTS(testid_to_index_map, runinfo->test->id)) return false;
+    if (testid_to_index_map.find(runinfo->test->id) == testid_to_index_map.end()) return false;
     if (runinfo->test->quality_level < sApp->requested_quality) return false;
     if (runinfo->weight <= 0)  return false;
 
