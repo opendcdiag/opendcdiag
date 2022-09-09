@@ -738,24 +738,6 @@ void logging_mark_thread_failed(int thread_num)
     thr->inner_loop_count_at_fail = thr->inner_loop_count;
 }
 
-static void log_message_preformatted(int thread_num, std::string_view msg)
-{
-    int level = status_level(msg[0]);
-    if (msg[0] == 'E')
-        logging_mark_thread_failed(thread_num);
-
-    std::atomic<int> &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
-    if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread)
-        return;
-
-    if (msg[msg.size() - 1] == '\n')
-        msg.remove_suffix(1);           // remove trailing newline
-
-    FILE *log = logging_stream_open(thread_num, level);
-    fwrite(msg.data(), 1, msg.size(), log);
-    logging_stream_close(log);
-}
-
 static __attribute__((cold)) void log_message_to_syslog(const char *msg)
 {
     // since logging to the system log is so infrequent, we initialize and tear
@@ -1200,23 +1182,44 @@ static inline void assert_log_message(const char *fmt)
     (void)fmt;  // for release builds
 }
 
+static void log_message_common(int thread_num, const char *fmt, va_list va,
+                               std::string_view prefix = {})
+{
+    assert_log_message(fmt);
+    if (!SandstoneConfig::Debug && *fmt == 'd')
+        return;         /* no Debug in non-debug build */
+    if (*fmt == 'E')
+        logging_mark_thread_failed(thread_num);
+
+    std::atomic<int> &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
+    if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread)
+        return;
+
+    std::string msg = create_filtered_message_string(fmt, va);
+    if (msg[msg.size() - 1] == '\n')
+        msg.resize(msg.size() - 1);         // remove trailing newline
+
+    char c = message_code(UserMessages, status_level(*fmt));
+    struct iovec vec[] = {
+        { &c, 1 },
+        { const_cast<char *>(prefix.data()), prefix.size() },
+        { msg.data(), msg.size() + 1 }  // including the null terminator
+    };
+    int fd = log_for_thread(thread_num).log_fd;
+    IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+}
+
 #undef log_platform_message
 void log_platform_message(const char *fmt, ...)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
 
-    assert_log_message(fmt);
-    if (!SandstoneConfig::Debug && *fmt == 'd')
-        return;         /* no Debug in non-debug build */
+    // a platform message always goes to the main thread, with a prefix
     va_list va;
     va_start(va, fmt);
-    std::string msg = create_filtered_message_string(fmt, va);
+    log_message_common(-1, fmt, va, "Platform issue: ");
     va_end(va);
-
-    // Insert prefix and log to main thread
-    msg.insert(3, "Platform issue: ");
-    log_message_preformatted(-1, msg);
 }
 
 #undef log_message
@@ -1225,14 +1228,10 @@ void log_message(int thread_num, const char *fmt, ...)
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
 
-    assert_log_message(fmt);
-    if (!SandstoneConfig::Debug && *fmt == 'd')
-        return;         /* no Debug in non-debug build */
     va_list va;
     va_start(va, fmt);
-    std::string msg = create_filtered_message_string(fmt, va);
+    log_message_common(thread_num, fmt, va);
     va_end(va);
-    log_message_preformatted(thread_num, msg);
 }
 
 /// Escapes \c{message} suitable for a single-quote YAML line and returns it.
