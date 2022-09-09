@@ -595,6 +595,14 @@ static void generate_backtrace(const char *pidstr, uintptr_t handle = 0, int cpu
         dup2(gdb_out.out(), STDERR_FILENO);
         dup2(gdb_out.out(), STDOUT_FILENO);
         dup2(gdb_in.in(), STDIN_FILENO);
+
+        // unset DEBUGINFO_URLS, if it is set
+        for (char **ptr = environ; *ptr; ++ptr) {
+            static char debuginfo_urls[] = "DEBUGINFO_URLS=";
+            if (strncmp(*ptr, debuginfo_urls, strlen(debuginfo_urls)) == 0)
+                (*ptr)[strlen(debuginfo_urls)] = '\0';
+        }
+
         execlp("gdb", "gdb", "-nw", "-n", "-q", "-p", pidstr, nullptr);
         _exit(EX_UNAVAILABLE);
     }
