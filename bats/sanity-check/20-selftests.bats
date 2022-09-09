@@ -428,6 +428,60 @@ test_list_file() {
     test_list_file '# a file list' '' selftest_pass '' '# the end!'
 }
 
+test_list_randomize() {
+    declare -A yamldump
+    local -a list=(
+        # These tests should run instantly
+        selftest_pass
+        selftest_logs
+        selftest_logdata
+        selftest_log_platform
+        selftest_logs_options
+        selftest_skip
+    )
+    list+=(${list[@]})          # 2x
+    list+=(${list[@]})          # 4x
+
+    local testmode=$1
+    shift
+    if [[ "$testmode" = "--test-list-file" ]]; then
+        local testlistfile=`mktempfile list.XXXXXX`
+        echo "=== test list ==="
+        printf '%s\n' ${list[@]} | tee "$testlistfile"
+        echo "=== ==="
+
+        sandstone_selftest --test-list-file "$testlistfile" "$@"
+        rm -f -- "$testlistfile"
+    elif [[ "$testmode" = "-e" ]]; then
+        local cmdline=`printf -- '-e %s ' ${list[@]}`
+        sandstone_selftest $cmdline "$@"
+    else
+        echo >&2 "Don't know what to do with argument: $testmode"
+        false
+    fi
+
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # confirm all tests ran
+    test_yaml_numeric "/tests@len" ${#list[@]}
+
+    # collect test names that ran
+    local -a executedlist=()
+    for ((i = 0; i < yamldump[/tests@len]; ++i)); do
+        executedlist+=${yamldump[/tests/$i/test]}
+    done
+
+    # confirm we didn't run in the original order
+    # (in theory, randomness could produce that, but it's unlikely)
+    echo "Executed list: ${executedlist[*]}"
+    [[ "${list[*]}" != "${executedlist[*]}" ]]
+}
+
+@test "--test-list-file --test-list-randomize" {
+    test_list_randomize --test-list-file
+}
+
 @test "--test-list-file with unknown test name" {
     # This doesn't produce valid YAML output, so run directly
     local name=`mktemp -u selftest_XXXXXX`
@@ -440,6 +494,10 @@ test_list_file() {
     echo "$output"
     [[ $status -eq 64 ]]        # exit(EX_USAGE)
     grep -qwF "$name" <<<"$output"
+}
+
+@test "--test-list-randomize" {
+    test_list_randomize -e
 }
 
 # -- negative tests --
