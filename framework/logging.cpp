@@ -1189,7 +1189,6 @@ void logging_finish()
 FILE *logging_stream_open(int thread_num, int level)
 {
     FILE *log = log_for_thread(thread_num).log;
-    fflush(log);
     fputc(message_code(UserMessages, level), log);
     return log;
 }
