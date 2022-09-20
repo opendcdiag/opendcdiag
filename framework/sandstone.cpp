@@ -233,7 +233,7 @@ static void find_thyself(char *argv0)
     std::string &path = sApp->path_to_self;
     path.resize(PATH_MAX);
     DWORD copied = GetModuleFileNameA(nullptr, &path[0], path.size());
-    if (copied == 0 || copied == sizeof(path)) {
+    if (copied == 0 || copied == path.size()) {
         perror("GetModuleFileNameA");
         exit(EX_OSERR);
     }
