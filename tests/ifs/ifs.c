@@ -9,7 +9,7 @@
  *
  * Requires `ifs.ko` to be loaded in the Linux kernel, as well as
  * firmware test blob data in `/lib/firmware/...`. Supported since
- * 5.17.0.
+ * 6.2
  *
  */
 
@@ -28,6 +28,7 @@
 #include <unistd.h>
 
 #define PATH_SYS_IFS_BASE "/sys/devices/virtual/misc/"
+#define DEFAULT_TEST_ID 1
 
 #define BUFLEN 256 // kernel module prints at most a 64bit value
 
@@ -39,6 +40,11 @@
  */
 #define IFS_SW_TIMEOUT                          0xFD
 #define IFS_SW_PARTIAL_COMPLETION               0xFE
+
+typedef struct {
+    char image_id[BUFLEN];
+    char image_version[BUFLEN];
+} ifs_test_t;
 
 static bool is_result_code_skip(unsigned long long code)
 {
@@ -65,12 +71,8 @@ static bool write_file(int dfd, const char *filename, const char* value)
         return true;
 }
 
-static ssize_t read_file(int dfd, const char *filename, char buf[static restrict BUFLEN])
+static ssize_t read_file_fd(int fd, char buf[static restrict BUFLEN])
 {
-        int fd = openat(dfd, filename, O_RDONLY | O_CLOEXEC);
-        if (fd < 0)
-            return fd;
-
         ssize_t n = read(fd, buf, BUFLEN);
         close(fd);
 
@@ -82,8 +84,84 @@ static ssize_t read_file(int dfd, const char *filename, char buf[static restrict
         return n;
 }
 
+static ssize_t read_file(int dfd, const char *filename, char buf[static restrict BUFLEN])
+{
+        int fd = openat(dfd, filename, O_RDONLY | O_CLOEXEC);
+        if (fd < 0)
+            return fd;
+
+        return read_file_fd(fd, buf);
+}
+
+static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info)
+{
+    char current_buf[BUFLEN], status_buf[BUFLEN];
+    int next_test, current_test, enforce_run;
+
+    /* read both files status and current_batch */
+    read_file(dfd, "status", status_buf);
+    read_file_fd(batch_fd, current_buf);
+
+    /* when previous run has a status of fail, skip test */
+    enforce_run = get_testspecific_knob_value_uint(test, "enforce_run", -1);
+    if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
+    {
+        log_warning("Previous run failure found! Refusing to run");
+        return false;
+    }
+
+    /* get interactive test file if provided by user */
+    next_test = get_testspecific_knob_value_uint(test, "test_file", -1);
+    if (next_test == -1)
+    {
+        if (memcmp(current_buf, "none", strlen("none")) == 0)
+            next_test = DEFAULT_TEST_ID;
+        else
+        {
+            current_test = (int) strtoul(current_buf, NULL, 0);
+            if (current_test < 0 && errno == ERANGE)
+            {
+                log_info("Cannot parse current_batch value: %s", current_buf);
+                return false;
+            }
+
+            if (memcmp(status_buf, "untested", strlen("untested")) == 0)
+            {
+                log_info("Test file %s remains untested, so try again", current_buf);
+                next_test = current_test;
+            }
+            else
+                next_test = current_test + 1;
+        }
+    }
+
+    /* write next test file ID */
+    sprintf(ifs_info->image_id, "%#x", next_test);
+    if (write_file(dfd, "current_batch", ifs_info->image_id))
+    {
+        return true;
+    }
+    else if (errno == ENOENT)
+    {
+        /* when next blob does not exists, it will fail with
+         * ENOENT error. Then, start from the begining */
+        log_info("Test file %s, does not exists. Starting over from 0x%x", ifs_info->image_id, DEFAULT_TEST_ID);
+        sprintf(ifs_info->image_id, "%#x", DEFAULT_TEST_ID);
+        if (write_file(dfd, "current_batch", ifs_info->image_id))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static int scan_init(struct test *test)
 {
+        /* allocate info struct */
+        ifs_test_t *ifs_info = malloc(sizeof(ifs_test_t));
+
+        /* see if driver is loaded, otherwise try to load it */
         int ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
         if (ifs0 < 0) {
                 /* modprobe kernel driver, ignore errors entirely here */
@@ -110,25 +188,36 @@ static int scan_init(struct test *test)
                 ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
         }
 
-
-        if (ifs0 < 0 || faccessat(ifs0, "run_test", R_OK, 0) < 0 ||
-                faccessat(ifs0, "status", R_OK, 0) < 0 || faccessat(ifs0, "details", R_OK, 0) < 0) {
-                log_info("not supported (missing kernel module, firmware, or invalid HW)");
-                close(ifs0);
-                return -EOPNOTSUPP;
-        }
-
-        /* see if we can open run_test for writing */
-        int fd = openat(ifs0, "run_test", O_WRONLY);
+        /* see if we can open run_test and current_batch for writing */
+        int run_fd = openat(ifs0, "run_test", O_WRONLY);
         int saved_errno = errno;
-        close(fd);
-        close(ifs0);
-        if (fd < 0) {
+        if (run_fd < 0) {
                 log_info("could not open intel_ifs_0/run_test for writing (not running as root?): %m");
-                close(fd);
+                close(run_fd);
                 return -saved_errno;
         }
 
+        int batch_fd = openat(ifs0, "current_batch", O_RDWR);
+        saved_errno = errno;
+        if (batch_fd < 0) {
+                log_info("could not open intel_ifs_0/current_batch for writing (not running as root?): %m");
+                close(batch_fd);
+                return -saved_errno;
+        }
+        close(run_fd);
+
+        /* load test file */
+        if (!load_test_file(ifs0, batch_fd, test, ifs_info))
+            return EXIT_SKIP;
+
+        /* read image version if available and log it */
+        if (read_file(ifs0, "image_version", ifs_info->image_version) <= 0) {
+                strncpy(ifs_info->image_version, "unknown", BUFLEN);
+        }
+        log_info("Test image ID: %s version: %s", ifs_info->image_id, ifs_info->image_version);
+
+        test->data = ifs_info;
+        close(ifs0);
         return EXIT_SUCCESS;
 }
 
@@ -138,6 +227,7 @@ static int scan_run(struct test *test, int cpu)
         DIR *base;
         int basefd;
         bool any_test_succeded = false;
+        ifs_test_t *ifs_info = test->data;
 
         if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
@@ -185,14 +275,13 @@ static int scan_run(struct test *test, int cpu)
                         close(ifsfd);
 
                         if (n < 0) {
-                                log_error("Test \"%s\" failed but could not retrieve error condition", d_name);
+                                log_error("Test \"%s\" failed but could not retrieve error condition. Image ID: %s  version: %s", d_name, ifs_info->image_id, ifs_info->image_version);
                         } else {
                                 if (sscanf(result, "%llx", &code) == 1 && is_result_code_skip(code)) {
-                                        log_warning("Test \"%s\" did not run to completion, code: %s",
-                                                    d_name, result);
+                                        log_warning("Test \"%s\" did not run to completion, code: %s image ID: %s version: %s", d_name, result, ifs_info->image_id, ifs_info->image_version);
                                         continue;       // not a failure condition
                                 }
-                                log_error("Test \"%s\" failed with condition: %s", d_name, result);
+                                log_error("Test \"%s\" failed with condition: %s image: %s version: %s", d_name, result, ifs_info->image_id, ifs_info->image_version);
                         }
                         break;
                 } else if (memcmp(result, "pass", strlen("pass")) == 0) {
@@ -213,7 +302,6 @@ DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
     .test_run = scan_run,
     .desired_duration = -1,
     .fracture_loop_count = -1,
-    .max_threads = 1,
 END_DECLARE_TEST
 
 #endif // __x86_64__ && __linux__
