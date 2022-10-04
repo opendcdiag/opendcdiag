@@ -2317,20 +2317,32 @@ static void apply_group_inits(/*nonconst*/ struct test *test)
     // the test to fail or skip during test_init().
 
     span<const struct test_group> groups = { &__start_test_group, &__stop_test_group };
-    static auto group_init_replacements = [=]() {
-        std::vector<initfunc> replacements(groups.size());
+    static auto replacements = [=]() {
+        struct Result {
+            decltype(test_group::group_init) group_init;
+            decltype(test_group::group_init()) replacement;
+        };
+
+        std::vector<Result> replacements(groups.size());
         size_t i = 0;
         for ( ; i < replacements.size(); ++i) {
-            if (groups[i].group_init)
-                replacements[i] = groups[i].group_init(); // call the group_init function
+            replacements[i].group_init = groups[i].group_init;
+            replacements[i].replacement = nullptr;
         }
         return replacements;
     }();
 
     for (auto ptr = test->groups; *ptr; ++ptr) {
         for (size_t i = 0; i < groups.size(); ++i) {
-            if (*ptr == &groups.begin()[i] && group_init_replacements[i]) {
-                test->test_init = group_init_replacements[i];
+            if (*ptr != &groups.begin()[i])
+                continue;
+            if (replacements[i].group_init && !replacements[i].replacement) {
+                // call the group_init function, only once
+                replacements[i].replacement = replacements[i].group_init();
+                replacements[i].group_init = nullptr;
+            }
+            if (replacements[i].replacement) {
+                test->test_init = replacements[i].replacement;
                 return;
             }
         }
