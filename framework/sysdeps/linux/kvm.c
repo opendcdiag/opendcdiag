@@ -514,7 +514,7 @@ int kvm_generic_run(struct test *test, int cpu)
         }
 
         stop = 0;
-            if (kvm_generic_reset_vcpu(&ctx, &init_regs) != EXIT_SUCCESS) {
+        if (kvm_generic_reset_vcpu(&ctx, &init_regs) != EXIT_SUCCESS) {
             result = EXIT_FAILURE;
             goto epilogue;
         }
