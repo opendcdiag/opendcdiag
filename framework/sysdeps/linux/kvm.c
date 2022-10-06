@@ -477,7 +477,7 @@ int kvm_generic_run(struct test *test, int cpu)
     int count = 0;
     do {
         /* Every 16 loops reset the A bit for the memory */
-        if (count % 16 == 0) {
+        if (count && (count % 16 == 0)) {
                 madvise(ctx.ram, ctx.ram_sz, MADV_COLD);
         }
         /* Recycle VM every 128-th time. There's an issue with KVM running and
