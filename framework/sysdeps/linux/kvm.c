@@ -381,7 +381,9 @@ static int kvm_generic_setup_vcpu(kvm_ctx_t *ctx)
             if (kvm_real16_setup_ram(ctx)) {
                 return EXIT_FAILURE;
             }
-            kvm_real16_setup_sregs(&sregs, ctx);
+            ret = kvm_real16_setup_sregs(&sregs, ctx);
+            if (ret < 0)
+                return EXIT_FAILURE;
             return EXIT_SUCCESS;
         case KVM_ADDR_MODE_PROTECTED_64BIT:
             ctx->ram_sz = kvm_prot64_check_ram_size(ctx->config->ram_size);
