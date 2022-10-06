@@ -145,6 +145,7 @@ static int kvm_generic_add_vcpu(kvm_ctx_t *ctx)
 
     ctx->runs = mmap(NULL, ctx->run_sz, PROT_READ | PROT_WRITE, MAP_SHARED, cpu_fd, 0);
     if (ctx->runs == MAP_FAILED) {
+        ctx->runs = NULL;
         close(cpu_fd);
         return -errno;
     }
@@ -161,6 +162,7 @@ static int kvm_real16_setup_ram(kvm_ctx_t *ctx)
 
     ctx->ram = mmap(NULL, ctx->ram_sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if (ctx->ram == MAP_FAILED) {
+        ctx->ram = NULL;
         return -errno;
     }
 
@@ -486,6 +488,10 @@ int kvm_generic_run(struct test *test, int cpu)
                 close(ctx.cpu_fd);
                 munmap(ctx.runs, ctx.run_sz);
                 munmap(ctx.ram, ctx.ram_sz);
+                ctx.vm_fd = -1;
+                ctx.cpu_fd = -1;
+                ctx.runs = NULL;
+                ctx.ram = NULL;
             }
 
             ctx.vm_fd = kvm_generic_create_vm(kvm_fd);
