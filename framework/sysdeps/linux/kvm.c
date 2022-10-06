@@ -133,18 +133,19 @@ static int kvm_generic_add_vcpu(kvm_ctx_t *ctx)
 {
     int cpu_fd = -1;
 
-    cpu_fd = ioctl(ctx->vm_fd, KVM_CREATE_VCPU, 0);
-    if (cpu_fd == -1) {
-        return -errno;
-    }
-
     ctx->run_sz = ioctl(kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (ctx->run_sz == -1) {
         return -errno;
     }
 
+    cpu_fd = ioctl(ctx->vm_fd, KVM_CREATE_VCPU, 0);
+    if (cpu_fd == -1) {
+        return -errno;
+    }
+
     ctx->runs = mmap(NULL, ctx->run_sz, PROT_READ | PROT_WRITE, MAP_SHARED, cpu_fd, 0);
     if (ctx->runs == MAP_FAILED) {
+        close(cpu_fd);
         return -errno;
     }
 
