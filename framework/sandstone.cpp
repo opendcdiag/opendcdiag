@@ -737,9 +737,12 @@ static bool max_loop_count_exceeded(const struct test *the_test)
     return false;
 }
 
+extern "C" void test_loop_iterate() noexcept;    // see below
+
 /* returns 1 if the test should keep running, useful for a while () loop */
 int test_time_condition(const struct test *the_test) noexcept
 {
+    test_loop_iterate();
     sApp->test_tests_iteration(the_test);
     cpu_data()->inner_loop_count++;
 
@@ -851,6 +854,23 @@ static void cleanup_internal(const struct test *test)
     }
 }
 
+template <uint64_t X, uint64_t Y, typename P = int>
+static void inline __attribute__((always_inline)) assembly_marker(P param = 0)
+{
+#ifdef __x86_64__
+    __asm__("cmpxchg %%eax, %%eax"      // just an expensive no-op
+            : : "D" (param), "a" (X), "d" (Y)
+            : "cc");
+#endif
+}
+
+namespace AssemblyMarker {
+static constexpr uint64_t TestLoop = 0x504f4f4c54534554;    // "TESTLOOP"
+static constexpr uint32_t Start = 0x54525453;               // "STRT"
+static constexpr uint64_t Iterate = 0x0045544152455449;     // "ITERATE\0"
+static constexpr uint32_t End = 0x00444e45;                 // "END\0";
+}
+
 extern "C" {
 // The test_start() and test_stop() functions are no-op, but exist to
 // facilitate catching test starts and stops from external tools like the Intel
@@ -884,6 +904,42 @@ int test_run_wrapper_function(const struct test *test, int thread_number)
 {
     return test->test_run(const_cast<struct test *>(test), thread_number);
 }
+
+#ifndef _WIN32
+#  pragma GCC visibility push(hidden)
+#endif
+
+// Ditto for TEST_LOOP:
+//     -start_address test_loop_start -stop_address test_loop_end
+// OR: -start_address test_loop_start -stop_address test_loop_iterate
+//
+// Notes:
+// - if the test fails, the functions following a report_fail() or
+//   memcpy_or_fail() will not run
+// - The test will run N loops of the content (see TEST_LOOP docs)
+//   between calls of these functions
+
+void test_loop_start() noexcept
+{
+    using namespace AssemblyMarker;
+    assembly_marker<TestLoop, Start>();
+}
+
+void test_loop_iterate() noexcept
+{
+    using namespace AssemblyMarker;
+    assembly_marker<TestLoop, Iterate>();
+}
+
+void test_loop_end() noexcept
+{
+    using namespace AssemblyMarker;
+    assembly_marker<TestLoop, End>(cpu_data()->inner_loop_count);
+}
+
+#ifndef _WIN32
+#  pragma GCC visibility pop
+#endif
 } // extern "C"
 
 static void *thread_runner(void *arg)

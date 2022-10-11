@@ -104,15 +104,6 @@ extern "C" {
         auto __return_value__  = call;          \
         (void)__return_value__;                 \
     })
-/// to be used in the test_run function of a test.  TEST_LOOP executes its body continuously until it is
-/// asked to terminate by the OpenDCDiag framework. The second parameter, N, specifies the
-/// granularity of the loop.  On each iteration of the loop, the body is executed N times.  The
-/// framework then checks to see if the test's time slot has elapsed.  If it has, the loop terminates.
-/// If it has not, the body is executed another N times before another check is made.
-/// By convention, the second parameter to TEST_LOOP is always a power of two.
-#define TEST_LOOP(test, N)                      \
-    static_assert(N > 0, "N must be positive"); \
-    for (int _loop_i_ = 0; _loop_i_ < N || (_loop_i_ = 0, test_time_condition(test)); ++_loop_i_)
 
 #else
 #define IGNORE_RETVAL(call)                     \
@@ -120,10 +111,19 @@ extern "C" {
         __auto_type __return_value__  = call;   \
         (void)__return_value__;                 \
     })
-#define TEST_LOOP(test, N)                      \
-    _Static_assert(N > 0, "N must be positive");\
-    for (int _loop_i_ = 0; _loop_i_ < N || (_loop_i_ = 0, test_time_condition(test)); ++_loop_i_)
 #endif
+
+/// to be used in the test_run function of a test.  TEST_LOOP executes its body continuously until it is
+/// asked to terminate by the OpenDCDiag framework. The second parameter, N, specifies the
+/// granularity of the loop.  On each iteration of the loop, the body is executed N times.  The
+/// framework then checks to see if the test's time slot has elapsed.  If it has, the loop terminates.
+/// If it has not, the body is executed another N times before another check is made.
+/// By convention, the second parameter to TEST_LOOP is always a power of two.
+#define TEST_LOOP(test, N)                          \
+    static_assert(N > 0, "N must be positive");     \
+    test_loop_start();                              \
+    for (int _loop_i_ = 0; _loop_i_ == 0; test_loop_end(), _loop_i_ = 1)          \
+        for ( ; _loop_i_ < N || (_loop_i_ = 0, test_time_condition(test)); ++_loop_i_)
 
 /// used in a test's quality_level field to signify that a test is a production test.
 #define TEST_QUALITY_PROD        100
@@ -450,6 +450,11 @@ extern void _memcmp_fail_report(const void *actual, const void *expected, size_t
 extern void _report_fail(const struct test *test, const char *file, int line) __attribute__((noreturn));
 extern void _report_fail_msg(const char *file, int line, const char *msg, ...)
     ATTRIBUTE_PRINTF(3, 4) __attribute__((noreturn));
+
+/// @internal function called by TEST_LOOP
+extern void test_loop_start(void) noexcept;
+/// @internal function called by TEST_LOOP
+extern void test_loop_end(void) noexcept;
 
 /// may be called inside a test's test_run function.  It returns a
 /// non-zero value if time remains in the test's time slot and the
