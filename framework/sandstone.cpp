@@ -738,7 +738,7 @@ static bool max_loop_count_exceeded(const struct test *the_test)
 }
 
 /* returns 1 if the test should keep running, useful for a while () loop */
-int test_time_condition(const struct test *the_test)
+int test_time_condition(const struct test *the_test) noexcept
 {
     sApp->test_tests_iteration(the_test);
     cpu_data()->inner_loop_count++;
