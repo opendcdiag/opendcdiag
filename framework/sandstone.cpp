@@ -865,6 +865,7 @@ static void inline __attribute__((always_inline)) assembly_marker(P param = 0)
 }
 
 namespace AssemblyMarker {
+static constexpr uint64_t Test = 0x4e49414d54534554;        // "TESTMAIN"
 static constexpr uint64_t TestLoop = 0x504f4f4c54534554;    // "TESTLOOP"
 static constexpr uint32_t Start = 0x54525453;               // "STRT"
 static constexpr uint64_t Iterate = 0x0045544152455449;     // "ITERATE\0"
@@ -877,24 +878,16 @@ extern "C" {
 // SDE (-start_address test_start -stop_address test_end) and Valgrind
 // (--toggle-collect=thread_runner).
 
-static void __attribute__((noinline)) test_start()
+static void __attribute__((noinline, noclone)) test_start()
 {
-#ifdef __x86_64__
-    __asm__("xchg   %%rbx, %%rbx\n"
-            "xchg   %%rcx, %%rcx\n"
-            "xchg   %%rdx, %%rdx"
-            : : "D" (thread_running));
-#endif
+    using namespace AssemblyMarker;
+    assembly_marker<Test, Start>();
 }
 
-static void __attribute__((noinline)) test_end(ThreadState state)
+static void __attribute__((noinline, noclone, sysv_abi)) test_end(ThreadState state)
 {
-#ifdef __x86_64__
-    __asm__("xchg   %%rdx, %%rdx\n"
-            "xchg   %%rcx, %%rcx\n"
-            "xchg   %%rbx, %%rbx\n"
-            : : "D" (state));
-#endif
+    using namespace AssemblyMarker;
+    assembly_marker<Test, End>(state);
 }
 
 // This wrapper function is needed by emulation to be able to identify
