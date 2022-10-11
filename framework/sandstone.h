@@ -36,6 +36,7 @@ extern "C" {
 #include <stdatomic.h>
 #include <stdbool.h>
 #define thread_local _Thread_local
+#define noexcept __attribute__((__nothrow__))
 #endif
 
 #define SANDSTONE_STRINGIFY(name)       SANDSTONE_STRINGIFY2(name)
@@ -457,7 +458,7 @@ extern void _report_fail_msg(const char *file, int line, const char *msg, ...)
 /// may be called inside a test's test_run function.  It returns a
 /// non-zero value if time remains in the test's time slot and the
 /// test should continue to execute.
-extern int test_time_condition(const struct test *test);
+extern int test_time_condition(const struct test *test) noexcept;
 
 /// outputs msg to the logs, prefixing it with the string "Platform issue:"
 /// This function is usually used to log a warning when an error is detected
