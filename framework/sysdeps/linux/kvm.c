@@ -133,18 +133,20 @@ static int kvm_generic_add_vcpu(kvm_ctx_t *ctx)
 {
     int cpu_fd = -1;
 
-    cpu_fd = ioctl(ctx->vm_fd, KVM_CREATE_VCPU, 0);
-    if (cpu_fd == -1) {
-        return -errno;
-    }
-
     ctx->run_sz = ioctl(kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (ctx->run_sz == -1) {
         return -errno;
     }
 
+    cpu_fd = ioctl(ctx->vm_fd, KVM_CREATE_VCPU, 0);
+    if (cpu_fd == -1) {
+        return -errno;
+    }
+
     ctx->runs = mmap(NULL, ctx->run_sz, PROT_READ | PROT_WRITE, MAP_SHARED, cpu_fd, 0);
     if (ctx->runs == MAP_FAILED) {
+        ctx->runs = NULL;
+        close(cpu_fd);
         return -errno;
     }
 
@@ -160,6 +162,7 @@ static int kvm_real16_setup_ram(kvm_ctx_t *ctx)
 
     ctx->ram = mmap(NULL, ctx->ram_sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if (ctx->ram == MAP_FAILED) {
+        ctx->ram = NULL;
         return -errno;
     }
 
@@ -378,7 +381,9 @@ static int kvm_generic_setup_vcpu(kvm_ctx_t *ctx)
             if (kvm_real16_setup_ram(ctx)) {
                 return EXIT_FAILURE;
             }
-            kvm_real16_setup_sregs(&sregs, ctx);
+            ret = kvm_real16_setup_sregs(&sregs, ctx);
+            if (ret < 0)
+                return EXIT_FAILURE;
             return EXIT_SUCCESS;
         case KVM_ADDR_MODE_PROTECTED_64BIT:
             ctx->ram_sz = kvm_prot64_check_ram_size(ctx->config->ram_size);
@@ -474,7 +479,7 @@ int kvm_generic_run(struct test *test, int cpu)
     int count = 0;
     do {
         /* Every 16 loops reset the A bit for the memory */
-        if (count % 16 == 0) {
+        if (count && (count % 16 == 0)) {
                 madvise(ctx.ram, ctx.ram_sz, MADV_COLD);
         }
         /* Recycle VM every 128-th time. There's an issue with KVM running and
@@ -485,6 +490,10 @@ int kvm_generic_run(struct test *test, int cpu)
                 close(ctx.cpu_fd);
                 munmap(ctx.runs, ctx.run_sz);
                 munmap(ctx.ram, ctx.ram_sz);
+                ctx.vm_fd = -1;
+                ctx.cpu_fd = -1;
+                ctx.runs = NULL;
+                ctx.ram = NULL;
             }
 
             ctx.vm_fd = kvm_generic_create_vm(kvm_fd);
@@ -513,7 +522,7 @@ int kvm_generic_run(struct test *test, int cpu)
         }
 
         stop = 0;
-            if (kvm_generic_reset_vcpu(&ctx, &init_regs) != EXIT_SUCCESS) {
+        if (kvm_generic_reset_vcpu(&ctx, &init_regs) != EXIT_SUCCESS) {
             result = EXIT_FAILURE;
             goto epilogue;
         }
