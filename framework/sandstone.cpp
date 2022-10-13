@@ -3599,8 +3599,8 @@ int main(int argc, char **argv)
             tc = 0;
             logging_print_iteration_start();
             initialize_smi_counts();  // used by smi_count test
-        } else if (lastTestResult != TestSkipped) {
-            if (sApp->service_background_scan)
+        } else {
+            if (sApp->service_background_scan && lastTestResult != TestSkipped)
                 background_scan_wait();
             else
                 wait_delay_between_tests();
