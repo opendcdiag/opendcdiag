@@ -42,28 +42,28 @@ protected:
     std::vector<struct test *> two_tests;
     std::vector<struct test *> four_tests;
 
-    struct weighted_run_info empty_weights[1] = { {NULL} };
+    struct weighted_run_info empty_weights[1] = { {nullptr} };
 
     struct weighted_run_info one_weight[2] = {
-            {&the_tests[0],   .weight=1,  .duration_ms = 100},
-            {NULL}
+            {.test=&the_tests[0],   .weight=1,  .duration_ms = 100},
+            {nullptr}
     };
     struct weighted_run_info two_weights[3] = {
-            {&the_tests[0],   .weight=1,  .duration_ms = 100},
-            {&the_tests[1],   .weight=1,  .duration_ms = 100},
-            {NULL}
+            {.test=&the_tests[0],   .weight=1,  .duration_ms = 100},
+            {.test=&the_tests[1],   .weight=1,  .duration_ms = 100},
+            {nullptr}
     };
 
     struct weighted_run_info four_weights[5] = {
-            {&the_tests[0],   .weight=1,  .duration_ms = 100},
-            {&the_tests[1],   .weight=1,  .duration_ms = 100},
-            {&the_tests[2],   .weight=1,  .duration_ms = 100},
-            {&the_tests[3],   .weight=1,  .duration_ms = 100},
-            {NULL}
+            {.test=&the_tests[0],   .weight=1,  .duration_ms = 100},
+            {.test=&the_tests[1],   .weight=1,  .duration_ms = 100},
+            {.test=&the_tests[2],   .weight=1,  .duration_ms = 100},
+            {.test=&the_tests[3],   .weight=1,  .duration_ms = 100},
+            {nullptr}
     };
 
     void SetUp() override {
-        srand(time(NULL));
+        srand(time(nullptr));
 
         for (int i=0; i<4; i++){
             if (i<1) one_test.push_back(&the_tests[i]);
@@ -284,10 +284,10 @@ TEST_F(WeightedTestSelectorFixture, test_GivenATestIsNotInRuninfoList_WhenWeAddA
     struct test test_2 = {.id="priority_2", .description="test0_name", .desired_duration=500, .quality_level=TEST_QUALITY_PROD};
     struct test test_3 = {.id="lower", .description="test0_name", .desired_duration=500, .quality_level=TEST_QUALITY_PROD};
     struct weighted_run_info ppv_runinfo[] = {
-            {&test_1, .weight=SCREEN_PRIORITY_TEST_WEIGHT_THRESHOLD, .duration_ms = 100},
-            {&test_2, .weight=SCREEN_PRIORITY_TEST_WEIGHT_THRESHOLD, .duration_ms = 100},
-            {&test_3, .weight=SCREEN_PRIORITY_TEST_WEIGHT_THRESHOLD - 1, .duration_ms = 100},
-            {NULL}
+            {.test=&test_1, .weight=SCREEN_PRIORITY_TEST_WEIGHT_THRESHOLD, .duration_ms = 100},
+            {.test=&test_2, .weight=SCREEN_PRIORITY_TEST_WEIGHT_THRESHOLD, .duration_ms = 100},
+            {.test=&test_3, .weight=SCREEN_PRIORITY_TEST_WEIGHT_THRESHOLD - 1, .duration_ms = 100},
+            {nullptr}
     };
 
     std::vector<struct test *> tests;
