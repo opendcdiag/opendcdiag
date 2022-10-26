@@ -8,6 +8,7 @@
 
 #include <sandstone.h>
 #include <openssl/aes.h>
+#include <openssl/bio.h>
 #include <openssl/blowfish.h>
 #include <openssl/cmac.h>
 #include <openssl/crypto.h>
@@ -16,6 +17,7 @@
 #include <openssl/md5.h>
 //#include <openssl/mdc2.h>
 //#include <openssl/ripemd.h>
+#include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
 //#include <openssl/whrlpool.h>
@@ -36,6 +38,218 @@
     F(AES_set_encrypt_key)                      \
     F(AES_unwrap_key)                           \
     F(AES_wrap_key)                             \
+    /**/
+
+#define SANDSTONE_SSL_BIO_FUNCTIONS(F)          \
+    F(BIO_accept_ex)                            \
+    F(BIO_ADDR_clear)                           \
+    F(BIO_ADDR_family)                          \
+    F(BIO_ADDR_free)                            \
+    F(BIO_ADDR_hostname_string)                 \
+    /*F(BIO_ADDR)*/                                 \
+    F(BIO_ADDRINFO_address)                     \
+    F(BIO_ADDRINFO_family)                      \
+    F(BIO_ADDRINFO_free)                        \
+    /*F(BIO_ADDRINFO)*/                             \
+    F(BIO_ADDRINFO_next)                        \
+    F(BIO_ADDRINFO_protocol)                    \
+    F(BIO_ADDRINFO_socktype)                    \
+    F(BIO_ADDR_new)                             \
+    F(BIO_ADDR_path_string)                     \
+    F(BIO_ADDR_rawaddress)                      \
+    F(BIO_ADDR_rawmake)                         \
+    F(BIO_ADDR_rawport)                         \
+    F(BIO_ADDR_service_string)                  \
+    /*F(BIO_append_filename)*/                      \
+    F(BIO_bind)                                 \
+    F(BIO_callback_ctrl)                        \
+    /*F(BIO_callback_fn_ex)                       \
+    F(BIO_callback_fn)*/                          \
+    F(BIO_closesocket)                          \
+    F(BIO_connect)                              \
+    F(BIO_ctrl_get_read_request)                \
+    F(BIO_ctrl_get_write_guarantee)             \
+    F(BIO_ctrl)                                 \
+    F(BIO_ctrl_pending)                         \
+    F(BIO_ctrl_reset_read_request)              \
+    F(BIO_ctrl_wpending)                        \
+    F(BIO_debug_callback)                       \
+    /*F(BIO_destroy_bio_pair)                     \
+    F(BIO_do_accept)                            \
+    F(BIO_do_connect)                           \
+    F(BIO_do_handshake)                         \
+    F(BIO_eof)*/                                  \
+    F(BIO_f_base64)                             \
+    F(BIO_f_buffer)                             \
+    F(BIO_f_cipher)                             \
+    F(BIO_find_type)                            \
+    /*F(BIO_flush)*/                                \
+    F(BIO_f_md)                                 \
+    F(BIO_f_null)                               \
+    F(BIO_free_all)                             \
+    F(BIO_free)                                 \
+    /*F(BIO_f_ssl)                                \
+    F(BIO_get_accept_ip_family)                 \
+    F(BIO_get_accept_name)                      \
+    F(BIO_get_accept_port)                      \
+    F(BIO_get_bind_mode)                        \
+    F(BIO_get_buffer_num_lines)*/                 \
+    F(BIO_get_callback_arg)                     \
+    F(BIO_get_callback_ex)                      \
+    F(BIO_get_callback)                         \
+    /*F(BIO_get_cipher_ctx)                       \
+    F(BIO_get_cipher_status)                    \
+    F(BIO_get_close)                            \
+    F(BIO_get_conn_address)                     \
+    F(BIO_get_conn_hostname)                    \
+    F(BIO_get_conn_ip_family)                   \
+    F(BIO_get_conn_port)*/                        \
+    F(BIO_get_data)                             \
+    F(BIO_get_ex_data)                          \
+    /*F(BIO_get_ex_new_index)                     \
+    F(BIO_get_fd)                               \
+    F(BIO_get_fp)                               \
+    F(BIO_get_info_callback)*/                    \
+    F(BIO_get_init)                             \
+    /*F(BIO_get_md_ctx)                           \
+    F(BIO_get_md)                               \
+    F(BIO_get_mem_data)                         \
+    F(BIO_get_mem_ptr)*/                          \
+    F(BIO_get_new_index)                        \
+    /*F(BIO_get_num_renegotiates)                 \
+    F(BIO_get_peer_name)                        \
+    F(BIO_get_peer_port)                        \
+    F(BIO_get_read_request)*/                     \
+    F(BIO_get_retry_BIO)                        \
+    F(BIO_get_retry_reason)                     \
+    F(BIO_gets)                                 \
+    F(BIO_get_shutdown)                         \
+    /*F(BIO_get_ssl)                              \
+    F(BIO_get_write_buf_size)                   \
+    F(BIO_get_write_guarantee)                  \
+    F(BIO_hostserv_priorities)                  \
+    F(BIO_info_cb)*/                              \
+    F(BIO_int_ctrl)                             \
+    F(BIO_listen)                               \
+    F(BIO_lookup_ex)                            \
+    F(BIO_lookup)                               \
+    /*F(BIO_lookup_type)                          \
+    F(BIO_make_bio_pair)*/                        \
+    F(BIO_meth_free)                            \
+    F(BIO_meth_get_callback_ctrl)               \
+    F(BIO_meth_get_create)                      \
+    F(BIO_meth_get_ctrl)                        \
+    F(BIO_meth_get_destroy)                     \
+    F(BIO_meth_get_gets)                        \
+    F(BIO_meth_get_puts)                        \
+    F(BIO_meth_get_read_ex)                     \
+    F(BIO_meth_get_read)                        \
+    F(BIO_meth_get_write_ex)                    \
+    F(BIO_meth_get_write)                       \
+    F(BIO_meth_new)                             \
+    F(BIO_method_type)                          \
+    F(BIO_meth_set_callback_ctrl)               \
+    F(BIO_meth_set_create)                      \
+    F(BIO_meth_set_ctrl)                        \
+    F(BIO_meth_set_destroy)                     \
+    F(BIO_meth_set_gets)                        \
+    F(BIO_meth_set_puts)                        \
+    F(BIO_meth_set_read_ex)                     \
+    F(BIO_meth_set_read)                        \
+    F(BIO_meth_set_write_ex)                    \
+    F(BIO_meth_set_write)                       \
+    F(BIO_new_accept)                           \
+    /*F(BIO_new_bio_pair)                         \
+    F(BIO_new_buffer_ssl_connect)               \
+    F(BIO_new_CMS)*/                              \
+    F(BIO_new_connect)                          \
+    F(BIO_new_fd)                               \
+    F(BIO_new_file)                             \
+    F(BIO_new_fp)                               \
+    F(BIO_new)                                  \
+    F(BIO_new_mem_buf)                          \
+    F(BIO_new_socket)                           \
+    /*F(BIO_new_ssl_connect)                      \
+    F(BIO_new_ssl)*/                              \
+    F(BIO_next)                                 \
+    F(BIO_parse_hostserv)                       \
+    /*F(BIO_pending)*/                              \
+    F(BIO_pop)                                  \
+    F(BIO_printf)                               \
+    F(BIO_ptr_ctrl)                             \
+    F(BIO_push)                                 \
+    F(BIO_puts)                                 \
+    F(BIO_read_ex)                              \
+    /*F(BIO_read_filename)*/                        \
+    F(BIO_read)                                 \
+    /*F(BIO_reset)                                \
+    F(BIO_retry_type)                           \
+    F(BIO_rw_filename)*/                          \
+    F(BIO_s_accept)                             \
+    F(BIO_s_bio)                                \
+    F(BIO_s_connect)                            \
+    /*F(BIO_seek)                                 \
+    F(BIO_set_accept_bios)                      \
+    F(BIO_set_accept_ip_family)                 \
+    F(BIO_set_accept_name)                      \
+    F(BIO_set_accept_port)                      \
+    F(BIO_set_bind_mode)                        \
+    F(BIO_set_buffer_read_data)                 \
+    F(BIO_set_buffer_size)*/                      \
+    F(BIO_set_callback_arg)                     \
+    F(BIO_set_callback_ex)                      \
+    F(BIO_set_callback)                         \
+    F(BIO_set_cipher)                           \
+    /*F(BIO_set_close)                            \
+    F(BIO_set_conn_address)                     \
+    F(BIO_set_conn_hostname)                    \
+    F(BIO_set_conn_ip_family)                   \
+    F(BIO_set_conn_port)*/                        \
+    F(BIO_set_data)                             \
+    F(BIO_set_ex_data)                          \
+    /*F(BIO_set_fd)                               \
+    F(BIO_set_fp)                               \
+    F(BIO_set_info_callback)*/                    \
+    F(BIO_set_init)                             \
+    /*F(BIO_set_md)                               \
+    F(BIO_set_mem_buf)                          \
+    F(BIO_set_mem_eof_return)                   \
+    F(BIO_set_nbio_accept)                      \
+    F(BIO_set_nbio)*/                             \
+    F(BIO_set_next)                             \
+    /*F(BIO_set_read_buffer_size)*/                 \
+    F(BIO_set_retry_reason)                     \
+    F(BIO_set_shutdown)                         \
+    /*F(BIO_set_ssl)                              \
+    F(BIO_set_ssl_mode)                         \
+    F(BIO_set_ssl_renegotiate_bytes)            \
+    F(BIO_set_ssl_renegotiate_timeout)          \
+    F(BIO_set_write_buffer_size)                \
+    F(BIO_set_write_buf_size)*/                   \
+    F(BIO_s_fd)                                 \
+    F(BIO_s_file)                               \
+    /*F(BIO_should_io_special)                    \
+    F(BIO_should_read)                          \
+    F(BIO_should_retry)                         \
+    F(BIO_should_write)                         \
+    F(BIO_shutdown_wr)*/                        \
+    F(BIO_s_mem)                                \
+    F(BIO_snprintf)                             \
+    F(BIO_s_null)                               \
+    F(BIO_socket)                               \
+    F(BIO_s_secmem)                             \
+    /*F(BIO_ssl_copy_session_id)                \
+    F(BIO_ssl_shutdown)*/                       \
+    F(BIO_s_socket)                             \
+    /*F(BIO_tell)*/                             \
+    F(BIO_up_ref)                               \
+    F(BIO_vfree)                                \
+    F(BIO_vprintf)                              \
+    F(BIO_vsnprintf)                            \
+    /*F(BIO_wpending)*/                         \
+    F(BIO_write_ex)                             \
+    /*F(BIO_write_filename)*/                   \
+    F(BIO_write)                                \
     /**/
 
 #define SANDSTONE_SSL_BF_FUNCTIONS(F)           \
@@ -507,6 +721,8 @@
     F(EVP_PKEY_CTX_ctrl_uint64)                  \
     F(EVP_PKEY_CTX_dup)                          \
     F(EVP_PKEY_CTX_free)                         \
+    F(EVP_PKEY_CTX_new_id)                       \
+    /*F(EVP_PKEY_CTX_set_rsa_keygen_bits)*/          \
     F(EVP_PKEY_decrypt)                          \
     F(EVP_PKEY_decrypt_init)                     \
     F(EVP_PKEY_derive)                           \
@@ -688,6 +904,138 @@
     F(RIPEMD160_Update)                         \
     /**/
 
+#define SANDSTONE_SSL_PEM_FUNCTIONS(F)          \
+    F(PEM_bytes_read_bio)                       \
+    F(PEM_bytes_read_bio_secmem)                \
+    F(PEM_do_header)                            \
+    /*F(PEM_FLAG_EAY_COMPATIBLE)                \
+    F(PEM_FLAG_ONLY_B64)                        \
+    F(PEM_FLAG_SECURE)*/                        \
+    F(PEM_get_EVP_CIPHER_INFO)                  \
+    /*F(PEM_read_bio_CMS)*/                     \
+    F(PEM_read_bio_DHparams)                    \
+    F(PEM_read_bio_DSAparams)                   \
+    F(PEM_read_bio_DSAPrivateKey)               \
+    F(PEM_read_bio_DSA_PUBKEY)                  \
+    F(PEM_read_bio_ECPKParameters)              \
+    F(PEM_read_bio_EC_PUBKEY)                   \
+    F(PEM_read_bio_ex)                          \
+    F(PEM_read_bio)                             \
+    F(PEM_read_bio_NETSCAPE_CERT_SEQUENCE)      \
+    /*F(PEM_read_bio_Parameters_ex)*/           \
+    F(PEM_read_bio_Parameters)                  \
+    F(PEM_read_bio_PKCS7)                       \
+    F(PEM_read_bio_PKCS8)                       \
+    F(PEM_read_bio_PKCS8_PRIV_KEY_INFO)         \
+    /*F(PEM_read_bio_PrivateKey_ex)*/           \
+    F(PEM_read_bio_PrivateKey)                  \
+    /*F(PEM_read_bio_PUBKEY_ex)*/               \
+    F(PEM_read_bio_PUBKEY)                      \
+    F(PEM_read_bio_RSAPrivateKey)               \
+    F(PEM_read_bio_RSA_PUBKEY)                  \
+    F(PEM_read_bio_RSAPublicKey)                \
+    /*F(PEM_read_bio_SSL_SESSION)*/             \
+    F(PEM_read_bio_X509_AUX)                    \
+    F(PEM_read_bio_X509_CRL)                    \
+    F(PEM_read_bio_X509)                        \
+    /*F(PEM_read_bio_X509_PUBKEY)*/             \
+    F(PEM_read_bio_X509_REQ)                    \
+    /*F(PEM_read_CMS)*/                         \
+    F(PEM_read_DHparams)                        \
+    F(PEM_read_DSAparams)                       \
+    F(PEM_read_DSAPrivateKey)                   \
+    F(PEM_read_DSA_PUBKEY)                      \
+    F(PEM_read_ECPKParameters)                  \
+    F(PEM_read_ECPrivateKey)                    \
+    F(PEM_read_EC_PUBKEY)                       \
+    F(PEM_read)                                 \
+    F(PEM_read_NETSCAPE_CERT_SEQUENCE)          \
+    F(PEM_read_PKCS7)                           \
+    F(PEM_read_PKCS8)                           \
+    F(PEM_read_PKCS8_PRIV_KEY_INFO)             \
+    /*F(PEM_read_PrivateKey_ex)*/               \
+    F(PEM_read_PrivateKey)                      \
+    /*F(PEM_read_PUBKEY_ex)*/                   \
+    F(PEM_read_PUBKEY)                          \
+    F(PEM_read_RSAPrivateKey)                   \
+    F(PEM_read_RSA_PUBKEY)                      \
+    F(PEM_read_RSAPublicKey)                    \
+    /*F(PEM_read_SSL_SESSION)*/                 \
+    F(PEM_read_X509_AUX)                        \
+    F(PEM_read_X509_CRL)                        \
+    F(PEM_read_X509)                            \
+    /*F(PEM_read_X509_PUBKEY)*/                 \
+    F(PEM_read_X509_REQ)                        \
+    /*F(PEM_write_bio_CMS)                      \
+    F(PEM_write_bio_CMS_stream)*/               \
+    F(PEM_write_bio_DHparams)                   \
+    F(PEM_write_bio_DHxparams)                  \
+    F(PEM_write_bio_DSAparams)                  \
+    F(PEM_write_bio_DSAPrivateKey)              \
+    F(PEM_write_bio_DSA_PUBKEY)                 \
+    F(PEM_write_bio_ECPKParameters)             \
+    F(PEM_write_bio_ECPrivateKey)               \
+    F(PEM_write_bio_EC_PUBKEY)                  \
+    F(PEM_write_bio)                            \
+    F(PEM_write_bio_NETSCAPE_CERT_SEQUENCE)     \
+    F(PEM_write_bio_Parameters)                 \
+    F(PEM_write_bio_PKCS7)                      \
+    F(PEM_write_bio_PKCS7_stream)               \
+    F(PEM_write_bio_PKCS8)                      \
+    F(PEM_write_bio_PKCS8PrivateKey)            \
+    F(PEM_write_bio_PKCS8PrivateKey_nid)        \
+    F(PEM_write_bio_PKCS8_PRIV_KEY_INFO)        \
+    /*F(PEM_write_bio_PrivateKey_ex)*/          \
+    F(PEM_write_bio_PrivateKey)                 \
+    F(PEM_write_bio_PrivateKey_traditional)     \
+    /*F(PEM_write_bio_PUBKEY_ex)*/              \
+    F(PEM_write_bio_PUBKEY)                     \
+    F(PEM_write_bio_RSAPrivateKey)              \
+    F(PEM_write_bio_RSA_PUBKEY)                 \
+    F(PEM_write_bio_RSAPublicKey)               \
+    /*F(PEM_write_bio_SSL_SESSION)*/            \
+    F(PEM_write_bio_X509_AUX)                   \
+    F(PEM_write_bio_X509_CRL)                   \
+    F(PEM_write_bio_X509)                       \
+    /*F(PEM_write_bio_X509_PUBKEY)*/            \
+    F(PEM_write_bio_X509_REQ)                   \
+    F(PEM_write_bio_X509_REQ_NEW)               \
+    /*F(PEM_write_CMS)*/                        \
+    F(PEM_write_DHparams)                       \
+    F(PEM_write_DHxparams)                      \
+    F(PEM_write_DSAparams)                      \
+    F(PEM_write_DSAPrivateKey)                  \
+    F(PEM_write_DSA_PUBKEY)                     \
+    F(PEM_write_ECPKParameters)                 \
+    F(PEM_write_ECPrivateKey)                   \
+    F(PEM_write_EC_PUBKEY)                      \
+    F(PEM_write)                                \
+    F(PEM_write_NETSCAPE_CERT_SEQUENCE)         \
+    F(PEM_write_PKCS7)                          \
+    F(PEM_write_PKCS8)                          \
+    F(PEM_write_PKCS8PrivateKey)                \
+    F(PEM_write_PKCS8PrivateKey_nid)            \
+    F(PEM_write_PKCS8_PRIV_KEY_INFO)            \
+    /*F(PEM_write_PrivateKey_ex)*/              \
+    F(PEM_write_PrivateKey)                     \
+    /*F(PEM_write_PUBKEY_ex)*/                  \
+    F(PEM_write_PUBKEY)                         \
+    F(PEM_write_RSAPrivateKey)                  \
+    F(PEM_write_RSA_PUBKEY)                     \
+    F(PEM_write_RSAPublicKey)                   \
+    /*F(PEM_write_SSL_SESSION)*/                \
+    F(PEM_write_X509_AUX)                       \
+    F(PEM_write_X509_CRL)                       \
+    F(PEM_write_X509)                           \
+    /*F(PEM_write_X509_PUBKEY)*/                \
+    F(PEM_write_X509_REQ)                       \
+    F(PEM_write_X509_REQ_NEW)                   \
+    /*F(PEM_X509_INFO_read_bio_ex)*/            \
+    F(PEM_X509_INFO_read_bio)                   \
+    /*F(PEM_X509_INFO_read_ex)*/                \
+    F(PEM_X509_INFO_read)                       \
+    /**/
+
 #define SANDSTONE_SSL_RSA_FUNCTIONS(F)          \
     F(RSA_bits)                                 \
     F(RSA_blinding_off)                         \
@@ -845,6 +1193,8 @@
     /**/
 
 #define SANDSTONE_SSL_X509_FUNCTIONS(F)         \
+    F(i2d_X509_bio)                             \
+    F(d2i_X509_bio)                             \
     F(X509_add1_ext_i2d)                        \
     F(X509_add1_reject_object)                  \
     F(X509_add1_trust_object)                   \
@@ -888,15 +1238,15 @@
     F(X509_certificate_type)                    \
     F(X509_chain_check_suiteb)                  \
     F(X509_chain_up_ref)                        \
-    F(X509_check_akid)                          \
+    /*F(X509_check_akid)                        \
     F(X509_check_ca)                            \
     F(X509_check_email)                         \
     F(X509_check_host)                          \
     F(X509_check_ip)                            \
     F(X509_check_ip_asc)                        \
-    F(X509_check_issued)                        \
+    F(X509_check_issued)*/                      \
     F(X509_check_private_key)                   \
-    F(X509_check_purpose)                       \
+    /*F(X509_check_purpose)*/                   \
     F(X509_check_trust)                         \
     F(X509_CINF_free)                           \
     F(X509_CINF_new)                            \
@@ -932,7 +1282,7 @@
     F(X509_CRL_get_REVOKED)                     \
     F(X509_CRL_get_signature_nid)               \
     F(X509_CRL_get_version)                     \
-    F(X509_CRL_http_nbio)                       \
+    /*F(X509_CRL_http_nbio)*/                       \
     F(X509_CRL_INFO_free)                       \
     F(X509_CRL_INFO_new)                        \
     F(X509_CRL_match)                           \
@@ -956,7 +1306,7 @@
     F(X509_delete_ext)                          \
     F(X509_digest)                              \
     F(X509_dup)                                 \
-    F(X509_email_free)                          \
+    /*F(X509_email_free)*/                      \
     F(X509_EXTENSION_create_by_NID)             \
     F(X509_EXTENSION_create_by_OBJ)             \
     F(X509_EXTENSION_dup)                       \
@@ -971,9 +1321,9 @@
     F(X509_find_by_issuer_and_serial)           \
     F(X509_find_by_subject)                     \
     F(X509_free)                                \
-    F(X509_get0_authority_issuer)               \
+    /*F(X509_get0_authority_issuer)             \
     F(X509_get0_authority_key_id)               \
-    F(X509_get0_authority_serial)               \
+    F(X509_get0_authority_serial)*/             \
     F(X509_get0_extensions)                     \
     F(X509_get0_notAfter)                       \
     F(X509_get0_notBefore)                      \
@@ -982,12 +1332,12 @@
     F(X509_get0_reject_objects)                 \
     F(X509_get0_serialNumber)                   \
     F(X509_get0_signature)                      \
-    F(X509_get0_subject_key_id)                 \
+    /*F(X509_get0_subject_key_id)*/             \
     F(X509_get0_tbs_sigalg)                     \
     F(X509_get0_trust_objects)                  \
     F(X509_get0_uids)                           \
-    F(X509_get1_email)                          \
-    F(X509_get1_ocsp)                           \
+    /*F(X509_get1_email)                        \
+    F(X509_get1_ocsp)*/                         \
     F(X509_get_default_cert_area)               \
     F(X509_get_default_cert_dir)                \
     F(X509_get_default_cert_dir_env)            \
@@ -1001,14 +1351,16 @@
     F(X509_get_ext_by_OBJ)                      \
     F(X509_get_ext_count)                       \
     F(X509_get_ext_d2i)                         \
-    F(X509_get_extended_key_usage)              \
-    F(X509_get_extension_flags)                 \
+    /*F(X509_get_extended_key_usage)            \
+    F(X509_get_extension_flags)*/               \
     F(X509_get_issuer_name)                     \
-    F(X509_get_key_usage)                       \
+    /*F(X509_get_key_usage)*/                   \
+    F(X509_get_notAfter)                       \
     F(X509_getm_notAfter)                       \
+    F(X509_get_notBefore)                      \
     F(X509_getm_notBefore)                      \
-    F(X509_get_pathlen)                         \
-    F(X509_get_proxy_pathlen)                   \
+    /*F(X509_get_pathlen)                       \
+    F(X509_get_proxy_pathlen)*/                 \
     F(X509_get_pubkey)                          \
     F(X509_get_pubkey_parameters)               \
     F(X509_get_serialNumber)                    \
@@ -1019,7 +1371,7 @@
     F(X509_get_version)                         \
     F(X509_get_X509_PUBKEY)                     \
     F(X509_gmtime_adj)                          \
-    F(X509_http_nbio)                           \
+    /*F(X509_http_nbio)*/                           \
     F(X509_INFO_free)                           \
     F(X509_INFO_new)                            \
     F(X509_issuer_and_serial_cmp)               \
@@ -1093,7 +1445,7 @@
     F(X509_NAME_get_index_by_OBJ)               \
     F(X509_NAME_get_text_by_NID)                \
     F(X509_NAME_get_text_by_OBJ)                \
-    F(X509_NAME_hash)                           \
+    /*F(X509_NAME_hash)*/                           \
     F(X509_NAME_hash_old)                       \
     F(X509_NAME_new)                            \
     F(X509_NAME_oneline)                        \
@@ -1122,7 +1474,7 @@
     F(X509_policy_node_get0_parent)             \
     F(X509_policy_node_get0_policy)             \
     F(X509_policy_node_get0_qualifiers)         \
-    F(X509_POLICY_NODE_print)                   \
+    /*F(X509_POLICY_NODE_print)*/               \
     F(X509_policy_tree_free)                    \
     F(X509_policy_tree_get0_level)              \
     F(X509_policy_tree_get0_policies)           \
@@ -1140,7 +1492,7 @@
     F(X509_PUBKEY_new)                          \
     F(X509_PUBKEY_set)                          \
     F(X509_PUBKEY_set0_param)                   \
-    F(X509_PURPOSE_add)                         \
+    /*F(X509_PURPOSE_add)                       \
     F(X509_PURPOSE_cleanup)                     \
     F(X509_PURPOSE_get0)                        \
     F(X509_PURPOSE_get0_name)                   \
@@ -1150,7 +1502,7 @@
     F(X509_PURPOSE_get_count)                   \
     F(X509_PURPOSE_get_id)                      \
     F(X509_PURPOSE_get_trust)                   \
-    F(X509_PURPOSE_set)                         \
+    F(X509_PURPOSE_set)*/                       \
     F(X509_reject_clear)                        \
     F(X509_REQ_add1_attr)                       \
     F(X509_REQ_add1_attr_by_NID)                \
@@ -1166,7 +1518,7 @@
     F(X509_REQ_free)                            \
     F(X509_REQ_get0_pubkey)                     \
     F(X509_REQ_get0_signature)                  \
-    F(X509_REQ_get1_email)                      \
+    /*F(X509_REQ_get1_email)*/                  \
     F(X509_REQ_get_attr)                        \
     F(X509_REQ_get_attr_by_NID)                 \
     F(X509_REQ_get_attr_by_OBJ)                 \
@@ -1215,8 +1567,8 @@
     F(X509_set1_notBefore)                      \
     F(X509_set_ex_data)                         \
     F(X509_set_issuer_name)                     \
-    F(X509_set_proxy_flag)                      \
-    F(X509_set_proxy_pathlen)                   \
+    /*F(X509_set_proxy_flag)                    \
+    F(X509_set_proxy_pathlen)*/                 \
     F(X509_set_pubkey)                          \
     F(X509_set_serialNumber)                    \
     F(X509_set_subject_name)                    \
@@ -1334,7 +1686,7 @@
     F(X509_subject_name_cmp)                    \
     F(X509_subject_name_hash)                   \
     F(X509_subject_name_hash_old)               \
-    F(X509_supported_extension)                 \
+    /*F(X509_supported_extension)*/             \
     F(X509_time_adj)                            \
     F(X509_time_adj_ex)                         \
     F(X509_to_X509_REQ)                         \
@@ -1351,7 +1703,7 @@
     F(X509_TRUST_set)                           \
     F(X509_TRUST_set_default)                   \
     F(X509_up_ref)                              \
-    F(X509V3_add1_i2d)                          \
+    /*F(X509V3_add1_i2d)                        \
     F(X509v3_add_ext)                           \
     F(X509v3_addr_add_inherit)                  \
     F(X509v3_addr_add_prefix)                   \
@@ -1378,9 +1730,9 @@
     F(X509v3_asid_subset)                       \
     F(X509v3_asid_validate_path)                \
     F(X509v3_asid_validate_resource_set)        \
-    F(X509V3_conf_free)                         \
+    F(X509V3_conf_free)*/                         \
     F(X509v3_delete_ext)                        \
-    F(X509V3_EXT_add)                           \
+    /*F(X509V3_EXT_add)                         \
     F(X509V3_EXT_add_alias)                     \
     F(X509V3_EXT_add_conf)                      \
     F(X509V3_EXT_add_list)                      \
@@ -1403,13 +1755,13 @@
     F(X509V3_EXT_REQ_add_conf)                  \
     F(X509V3_EXT_REQ_add_nconf)                 \
     F(X509V3_EXT_val_prn)                       \
-    F(X509V3_get_d2i)                           \
+    F(X509V3_get_d2i)*/                         \
     F(X509v3_get_ext)                           \
     F(X509v3_get_ext_by_critical)               \
     F(X509v3_get_ext_by_NID)                    \
     F(X509v3_get_ext_by_OBJ)                    \
     F(X509v3_get_ext_count)                     \
-    F(X509V3_get_section)                       \
+    /*F(X509V3_get_section)                     \
     F(X509V3_get_string)                        \
     F(X509V3_get_value_bool)                    \
     F(X509V3_get_value_int)                     \
@@ -1419,7 +1771,7 @@
     F(X509V3_set_conf_lhash)                    \
     F(X509V3_set_ctx)                           \
     F(X509V3_set_nconf)                         \
-    F(X509V3_string_free)                       \
+    F(X509V3_string_free)*/                     \
     F(X509_VAL_free)                            \
     F(X509_VAL_new)                             \
     F(X509_verify)                              \
@@ -1464,14 +1816,17 @@
 
 #define SANDSTONE_SSL_FUNCTIONS(F)              \
     SANDSTONE_SSL_AES_FUNCTIONS(F)              \
+    SANDSTONE_SSL_BIO_FUNCTIONS(F)              \
     SANDSTONE_SSL_BF_FUNCTIONS(F)               \
     SANDSTONE_SSL_CMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_EVP_FUNCTIONS(F)              \
     SANDSTONE_SSL_HMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_GENERIC_FUNCTIONS(F)          \
     SANDSTONE_SSL_MD5_FUNCTIONS(F)              \
+    SANDSTONE_SSL_PEM_FUNCTIONS(F)              \
     SANDSTONE_SSL_RSA_FUNCTIONS(F)              \
     SANDSTONE_SSL_SHA_FUNCTIONS(F)              \
+    SANDSTONE_SSL_X509_FUNCTIONS(F)             \
     /**/
 
 # define s_SSL_set_max_cert_list(ssl,m) \
