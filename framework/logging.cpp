@@ -1301,6 +1301,7 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
     fputc(0, log);
 }
 
+#undef log_data
 void log_data(const char *message, const void *data, size_t size)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
