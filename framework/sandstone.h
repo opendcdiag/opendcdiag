@@ -341,6 +341,10 @@ typedef enum test_flag {
     /// Tells the --test-tests mode to ignore the detection that this test
     /// may have called test_time_condition() before doing any work.
     test_flag_ignore_do_while       = 0x0100,
+
+    /// Indicates that a test can only attribute failure to a particular
+    /// package and not to threads or cores.
+    test_failure_package_only       = 0x1000,
 } test_flags;
 
 struct test_data_per_thread

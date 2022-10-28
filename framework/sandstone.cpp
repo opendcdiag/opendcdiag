@@ -1995,6 +1995,45 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
         // can't use this information
         if (all_cpus_failed_equally)
             logging_printf(LOG_LEVEL_VERBOSE(1), "# All failing CPUs failed equally.\n");
+    } else if (test->flags & test_failure_package_only) {
+        // Failure cannot be attributed to a single thread or core.  Let's see if it
+        // can be pinned down to a single package.
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
+
+        // Analysis is not needed if there's only a single package.
+        if (topology.packages.size() == 1) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failures localised to package %d\n",
+                           topology.packages[0].id);
+            return;
+        }
+
+        std::vector<int> pkg_failures(topology.packages.size(), -1);
+        int failed_packages = 0;
+        int last_bad_package = -1;
+        for (size_t p = 0; p < topology.packages.size(); ++p) {
+            Topology::Package *pkg = &topology.packages[p];
+            for (size_t c = 0; c < pkg->cores.size(); ++c) {
+                Topology::Core *core = &pkg->cores[c];
+                for (Topology::Thread &thr : core->threads) {
+                    if (thr.cpu == -1)
+                        continue;
+                    if (per_cpu_failures[thr.cpu] && (pkg_failures[p] == -1)) {
+                        last_bad_package = pkg->id;
+                        failed_packages++;
+                        pkg_failures[p] = pkg->id;
+                    }
+                }
+            }
+        }
+        if (failed_packages == 1) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failures localised to package %d\n", last_bad_package);
+        } else {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failure detected on multiple packages:\n");
+            for (int p : pkg_failures) {
+                if (pkg_failures[p] >= 0)
+                    logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Package %d failed\n", p);
+            }
+        }
     } else {
         // valid topology, we can do more a interesting analysis
         logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
