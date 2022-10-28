@@ -11,6 +11,9 @@
 #include "sandstone_p.h"
 #include "sandstone_iovec.h"
 #include "sandstone_utils.h"
+#if SANDSTONE_SSL_BUILD
+#  include "sandstone_ssl.h"
+#endif
 #include "test_knobs.h"
 #include "topology.h"
 
@@ -90,9 +93,6 @@ RtlGetVersion(
 #  include <gnu/libc-version.h>
 #endif
 
-#if SANDSTONE_SSL_BUILD
-#   include <openssl/opensslv.h>
-#endif
 
 #define PROGRAM_VERSION         SANDSTONE_EXECUTABLE_NAME "-" GIT_ID
 
@@ -873,13 +873,24 @@ static std::string libc_info()
     return result;
 }
 
+#if SANDSTONE_SSL_BUILD
+static std::string openssl_info()
+{
+    std::string result = "";
+#if __has_include(<openssl/crypto.h>)
+    result = s_OpenSSL_version(0);
+#endif
+    return result;
+}
+#endif
+
 static std::string os_info()
 {
     std::string os_info;
     std::string kernel = kernel_info();
     std::string libc = libc_info();
 #if SANDSTONE_SSL_BUILD
-    std::string libssl = OPENSSL_VERSION_TEXT;
+    std::string libssl = openssl_info();
 #endif
     if (kernel.empty())
         return "<unknown>";
