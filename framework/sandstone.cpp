@@ -26,7 +26,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
-#ifdef __GLIBC__
+#if __has_include(<malloc.h>)
 #  include <malloc.h>
 #endif
 #include <stdarg.h>
@@ -3055,10 +3055,13 @@ int main(int argc, char **argv)
     thread_num = -1;            /* indicate main thread */
     find_thyself(argv[0]);
     setup_stack_size(argc, argv);
+    sApp->enabled_cpus = init_cpus();
+#ifdef M_ARENA_MAX
+    mallopt(M_ARENA_MAX, sApp->enabled_cpus.count() * 2);
+#endif
 #ifdef __linux__
     prctl(PR_SET_TIMERSLACK, 1, 0, 0, 0);
 #endif
-    sApp->enabled_cpus = init_cpus();
 
     if (argc > 1 && strcmp(argv[1], "-x") == 0) {
         /* exec mode is when a brand new child is launched for each test, as opposed to
