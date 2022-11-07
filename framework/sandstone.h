@@ -641,17 +641,19 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 #endif
 
 #if SANDSTONE_NO_LOGGING
+#  undef log_data
 #  undef log_error
 #  undef log_warning
 #  undef log_info
 #  undef report_fail
 #  undef report_fail_msg
 
-#  define log_error(...)        log_message(thread_num, SANDSTONE_LOG_ERROR "")
-#  define log_warning(...)      (void)0
-#  define log_info(...)         (void)0
-#  define report_fail(test)     _report_fail(test, NULL, 0)
-#  define report_fail_msg(...)  _report_fail_msg(NULL, 0, NULL)
+#  define log_data(message, data, size)     (void)0
+#  define log_error(...)                    log_message(thread_num, SANDSTONE_LOG_ERROR "")
+#  define log_warning(...)                  (void)0
+#  define log_info(...)                     (void)0
+#  define report_fail(test)                 _report_fail(test, NULL, 0)
+#  define report_fail_msg(...)              _report_fail_msg(NULL, 0, NULL)
 
 #  define log_message(thrnum, msg, ...)     ({ if (msg[0] == SANDSTONE_LOG_ERROR[0]) log_message(thrnum, SANDSTONE_LOG_ERROR); })
 #  define log_platform_message(msg, ...)    ({ if (msg[0] == SANDSTONE_LOG_ERROR[0]) log_platform_message(SANDSTONE_LOG_ERROR); })
