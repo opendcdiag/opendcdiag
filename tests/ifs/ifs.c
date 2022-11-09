@@ -112,7 +112,9 @@ static int scan_init(struct test *test)
 
 
         if (ifs0 < 0 || faccessat(ifs0, "run_test", R_OK, 0) < 0 ||
-                faccessat(ifs0, "status", R_OK, 0) < 0 || faccessat(ifs0, "details", R_OK, 0) < 0) {
+                faccessat(ifs0, "status", R_OK, 0) < 0 ||
+                faccessat(ifs0, "image_version", R_OK, 0) < 0 ||
+                faccessat(ifs0, "details", R_OK, 0) < 0) {
                 log_info("not supported (missing kernel module, firmware, or invalid HW)");
                 close(ifs0);
                 return -EOPNOTSUPP;
@@ -134,7 +136,7 @@ static int scan_init(struct test *test)
 
 static int scan_run(struct test *test, int cpu)
 {
-        char result[BUFLEN], my_cpu[BUFLEN];
+        char result[BUFLEN], my_cpu[BUFLEN], image_version[BUFLEN];
         DIR *base;
         int basefd;
         bool any_test_succeded = false;
@@ -164,6 +166,12 @@ static int scan_run(struct test *test, int cpu)
                         continue;
                 }
 
+                /* read image version if available and log it */
+                if (read_file(ifsfd, "image_version", image_version) <= 0) {
+                        strncpy(image_version, "unknown", BUFLEN);
+                }
+                log_info("Single IFS image version: %s", image_version);
+
                 /* start the test; this blocks until the test has finished */
                 if (!write_file(ifsfd, "run_test", my_cpu)) {
                         log_warning("Could not start test for \"%s\": %m", d_name);
@@ -185,14 +193,14 @@ static int scan_run(struct test *test, int cpu)
                         close(ifsfd);
 
                         if (n < 0) {
-                                log_error("Test \"%s\" failed but could not retrieve error condition", d_name);
+                                log_error("Test \"%s\" failed but could not retrieve error condition. Single image used with version: %s", d_name, image_version);
                         } else {
                                 if (sscanf(result, "%llx", &code) == 1 && is_result_code_skip(code)) {
                                         log_warning("Test \"%s\" did not run to completion, code: %s",
                                                     d_name, result);
                                         continue;       // not a failure condition
                                 }
-                                log_error("Test \"%s\" failed with condition: %s", d_name, result);
+                                log_error("Test \"%s\" failed with condition: %s. Single image used with version: %s", d_name, result, image_version);
                         }
                         break;
                 } else if (memcmp(result, "pass", strlen("pass")) == 0) {
