@@ -103,6 +103,7 @@ add_project_link_arguments([
 	'-Wl,--stack,8388608',
 	'-static-libgcc',
 	'-Wl,-static',
+	'-lpdh',
 	'-lpthread',
 	'-lm',
 	'-lssp',

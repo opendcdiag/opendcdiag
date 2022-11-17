@@ -84,6 +84,7 @@ static constexpr struct test *ordered_test_list[] = { nullptr };
 #  include <ntstatus.h>
 #  include <shlwapi.h>
 #  include <windows.h>
+#  include <pdh.h>
 
 #  ifdef ftruncate
 // MinGW's ftruncate64 tries to check free disk space and that fails on Wine,
@@ -2834,6 +2835,101 @@ static void warn_deprecated_opt(const char *opt)
             program_invocation_name, opt);
 }
 
+/* Setup of the performance counters we read to get getloadavg() on linux. */
+#ifdef _WIN32
+
+/* Performance counters we are going to read */
+static const char PQL_COUNTER_PATH[] = "\\System\\Processor Queue Length";
+static HCOUNTER pql_counter;
+
+static const char PT_COUNTER_PATH[]  = "\\Processor(_Total)\\% Processor Time";
+static HCOUNTER pt_counter;
+
+
+static constexpr unsigned TOTAL_5MIN_SAMPLES_COUNT = ((5u * 60u) / 5u);
+static constexpr unsigned SAMPLE_INTERVAL_SECONDS = 5u;
+static constexpr double   EXP_LOADAVG = exp(5.0 / (5.0 * 60.0)); // exp(5sec/5min)
+
+static std::atomic<double> loadavg = 0;
+static double last_tick_seconds;
+
+static void loadavg_windows_callback(PVOID, BOOLEAN)
+{
+    PDH_FMT_COUNTERVALUE vpql, vpt;
+
+    if (PdhGetFormattedCounterValue((PDH_HCOUNTER)pql_counter, PDH_FMT_DOUBLE, 0, &vpql) != ERROR_SUCCESS) {
+        return;
+    }
+
+    if (PdhGetFormattedCounterValue((PDH_HCOUNTER)pt_counter, PDH_FMT_DOUBLE, 0, &vpt) != ERROR_SUCCESS) {
+        return;
+    }
+
+    // We calculate current average load as average instantaenous cpu load plus amount of
+    // tasks that are ready to run but cannot be scheduled because CPUs are already
+    // running other tasks.
+    //
+    // We divide by 100.0 to get value in range (0.0;1.0) instead of percents.
+    //
+    // We also mutliply by number of cpus to make the metric behave more like the
+    // /proc/loadavg from Linux, so we get value from range (0.0;num_cpus()), where
+    // num_cpus() value means all cores at 100% utilization.
+    const double current_avg_cpu_usage = (vpt.doubleValue * num_cpus() / 100.0);
+    const double current_proc_queue    = vpql.doubleValue;
+    const double current_avg_load      = current_avg_cpu_usage + current_proc_queue;
+
+    // Calculate how many sample windows we missed and adjust.
+    const double current_tick_seconds  = GetTickCount64() / 1000.0;
+    const double tick_diff_seconds     = current_tick_seconds - last_tick_seconds;
+    const double sample_windows_count  = tick_diff_seconds / static_cast<double>(SAMPLE_INTERVAL_SECONDS);
+    const double efactor               = 1.0 / pow(EXP_LOADAVG, sample_windows_count);
+
+    // Exponential moving average
+    double loadavg_ = loadavg.load(std::memory_order::memory_order_consume);
+    loadavg_ = loadavg_ * efactor + current_avg_load * (1.0 - efactor);
+
+    last_tick_seconds = current_tick_seconds;
+    loadavg.store(loadavg_, std::memory_order::memory_order_release);
+}
+
+static int setup_windows_loadavg_perf_counters()
+{
+    HQUERY load_query;
+    HANDLE load_event;
+
+    last_tick_seconds = GetTickCount64() / 1000.0;
+
+    if (PdhOpenQueryA(NULL, 0, &load_query) != ERROR_SUCCESS)
+        return 1;
+
+    if (PdhAddEnglishCounterA(load_query, PQL_COUNTER_PATH, 0, &pql_counter))
+        return 2;
+
+    if (PdhAddEnglishCounterA(load_query, PT_COUNTER_PATH, 0, &pt_counter))
+        return 2;
+
+    load_event = CreateEventA(NULL, FALSE, FALSE, "AvgLoad5sEvent");
+    if (load_event == NULL) {
+        return 3;
+    }
+
+    if (PdhCollectQueryDataEx(load_query, SAMPLE_INTERVAL_SECONDS, load_event) != ERROR_SUCCESS) {
+        return 4;
+    }
+
+    HANDLE h; // Dummy handle, we don't ever use it, It's closed by the system when the program exits.
+    const int register_callback_status =
+        RegisterWaitForSingleObject(&h, load_event, (WAITORTIMERCALLBACK)loadavg_windows_callback, NULL, INFINITE, WT_EXECUTEDEFAULT);
+
+    if (register_callback_status == 0) {
+        return 5;
+    }
+
+    return 0;
+}
+#endif // _WIN32
+
+
 static float system_idle_load()
 {
 #ifdef __linux__
@@ -2853,6 +2949,8 @@ static float system_idle_load()
 
     if (ret == 1)
        return load_5;
+#elif defined(_WIN32)
+    return loadavg.load(std::memory_order::memory_order_consume);
 #else //__linux__
     return std::numeric_limits<float>::lowest();
 #endif
@@ -2901,6 +2999,10 @@ static void background_scan_init()
 
     if (fd >= 0)
         close(fd);
+
+#ifdef _WIN32
+    setup_windows_loadavg_perf_counters();
+#endif // _WIN32
 }
 
 static void background_scan_update_load_threshold(MonotonicTimePoint now)
