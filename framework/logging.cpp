@@ -636,10 +636,17 @@ void logging_init_global(void)
 
     if (file_log_fd == -1) {
         file_log_fd = real_stdout_fd;
+    } else {
+#ifdef _WIN32
+        // no tty on win32, open app's console instead
+        tty = open("CON:", _O_WRONLY);
+#else
 #ifdef _PATH_TTY
-    } else if (isatty(real_stdout_fd)) {
-        // stdout is a tty, so try to open /dev/tty
-        tty = open(_PATH_TTY, O_WRONLY | O_NOCTTY | O_CLOEXEC);
+        if (isatty(real_stdout_fd)) {
+            // stdout is a tty, so try to open /dev/tty
+            tty = open(_PATH_TTY, O_WRONLY | O_NOCTTY | O_CLOEXEC);
+        }
+#endif
 #endif
     }
 
