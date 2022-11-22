@@ -640,13 +640,11 @@ void logging_init_global(void)
 #ifdef _WIN32
         // no tty on win32, open app's console instead
         tty = open("CON:", _O_WRONLY);
-#else
-#ifdef _PATH_TTY
+#elif defined _PATH_TTY
         if (isatty(real_stdout_fd)) {
             // stdout is a tty, so try to open /dev/tty
             tty = open(_PATH_TTY, O_WRONLY | O_NOCTTY | O_CLOEXEC);
         }
-#endif
 #endif
     }
 
