@@ -23,7 +23,7 @@ static void try_load_kmod()
     if (atomic_load_explicit(&tried, memory_order_relaxed))
         return;
 
-    if (access("/sys/module/msr/initstate", F_OK) < 0) {
+    if (access("/sys/module/msr", F_OK) < 0) {
         // try loading the module
         pid_t child = fork();
         if (child == 0) {
