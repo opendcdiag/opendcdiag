@@ -1886,11 +1886,6 @@ static TestResult run_child(/*nonconst*/ struct test *test, SharedMemorySynchron
                             const SandstoneApplication::ExecState *app_state = nullptr)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
-#ifdef M_TRIM_THRESHOLD
-        // tell malloc we don't need it to trim the heap
-        // (this is a short-lived process)
-        mallopt(M_TRIM_THRESHOLD, -1);
-#endif
         pin_to_logical_processor(LogicalProcessor(-1), "control");
         setup_child_signals();
         debug_init_child();
