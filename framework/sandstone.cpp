@@ -817,7 +817,6 @@ static void init_internal(const struct test *test)
     }
     sApp->current_slice_count = slice_count;
     sApp->current_max_threads = max_threads;
-    sApp->current_test_starttime = MonotonicTimePoint::clock::now();
 }
 
 static void initialize_smi_counts()
@@ -1174,7 +1173,7 @@ Common command-line options are:
      Display program version information.
  --1sec, --30sec, --2min, --5min
      Run for the specified amount of time in the option. In this mode, the program
-     prioritizes test execution based on prior detections. 
+     prioritizes test execution based on prior detections.
      These options are intended to drive coverage over multiple runs.
      Test priority is ignored when running in combination with the
      --test-list-file option.
@@ -1183,7 +1182,7 @@ Common command-line options are:
      in the order they appear in the file and also allows you to vary the
      individual test durations.  See the User Guide for details.
  --test-range A-B
-     Run tests from test number A to test number B based on their list location 
+     Run tests from test number A to test number B based on their list location
      in an input file specified using --test-list-file <inputfile>.
      For example: --test-list-file mytests.list -test-range 6-10
                   runs tests 6 through 10 from the file mytests.list.
@@ -2084,8 +2083,9 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     int fail_count = 0;
     int iterations;
     std::unique_ptr<char[]> random_allocation;
-    MonotonicTimePoint current_test_endtime, first_iteration_target;
+    MonotonicTimePoint first_iteration_target;
     bool auto_fracture = false;
+    Duration runtime = 0ms;
 
     // resize and zero the storage
     if (per_cpu_fails.size() == num_cpus()) {
@@ -2096,9 +2096,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     }
 
     sApp->current_test_duration = test_duration(test->desired_duration, test->minimum_duration, test->maximum_duration);
-    sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
-    current_test_endtime =  MonotonicTimePoint::clock::now() + test_duration(test->desired_duration, test->minimum_duration, test->maximum_duration);
 
     if (sApp->max_test_loop_count) {
         sApp->current_max_loop_count = sApp->max_test_loop_count;
@@ -2120,7 +2118,12 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     /* First we go to do our -- possibly fractured -- normal run, we'll do retries after */
     for (sApp->current_iteration_count = 0;; ++sApp->current_iteration_count) {
         init_internal(test);
+
+        // calculate starttime->endtime, reduce the overhead to have better test runtime calculations
+        sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration - runtime, &sApp->current_test_starttime);
         state = run_one_test_once(tc, test);
+        runtime += MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
+
         cleanup_internal(test);
 
         if ((sApp->current_max_loop_count > 0 && MonotonicTimePoint::clock::now() < first_iteration_target && auto_fracture))
@@ -2142,7 +2145,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
 
         // do we fracture?
         if (sApp->current_max_loop_count <= 0 || sApp->max_test_loop_count
-                || wallclock_deadline_has_expired(current_test_endtime))
+                || (runtime >= sApp->current_test_duration))
             goto out;
 
         // For improved randomization of addresses, we are going to do a random
@@ -2170,8 +2173,8 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
             if (sApp->total_retest_count > 0)
                 --sApp->total_retest_count;
             sApp->current_iteration_count = -iterations;
-            sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration);
             init_internal(test);
+            sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration, &sApp->current_test_starttime);
             state = run_one_test_once(tc, test);
             cleanup_internal(test);
 
@@ -2901,7 +2904,7 @@ static void background_scan_update_load_threshold(MonotonicTimePoint now)
 
     // scale our idle threshold value from 0.2 base, to 0.8 after 12h
     // every hour adds 0.05 to the threshold value
-    sApp->background_scan.load_idle_threshold = 
+    sApp->background_scan.load_idle_threshold =
         sApp->background_scan.load_idle_threshold_init +
         (time_from_last_test.count() * sApp->background_scan.load_idle_threshold_inc_val);
 
