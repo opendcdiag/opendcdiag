@@ -1944,7 +1944,8 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
     case TestOutOfMemory:
         if (!sApp->ignore_os_errors) {
             logging_flush();
-            _exit(logging_close_global(2));
+            int exit_code = print_application_footer(2, {});
+            _exit(logging_close_global(exit_code));
         } else {
             // not a pass either, but won't affect the result
             real_state = TestSkipped;
