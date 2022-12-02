@@ -1830,9 +1830,16 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
     snprintf(statefdstr.begin(), statefdstr.size(), "%u", unsigned(statefd));
 
     std::string random_seed = random_format_seed();
+
+#ifdef _WIN32
+    // _spawn on Windows requires argv elements to be quoted if they contain space.
+    const char * const argv0 = SANDSTONE_EXECUTABLE_NAME ".exe";
+#else
+    const char * const argv0 = SANDSTONE_EXECUTABLE_NAME;
+#endif
     const char *argv[] = {
         // argument order must match exec_mode_run()
-        program_invocation_name, "-x", test->id, random_seed.c_str(),
+        argv0, "-x", test->id, random_seed.c_str(),
         statefdstr.begin(), shmempipefd >= 0 ? shmempipefdstr.begin() : nullptr,
         nullptr
     };
