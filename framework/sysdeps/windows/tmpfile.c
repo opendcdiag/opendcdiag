@@ -20,6 +20,9 @@
 #ifndef RtlGenRandom
 #  define RtlGenRandom SystemFunction036
 #endif
+
+#define WIN_TEMP_MAX_RETIRES            16
+
 DECLSPEC_IMPORT BOOLEAN WINAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
 
 static unsigned next_random()
@@ -43,19 +46,33 @@ static unsigned next_random()
 int open_memfd(enum MemfdCloexecFlag flag)
 {
     wchar_t tmpname[sizeof SANDSTONE_STRINGIFY(UINT_MAX) ".tmp"];
+    wchar_t tmppath[MAX_PATH];
+
     HANDLE hFile = INVALID_HANDLE_VALUE;
     SECURITY_ATTRIBUTES sa = {};
     sa.nLength = sizeof(sa);
     sa.bInheritHandle = (flag == MemfdInheritOnExec);
     sa.lpSecurityDescriptor = NULL;
 
-    for (int i = 0; hFile == INVALID_HANDLE_VALUE && i < 16; ++i) {
+    DWORD getTempPathRes = GetTempPathW(MAX_PATH, tmppath);
+
+    if (getTempPathRes == 0)
+        return -1;
+
+    if (wcslen(tmppath) >= MAX_PATH)
+        return -1;
+
+    for (int i = 0; hFile == INVALID_HANDLE_VALUE && i < WIN_TEMP_MAX_RETIRES; ++i) {
         wcscat(_ultow(next_random(), tmpname, 36), L".tmp");            // yes, base 36
         DWORD access = GENERIC_READ | GENERIC_WRITE;
         DWORD sharemode = FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE;
         DWORD creation = CREATE_NEW;
         DWORD flags = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE;
-        hFile = CreateFileW(tmpname, access, sharemode, &sa, creation, flags, NULL);
+
+        if ((wcslen(tmppath) + wcslen(tmpname)) >= MAX_PATH)
+            continue;
+
+        hFile = CreateFileW(wcscat(tmppath, tmpname), access, sharemode, &sa, creation, flags, NULL);
     }
     if (hFile != INVALID_HANDLE_VALUE)
         return _open_osfhandle((intptr_t)hFile, _O_BINARY | (sa.bInheritHandle ? 0 : _O_NOINHERIT));
