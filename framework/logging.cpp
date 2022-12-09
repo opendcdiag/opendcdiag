@@ -588,6 +588,16 @@ static const char *time_based_log_path()
 
 void logging_init_global(void)
 {
+#ifdef _WIN32
+    // Enable virtual terminal sequences in our console, so sequences used in
+    // progress bar are handled correctly. We do it early so that we can get
+    // our console from STD_OUTPUT_HANDLE.
+    DWORD conmode;
+    HANDLE hstdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleMode(hstdout, &conmode);
+    SetConsoleMode(hstdout, conmode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#endif
+
     /* move stdout to a different file descriptor for us */
 #ifdef F_DUPFD_CLOEXEC
     real_stdout_fd = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, 0);
