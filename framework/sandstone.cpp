@@ -88,7 +88,7 @@ static constexpr struct test *ordered_test_list[] = { nullptr };
 #  ifdef ftruncate
 // MinGW's ftruncate64 tries to check free disk space and that fails on Wine,
 // so use the the 32-bit offset version (which calls _chsize)
-#    undef fruncate
+#    undef ftruncate
 #  endif
 
 namespace {

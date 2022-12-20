@@ -100,9 +100,9 @@ test_yaml_regexp() {
     # not all tests
     for test in selftest_failinit selftest_fail; do
         bash -c "$SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 -e $test -o -; [[ $? -eq 1 ]]" | \
-            sed 's,\r$,,' | tee output.tap
-        egrep -qx "\[[ 0-9.]+\] exit: fail" output.tap
-        not_oks=`grep -E 'not ok +([0-9] )'$test output.tap`
+            sed 's,\r$,,' | tee /tmp/output.tap
+        egrep -qx "\[[ 0-9.]+\] exit: fail" /tmp/output.tap
+        not_oks=`grep -E 'not ok +([0-9] )'$test /tmp/output.tap`
         [[ `echo "$not_oks" | wc -l` -eq 5 ]]
     done
 }
@@ -606,7 +606,7 @@ fail_common() {
         test_yaml_regexp "/tests/$i/state/retry" True
         test_yaml_numeric "/tests/$i/state/iteration" "value == $i"
     done
-    grep -e '# Test failed 4 out of 4' output.yaml
+    grep -e '# Test failed 4 out of 4' /tmp/output.yaml
 
     # confirm it retested - second selftest_fail
     for ((i = 5; i <= 6; ++i)); do
@@ -618,7 +618,7 @@ fail_common() {
         test_yaml_regexp "/tests/$i/state/retry" True
         test_yaml_numeric "/tests/$i/state/iteration" "value == $i - 4"
     done
-    grep -e '# Test failed 3 out of 3' output.yaml
+    grep -e '# Test failed 3 out of 3' /tmp/output.yaml
 }
 
 function selftest_logerror_common() {
