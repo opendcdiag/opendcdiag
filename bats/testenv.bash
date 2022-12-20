@@ -34,7 +34,7 @@ SANDSTONE="$SANDSTONE --on-crash=core --on-hang=kill"
 
 function teardown()
 {
-    rm -f output.yaml output.tap
+    rm -f /tmp/output.yaml /tmp/output.tap
     if [[ -f ./core ]]; then
         # Rename the core file so it won't get clobbered
         mv ./core core.batstest-${BATS_SUITE_TEST_NUMBER}
@@ -71,12 +71,12 @@ function run_sandstone_yaml()
     local sss=$(bash -xc "$command" argv0 "$@" 3> $yamlfile)
 
     # Strip CR from CRLF
-    sed 's/\r$//' $yamlfile > output.yaml
+    sed 's/\r$//' $yamlfile > /tmp/output.yaml
     rm -- $yamlfile
-    (echo ---; cat output.yaml) | \
+    (echo ---; cat /tmp/output.yaml) | \
         tee -a total_log_output.yaml # for bats' logger
 
-    local exit=$(sed -En '/^ *exit: (.*)$/s//\1/p' output.yaml)
+    local exit=$(sed -En '/^ *exit: (.*)$/s//\1/p' /tmp/output.yaml)
     # confirm exit status
     case "$exit" in
         pass) expected=0 ;;
@@ -96,12 +96,12 @@ function run_sandstone_yaml()
     if [[ "$VALIDATION" = "dump" ]]; then
         # Load the YAML structure into the $yamldump associative array variable
         declare -p yamldump > /dev/null # errors out if variable is not pre-declared
-        local structure=$(python3 $BATS_TEST_COMMONDIR/dumpyaml.py < output.yaml)
+        local structure=$(python3 $BATS_TEST_COMMONDIR/dumpyaml.py < /tmp/output.yaml)
         eval "yamldump=($structure)"
     elif [[ "$VALIDATION" != 0 ]]; then
-	python3 $BATS_TEST_COMMONDIR/yamltest.py output.yaml
+	python3 $BATS_TEST_COMMONDIR/yamltest.py /tmp/output.yaml
         if type -p yq > /dev/null; then
-	    yq . output.yaml > /dev/null
+	    yq . /tmp/output.yaml > /dev/null
         fi
     fi
     run_sandstone_yaml_post
