@@ -1481,7 +1481,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
-#ifdef SANDSTONE_OPENSSL_LINKED
+#if SANDSTONE_OPENSSL_LINKED
 static constexpr bool OpenSSLWorking = true;
 #  define DECLARE_FUNCTIONS(Fn)     static constexpr auto s_ ## Fn = Fn;
 #else
