@@ -117,7 +117,7 @@ static linux_cpu_info parse_proc_cpuinfo()
             char *endptr = nullptr;
             uint64_t value = strtoull(colon + 1, &endptr, 0);
             if (endptr > colon) {
-                if (value <= result.cpu_fields.size())
+                if (value >= result.cpu_fields.size())
                     result.cpu_fields.resize(value + 1);
                 current = &result.cpu_fields[value];
             } else {
