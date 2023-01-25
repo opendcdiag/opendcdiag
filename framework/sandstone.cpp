@@ -1685,11 +1685,6 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
             state = TestFailed;
             break;
         } else if (ret < 0) {
-            if (ret > EXIT_SKIP) {
-                log_info("Init function requested skip with code %i (%s)", ret, strerror(-ret));
-            } else {
-                log_info("Init function requested skip with code %i", ret);
-            }
             state = TestSkipped;
             break;
         }

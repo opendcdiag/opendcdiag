@@ -84,6 +84,24 @@ extern "C" {
 #  define log_debug( ...)       (void)0
 #endif
 
+// skip categories
+typedef enum SkipCategory {
+    ResourceIssueSkipCategory = 1,
+    CpuNotSupportedSkipCategory,
+    DeviceNotFoundSkipCategory,
+    DeviceNotConfiguredSkipCategory,
+    UnknownSkipCategory,
+    RuntimeSkipCategory,
+    SelftestSkipCategory,
+    OsNotSupportedSkipCategory,
+    ThreadIssueSkipCategory
+} SkipCategory;
+
+/// logs a skip message to the logfile. log_skip accepts the category to which the skip belongs to
+/// and accepts a constant format string followed by 0 or more arguments that provide data for the 
+/// format string.
+#define log_skip(skip_category, ...)          log_message_skip(thread_num, skip_category, __VA_ARGS__)
+
 /// used to determine whether one or more CPU features are available at runtime.  f is a bitmask
 /// of cpu features as defined in the auto-generated cpu_features.h file.  For example, a test
 /// may call cpu_has_feature(cpu_feature_avx512f) to determine whether AVX-512 is available.
@@ -473,6 +491,7 @@ extern int test_time_condition(const struct test *test) noexcept;
 /// failures to allocate memory or create a file.
 extern void log_platform_message(const char *msg, ...) ATTRIBUTE_PRINTF(1, 2);
 extern void log_message(int thread_num, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
+extern void log_message_skip(int thread_num, SkipCategory c, const char *msg, ...) ATTRIBUTE_PRINTF(3, 4);
 /// logs binary data to the logs.  The data is specified in the data
 /// parameter and the size of the data in bytes in the size parameter.
 /// The message parameter provides a description of the data which

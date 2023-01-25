@@ -110,6 +110,7 @@ enum LogTypes {
     UserMessages = 0,
     Preformatted = 1,
     UsedKnobValue = 2,
+    SkipMessages = 3,
 };
 
 struct ThreadLog
@@ -149,7 +150,7 @@ private:
     const char *stdout_terminator = nullptr;
 
     void maybe_print_yaml_marker(int fd);
-    void print_thread_messages();
+    void print_thread_messages(ChildExitStatus status);
     void print_thread_header(int fd, int cpu, int verbosity);
     void print_child_stderr();
     static std::string format_status_code(ChildExitStatus status);
@@ -176,7 +177,7 @@ private:
     void maybe_print_messages_header(int fd);
     void print_thread_header(int fd, int cpu, int verbosity);
     static int print_test_knobs(int fd, mmap_region r);
-    static int print_one_thread_messages(int fd, mmap_region r, int level);
+    static int print_one_thread_messages(int fd, mmap_region r, int level, ChildExitStatus status);
     void print_result_line(ChildExitStatus status);
 
     enum TestHeaderTime { AtStart, OnFirstFail };
@@ -192,14 +193,14 @@ public:
         prepare_line_prefix();
     }
 
-    void print(int tc);
+    void print(int tc, ChildExitStatus status);
 
 private:
     std::string timestamp_prefix;
 
     void prepare_line_prefix();
     void print_thread_header(int fd, int cpu, const char *prefix);
-    void print_thread_messages();
+    void print_thread_messages(ChildExitStatus status);
     void print_child_stderr();
 };
 
@@ -230,7 +231,7 @@ static const char *strnchr(const char *buffer, char c, size_t len)
 
 static uint8_t message_code(enum LogTypes logType, int level)
 {
-    assert((int)logType < 3);
+    assert((int)logType < 4);
     unsigned code = ((unsigned)logType + 1) << 4;
     code |= (level & 0xf);
     return (uint8_t)code;
@@ -438,6 +439,32 @@ static uint8_t status_level(char letter)
 
     log_warning("got improper status log message '%c'", letter);
     return 2;
+}
+
+static const char *char_to_skip_category(int val)
+{
+    switch (val) {
+    case SkipCategory(1):
+        return "ResourceIssueSkipCategory";
+    case SkipCategory(2):
+        return "CpuNotSupportedSkipCategory";
+    case SkipCategory(3):
+        return "DeviceNotFoundSkipCategory";
+    case SkipCategory(4):
+        return "DeviceNotConfiguredSkipCategory";
+    case SkipCategory(5):
+        return "UnknownSkipCategory";
+    case SkipCategory(6):
+        return "RuntimeSkipCategory";
+    case SkipCategory(7):
+        return "SelftestSkipCategory";
+    case SkipCategory(8):
+        return "OsNotSupportedSkipCategory";
+    case SkipCategory(9):
+        return "ThreadIssueSkipCategory";
+    }
+
+    return "NO CATEGORY PRESENT";
 }
 
 static std::vector<ThreadLog> &all_thread_logs() noexcept
@@ -1221,6 +1248,30 @@ void log_platform_message(const char *fmt, ...)
     log_message_preformatted(-1, msg);
 }
 
+#undef log_message_skip
+void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ...)
+{
+    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+        return;
+
+    va_list va;
+    va_start(va, fmt);
+    std::string msg = create_filtered_message_string(fmt, va);
+    va_end(va);
+    
+    msg.insert(msg.begin(), category);
+
+    if (msg[msg.size() - 1] == '\n')
+        msg.pop_back(); // remove trailing newline
+             
+    int level = LOG_LEVEL_QUIET;
+    FILE *log = log_for_thread(thread_num).log;
+    fflush(log);
+    fputc(message_code(SkipMessages, level), log);
+    fwrite(msg.c_str(), 1, msg.size(), log);
+    logging_stream_close(log);
+}
+
 #undef log_message
 void log_message(int thread_num, const char *fmt, ...)
 {
@@ -1545,50 +1596,93 @@ static void print_content_single_line(int fd, std::string_view before,
     writeln(fd, before, escape_for_single_line(message, escaped), after);
 }
 
-static void format_and_print_message(int fd, int message_level, std::string_view message)
+static void format_and_print_message(int fd, int message_level, std::string_view message, bool from_thread_message)
 {
-    const char *levels[] = { "error", "warning", "info", "debug" }; //levels for yaml
+    const char *levels[] = { "error", "warning", "info", "debug", "skip" }; //levels for yaml
 
     if (message.find('\n') != std::string_view::npos) {
         /* multi line */
         if (current_output_format() == SandstoneApplication::OutputFormat::yaml) {
-            if (message_level > int(std::size(levels)))
-                message_level = std::size(levels) - 1;
+            if (from_thread_message) {
+                 if (message_level > int(std::size(levels)))
+                    message_level = std::size(levels) - 1;
 
-            // trim a trailing newline, if any (just one)
-            if (message[message.size() - 1] == '\n')
-                message.remove_suffix(1);
-            writeln(fd, indent_spaces(), "    - level: ", levels[message_level]);
-            writeln(fd, indent_spaces(), "      text: |1");
-            print_content_indented(fd, "       ", message);
+                // trim a trailing newline, if any (just one)
+                if (message[message.size() - 1] == '\n')
+                    message.remove_suffix(1);
+
+                writeln(fd, indent_spaces(), "    - level: ", levels[message_level]);
+                writeln(fd, indent_spaces(), "      text: |1");
+                print_content_indented(fd, "       ", message);
+            } else {
+                writeln(fd, indent_spaces(), "  skip-reason: |1");
+                print_content_indented(fd, "   ", message);
+            }   
         } else {
-            writeln(fd, "  - |");
-            print_content_indented(fd, "    ", message);
+            if (from_thread_message) // are you writing individual thread's message?
+                writeln(fd, "  - |");
+            else                     // are you writing init thread's message?
+                writeln(fd, "\n", indent_spaces(), " - |");
+            print_content_indented(fd, "    ", message); 
         }
     } else {
         /* single line */
         if (current_output_format() == SandstoneApplication::OutputFormat::yaml) {
-            iovec vec[] = { IoVec(indent_spaces()), IoVec("    - { level: "), IoVec(levels[message_level]) };
-            IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
-            print_content_single_line(fd, ", text: '", message, "' }");
+            if (from_thread_message) {
+                iovec vec[] = { IoVec(indent_spaces()), IoVec("    - { level: "), IoVec(levels[message_level]) };
+                IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+                print_content_single_line(fd, ", text: '", message, "' }");
+            } else {
+                iovec vec[] = { IoVec(indent_spaces()) };
+                IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+                print_content_single_line(fd, "  skip-reason: '", message, "'");
+            }
         } else {
-            char c = '\'';
-            print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
+            if (from_thread_message) { // are you writing individual thread's message?
+                char c = '\'';
+                print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
+            } else { // are you writing init thread's message?
+                print_content_single_line(fd, "'", message, "'"); 
+            }
         }
     }
+}
 
+static std::string get_skip_message(int thread_num)
+{
+    std::string skip_message;
+    auto log = log_for_thread(thread_num);
+    struct mmap_region r = mmap_file(log.log_fd);
+    auto ptr = static_cast<const char *>(r.base);
+    const char *end = ptr + r.size;
+    const char *delim;
+
+    for ( ; ptr < end && (delim = strnchr(ptr, '\0', end - ptr)) != nullptr; ptr = delim + 1) {
+        uint8_t code = (uint8_t)*ptr++;
+        if (log_type_from_code(code) == LogTypes::SkipMessages) {
+            skip_message.assign(ptr, delim);
+            break;
+        }
+    }
+    munmap_file(r);
+    return skip_message;
+}
+
+static inline void format_skip_message(std::string &skip_message, std::string_view message)
+{
+    skip_message += message.substr(1, message.size());
 }
 
 /// Returns the lowest priority found
 /// (this function is shared between the TAP and key-value pair loggers)
-static int print_one_thread_messages(int fd, struct per_thread_data *data, struct mmap_region r, int level)
+static int print_one_thread_messages(int fd, struct per_thread_data *data, struct mmap_region r, int level, ChildExitStatus status)
 {
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
     const char *delim;
 
-    for ( ; ptr < end && (delim = strnchr(ptr, '\0', end - ptr)) != NULL; ptr = delim + 1) {
+    for ( ; ptr < end && (delim = strnchr(ptr, '\0', end - ptr)) != nullptr; ptr = delim + 1) {
         uint8_t code = (uint8_t)*ptr++;
         int message_level = level_from_code(code);
 
@@ -1598,11 +1692,19 @@ static int print_one_thread_messages(int fd, struct per_thread_data *data, struc
         std::string_view message(ptr, delim - ptr);
         switch (log_type_from_code(code)) {
         case UserMessages:
-            format_and_print_message(fd, -1, message);
+            format_and_print_message(fd, -1, message, true);
             break;
 
         case Preformatted:
             IGNORE_RETVAL(write(fd, ptr, delim - ptr));
+            break;
+        
+        case SkipMessages: 
+            if (status.result != TestSkipped) { // If test skipped in init, no need to display as it's already displayed in print_result_line
+                std::string skip_message;
+                format_skip_message(skip_message, message);
+                format_and_print_message(fd, -1, std::string_view{&skip_message[0], skip_message.size()}, true);
+            }
             break;
 
         case UsedKnobValue: {
@@ -1667,8 +1769,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, TestResult state_
         all_logs[0] = reopen_log(-1);   // main thread
 
     if (state == TestSkipped)
-        return;         // no threads were started
-
+        return;         // no threads were started    
     for (int i = 0; i < num_cpus(); ++i) {
         struct per_thread_data *data = cpu_data_for_thread(i);
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
@@ -1706,11 +1807,30 @@ void KeyValuePairLogger::prepare_line_prefix()
     timestamp_prefix += test->id;
 }
 
-void KeyValuePairLogger::print(int tc)
+void KeyValuePairLogger::print(int tc, ChildExitStatus status)
 {
     logging_printf(LOG_LEVEL_QUIET, "%s_result = %s\n", test->id,
                    state == TestSkipped ? "skip" :
                    state == TestFailed ? "fail" : "pass");
+    
+    if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
+        logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "RuntimeSkipCategory");
+        logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id, "All CPUs skipped while executing 'test_run()' function, check log for details");
+    } else if (status.result == TestSkipped) {  //if skipped in init
+        std::string init_skip_message = get_skip_message(-1);
+        if (init_skip_message.size() > 0) {
+            logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, char_to_skip_category(init_skip_message[0]));
+            logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = ", test->id);
+            std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
+            format_and_print_message(real_stdout_fd, -1, message, false);
+            if (file_log_fd != real_stdout_fd)
+                format_and_print_message(file_log_fd, -1, message, false);
+        } else {
+            logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "UnknownSkipCategory");
+            logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id, "Unknown, check main thread message for details or use -vv option for more info");
+        }
+    }
+
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_seq = %d\n", test->id, tc);
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_quality = %s\n", test->id, quality_string(test));
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_description = %s\n", test->id, test->description);
@@ -1729,7 +1849,7 @@ void KeyValuePairLogger::print(int tc)
     }
 
     logging_flush();
-    print_thread_messages();
+    print_thread_messages(status);
     print_child_stderr();
     logging_flush();
 }
@@ -1765,7 +1885,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
     dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
 }
 
-void KeyValuePairLogger::print_thread_messages()
+void KeyValuePairLogger::print_thread_messages(ChildExitStatus status)
 {
     for (int i = -1; i < num_cpus(); i++) {
         struct per_thread_data *data = cpu_data_for_thread(i);
@@ -1776,11 +1896,11 @@ void KeyValuePairLogger::print_thread_messages()
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
+        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, status);
 
         if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, test->id);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity);
+            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity, status);
         }
 
         munmap_file(r);
@@ -1846,6 +1966,15 @@ void TapFormatLogger::print(int tc, ChildExitStatus status)
             tap_line += extra;
         if (status.extra)
             tap_line += format_status_code(status);
+        if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
+            tap_line += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' function, check log for details)";
+        } else if (status.result == TestSkipped) {  //if skipped in init
+            std::string init_skip_message = get_skip_message(-1);
+            if (init_skip_message.size() != 0)
+                tap_line += " (" + std::string(char_to_skip_category(init_skip_message[0])) + " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
+            else
+                tap_line += "(UnknownSkipCategory: check main thread message for details or use -vv option for more info)";
+        }       
     }
     int loglevel = LOG_LEVEL_VERBOSE(1);
     if (state == TestFailed || (sApp->fatal_skips && state == TestSkipped))
@@ -1853,7 +1982,7 @@ void TapFormatLogger::print(int tc, ChildExitStatus status)
     logging_printf(loglevel, "%s\n", tap_line.c_str());
 
     logging_flush();
-    print_thread_messages();
+    print_thread_messages(status);
     if (sApp->verbosity >= 1)
         print_child_stderr();
 
@@ -2024,7 +2153,7 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
     }
 }
 
-void TapFormatLogger::print_thread_messages()
+void TapFormatLogger::print_thread_messages(ChildExitStatus status)
 {
     for (int i = -1; i < num_cpus(); i++) {
         struct per_thread_data *data = cpu_data_for_thread(i);
@@ -2035,11 +2164,11 @@ void TapFormatLogger::print_thread_messages()
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
+        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, status);
 
         if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, sApp->verbosity);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity);
+            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity, status);
         }
 
         munmap_file(r);
@@ -2147,7 +2276,7 @@ int YamlLogger::print_test_knobs(int fd, mmap_region r)
     return print_count;
 }
 
-inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level)
+inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level, ChildExitStatus status)
 {
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
@@ -2171,13 +2300,21 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
 
         switch (log_type_from_code(code)) {
         case UserMessages:
-            format_and_print_message(fd, message_level, message);
+            format_and_print_message(fd, message_level, message, true);
             break;
 
         case Preformatted:
             IGNORE_RETVAL(write(fd, message.data(), message.size()));
             break;
-
+        
+        case SkipMessages:
+            if (status.result != TestSkipped) { // If test skipped in init, no need to display as it's already displayed in print_result_line
+                std::string skip_message;
+                format_skip_message(skip_message, message);
+                format_and_print_message(fd, 4, std::string_view{&skip_message[0], skip_message.size()}, true);
+            }
+            break;
+        
         case UsedKnobValue:
             assert(sApp->log_test_knobs);
             continue;       // not break
@@ -2212,7 +2349,24 @@ void YamlLogger::print_result_line(ChildExitStatus status)
         // recheck, as status.result does not take failing threads into account
         switch (state) {
         case TestSkipped:
-            return logging_printf(loglevel, "  result: skip\n");
+            logging_printf(loglevel, "  result: skip\n");
+            if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
+                logging_printf(loglevel, "  skip-category: %s\n", "RuntimeSkipCategory");
+                return logging_printf(loglevel, "  skip-reason: %s\n", "All CPUs skipped while executing 'test_run()' function, check log for details");
+            } else if (status.result == TestSkipped) {  //if skipped in init
+                std::string init_skip_message = get_skip_message(-1);
+                if (init_skip_message.size() > 0) {
+                    logging_printf(loglevel, "  skip-category: %s\n", char_to_skip_category(init_skip_message[0]));
+                    std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
+                    format_and_print_message(real_stdout_fd, -1, message, false);
+                    if (file_log_fd != real_stdout_fd)
+                        format_and_print_message(file_log_fd, -1, message, false);
+                } else {
+                    logging_printf(loglevel, "  skip-category: %s\n", "UnknownSkipCategory");  
+                    return logging_printf(loglevel, "  skip-reason: %s\n", "Unknown, check main thread message for details or use -vv option for more info");
+                }
+            }
+            return;
         case TestPassed:
             return logging_printf(loglevel, "  result: pass\n");
         default:
@@ -2312,11 +2466,11 @@ void YamlLogger::print(int, ChildExitStatus status)
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX);
+        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX, status);
 
         if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, sApp->verbosity);
-            print_one_thread_messages(real_stdout_fd, r, sApp->verbosity);
+            print_one_thread_messages(real_stdout_fd, r, sApp->verbosity, status);
         }
 
         munmap_file(r);
@@ -2383,7 +2537,7 @@ TestResult logging_print_results(ChildExitStatus status, int *tc, const struct t
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value: {
         KeyValuePairLogger l(test, status.result);
-        l.print(n);
+        l.print(n, status);
         return l.state;
     }
 
