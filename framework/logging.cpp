@@ -892,9 +892,8 @@ static std::string libc_info()
 static std::string openssl_info()
 {
     std::string result = "";
-#if __has_include(<openssl/crypto.h>)
-    result = s_OpenSSL_version(0);
-#endif
+    if (s_OpenSSL_version)
+        result = s_OpenSSL_version(0);
     return result;
 }
 #endif

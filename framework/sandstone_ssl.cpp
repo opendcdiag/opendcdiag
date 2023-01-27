@@ -14,11 +14,15 @@
 
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
-#ifndef SANDSTONE_OPENSSL_LINKED
 
 #define DECLARE_SSL_POINTERS(Fn)        decltype(&Fn) s_ ## Fn = nullptr;
-#define INITIALIZE_SSL_POINTERS(Fn)     s_ ## Fn = reinterpret_cast<decltype(&Fn)>(resolve(SANDSTONE_STRINGIFY(Fn)));
 #define CHECK_SSL_POINTERS(Fn)          check(s_ ## Fn);
+
+#if SANDSTONE_SSL_LINKED
+#define INITIALIZE_SSL_POINTERS(Fn)     s_ ## Fn = &Fn;
+#else
+#define INITIALIZE_SSL_POINTERS(Fn)     s_ ## Fn = reinterpret_cast<decltype(&Fn)>(resolve(SANDSTONE_STRINGIFY(Fn)));
+#endif
 
 bool OpenSSLWorking = false;
 
@@ -26,6 +30,8 @@ SANDSTONE_SSL_FUNCTIONS(DECLARE_SSL_POINTERS)
 
 void sandstone_ssl_init()
 {
+// Load library when not linked
+#if SANDSTONE_SSL_LINKED == 0
 #ifdef _WIN32
     struct Libs {
         HMODULE ssleay32;
@@ -61,13 +67,16 @@ void sandstone_ssl_init()
     };
 #endif
 
-    bool failed = false;
     auto resolve = [&](const char *name) {
         void (*result)(void) = nullptr;
         if (auto ptr = inner_resolve(name))
             result = reinterpret_cast<void (*)(void)>(ptr);
         return result;
     };
+#endif // SANDSTONE_SSL_LINKED == 0
+
+    // Initialize pointers and do check ups
+    bool failed = false;
     auto check = [&](auto fn) {
         failed = failed || fn == nullptr;
     };
@@ -81,4 +90,3 @@ void sandstone_ssl_init()
     }
 }
 
-#endif
