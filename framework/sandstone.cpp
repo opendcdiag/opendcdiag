@@ -2850,7 +2850,7 @@ static constexpr unsigned TOTAL_5MIN_SAMPLES_COUNT = ((5u * 60u) / 5u);
 static constexpr unsigned SAMPLE_INTERVAL_SECONDS = 5u;
 static constexpr double   EXP_LOADAVG = exp(5.0 / (5.0 * 60.0)); // exp(5sec/5min)
 
-static std::atomic<double> loadavg = 0;
+static std::atomic<double> loadavg = std::numeric_limits<double>::infinity();
 static double last_tick_seconds;
 
 static void loadavg_windows_callback(PVOID, BOOLEAN)
@@ -2942,7 +2942,7 @@ static float system_idle_load()
 
     loadavg = fopen("/proc/loadavg", "r");
     if (!loadavg)
-        return false;
+        return std::numeric_limits<float>::infinity();
 
     ret = fscanf(loadavg, "%*f %f %*f", &load_5);
     fclose(loadavg);
