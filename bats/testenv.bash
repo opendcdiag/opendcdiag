@@ -99,7 +99,7 @@ function run_sandstone_yaml()
         local structure=$(python3 $BATS_TEST_COMMONDIR/dumpyaml.py < /tmp/output.yaml)
         eval "yamldump=($structure)"
     elif [[ "$VALIDATION" != 0 ]]; then
-	python3 $BATS_TEST_COMMONDIR/yamltest.py /tmp/output.yaml
+        python3 $BATS_TEST_COMMONDIR/yamltest.py /tmp/output.yaml
         if type -p yq > /dev/null; then
 	    yq . /tmp/output.yaml > /dev/null
         fi
