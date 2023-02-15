@@ -1002,7 +1002,6 @@ void logging_print_iteration_start()
     case SandstoneApplication::OutputFormat::key_value:
         return logging_printf(LOG_LEVEL_QUIET, "random_generator_state = %s\n", random_seed.c_str());
     case SandstoneApplication::OutputFormat::tap:
-        return logging_printf(LOG_LEVEL_QUIET, "# Random generator state: %s\n", random_seed.c_str());
     case SandstoneApplication::OutputFormat::yaml:
         return;
     case SandstoneApplication::OutputFormat::no_output:
@@ -1089,6 +1088,7 @@ void logging_init(const struct test *test)
     case SandstoneApplication::OutputFormat::key_value:
     case SandstoneApplication::OutputFormat::tap:
         logging_printf(LOG_LEVEL_VERBOSE(2), "# Executing test %s '%s'\n", test->id, test->description);
+        logging_printf(LOG_LEVEL_VERBOSE(2), "# Seed: %s \n", random_format_seed().c_str());
         break;
     case SandstoneApplication::OutputFormat::yaml:
         // note: see comments in YamlLogger::print() on this first line
