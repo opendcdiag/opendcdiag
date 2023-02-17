@@ -176,7 +176,6 @@ private:
     void maybe_print_messages_header(int fd);
     void print_thread_header(int fd, int cpu, int verbosity);
     static int print_test_knobs(int fd, mmap_region r);
-    static void print_one_message(int fd, int level, std::string_view message);
     static int print_one_thread_messages(int fd, mmap_region r, int level);
     void print_result_line(ChildExitStatus status);
 
@@ -1546,6 +1545,40 @@ static void print_content_single_line(int fd, std::string_view before,
     writeln(fd, before, escape_for_single_line(message, escaped), after);
 }
 
+static void format_and_print_message(int fd, int message_level, std::string_view message)
+{
+    const char *levels[] = { "error", "warning", "info", "debug" }; //levels for yaml
+
+    if (message.find('\n') != std::string_view::npos) {
+        /* multi line */
+        if (current_output_format() == SandstoneApplication::OutputFormat::yaml) {
+            if (message_level > int(std::size(levels)))
+                message_level = std::size(levels) - 1;
+
+            // trim a trailing newline, if any (just one)
+            if (message[message.size() - 1] == '\n')
+                message.remove_suffix(1);
+            writeln(fd, indent_spaces(), "    - level: ", levels[message_level]);
+            writeln(fd, indent_spaces(), "      text: |1");
+            print_content_indented(fd, "       ", message);
+        } else {
+            writeln(fd, "  - |");
+            print_content_indented(fd, "    ", message);
+        }
+    } else {
+        /* single line */
+        if (current_output_format() == SandstoneApplication::OutputFormat::yaml) {
+            iovec vec[] = { IoVec(indent_spaces()), IoVec("    - { level: "), IoVec(levels[message_level]) };
+            IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+            print_content_single_line(fd, ", text: '", message, "' }");
+        } else {
+            char c = '\'';
+            print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
+        }
+    }
+
+}
+
 /// Returns the lowest priority found
 /// (this function is shared between the TAP and key-value pair loggers)
 static int print_one_thread_messages(int fd, struct per_thread_data *data, struct mmap_region r, int level)
@@ -1556,7 +1589,6 @@ static int print_one_thread_messages(int fd, struct per_thread_data *data, struc
     const char *delim;
 
     for ( ; ptr < end && (delim = strnchr(ptr, '\0', end - ptr)) != NULL; ptr = delim + 1) {
-        const char *newline;
         uint8_t code = (uint8_t)*ptr++;
         int message_level = level_from_code(code);
 
@@ -1566,16 +1598,7 @@ static int print_one_thread_messages(int fd, struct per_thread_data *data, struc
         std::string_view message(ptr, delim - ptr);
         switch (log_type_from_code(code)) {
         case UserMessages:
-            newline = strnchr(ptr, '\n', delim - ptr);
-            if (!newline) {
-                /* single line */
-                char c = '\'';  // I'm lazy
-                print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
-            } else {
-                /* multi line */
-                writeln(fd, "  - |");
-                print_content_indented(fd, "    ", message);
-            }
+            format_and_print_message(fd, -1, message);
             break;
 
         case Preformatted:
@@ -2122,35 +2145,6 @@ int YamlLogger::print_test_knobs(int fd, mmap_region r)
     return print_count;
 }
 
-inline void YamlLogger::print_one_message(int fd, int level, std::string_view message)
-{
-    assert(!message.empty());       // print_one_thread_messages() already checked
-
-    const char *levels[] = { "error", "warning", "info", "debug" };
-    if (level > int(std::size(levels)))
-        level = std::size(levels) - 1;
-
-    // trim a trailing newline, if any (just one)
-    if (message[message.size() - 1] == '\n')
-        message.remove_suffix(1);
-
-    // within single-quote YAML, single quotes and newlines need to be
-    // duplicated, so we must do something about those two
-    size_t pos = message.find('\n');
-    if (pos != std::string_view::npos) {
-        // multi-line input, print as multi-line output too
-        writeln(fd, indent_spaces(), "    - level: ", levels[level]);
-        writeln(fd, indent_spaces(), "      text: |1");
-        print_content_indented(fd, "       ", message);
-        return;
-    }
-
-    // we'll print in a single line, thank you
-    iovec vec[] = { IoVec(indent_spaces()), IoVec("    - { level: "), IoVec(levels[level]) };
-    IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
-    print_content_single_line(fd, ", text: '", message, "' }");
-}
-
 inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level)
 {
     int lowest_level = INT_MAX;
@@ -2175,7 +2169,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
 
         switch (log_type_from_code(code)) {
         case UserMessages:
-            print_one_message(fd, message_level, message);
+            format_and_print_message(fd, message_level, message);
             break;
 
         case Preformatted:
