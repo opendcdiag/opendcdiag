@@ -231,19 +231,19 @@ static const char *strnchr(const char *buffer, char c, size_t len)
 static uint8_t message_code(enum LogTypes logType, int level)
 {
     assert((int)logType < 3);
-    unsigned code = ((unsigned)logType + 1) << 6;
-    code |= (level & 0x3f);
+    unsigned code = ((unsigned)logType + 1) << 4;
+    code |= (level & 0xf);
     return (uint8_t)code;
 }
 
 static enum LogTypes log_type_from_code(uint8_t code)
 {
-    return (enum LogTypes)((code >> 6) - 1);
+    return (enum LogTypes)((code >> 4) - 1);
 }
 
 static int level_from_code(uint8_t code)
 {
-    return code & 0x3f;
+    return code & 0xf;
 }
 
 static auto thread_core_spacing()
