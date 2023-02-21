@@ -67,4 +67,35 @@ static ssize_t read_file(int dfd, const char *filename, char buf[static restrict
         return read_file_fd(fd, buf);
 }
 
+static int kernel_driver_is_loaded()
+{
+        /* see if driver is loaded, otherwise try to load it */
+        int ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
+        if (ifs0 < 0) {
+                /* modprobe kernel driver, ignore errors entirely here */
+                pid_t pid = fork();
+                if (pid == 0) {
+                        execl("/sbin/modprobe", "/sbin/modprobe", "-q", "intel_ifs", NULL);
+
+                        /* don't print an error if /sbin/modprobe wasn't found, but
+                           log_debug() is fine (since the parent is waiting, we can
+                           write to the FILE* because it's unbuffered) */
+                        log_debug("Failed to run modprobe: %s", strerror(errno));
+                        _exit(errno);
+                } else if (pid > 0) {
+                        /* wait for child */
+                        int status, ret;
+                        do {
+                            ret = waitpid(pid, &status, 0);
+                        } while (ret < 0 && errno == EINTR);
+                } else {
+                        /* ignore failure to fork() -- extremely unlikely */
+                }
+
+                /* try opening again now that we've potentially modprobe'd */
+                ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
+        }
+    return ifs0;
+}
+
 #endif /* SANDSTONE_IFS_H_INCLUDED */

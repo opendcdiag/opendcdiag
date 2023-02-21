@@ -29,19 +29,6 @@
 
 #include "sandstone_ifs.h"
 
-#define PATH_SYS_IFS_BASE "/sys/devices/virtual/misc/"
-#define DEFAULT_TEST_ID 1
-
-#define BUFLEN 256 // kernel module prints at most a 64bit value
-
-/* from linux/ifs/ifs.h: */
-/*
- * Driver populated error-codes
- * 0xFD: Test timed out before completing all the chunks.
- * 0xFE: not all scan chunks were executed. Maximum forward progress retries exceeded.
- */
-#define IFS_SW_TIMEOUT                          0xFD
-#define IFS_SW_PARTIAL_COMPLETION               0xFE
 
 static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info)
 {
@@ -111,32 +98,8 @@ static int scan_init(struct test *test)
         /* allocate info struct */
         ifs_test_t *ifs_info = malloc(sizeof(ifs_test_t));
 
-        /* see if driver is loaded, otherwise try to load it */
-        int ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
-        if (ifs0 < 0) {
-                /* modprobe kernel driver, ignore errors entirely here */
-                pid_t pid = fork();
-                if (pid == 0) {
-                        execl("/sbin/modprobe", "/sbin/modprobe", "-q", "intel_ifs", NULL);
-
-                        /* don't print an error if /sbin/modprobe wasn't found, but
-                           log_debug() is fine (since the parent is waiting, we can
-                           write to the FILE* because it's unbuffered) */
-                        log_debug("Failed to run modprobe: %s", strerror(errno));
-                        _exit(errno);
-                } else if (pid > 0) {
-                        /* wait for child */
-                        int status, ret;
-                        do {
-                            ret = waitpid(pid, &status, 0);
-                        } while (ret < 0 && errno == EINTR);
-                } else {
-                        /* ignore failure to fork() -- extremely unlikely */
-                }
-
-                /* try opening again now that we've potentially modprobe'd */
-                ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
-        }
+        /* see if dirver is loaded */
+        int ifs0 = kernel_driver_is_loaded();
 
         /* see if we can open run_test and current_batch for writing */
         int run_fd = openat(ifs0, "run_test", O_WRONLY);
