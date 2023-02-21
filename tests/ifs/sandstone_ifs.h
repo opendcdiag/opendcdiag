@@ -67,11 +67,16 @@ static ssize_t read_file(int dfd, const char *filename, char buf[static restrict
         return read_file_fd(fd, buf);
 }
 
-static int kernel_driver_is_loaded()
+static int kernel_driver_is_loaded(const char *dir)
 {
+        /* */
+        char sys_ifs_path[50];
+        strcpy(sys_ifs_path, PATH_SYS_IFS_BASE);
+        strcat(sys_ifs_path, dir);
+
         /* see if driver is loaded, otherwise try to load it */
-        int ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
-        if (ifs0 < 0) {
+        int sys_ifs_fd = open(sys_ifs_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+        if (sys_ifs_fd < 0) {
                 /* modprobe kernel driver, ignore errors entirely here */
                 pid_t pid = fork();
                 if (pid == 0) {
@@ -93,9 +98,9 @@ static int kernel_driver_is_loaded()
                 }
 
                 /* try opening again now that we've potentially modprobe'd */
-                ifs0 = open(PATH_SYS_IFS_BASE "intel_ifs_0", O_DIRECTORY | O_PATH | O_CLOEXEC);
+                sys_ifs_fd = open(sys_ifs_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
         }
-    return ifs0;
+    return sys_ifs_fd;
 }
 
 #endif /* SANDSTONE_IFS_H_INCLUDED */

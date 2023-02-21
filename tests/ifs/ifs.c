@@ -98,8 +98,9 @@ static int scan_init(struct test *test)
         /* allocate info struct */
         ifs_test_t *ifs_info = malloc(sizeof(ifs_test_t));
 
-        /* see if dirver is loaded */
-        int ifs0 = kernel_driver_is_loaded();
+        /* see if driver is loaded */
+        const char *sys_ifs_dir = "intel_ifs_0";
+        int ifs0 = kernel_driver_is_loaded(sys_ifs_dir);
 
         /* see if we can open run_test and current_batch for writing */
         int run_fd = openat(ifs0, "run_test", O_WRONLY);
