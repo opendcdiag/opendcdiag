@@ -131,10 +131,10 @@ static int selftest_logdata_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
-static int selftest_log_platform_run(struct test *test, int cpu)
+static int selftest_log_platform_init(struct test *test)
 {
     (void)test;
-    log_platform_message(SANDSTONE_LOG_INFO "This is an informational platform message from CPU %d", cpu);
+    log_platform_message(SANDSTONE_LOG_INFO "This is an informational platform message");
     return EXIT_SUCCESS;
 }
 
@@ -714,7 +714,8 @@ static struct test selftests_array[] = {
     .id = "selftest_log_platform",
     .description = "Logs platform messages (not related to the test)",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
-    .test_run = selftest_log_platform_run,
+    .test_init = selftest_log_platform_init,
+    .test_run = selftest_pass_run,
     .desired_duration = -1,
 },
 {
