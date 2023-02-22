@@ -16,6 +16,7 @@
 #define IFS_SW_PARTIAL_COMPLETION               0xFE
 
 typedef struct {
+    bool image_support;
     char image_id[BUFLEN];
     char image_version[BUFLEN];
 } ifs_test_t;

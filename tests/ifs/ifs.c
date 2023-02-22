@@ -93,45 +93,48 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
     return false;
 }
 
-static int scan_init(struct test *test)
+static int scan_common_init(struct test *test, const char *sys_ifs_dir)
 {
         /* allocate info struct */
-        ifs_test_t *ifs_info = malloc(sizeof(ifs_test_t));
+        ifs_test_t *ifs_info = test->data;
 
         /* see if driver is loaded */
-        const char *sys_ifs_dir = "intel_ifs_0";
-        int ifs0 = kernel_driver_is_loaded(sys_ifs_dir);
+        int ifs_fd = kernel_driver_is_loaded(sys_ifs_dir);
 
-        /* see if we can open run_test and current_batch for writing */
-        int run_fd = openat(ifs0, "run_test", O_WRONLY);
+        /* see if we can open run_test for writing */
+        int run_fd = openat(ifs_fd, "run_test", O_WRONLY);
         int saved_errno = errno;
         if (run_fd < 0) {
-                log_info("could not open intel_ifs_0/run_test for writing (not running as root?): %m");
+                log_info("could not open %s/run_test for writing (not running as root?): %m", sys_ifs_dir);
                 close(run_fd);
                 return -saved_errno;
         }
 
-        int batch_fd = openat(ifs0, "current_batch", O_RDWR);
-        saved_errno = errno;
-        if (batch_fd < 0) {
-                log_info("could not open intel_ifs_0/current_batch for writing (not running as root?): %m");
-                close(batch_fd);
-                return -saved_errno;
+        /* Check on images if supported */
+        if (ifs_info->image_support)
+        {
+            /* see if we can open current_batch for writing */
+            int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+            saved_errno = errno;
+            if (batch_fd < 0) {
+                    log_info("could not open %s/current_batch for writing (not running as root?): %m", sys_ifs_dir);
+                    close(batch_fd);
+                    return -saved_errno;
+            }
+            close(run_fd);
+
+            /* load test file */
+            if (!load_test_file(ifs_fd, batch_fd, test, ifs_info))
+                return EXIT_SKIP;
+
+            /* read image version if available and log it */
+            if (read_file(ifs_fd, "image_version", ifs_info->image_version) <= 0) {
+                    strncpy(ifs_info->image_version, "unknown", BUFLEN);
+            }
+            log_info("Test image ID: %s version: %s", ifs_info->image_id, ifs_info->image_version);
         }
-        close(run_fd);
 
-        /* load test file */
-        if (!load_test_file(ifs0, batch_fd, test, ifs_info))
-            return EXIT_SKIP;
-
-        /* read image version if available and log it */
-        if (read_file(ifs0, "image_version", ifs_info->image_version) <= 0) {
-                strncpy(ifs_info->image_version, "unknown", BUFLEN);
-        }
-        log_info("Test image ID: %s version: %s", ifs_info->image_id, ifs_info->image_version);
-
-        test->data = ifs_info;
-        close(ifs0);
+        close(ifs_fd);
         return EXIT_SUCCESS;
 }
 
@@ -210,9 +213,18 @@ static int scan_run(struct test *test, int cpu)
         return any_test_succeded ? EXIT_SUCCESS : EXIT_SKIP;
 }
 
+static int scan_saf_init(struct test *test)
+{
+    ifs_test_t *data = (ifs_test_t *) malloc(sizeof(ifs_test_t));
+    data->image_support = true;
+    test->data = data;
+
+    return scan_common_init(test, "intel_ifs_0");
+}
+
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
     .quality_level = TEST_QUALITY_PROD,
-    .test_init = scan_init,
+    .test_init = scan_saf_init,
     .test_run = scan_run,
     .desired_duration = -1,
     .fracture_loop_count = -1,
