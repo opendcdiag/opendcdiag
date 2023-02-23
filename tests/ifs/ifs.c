@@ -140,77 +140,57 @@ static int scan_common_init(struct test *test)
 
 static int scan_run(struct test *test, int cpu)
 {
-        char result[BUFLEN], my_cpu[BUFLEN];
-        DIR *base;
-        int basefd;
-        bool any_test_succeded = false;
+        /* Get info struct */
         ifs_test_t *ifs_info = test->data;
+        char result[BUFLEN], my_cpu[BUFLEN];
 
         if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
 
-        basefd = open(PATH_SYS_IFS_BASE, O_DIRECTORY | O_CLOEXEC);
-        if (basefd < 0)
-                return -errno;      // shouldn't happen
-        base = fdopendir(basefd);
-        if (base == NULL)
-            return -errno;          // shouldn't happen
-
         snprintf(my_cpu, sizeof(my_cpu), "%d\n", cpu_info[cpu].cpu_number);
 
-        struct dirent *ent;
-        while ((ent = readdir(base)) != NULL) {
-                static const char prefix[] = "intel_ifs_";
-                const char *d_name = ent->d_name;
-                if (ent->d_type != DT_DIR || memcmp(ent->d_name, prefix, strlen(prefix)) != 0)
-                        continue;
-
-                int ifsfd = openat(basefd, d_name, O_DIRECTORY | O_PATH | O_CLOEXEC);
-                if (ifsfd < 0) {
-                        log_warning("Could not start test for \"%s\": %m", d_name);
-                        continue;
-                }
-
-                /* start the test; this blocks until the test has finished */
-                if (!write_file(ifsfd, "run_test", my_cpu)) {
-                        log_warning("Could not start test for \"%s\": %m", d_name);
-                        close(ifsfd);
-                        continue;
-                }
-
-                /* read result */
-                if (read_file(ifsfd, "status", result) < 0) {
-                        log_warning("Could not obtain result for \"%s\": %m", d_name);
-                        close(ifsfd);
-                        continue;
-                }
-
-                if (memcmp(result, "fail", strlen("fail")) == 0) {
-                        /* failed, get status code */
-                        unsigned long long code;
-                        ssize_t n = read_file(ifsfd, "details", result);
-                        close(ifsfd);
-
-                        if (n < 0) {
-                                log_error("Test \"%s\" failed but could not retrieve error condition. Image ID: %s  version: %s", d_name, ifs_info->image_id, ifs_info->image_version);
-                        } else {
-                                if (sscanf(result, "%llx", &code) == 1 && is_result_code_skip(code)) {
-                                        log_warning("Test \"%s\" did not run to completion, code: %s image ID: %s version: %s", d_name, result, ifs_info->image_id, ifs_info->image_version);
-                                        continue;       // not a failure condition
-                                }
-                                log_error("Test \"%s\" failed with condition: %s image: %s version: %s", d_name, result, ifs_info->image_id, ifs_info->image_version);
-                        }
-                        break;
-                } else if (memcmp(result, "pass", strlen("pass")) == 0) {
-                        log_debug("Test \"%s\" passed", d_name);
-                        any_test_succeded = true;
-                }
-
-                close(ifsfd);
+        int ifsfd = open(ifs_info->sys_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+        if (ifsfd < 0) {
+                log_warning("Could not start test for \"%s\": %m", ifs_info->sys_dir);
+                return EXIT_SKIP;
         }
 
-        closedir(base);
-        return any_test_succeded ? EXIT_SUCCESS : EXIT_SKIP;
+        /* start the test; this blocks until the test has finished */
+        if (!write_file(ifsfd, "run_test", my_cpu)) {
+                log_warning("Could not start test for \"%s\": %m", ifs_info->sys_dir);
+                close(ifsfd);
+                return EXIT_SKIP;
+        }
+
+        /* read result */
+        if (read_file(ifsfd, "status", result) < 0) {
+                log_warning("Could not obtain result for \"%s\": %m", ifs_info->sys_dir);
+                close(ifsfd);
+                return EXIT_SKIP;
+        }
+
+        if (memcmp(result, "fail", strlen("fail")) == 0) {
+                /* failed, get status code */
+                unsigned long long code;
+                ssize_t n = read_file(ifsfd, "details", result);
+                close(ifsfd);
+
+                if (n < 0) {
+                        report_fail_msg("Test \"%s\" failed but could not retrieve error condition. Image ID: %s  version: %s", ifs_info->sys_dir, ifs_info->image_id, ifs_info->image_version);
+                } else {
+                        if (sscanf(result, "%llx", &code) == 1 && is_result_code_skip(code)) {
+                                log_warning("Test \"%s\" did not run to completion, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                                return EXIT_SKIP; // not a failure condition
+                        }
+                        report_fail_msg("Test \"%s\" failed with condition: %s image: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                }
+                //break;
+        } else if (memcmp(result, "pass", strlen("pass")) == 0) {
+                log_debug("Test \"%s\" passed", ifs_info->sys_dir);
+        }
+
+        close(ifsfd);
+        return EXIT_SUCCESS;
 }
 
 static int scan_saf_init(struct test *test)
