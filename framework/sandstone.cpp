@@ -2934,11 +2934,11 @@ static void loadavg_windows_callback(PVOID, BOOLEAN)
     const double efactor               = 1.0 / pow(EXP_LOADAVG, sample_windows_count);
 
     // Exponential moving average
-    double loadavg_ = loadavg.load(std::memory_order::memory_order_consume);
+    double loadavg_ = loadavg.load(std::memory_order::consume);
     loadavg_ = loadavg_ * efactor + current_avg_load * (1.0 - efactor);
 
     last_tick_seconds = current_tick_seconds;
-    loadavg.store(loadavg_, std::memory_order::memory_order_release);
+    loadavg.store(loadavg_, std::memory_order::relaxed);
 }
 
 static int setup_windows_loadavg_perf_counters()
@@ -2999,7 +2999,7 @@ static float system_idle_load()
     if (ret == 1)
        return load_5;
 #elif defined(_WIN32)
-    return loadavg.load(std::memory_order::memory_order_consume);
+    return loadavg.load(std::memory_order::consume);
 #else //__linux__
     return std::numeric_limits<float>::lowest();
 #endif
