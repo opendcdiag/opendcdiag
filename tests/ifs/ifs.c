@@ -93,19 +93,19 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
     return false;
 }
 
-static int scan_common_init(struct test *test, const char *sys_ifs_dir)
+static int scan_common_init(struct test *test)
 {
-        /* allocate info struct */
+        /* Get info struct */
         ifs_test_t *ifs_info = test->data;
 
         /* see if driver is loaded */
-        int ifs_fd = kernel_driver_is_loaded(sys_ifs_dir);
+        int ifs_fd = kernel_driver_is_loaded(ifs_info->sys_path);
 
         /* see if we can open run_test for writing */
         int run_fd = openat(ifs_fd, "run_test", O_WRONLY);
         int saved_errno = errno;
         if (run_fd < 0) {
-                log_info("could not open %s/run_test for writing (not running as root?): %m", sys_ifs_dir);
+                log_info("could not open %s/run_test for writing (not running as root?): %m", ifs_info->sys_dir);
                 close(run_fd);
                 return -saved_errno;
         }
@@ -117,7 +117,7 @@ static int scan_common_init(struct test *test, const char *sys_ifs_dir)
             int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
             saved_errno = errno;
             if (batch_fd < 0) {
-                    log_info("could not open %s/current_batch for writing (not running as root?): %m", sys_ifs_dir);
+                    log_info("could not open %s/current_batch for writing (not running as root?): %m", ifs_info->sys_dir);
                     close(batch_fd);
                     return -saved_errno;
             }
@@ -216,10 +216,13 @@ static int scan_run(struct test *test, int cpu)
 static int scan_saf_init(struct test *test)
 {
     ifs_test_t *data = (ifs_test_t *) malloc(sizeof(ifs_test_t));
-    data->image_support = true;
-    test->data = data;
 
-    return scan_common_init(test, "intel_ifs_0");
+    data->sys_dir = "intel_ifs_0";
+    data->sys_path = PATH_SYS_IFS_BASE "intel_ifs_0";
+    data->image_support = true;
+
+    test->data = data;
+    return scan_common_init(test);
 }
 
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
