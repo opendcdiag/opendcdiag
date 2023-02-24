@@ -185,6 +185,9 @@ static int scan_run(struct test *test, int cpu)
                         report_fail_msg("Test \"%s\" failed with condition: %s image: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
                 }
                 //break;
+        } else if (memcmp(result, "untested", strlen("untested")) == 0) {
+                log_warning("Test \"%s\" remains unstested, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                return EXIT_SKIP;
         } else if (memcmp(result, "pass", strlen("pass")) == 0) {
                 log_debug("Test \"%s\" passed", ifs_info->sys_dir);
         }
