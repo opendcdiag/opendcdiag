@@ -133,6 +133,12 @@ static int scan_common_init(struct test *test)
             }
             log_info("Test image ID: %s version: %s", ifs_info->image_id, ifs_info->image_version);
         }
+        else
+        {
+            /* When images are not supported, mark them as Not Applicable */
+            strncpy(ifs_info->image_id, "NA", BUFLEN);
+            strncpy(ifs_info->image_version, "NA", BUFLEN);
+        }
 
         close(ifs_fd);
         return EXIT_SUCCESS;
