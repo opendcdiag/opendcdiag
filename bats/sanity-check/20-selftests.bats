@@ -114,7 +114,7 @@ test_yaml_regexp() {
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/command-line" ".* $args"
-    test_yaml_regexp "/version" '([a-z-]+-)?(v[0-9.]+(-[0-9a-z]+)? \([0-9a-f]{40}\)|[0-9]+-[0-9]+-g[0-9a-f]+|[0-9a-f]{12}|[0-9a-f]{40})(-.*)?'
+    test_yaml_regexp "/version" '([a-z-]+-)?(v[0-9]+(rc[0-9]){0,1}+(-[0-9a-z]+)? \([0-9a-f]{40}\)|[0-9]+-[0-9]+-g[0-9a-f]+|[0-9a-f]{12}|[0-9a-f]{40})(-.*)?'
 
     local os=`uname -sr`
     if [[ "$SANDSTONE" = "wine "* ]]; then
