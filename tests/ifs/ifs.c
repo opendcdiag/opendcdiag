@@ -44,7 +44,7 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
     enforce_run = get_testspecific_knob_value_uint(test, "enforce_run", -1);
     if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
     {
-        log_warning("Previous run failure found! Refusing to run");
+        log_warning("Previous run failure found! This test will skip until enforced adding flag: -O ifs.enforce_run=1");
         return false;
     }
 
