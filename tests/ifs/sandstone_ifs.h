@@ -2,7 +2,8 @@
 #define SANDSTONE_IFS_H_INCLUDED
 
 #define PATH_SYS_IFS_BASE "/sys/devices/virtual/misc/"
-#define DEFAULT_TEST_ID 1
+#define PATH_LEN          38
+#define DEFAULT_TEST_ID   1
 
 #define BUFLEN 256 // kernel module prints at most a 64bit value
 
@@ -17,7 +18,6 @@
 
 typedef struct {
     const char *sys_dir;
-    const char *sys_path;
     bool image_support;
     char image_id[BUFLEN];
     char image_version[BUFLEN];
