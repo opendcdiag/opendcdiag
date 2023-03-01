@@ -70,7 +70,7 @@ static ssize_t read_file(int dfd, const char *filename, char buf[static restrict
         return read_file_fd(fd, buf);
 }
 
-static int kernel_driver_is_loaded(const char *sys_path)
+static int open_sysfs_ifs_base(const char *sys_path)
 {
         /* see if driver is loaded, otherwise try to load it */
         int sys_ifs_fd = open(sys_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
