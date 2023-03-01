@@ -103,7 +103,13 @@ static int scan_common_init(struct test *test)
         char sys_path[PATH_LEN];
         int n = snprintf(sys_path, PATH_LEN, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
         assert(n < sizeof(sys_path));
-        int ifs_fd = kernel_driver_is_loaded(sys_path);
+        int ifs_fd = open_sysfs_ifs_base(sys_path);
+        if (ifs_fd < 0) {
+            int saved_errno = errno;
+            log_info("could not find IFS control files in %s: either IFS is not supported on this system"
+                     " or this kernel does not support IFS (%m)", ifs_info->sys_dir);
+        return -saved_errno;
+        }
 
         /* see if we can open run_test for writing */
         int run_fd = openat(ifs_fd, "run_test", O_WRONLY);
