@@ -18,6 +18,7 @@
 
 #if defined(__x86_64__) && defined(__linux__)
 
+#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -99,7 +100,10 @@ static int scan_common_init(struct test *test)
         ifs_test_t *ifs_info = test->data;
 
         /* see if driver is loaded */
-        int ifs_fd = kernel_driver_is_loaded(ifs_info->sys_path);
+        char sys_path[PATH_LEN];
+        int n = snprintf(sys_path, PATH_LEN, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
+        assert(n < sizeof(sys_path));
+        int ifs_fd = kernel_driver_is_loaded(sys_path);
 
         /* see if we can open run_test for writing */
         int run_fd = openat(ifs_fd, "run_test", O_WRONLY);
@@ -155,7 +159,10 @@ static int scan_run(struct test *test, int cpu)
 
         snprintf(my_cpu, sizeof(my_cpu), "%d\n", cpu_info[cpu].cpu_number);
 
-        int ifsfd = open(ifs_info->sys_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+        char sys_path[PATH_LEN];
+        int n = snprintf(sys_path, PATH_LEN, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
+        assert(n < sizeof(sys_path));
+        int ifsfd = open(sys_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
         if (ifsfd < 0) {
                 log_warning("Could not start test for \"%s\": %m", ifs_info->sys_dir);
                 return EXIT_SKIP;
@@ -207,7 +214,6 @@ static int scan_saf_init(struct test *test)
     ifs_test_t *data = (ifs_test_t *) malloc(sizeof(ifs_test_t));
 
     data->sys_dir = "intel_ifs_0";
-    data->sys_path = PATH_SYS_IFS_BASE "intel_ifs_0";
     data->image_support = true;
 
     test->data = data;
