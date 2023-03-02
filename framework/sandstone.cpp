@@ -2899,7 +2899,7 @@ static constexpr unsigned TOTAL_5MIN_SAMPLES_COUNT = ((5u * 60u) / 5u);
 static constexpr unsigned SAMPLE_INTERVAL_SECONDS = 5u;
 static constexpr double   EXP_LOADAVG = exp(5.0 / (5.0 * 60.0)); // exp(5sec/5min)
 
-static std::atomic<double> loadavg = std::numeric_limits<double>::infinity();
+static std::atomic<double> loadavg = 0.0;
 static double last_tick_seconds;
 
 static void loadavg_windows_callback(PVOID, BOOLEAN)
@@ -3050,7 +3050,10 @@ static void background_scan_init()
         close(fd);
 
 #ifdef _WIN32
-    setup_windows_loadavg_perf_counters();
+    if (setup_windows_loadavg_perf_counters() != 0) {
+        // If setting up performance counters fail, assume system is never idle.
+        loadavg.store(std::numeric_limits<double>::infinity(), std::memory_order_relaxed);
+    }
 #endif // _WIN32
 }
 
