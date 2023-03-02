@@ -3764,12 +3764,18 @@ int main(int argc, char **argv)
                                                        test_list_randomize);
     } else {
         if (use_builtin_test_list) {
-            if (!SandstoneConfig::RestrictedCommandLine && test_list.size()) {
-                logging_printf(LOG_LEVEL_QUIET,
+            if (test_list.size()) {
+                if (!SandstoneConfig::RestrictedCommandLine) {
+                    logging_printf(LOG_LEVEL_QUIET,
                                "# WARNING: both --enable and --use-builtin-test-list specified, "
                                "the built-in test list.\n");
+                } else {
+                    logging_printf(LOG_LEVEL_QUIET, "# WARNING: test list is not empty while built-in test list provided.\n");
+                }
             }
-            test_list = { std::begin(ordered_test_list), std::end(ordered_test_list) };
+            for (auto& test : ordered_test_list) {
+                add_test(test_list, test);
+            }
         } else {
             generate_test_list(test_list);
         }
