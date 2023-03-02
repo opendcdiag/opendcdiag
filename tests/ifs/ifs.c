@@ -33,7 +33,7 @@
 
 static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info)
 {
-    char current_buf[BUFLEN], status_buf[BUFLEN];
+    char current_buf[BUFLEN] = {}, status_buf[BUFLEN] = {};
     int next_test, current_test, enforce_run;
 
     /* read both files status and current_batch */
@@ -44,7 +44,8 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
     enforce_run = get_testspecific_knob_value_uint(test, "enforce_run", -1);
     if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
     {
-        log_warning("Previous run failure found! This test will skip until enforced adding flag: -O ifs.enforce_run=1");
+        log_warning("Previous run failure found! This test will skip until enforced adding flag: "
+                    "-O %s.enforce_run=1", test->id);
         return false;
     }
 
@@ -79,11 +80,20 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
     {
         return true;
     }
+
+    /* when next blob does not exist, it will fail with ENOENT error */
     else if (errno == ENOENT)
     {
-        /* when next blob does not exists, it will fail with
-         * ENOENT error. Then, start from the begining */
-        log_info("Test file %s, does not exists. Starting over from 0x%x", ifs_info->image_id, DEFAULT_TEST_ID);
+        /* when not even default image is available, test cannot proceed. */
+        if (next_test == DEFAULT_TEST_ID)
+        {
+            log_info("There are no images available for this system or they are not located in the"
+                    " right directory");
+            return false;
+        }
+
+        /* when reached the latest image available, start from the begining */
+        log_info("Test file %s, does not exist. Starting over from 0x%x", ifs_info->image_id, DEFAULT_TEST_ID);
         sprintf(ifs_info->image_id, "%#x", DEFAULT_TEST_ID);
         if (write_file(dfd, "current_batch", ifs_info->image_id))
         {
@@ -100,15 +110,15 @@ static int scan_common_init(struct test *test)
         ifs_test_t *ifs_info = test->data;
 
         /* see if driver is loaded */
-        char sys_path[PATH_LEN];
-        int n = snprintf(sys_path, PATH_LEN, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
+        char sys_path[PATH_MAX];
+        int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
         assert(n < sizeof(sys_path));
         int ifs_fd = open_sysfs_ifs_base(sys_path);
         if (ifs_fd < 0) {
             int saved_errno = errno;
             log_info("could not find IFS control files in %s: either IFS is not supported on this system"
                      " or this kernel does not support IFS (%m)", ifs_info->sys_dir);
-        return -saved_errno;
+            return -saved_errno;
         }
 
         /* see if we can open run_test for writing */
@@ -120,12 +130,21 @@ static int scan_common_init(struct test *test)
                 return -saved_errno;
         }
 
-        /* Check on images if supported */
-        if (ifs_info->image_support)
+        /* try open current_batch for writing */
+        int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+        saved_errno = errno;
+        if (saved_errno == ENOENT)
         {
-            /* see if we can open current_batch for writing */
-            int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
-            saved_errno = errno;
+            /* when curren_batch file does not exist, we assume there are not image support */
+            ifs_info->image_support = false;
+
+            /* when images are not supported, mark them as Not Applicable */
+            strncpy(ifs_info->image_id, "NA", BUFLEN);
+            strncpy(ifs_info->image_version, "NA", BUFLEN);
+        }
+        else {
+            ifs_info->image_support = true;
+
             if (batch_fd < 0) {
                     log_info("could not open %s/current_batch for writing (not running as root?): %m", ifs_info->sys_dir);
                     close(batch_fd);
@@ -143,30 +162,28 @@ static int scan_common_init(struct test *test)
             }
             log_info("Test image ID: %s version: %s", ifs_info->image_id, ifs_info->image_version);
         }
-        else
-        {
-            /* When images are not supported, mark them as Not Applicable */
-            strncpy(ifs_info->image_id, "NA", BUFLEN);
-            strncpy(ifs_info->image_version, "NA", BUFLEN);
-        }
 
         close(ifs_fd);
         return EXIT_SUCCESS;
 }
 
-static int scan_run(struct test *test, int cpu)
+static int scan_run_helper(struct test *test, int cpu)
 {
         /* Get info struct */
         ifs_test_t *ifs_info = test->data;
-        char result[BUFLEN], my_cpu[BUFLEN];
+        char result[BUFLEN] = {}, my_cpu[BUFLEN] = {};
+
+        /* HACK: Shadows global variable that log_warning() uses
+         * DON'T use report_fail_msg() */
+        int thread_num = cpu;
 
         if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
 
         snprintf(my_cpu, sizeof(my_cpu), "%d\n", cpu_info[cpu].cpu_number);
 
-        char sys_path[PATH_LEN];
-        int n = snprintf(sys_path, PATH_LEN, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
+        char sys_path[PATH_MAX];
+        int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
         assert(n < sizeof(sys_path));
         int ifsfd = open(sys_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
         if (ifsfd < 0) {
@@ -195,16 +212,21 @@ static int scan_run(struct test *test, int cpu)
                 close(ifsfd);
 
                 if (n < 0) {
-                        report_fail_msg("Test \"%s\" failed but could not retrieve error condition. Image ID: %s  version: %s", ifs_info->sys_dir, ifs_info->image_id, ifs_info->image_version);
+                        log_error("Test \"%s\" failed but could not retrieve error condition. Image ID: %s  version: %s", ifs_info->sys_dir, ifs_info->image_id, ifs_info->image_version);
+                        return EXIT_FAILURE;
                 } else {
                         if (sscanf(result, "%llx", &code) == 1 && is_result_code_skip(code)) {
                                 log_warning("Test \"%s\" did not run to completion, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
                                 return EXIT_SKIP; // not a failure condition
                         }
-                        report_fail_msg("Test \"%s\" failed with condition: %s image: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                        log_error("Test \"%s\" failed with condition: %s image: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                        return EXIT_FAILURE;
                 }
                 //break;
         } else if (memcmp(result, "untested", strlen("untested")) == 0) {
+                ssize_t n = read_file(ifsfd, "details", result);
+                if (n < 0)
+                    strncpy(result, "unknown", BUFLEN);
                 log_warning("Test \"%s\" remains unstested, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
                 return EXIT_SKIP;
         } else if (memcmp(result, "pass", strlen("pass")) == 0) {
@@ -215,14 +237,33 @@ static int scan_run(struct test *test, int cpu)
         return EXIT_SUCCESS;
 }
 
+static int scan_run(struct test *test, int cpu)
+{
+    /* cpu 0 will orchestrate the execution for all cpus */
+    if (cpu != 0)
+        return EXIT_SKIP;
+
+    int count = num_cpus();
+    for (int i = 0; i < count; i++)
+    {
+        int scan_ret = scan_run_helper(test, i);
+        if (scan_ret >= EXIT_FAILURE)
+        {
+            /* scan_run_helper has called log error, so the thread "i" has been
+             * mark as failed. */
+            break;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
 static int scan_saf_init(struct test *test)
 {
     ifs_test_t *data = (ifs_test_t *) malloc(sizeof(ifs_test_t));
-
     data->sys_dir = "intel_ifs_0";
-    data->image_support = true;
-
     test->data = data;
+
     return scan_common_init(test);
 }
 
