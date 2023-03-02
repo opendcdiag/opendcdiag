@@ -2,7 +2,6 @@
 #define SANDSTONE_IFS_H_INCLUDED
 
 #define PATH_SYS_IFS_BASE "/sys/devices/virtual/misc/"
-#define PATH_LEN          38
 #define DEFAULT_TEST_ID   1
 
 #define BUFLEN 256 // kernel module prints at most a 64bit value
