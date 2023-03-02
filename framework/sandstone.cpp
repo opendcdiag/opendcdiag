@@ -2933,9 +2933,10 @@ static void loadavg_windows_callback(PVOID, BOOLEAN)
     const double sample_windows_count  = tick_diff_seconds / static_cast<double>(SAMPLE_INTERVAL_SECONDS);
     const double efactor               = 1.0 / pow(EXP_LOADAVG, sample_windows_count);
 
-    // Exponential moving average
+    // Exponential moving average, but don't allow values outside of range (0.0;num_cpus()*2)
     double loadavg_ = loadavg.load(std::memory_order::relaxed);
     loadavg_ = loadavg_ * efactor + current_avg_load * (1.0 - efactor);
+    loadavg_ = std::clamp(loadavg_, 0.0, static_cast<double>(num_cpus()*2));
 
     last_tick_seconds = current_tick_seconds;
     loadavg.store(loadavg_, std::memory_order::relaxed);
