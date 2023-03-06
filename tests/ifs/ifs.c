@@ -31,23 +31,13 @@
 #include "sandstone_ifs.h"
 
 
-static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info)
+static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info, char *status_buf)
 {
-    char current_buf[BUFLEN] = {}, status_buf[BUFLEN] = {};
-    int next_test, current_test, enforce_run;
+    char current_buf[BUFLEN] = {};
+    int next_test, current_test;
 
-    /* read both files status and current_batch */
-    read_file(dfd, "status", status_buf);
+    /* read current_batch */
     read_file_fd(batch_fd, current_buf);
-
-    /* when previous run has a status of fail, skip test */
-    enforce_run = get_testspecific_knob_value_uint(test, "enforce_run", -1);
-    if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
-    {
-        log_warning("Previous run failure found! This test will skip until enforced adding flag: "
-                    "-O %s.enforce_run=1", test->id);
-        return false;
-    }
 
     /* get interactive test file if provided by user */
     next_test = get_testspecific_knob_value_uint(test, "test_file", -1);
@@ -121,6 +111,17 @@ static int scan_common_init(struct test *test)
             return -saved_errno;
         }
 
+        /* when previous run has a status of fail, skip test */
+        char status_buf[BUFLEN] = {};
+        read_file(ifs_fd, "status", status_buf);
+        int enforce_run = get_testspecific_knob_value_uint(test, "enforce_run", -1);
+        if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
+        {
+            log_warning("Previous run failure found! This test will skip until enforced adding flag: "
+                        "-O %s.enforce_run=1", test->id);
+            return EXIT_SKIP;
+        }
+
         /* see if we can open run_test for writing */
         int run_fd = openat(ifs_fd, "run_test", O_WRONLY);
         int saved_errno = errno;
@@ -129,6 +130,7 @@ static int scan_common_init(struct test *test)
                 close(run_fd);
                 return -saved_errno;
         }
+        close(run_fd);
 
         /* try open current_batch for writing */
         int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
@@ -150,10 +152,9 @@ static int scan_common_init(struct test *test)
                     close(batch_fd);
                     return -saved_errno;
             }
-            close(run_fd);
 
             /* load test file */
-            if (!load_test_file(ifs_fd, batch_fd, test, ifs_info))
+            if (!load_test_file(ifs_fd, batch_fd, test, ifs_info, status_buf))
                 return EXIT_SKIP;
 
             /* read image version if available and log it */
