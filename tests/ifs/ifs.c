@@ -4,6 +4,7 @@
  */
 
 /**
+ * @test ifs
  *
  * Run 'In Field Scan' test provided by the Linux kernel on compatible hardware
  *
@@ -11,6 +12,18 @@
  * firmware test blob data in `/lib/firmware/...`. Supported since
  * 6.2
  *
+ * @test array_bist
+ *
+ * Run 'Array BIST' test provided by the Linux kernel on compatible hardware
+ *
+ * Array BIST is a new type of core test introduced under the Intel Infield
+ * Scan (IFS) suite of tests.
+ *
+ * Array BIST performs tests on some portions of the core logic such as
+ * caches and register files. These are different portions of the silicon
+ * compared to the parts tested by Scan at Field (SAF).
+ *
+ * Requires `ifs.ko` to be loaded in the Linux kernel, supported since 6.4
  */
 
 #define _GNU_SOURCE 1
@@ -268,9 +281,26 @@ static int scan_saf_init(struct test *test)
     return scan_common_init(test);
 }
 
+static int scan_array_init(struct test *test)
+{
+    ifs_test_t *data = (ifs_test_t *) malloc(sizeof(ifs_test_t));
+    data->sys_dir = "intel_ifs_1";
+    test->data = data;
+
+    return scan_common_init(test);
+}
+
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
     .quality_level = TEST_QUALITY_PROD,
     .test_init = scan_saf_init,
+    .test_run = scan_run,
+    .desired_duration = -1,
+    .fracture_loop_count = -1,
+END_DECLARE_TEST
+
+DECLARE_TEST(array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware selftest for cache and registers")
+    .quality_level = TEST_QUALITY_BETA,
+    .test_init = scan_array_init,
     .test_run = scan_run,
     .desired_duration = -1,
     .fracture_loop_count = -1,
