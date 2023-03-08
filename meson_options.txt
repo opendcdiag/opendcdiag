@@ -2,29 +2,29 @@
 # SPDX-License-Identifier: Apache-2.0
 
 option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'none'], value : 'yaml',
-	description : 'Set build-time default logging format to "none", "yaml" (default), or "tap".')
+    description : 'Set build-time default logging format to "none", "yaml" (default), or "tap".')
 option('march_base', type : 'string', value : '',
-	description : 'Build framework with this base optimization -march= value (default: "haswell").')
+    description : 'Build framework with this base optimization -march= value (default: "haswell").')
 option('framework_options', type : 'array', value : [],
-	description : 'Configuration options for the framework. ' +
-	'Possible options: restricted-cmdline, no-child-backtrace')
+    description : 'Configuration options for the framework. ' +
+    'Possible options: restricted-cmdline, no-child-backtrace')
 option('dependency_link', type : 'combo', choices : ['dynamic', 'static'], value : 'dynamic',
-	description : 'Link preference for dependencies: dynamic (default) or static')
+    description : 'Link preference for dependencies: dynamic (default) or static')
 option('docdir', type : 'string', value : 'doc/dcdiag',
-	description : 'Directory name of where documentation will be installed.')
+    description : 'Directory name of where documentation will be installed.')
 option('static_libstdcpp', type : 'boolean', value : false,
-	description : 'Link with -static-libstdc++ (default false).')
+    description : 'Link with -static-libstdc++ (default false).')
 option('executable_name', type : 'string', value : 'opendcdiag',
-	description : 'Output name of the main binary (default "opendcdiag").')
+    description : 'Output name of the main binary (default "opendcdiag").')
 option('fallback_exec', type : 'string', value : '',
-	description : 'Executable to run if processor does not support required features (e.g. AVX2)')
+    description : 'Executable to run if processor does not support required features (e.g. AVX2)')
 option('selftests', type : 'boolean', value : true,
-	description : 'Build in selftests (default true)')
+    description : 'Build in selftests (default true)')
 option('version_suffix', type : 'string', value: '',
-	description : 'Suffix to be added to the version number (e.g., build variant)')
+    description : 'Suffix to be added to the version number (e.g., build variant)')
 option('builtin_test_list', type : 'array', value : [],
-	description : 'List of files that specify the built-in test list to be run by default')
+    description : 'List of files that specify the built-in test list to be run by default')
 option('flavor', type : 'combo', choices : ['default', 'ga', 'ga-dev'], value : 'default',
-	description : 'Select one of the novel build flavors (ga, ga-dev) or the default')
+    description : 'Select one of the novel build flavors (ga, ga-dev) or the default')
 option('ssl_link_type', type: 'combo', choices : ['none', 'dynamic', 'loaded', 'static'], value: 'none',
-	description : 'Link with openssl library if available (default none).')
+    description : 'Link with openssl library if available (default none).')
