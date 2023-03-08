@@ -7,53 +7,53 @@ framework_config.set10('SANDSTONE_STATIC', false) # sysdeps may override
 sysdeps_dir = 'sysdeps/' + target_machine.system()
 
 if target_machine.system() == 'cygwin'
-	sysdeps_dir = 'sysdeps/windows'
+    sysdeps_dir = 'sysdeps/windows'
 endif
 
 framework_incdir = [
-	top_incdir,
-	include_directories([
-		'.',
-		'test_selectors',
-		sysdeps_dir,
-	])
+    top_incdir,
+    include_directories([
+        '.',
+        'test_selectors',
+        sysdeps_dir,
+    ])
 ]
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
-	subdir('sysdeps/unix')
+    subdir('sysdeps/unix')
 endif
 subdir(sysdeps_dir)
 
 # Must be a configure_file, not custom_target, so it's created at
 # meson time and thus before everything
 generated_cpu_features_h = configure_file(
-	output : 'cpu_features.h',
-	encoding : 'ascii',
-	input : files(
-		'simd.conf',
-	),
-	capture : true,
-	command : [
-		perl, files('scripts/x86simd_generate.pl'), '@INPUT@', '@OUTPUT@',
-	],
+    output : 'cpu_features.h',
+    encoding : 'ascii',
+    input : files(
+        'simd.conf',
+    ),
+    capture : true,
+    command : [
+        perl, files('scripts/x86simd_generate.pl'), '@INPUT@', '@OUTPUT@',
+    ],
 )
 
 generated_builtin_test_list = []
 builtin_test_list_inputs = []
 foreach f : get_option('builtin_test_list')
-	builtin_test_list_inputs += meson.project_source_root() / f
+    builtin_test_list_inputs += meson.project_source_root() / f
 endforeach
 if builtin_test_list_inputs.length() != 0
-	generated_builtin_test_list = custom_target(
-		'sandstone_ordered_test_list.h',
-		input : builtin_test_list_inputs,
-		output : [
-			'sandstone_ordered_test_list.h'
-		],
-		command : [
-			perl, files('scripts/generate-test-list.pl'), '@OUTPUT@', '@INPUT@',
-		],
-	)
+    generated_builtin_test_list = custom_target(
+        'sandstone_ordered_test_list.h',
+        input : builtin_test_list_inputs,
+        output : [
+            'sandstone_ordered_test_list.h'
+        ],
+        command : [
+            perl, files('scripts/generate-test-list.pl'), '@OUTPUT@', '@INPUT@',
+        ],
+    )
 endif
 
 if cc.has_type('_Float16') and cpp.has_type('_Float16')
@@ -80,111 +80,111 @@ framework_config.set10('SANDSTONE_SSL_LINKED',
   get_option('ssl_link_type') == 'static' or get_option('ssl_link_type') == 'dynamic')
 
 framework_config_h = configure_file(
-	input : 'sandstone_config.h.in',
-	output : 'sandstone_config.h',
-	configuration : framework_config,
+    input : 'sandstone_config.h.in',
+    output : 'sandstone_config.h',
+    configuration : framework_config,
 )
 
 framework_main_a = static_library(
-	'framework_main',
-	files(
-		'main.cpp',
-	),
-	build_by_default: false,
-	include_directories : [
-		framework_incdir,
-	],
-	cpp_args : [
-		debug_c_flags,
-		march_generic_flags,
-		default_cpp_flags,
-		default_cpp_warn,
-	],
+    'framework_main',
+    files(
+        'main.cpp',
+    ),
+    build_by_default: false,
+    include_directories : [
+        framework_incdir,
+    ],
+    cpp_args : [
+        debug_c_flags,
+        march_generic_flags,
+        default_cpp_flags,
+        default_cpp_warn,
+    ],
 )
 
 framework_files = files(
-	'Floats.cpp',
-	'generated_vectors.c',
-	'logging.cpp',
-	'mmap_region.c',
-	'random.cpp',
-	'sandstone.cpp',
-	'sandstone_chrono.cpp',
-	'sandstone_data.cpp',
-	'sandstone_test_groups.cpp',
-	'sandstone_utils.cpp',
-	'static_vectors.c',
-	'test_knobs.cpp',
-	'test_selectors/SelectorFactory.cpp',
-	'test_selectors/WeightedSelectorBase.cpp',
-	'sandstone_context_dump.cpp',
-	'topology.cpp',
+    'Floats.cpp',
+    'generated_vectors.c',
+    'logging.cpp',
+    'mmap_region.c',
+    'random.cpp',
+    'sandstone.cpp',
+    'sandstone_chrono.cpp',
+    'sandstone_data.cpp',
+    'sandstone_test_groups.cpp',
+    'sandstone_utils.cpp',
+    'static_vectors.c',
+    'test_knobs.cpp',
+    'test_selectors/SelectorFactory.cpp',
+    'test_selectors/WeightedSelectorBase.cpp',
+    'sandstone_context_dump.cpp',
+    'topology.cpp',
 )
 
 crypto_dep = dependency('libcrypto',
                         required: false,
                         static: get_option('ssl_link_type') == 'static')
 if crypto_dep.found() and framework_config.get('SANDSTONE_SSL_BUILD') == true
-	framework_files += ['sandstone_ssl.cpp']
+    framework_files += ['sandstone_ssl.cpp']
 endif
 
 if get_option('selftests')
-	framework_files += files('selftest.cpp')
+    framework_files += files('selftest.cpp')
 else
-	default_c_flags += [ '-DNO_SELF_TESTS', ]
-	default_cpp_flags += [ '-DNO_SELF_TESTS', ]
+    default_c_flags += [ '-DNO_SELF_TESTS', ]
+    default_cpp_flags += [ '-DNO_SELF_TESTS', ]
 endif
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
 framework_files += [
-	'forkfd/forkfd.c',
+    'forkfd/forkfd.c',
 ]
 endif
 if target_machine.system() == 'darwin'
 framework_files += [
-	'sandstone_sections.S',
+    'sandstone_sections.S',
 ]
 endif
 
 framework_a = static_library(
-	'framework',
-	framework_files,
-	generated_builtin_test_list,
-	generated_cpu_features_h,
-	build_by_default: false,
-	include_directories : [
-		framework_incdir,
-	],
-	objects: [
-		sysdeps_a.extract_all_objects(recursive: true),
-		framework_main_a.extract_all_objects(recursive: false),
-	],
-	c_args : [
-		debug_c_flags,
-		march_flags,
-		default_c_flags,
-		default_c_warn,
-	],
-	cpp_args : [
-		debug_c_flags,
-		march_flags,
-		default_cpp_flags,
-		default_cpp_warn,
-	],
+    'framework',
+    framework_files,
+    generated_builtin_test_list,
+    generated_cpu_features_h,
+    build_by_default: false,
+    include_directories : [
+        framework_incdir,
+    ],
+    objects: [
+        sysdeps_a.extract_all_objects(recursive: true),
+        framework_main_a.extract_all_objects(recursive: false),
+    ],
+    c_args : [
+        debug_c_flags,
+        march_flags,
+        default_c_flags,
+        default_c_warn,
+    ],
+    cpp_args : [
+        debug_c_flags,
+        march_flags,
+        default_cpp_flags,
+        default_cpp_warn,
+    ],
 )
 
 unittests_sources += files(
-	'sandstone_chrono.cpp',
-	'sandstone_data.cpp',
-	'sandstone_utils.cpp',
-	'test_knobs.cpp',
-	'test_selectors/SelectorFactory.cpp',
-	'test_selectors/WeightedSelectorBase.cpp',
-	'unit-tests/WeightedTestSelector_tests.cpp',
-	'unit-tests/sandstone_data_tests.cpp',
-	'unit-tests/sandstone_test_utils_tests.cpp',
-	'unit-tests/sandstone_utils_tests.cpp',
-	'unit-tests/tests_dummy.cpp',
-	'unit-tests/test_knob_tests.cpp',
-	'unit-tests/thermal_monitor_tests.cpp',
+    'sandstone_chrono.cpp',
+    'sandstone_data.cpp',
+    'sandstone_utils.cpp',
+    'test_knobs.cpp',
+    'test_selectors/SelectorFactory.cpp',
+    'test_selectors/WeightedSelectorBase.cpp',
+    'unit-tests/WeightedTestSelector_tests.cpp',
+    'unit-tests/sandstone_data_tests.cpp',
+    'unit-tests/sandstone_test_utils_tests.cpp',
+    'unit-tests/sandstone_utils_tests.cpp',
+    'unit-tests/tests_dummy.cpp',
+    'unit-tests/test_knob_tests.cpp',
+    'unit-tests/thermal_monitor_tests.cpp',
 )

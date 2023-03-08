@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 sysdeps_unix_files = files(
-	'child_debug.cpp',
-	'splitlock_detect.c',
-	'stacksize.cpp',
-	'tmpfile.c',
+    'child_debug.cpp',
+    'splitlock_detect.c',
+    'stacksize.cpp',
+    'tmpfile.c',
 )
 
 # same check as linux/meson.build
 if get_option('cpp_link_args').contains('-static')
-	framework_config.set10('SANDSTONE_STATIC', true)
+    framework_config.set10('SANDSTONE_STATIC', true)
 endif
