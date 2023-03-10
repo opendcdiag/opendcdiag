@@ -715,10 +715,11 @@ selftest_crash_common() {
     sandstone_selftest --on-crash=kill -vvv -e $test
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
-    test_yaml_regexp "/tests/0/result/crashed" True
-    test_yaml_regexp "/tests/0/result/core-dump" '(True|False)'
-    test_yaml_numeric "/tests/0/result/code" 'value > 0 && value == '$2
-    test_yaml_regexp "/tests/0/result/reason" "$3"
+    test_yaml_regexp "/tests/0/result" "crash"
+    test_yaml_regexp "/tests/0/result-details/crashed" True
+    test_yaml_regexp "/tests/0/result-details/core-dump" '(True|False)'
+    test_yaml_numeric "/tests/0/result-details/code" 'value > 0 && value == '$2
+    test_yaml_regexp "/tests/0/result-details/reason" "$3"
 }
 
 @test "selftest_abortinit" {
@@ -778,10 +779,10 @@ selftest_crash_common() {
     sandstone_selftest -vvv -e selftest_sigkill
     [[ "$status" -eq 2 ]]
     test_yaml_regexp "/exit" invalid    # interpreted as OOM killer
-    test_yaml_regexp "/tests/0/result/crashed" True
-    test_yaml_regexp "/tests/0/result/core-dump" '(True|False)'
-    test_yaml_numeric "/tests/0/result/code" 'value > 0 && value == 9'
-    test_yaml_regexp "/tests/0/result/reason" Killed
+    test_yaml_regexp "/tests/0/result-details/crashed" True
+    test_yaml_regexp "/tests/0/result-details/core-dump" '(True|False)'
+    test_yaml_numeric "/tests/0/result-details/code" 'value > 0 && value == 9'
+    test_yaml_regexp "/tests/0/result-details/reason" Killed
 }
 
 @test "selftest_sigkill --ignore-os-error" {
@@ -792,8 +793,8 @@ selftest_crash_common() {
     sandstone_selftest -vvv -e selftest_sigkill --ignore-os-error
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/result/crashed" True
-    test_yaml_regexp "/tests/0/result/reason" Killed
+    test_yaml_regexp "/tests/0/result-details/crashed" True
+    test_yaml_regexp "/tests/0/result-details/reason" Killed
 }
 
 @test "selftest_malloc_fail" {
@@ -817,7 +818,7 @@ selftest_crash_common() {
     sandstone_selftest --on-crash=backtrace -n1 -vvv -e selftest_sigsegv
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
-    test_yaml_regexp "/tests/0/result/crashed" True
+    test_yaml_regexp "/tests/0/result-details/crashed" True
     test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
     test_yaml_regexp "/tests/0/threads/1/state" "failed"
@@ -838,10 +839,11 @@ selftest_crash_common() {
     sandstone_selftest --on-crash=kill -vvv -e selftest_oserror
     [[ "$status" -eq 2 ]]
     test_yaml_regexp "/exit" invalid
-    test_yaml_regexp "/tests/0/result/crashed" False
-    test_yaml_regexp "/tests/0/result/core-dump" False
-    test_yaml_numeric "/tests/0/result/code" 'value == 78' # EX_CONFIG
-    test_yaml_regexp "/tests/0/result/reason" "Operating system error: configuration error"
+    test_yaml_regexp "/tests/0/result" "operating system error"
+    test_yaml_regexp "/tests/0/result-details/crashed" False
+    test_yaml_regexp "/tests/0/result-details/core-dump" False
+    test_yaml_numeric "/tests/0/result-details/code" 'value == 78' # EX_CONFIG
+    test_yaml_regexp "/tests/0/result-details/reason" "Operating system error: configuration error"
 }
 
 @test "triage" {
