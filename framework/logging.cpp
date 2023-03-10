@@ -1933,6 +1933,7 @@ std::string TapFormatLogger::fail_info_details()
 {
     assert(status.result == TestOperatingSystemError);
     switch (status.extra) {
+    case EXIT_NOTINSTALLED: return "the program is not installed.";
     case EX_USAGE:      return "command line usage error";
     case EX_DATAERR:    return "data format error";
     case EX_NOINPUT:    return "cannot open input";
@@ -1948,6 +1949,7 @@ std::string TapFormatLogger::fail_info_details()
     case EX_PROTOCOL:   return "remote error in protocol";
     case EX_NOPERM:     return "permission denied";
     case EX_CONFIG:     return "configuration error";
+    case EXIT_MEMORY:   return "failed to perform an action due to memory shortage.";
     }
     return "unknown error";
 }
