@@ -1923,7 +1923,7 @@ std::string TapFormatLogger::fail_info_details()
     case STATUS_STACK_BUFFER_OVERRUN:
         return "Stack buffer overrun";
     }
-    return nullptr;
+    return "Unknown";
 #else
     return strsignal(status.extra);
 #endif
@@ -2202,6 +2202,10 @@ void YamlLogger::print_result_line(ChildExitStatus status)
         writeln(real_stdout_fd, indent_spaces(), "- test: ", test->id);
     }
 
+    bool crashed = false;
+    bool coredumped = false;
+    std::string reason;
+
     switch (status.result) {
     case TestSkipped:   // can only be "result: skip"...
     case TestPassed:
@@ -2223,34 +2227,29 @@ void YamlLogger::print_result_line(ChildExitStatus status)
     case TestInterrupted:
         return logging_printf(loglevel, "  result: interrupted\n");
     case TestOperatingSystemError:
-        return logging_printf(loglevel,
-                              "  result: { crashed: false, core-dump: false, code: %u, "
-                              "reason: 'Operating system error: %s' )\n",
-                              status.extra, sysexit_reason(status));
+        logging_printf(loglevel, "  result: operating system error\n");
+        reason = "Operating system error: ";
+        reason += sysexit_reason(status);
+        break;
     case TestCoreDumped:
+        coredumped = true;
+        [[fallthrough]];
     case TestOutOfMemory:
     case TestKilled:
+        logging_printf(loglevel, "  result: crash\n");
+        reason = crash_reason(status);
+        crashed = true;
         break;
     }
 
-    // crash case
-#ifdef _WIN32
-#  define fmt_code      "0x%08x"
-#else
-#  define fmt_code      "%d"
-#endif
+    // format the code for us first
+    char code[std::numeric_limits<unsigned>::digits10 + 2]; // sufficient for 0x + hex too
+    snprintf(code, sizeof(code), status.extra > 4096 ? "%#08x" : "%u", status.extra);
 
-    std::string extra;
-    if (const char *msg = crash_reason(status)) {
-        extra.reserve(strlen(", reason: ") + strlen(msg));
-        extra = ", reason: ";
-        extra += msg;
-    }
-    logging_printf(loglevel, "  result: { crashed: true, core-dump: %s, code: " fmt_code "%s }\n",
-                   status.result == TestCoreDumped ? "true" : "false", status.extra,
-                   extra.c_str());
-
-#undef fmt_code
+    // print result details now
+    auto booleanstr = [](bool cond) { return cond ? "true" : "false"; };
+    logging_printf(loglevel, "  result-details: { crashed: %s, core-dump: %s, code: %s, reason: '%s' }\n",
+                   booleanstr(crashed), booleanstr(coredumped), code, reason.c_str());
 }
 
 std::string YamlLogger::get_current_time()

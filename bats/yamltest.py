@@ -95,9 +95,13 @@ with open(sys.argv[1]) as file:
         validate_time(test, 'time-at-start')
         validate_time(test, 'time-at-end')
 
-        if type(result) is str:
-            if not result in ('pass', 'fail', 'skip', 'timed out'):
-                fail("result for test {} was not a valid one (was: {})".format(name, result))
+        if not result in ('pass', 'fail', 'skip', 'timed out', 'crash', 'operating system error'):
+            fail("result for test {} was not a valid one (was: {})".format(name, result))
+            if (result in ('crash', 'operating system error')):
+                test['result-details']['crashed']
+                test['result-details']['coredump']
+                test['result-details']['code']
+                test['result-details']['reason']
         if not type(runtime) is float:
             fail('test-runtime for test{} was not a number'.format(name))
 
