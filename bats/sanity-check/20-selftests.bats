@@ -833,6 +833,17 @@ selftest_crash_common() {
     fi
 }
 
+@test "selftest_oserror" {
+    declare -A yamldump
+    sandstone_selftest --on-crash=kill -vvv -e selftest_oserror
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result/crashed" False
+    test_yaml_regexp "/tests/0/result/core-dump" False
+    test_yaml_numeric "/tests/0/result/code" 'value == 78' # EX_CONFIG
+    test_yaml_regexp "/tests/0/result/reason" "Operating system error: configuration error"
+}
+
 @test "triage" {
     if ! $is_debug; then
         skip "Test only works with Debug builds (to mock the topology)"

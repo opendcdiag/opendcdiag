@@ -497,6 +497,11 @@ static int selftest_malloc_fail(struct test *test, int cpu)
     return ret;
 }
 
+static int selftest_oserror_run(struct test *test, int cpu)
+{
+    _exit(EX_CONFIG);
+}
+
 #if defined(STATIC) && defined(__GLIBC__)
 extern "C" {
 [[noreturn]] void __libc_fatal (const char *message);
@@ -1034,6 +1039,13 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .description = "Attempts to malloc a silly amount of memory",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_malloc_fail,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_oserror",
+    .description = "Exits the test with an operating system error",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_oserror_run,
     .desired_duration = -1,
 },
 {
