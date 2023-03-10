@@ -20,6 +20,7 @@
 
 /*
  * Extra exit codes, from systemd.exec(3)
+ * Make sure they're listed in sysexit_reason() in logging.cpp too.
  */
 #define EXIT_NOTINSTALLED 5     /* The program is not installed. */
 #define EXIT_MEMORY     204     /* Failed to perform an action due to memory shortage. */
