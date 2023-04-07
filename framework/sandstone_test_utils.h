@@ -19,6 +19,7 @@
 #define SANDSTONE_TEST_UTILS_H
 #include <sys/mman.h>
 #include <cstdint>
+#include <map>
 
 // These macros have been copied from sandstone_p.h because sandstone_p.h creates
 // too many dependencies to get under unit-test.  Eventually we should refactor
@@ -108,4 +109,53 @@ public:
 
 
 
+
+// This structure is used by tests to select from a list of possible values
+// based on a weighted distribution.  Simply provide a map of value => weights
+// to the constructor and call pick() to get a value from the list.
+//
+// Example:
+//     WeightedPicker<std::string> picker({
+//         {"value_a": 1},
+//         {"value_b": 5},  // This value should come up 5X more
+//         {"value_c": 0},  // This value should never come up
+//     });
+//
+//     for (int i=0; i<1000; i++)
+//         printf("%s\n", picker.pick());
+//
+template <typename T>
+struct WeightedPicker {
+
+    uint64_t sum_of_weights = 0;
+    std::map<T, uint64_t>  weights;
+    explicit WeightedPicker(std::map<T, uint64_t>  weights){
+        this->weights = weights;
+        prepare_picker();
+    }
+
+    void prepare_picker() {
+        for (auto w : weights)
+            sum_of_weights += w.second;
+    }
+
+    T pick(){
+        uint64_t target_count = rand_from(0, sum_of_weights-1);
+        uint64_t count = 0;
+        for (auto w : weights){
+            count += w.second;
+            if (count > target_count)
+                return w.first;
+        }
+        // Should never reach here, but prevent crashes
+        // by providing valid fallback value just in case
+        return weights.begin()->first;
+    }
+
+    inline static uint64_t rand_from(uint64_t low, uint64_t high){
+        return (random64() % (high - low + 1)) + low;
+    }
+};
+
 #endif //SANDSTONE_TEST_UTILS_H
+
