@@ -3,8 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+
 #include <vector>
 #include "gtest/gtest.h"
+
+// Mocking random64() so I can break the dependency on the sandstone
+// random libraries which brings in  a lot of other dependencies
+size_t random64() {
+    return (size_t) rand();
+}
+
 #include "sandstone_test_utils.h"
 
 
@@ -59,3 +67,62 @@ TEST_F(CodeBufferTestFixture, AllocatingBufferAtParticularAddress) {
     EXPECT_EQ((size_t) code_buffer.ptr(), 0x1234560000);
 }
 
+
+
+// ======================================================================
+// Weighted Test Picker Tests
+// ======================================================================
+class WeightedPickerTestFixture : public ::testing::Test {
+protected:
+    std::map<std::string, int> counts = {};
+    WeightedPicker<std::string> * picker;
+
+    void pick_items(int num_items){
+        for (int i = 0; i < num_items; i++)
+            counts[picker->pick()]++;
+    }
+};
+
+TEST_F(WeightedPickerTestFixture, Entry1_100_percent) {
+    picker = new WeightedPicker<std::string>(
+            {{"Op1", 0},
+             {"Op2", 1}}
+    );
+    pick_items(1000);
+
+    ASSERT_NEAR(   0, counts["Op1"], 0);
+    ASSERT_NEAR(1000, counts["Op2"], 0);
+}
+
+TEST_F(WeightedPickerTestFixture, Entry0_100_percent) {
+    picker = new WeightedPicker<std::string>(
+            {{"Op1", 1},
+             {"Op2", 0}}
+    );
+    pick_items(1000);
+
+    ASSERT_NEAR(1000, counts["Op1"], 0);
+    ASSERT_NEAR(   0, counts["Op2"], 0);
+}
+
+TEST_F(WeightedPickerTestFixture, Entry_0_1_is_50_50_percent) {
+    picker = new WeightedPicker<std::string>(
+            {{"Op1", 1},
+             {"Op2", 1}}
+    );
+    pick_items(1000);
+
+    ASSERT_NEAR(500, counts["Op1"], 100);
+    ASSERT_NEAR(500, counts["Op2"], 100);
+}
+
+TEST_F(WeightedPickerTestFixture, Entry_0_1_is_33_66_percent) {
+    picker = new WeightedPicker<std::string>(
+            {{"Op1", 1},
+             {"Op2", 2}}
+    );
+    pick_items(1000);
+
+    ASSERT_NEAR(0.333333 * 1000, counts["Op1"], 100);
+    ASSERT_NEAR(0.666666 * 1000, counts["Op2"], 100);
+}
