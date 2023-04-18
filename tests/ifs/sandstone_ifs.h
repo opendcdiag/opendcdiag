@@ -22,13 +22,11 @@ typedef struct {
     char image_version[BUFLEN];
 } ifs_test_t;
 
-static bool is_result_code_skip(unsigned long long code)
+static bool compare_error_codes(unsigned long long code, unsigned long long expected)
 {
-    switch (code) {
-    case IFS_SW_TIMEOUT:
-    case IFS_SW_PARTIAL_COMPLETION:
+    /* Error code is stored in 39:32 bits */
+    if (((code >> 32) & 0xFF) == expected)
         return true;
-    }
 
     return false;
 }

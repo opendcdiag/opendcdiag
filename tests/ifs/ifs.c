@@ -172,6 +172,7 @@ static int scan_run_helper(struct test *test, int cpu)
         /* Get info struct */
         ifs_test_t *ifs_info = test->data;
         char result[BUFLEN] = {}, my_cpu[BUFLEN] = {};
+        unsigned long long code;
 
         /* HACK: Shadows global variable that log_warning() uses
          * DON'T use report_fail_msg() */
@@ -207,7 +208,6 @@ static int scan_run_helper(struct test *test, int cpu)
 
         if (memcmp(result, "fail", strlen("fail")) == 0) {
                 /* failed, get status code */
-                unsigned long long code;
                 ssize_t n = read_file(ifsfd, "details", result);
                 close(ifsfd);
 
@@ -215,7 +215,8 @@ static int scan_run_helper(struct test *test, int cpu)
                         log_error("Test \"%s\" failed but could not retrieve error condition. Image ID: %s  version: %s", ifs_info->sys_dir, ifs_info->image_id, ifs_info->image_version);
                         return EXIT_FAILURE;
                 } else {
-                        if (sscanf(result, "%llx", &code) == 1 && is_result_code_skip(code)) {
+                        // Compare common driver error codes
+                        if (sscanf(result, "%llx", &code) == 1 && (compare_error_codes(code, IFS_SW_TIMEOUT) || compare_error_codes(code, IFS_SW_PARTIAL_COMPLETION))) {
                                 log_warning("Test \"%s\" did not run to completion, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
                                 return EXIT_SKIP; // not a failure condition
                         }
