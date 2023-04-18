@@ -70,12 +70,6 @@
 #include "sandstone_utils.h"
 #include "topology.h"
 
-#if SANDSTONE_BUILTIN_TEST_LIST
-#  include "sandstone_ordered_test_list.h"
-#else
-static constexpr struct test *ordered_test_list[] = { nullptr };
-#endif
-
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
 #endif
@@ -100,6 +94,15 @@ struct HandleCloser
 };
 }
 using AutoClosingHandle = std::unique_ptr<void, HandleCloser>;
+#endif
+
+#include "sandstone_test_lists.h"
+static size_t builtin_test_list_sz;
+static struct test * const *builtin_test_list
+#if SANDSTONE_BUILTIN_TEST_LIST
+        ; // do nothing here
+#else
+        = { nullptr }; // statically initialize to empty list
 #endif
 
 #define RESTART_OF_TESTS            ((struct test *)~(uintptr_t)0)
@@ -3219,7 +3222,7 @@ int main(int argc, char **argv)
         { "total-retest-on-failure", required_argument, nullptr, total_retest_on_failure },
         { "total-time", required_argument, nullptr, 'T' },
         { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
-        { "use-builtin-test-list", no_argument, nullptr, use_builtin_test_list_option },
+        { "use-builtin-test-list", optional_argument, nullptr, use_builtin_test_list_option },
         { "verbose", no_argument, nullptr, 'v' },
         { "version", no_argument, nullptr, version_option },
         { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
@@ -3252,6 +3255,7 @@ int main(int argc, char **argv)
     const char *test_list_file_path = nullptr;
     bool test_list_randomize = false;
     bool use_builtin_test_list = false;
+    const char *builtin_test_list_name = nullptr;
     int starting_test_number = 1;  // One based count for user interface, not zero based
     int ending_test_number = INT_MAX;
     WeightedTestScheme test_selection_strategy = Alphabetical;
@@ -3477,14 +3481,15 @@ int main(int argc, char **argv)
             sApp->ud_on_failure = true;
             break;
         case use_builtin_test_list_option:
-            if (SandstoneConfig::HasBuiltinTestList) {
-                test_selection_strategy = Ordered;
-                use_builtin_test_list = true;
-            } else {
+            if (!SandstoneConfig::HasBuiltinTestList) {
                 fprintf(stderr, "%s: --use-builtin-test-list specified but this build does not "
                                 "have a built-in test list.", argv[0]);
                 return EX_USAGE;
             }
+            use_builtin_test_list = true;
+            test_selection_strategy = Ordered;
+            if (optarg)
+                builtin_test_list_name = optarg;
             break;
         case use_predictable_file_names_option:
 #ifndef NDEBUG
@@ -3778,8 +3783,14 @@ int main(int argc, char **argv)
                     logging_printf(LOG_LEVEL_QUIET, "# WARNING: test list is not empty while built-in test list provided.\n");
                 }
             }
-            for (auto& test : ordered_test_list) {
-                add_test(test_list, test);
+            builtin_test_list = get_test_list(builtin_test_list_name, &builtin_test_list_sz);
+            if (!builtin_test_list) {
+                logging_printf(LOG_LEVEL_QUIET,
+                        "# ERROR: the list '%s' specified with --use-builtin-test-list does not exist.\n", builtin_test_list_name);
+                exit(EX_USAGE);
+            }
+            for (int i = 0; i < builtin_test_list_sz; i++) {
+                add_test(test_list, builtin_test_list[i]);
             }
         } else {
             generate_test_list(test_list);
