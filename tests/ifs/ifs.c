@@ -227,8 +227,18 @@ static int scan_run_helper(struct test *test, int cpu)
         } else if (memcmp(result, "untested", strlen("untested")) == 0) {
                 ssize_t n = read_file(ifsfd, "details", result);
                 if (n < 0)
+                {
                     strncpy(result, "unknown", BUFLEN);
-                log_warning("Test \"%s\" remains unstested, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                    log_warning("Test \"%s\" remains unstested, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                }
+                else
+                {
+                    if (sscanf(result, "%llx", &code) == 1 && compare_error_codes(code, IFS_SW_SCAN_CANNOT_START))
+                    {
+                        log_info("Test \"%s\" cannot be started at the moment, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                        return IFS_SW_SCAN_CANNOT_START;
+                    }
+                }
                 return EXIT_SKIP;
         } else if (memcmp(result, "pass", strlen("pass")) == 0) {
                 log_debug("Test \"%s\" passed", ifs_info->sys_dir);
@@ -253,6 +263,10 @@ static int scan_run(struct test *test, int cpu)
             /* scan_run_helper has called log error, so the thread "i" has been
              * mark as failed. */
             break;
+        }
+        else if (scan_ret == IFS_EXIT_CANNOT_START)
+        {
+            return EXIT_SKIP;
         }
     }
 
