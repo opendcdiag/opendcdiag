@@ -3478,6 +3478,7 @@ int main(int argc, char **argv)
             break;
         case use_builtin_test_list_option:
             if (SandstoneConfig::HasBuiltinTestList) {
+                test_selection_strategy = Ordered;
                 use_builtin_test_list = true;
             } else {
                 fprintf(stderr, "%s: --use-builtin-test-list specified but this build does not "
