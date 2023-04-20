@@ -613,6 +613,11 @@ extern struct cpu_info *cpu_info;
 /// restricts the number of CPUs sandstone can see.
 int num_cpus() __attribute__((pure));
 
+/// Returns the number of physical CPU packages (a.k.a. sockets) available to a
+/// test. It is number of packages which contain the logical CPUs available to a
+/// test.
+int num_sockets() __attribute__((pure));
+
 #ifdef __cplusplus
 }
 inline int cpu_info::cpu() const
