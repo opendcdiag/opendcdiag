@@ -974,6 +974,10 @@ int num_cpus()
     return sApp->thread_count;
 }
 
+int num_packages() {
+    return Topology::topology().packages.size();
+}
+
 static LogicalProcessorSet init_cpus()
 {
     LogicalProcessorSet result = ambient_logical_processor_set();
