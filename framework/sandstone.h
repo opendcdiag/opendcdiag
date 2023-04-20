@@ -322,6 +322,7 @@ struct cpu_info {
     int thread_id;          ///! Topology info from APIC
     int core_id;            ///! Topology info from APIC
     int package_id;         ///! Topology info from APIC
+    int package_idx;        ///! Package index (0 to number of sockets - 1),
     struct cache_info cache[3]; ///! Cache info from OS
     uint8_t family;         ///! CPU family (usually 6)
     uint8_t stepping;       ///! CPU stepping

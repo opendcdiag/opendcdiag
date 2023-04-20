@@ -251,6 +251,7 @@ static void init_cpu_info(struct cpu_info *info, int os_cpu) {
     /* fill everything with -1 to indicate n/a and set the OS cpu id. */
     info->cpu_number = os_cpu;
     info->package_id = -1;
+    info->package_idx = -1;
     info->core_id = -1;
     info->thread_id = -1;
 
@@ -797,6 +798,8 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     auto detect = [](void *ptr) -> void * {
         auto enabled_cpus = *static_cast<const LogicalProcessorSet *>(ptr);
         int curr_cpu = 0;
+        std::map<int, int> package_map; /* maps of package_id to package_idx */
+        int curr_package_idx = 0; /* this is current package index. */
         for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
             auto lp = LogicalProcessor(curr_cpu);
             while (!enabled_cpus.is_set(lp)) {
@@ -810,6 +813,16 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             try_detection<ucode_impls>(&cpu_info[i]);
             try_detection<cache_info_impls>(&cpu_info[i]);
             try_detection<topo_impls>(&cpu_info[i]);
+            /* calculate package index */
+            if (cpu_info[i].package_id < 0) {
+                continue;
+            }
+            /* register it if we haven't seen it yet */
+            if (package_map.find(cpu_info[i].package_id) == package_map.end()) {
+                package_map[cpu_info[i].package_id] = curr_package_idx;
+                curr_package_idx++;
+            }
+            cpu_info[i].package_idx = package_map[cpu_info[i].package_id];
         }
         return nullptr;
     };
