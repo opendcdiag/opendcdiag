@@ -107,7 +107,7 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
 static int scan_common_init(struct test *test)
 {
         /* Get info struct */
-        ifs_test_t *ifs_info = test->data;
+        ifs_test_t *ifs_info = (ifs_test_t *) test->data;
 
         /* see if driver is loaded */
         char sys_path[PATH_MAX];
@@ -170,7 +170,7 @@ static int scan_common_init(struct test *test)
 static int scan_run_helper(struct test *test, int cpu)
 {
         /* Get info struct */
-        ifs_test_t *ifs_info = test->data;
+        ifs_test_t *ifs_info = (ifs_test_t *) test->data;
         char result[BUFLEN] = {}, my_cpu[BUFLEN] = {};
         unsigned long long code;
 
@@ -283,11 +283,11 @@ static int scan_saf_init(struct test *test)
 }
 
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
-    .quality_level = TEST_QUALITY_PROD,
     .test_init = scan_saf_init,
     .test_run = scan_run,
     .desired_duration = -1,
     .fracture_loop_count = -1,
+    .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
 
 #endif // __x86_64__ && __linux__

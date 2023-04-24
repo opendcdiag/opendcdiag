@@ -48,7 +48,7 @@ static bool write_file(int dfd, const char *filename, const char* value)
         return true;
 }
 
-static ssize_t read_file_fd(int fd, char buf[static restrict BUFLEN])
+static ssize_t read_file_fd(int fd, char buf[BUFLEN])
 {
         ssize_t n = read(fd, buf, BUFLEN);
         close(fd);
@@ -61,7 +61,7 @@ static ssize_t read_file_fd(int fd, char buf[static restrict BUFLEN])
         return n;
 }
 
-static ssize_t read_file(int dfd, const char *filename, char buf[static restrict BUFLEN])
+static ssize_t read_file(int dfd, const char *filename, char buf[BUFLEN])
 {
         int fd = openat(dfd, filename, O_RDONLY | O_CLOEXEC);
         if (fd < 0)
