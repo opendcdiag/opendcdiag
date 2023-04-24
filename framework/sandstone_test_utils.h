@@ -128,8 +128,8 @@ template <typename T>
 struct WeightedPicker {
 
     uint64_t sum_of_weights = 0;
-    std::map<T, uint64_t>  weights;
-    explicit WeightedPicker(std::map<T, uint64_t>  weights){
+    std::map<T, uint32_t>  weights;
+    explicit WeightedPicker(std::map<T, uint32_t>  weights){
         this->weights = weights;
         prepare_picker();
     }
@@ -152,8 +152,8 @@ struct WeightedPicker {
         return weights.begin()->first;
     }
 
-    inline static uint64_t rand_from(uint64_t low, uint64_t high){
-        return (random64() % (high - low + 1)) + low;
+    inline static uint32_t rand_from(uint32_t low, uint32_t high){
+        return (rand() % (high - low + 1)) + low;
     }
 };
 
