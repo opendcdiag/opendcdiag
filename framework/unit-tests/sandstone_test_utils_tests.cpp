@@ -7,12 +7,6 @@
 #include <vector>
 #include "gtest/gtest.h"
 
-// Mocking random64() so I can break the dependency on the sandstone
-// random libraries which brings in  a lot of other dependencies
-size_t random64() {
-    return (size_t) rand();
-}
-
 #include "sandstone_test_utils.h"
 
 
