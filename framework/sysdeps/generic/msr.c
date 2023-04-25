@@ -7,10 +7,12 @@
 
 bool read_msr(int cpu, uint32_t msr, uint64_t * value)
 {
+    errno = ENOSYS;
     return false;
 }
 
 bool write_msr(int cpu, uint32_t msr, uint64_t value)
 {
+    errno = ENOSYS;
     return false;
 }
