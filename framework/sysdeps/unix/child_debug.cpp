@@ -103,6 +103,8 @@ static tid_t sys_gettid()
 }
 #endif
 
+extern char **environ;
+
 namespace {
 bool must_ignore_sigpipe()
 {
