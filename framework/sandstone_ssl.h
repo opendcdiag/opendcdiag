@@ -834,9 +834,6 @@
     F(EVP_rc2_cfb)                               \
     F(EVP_rc2_ecb)                               \
     F(EVP_rc2_ofb)                               \
-    F(EVP_rc4_40)                                \
-    F(EVP_rc4_hmac_md5)                          \
-    F(EVP_rc4)                                   \
     /*F(EVP_rc5_32_12_16_cbc)                    \
     F(EVP_rc5_32_12_16_cfb64)                    \
     F(EVP_rc5_32_12_16_cfb)                      \
