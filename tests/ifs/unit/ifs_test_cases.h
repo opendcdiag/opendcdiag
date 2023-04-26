@@ -32,6 +32,68 @@ static ifs_unit reqs_test3 = {
     }
 };
 
+/* Load image */
+
+static ifs_unit load_test1 = {
+    "/tmp/intel_ifs_0.test1_previous_image_fail",
+    5,
+    {
+        {"current_batch", "0x3"},
+        {"details", "0x8082"},
+        {"image_version", "0x173"},
+        {"run_test", "1"},
+        {"status", "fail"}
+    }
+};
+
+static ifs_unit load_test2 = {
+    "/tmp/intel_ifs_0.test2_previous_image_none",
+    5,
+    {
+        {"current_batch", "none"},
+        {"details", "0x8082"},
+        {"image_version", "none"},
+        {"run_test", "1"},
+        {"status", "untested"}
+    }
+};
+
+static ifs_unit load_test3 = {
+    "/tmp/intel_ifs_0.test3_previous_image_cannot_be_parsed",
+    5,
+    {
+        {"current_batch", "wxyz"},
+        {"details", "0x8082"},
+        {"image_version", "0x17a"},
+        {"run_test", "1"},
+        {"status", "other"}
+    }
+};
+
+static ifs_unit load_test4 = {
+    "/tmp/intel_ifs_0.test4_previous_image_untested",
+    5,
+    {
+        {"current_batch", "0x4"},
+        {"details", "0x8082"},
+        {"image_version", "0x174"},
+        {"run_test", "4"},
+        {"status", "untested"}
+    }
+};
+
+static ifs_unit load_test5 = {
+    "/tmp/intel_ifs_0.test5_load_next_image",
+    5,
+    {
+        {"current_batch", "0xa4"},
+        {"details", "0x8082"},
+        {"image_version", "0x17a"},
+        {"run_test", "10"},
+        {"status", "pass"}
+    }
+};
+
 /* Trigger and execute */
 static ifs_unit trigger_test1 = {
     "/tmp/intel_ifs_0.test1_all_cores_pass",
