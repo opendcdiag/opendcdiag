@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Intel Corporation.
+ * Copyright 2022-2023 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,7 +25,6 @@
 #include <limits.h>
 #include <paths.h>
 #include <stdio.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include "sandstone_ifs.h"

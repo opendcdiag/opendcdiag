@@ -34,6 +34,7 @@ endif
 
 tests_set_base.add(
     files(
+        'ifs/sandstone_ifs.c',
         'ifs/ifs.c',
     )
 )
