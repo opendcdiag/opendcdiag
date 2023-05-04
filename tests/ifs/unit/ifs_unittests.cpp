@@ -131,4 +131,120 @@ TEST(IFSRequirements, CurrentBatchNotFound)
     test_cleanup(test_t, ifs_info, reqs_test3);
 }
 
+
+/*
+ * @test Trigger IFS on all cores available and all cores succeed.
+ */
+TEST(IFSTrigger, AllCoresPass)
+{
+    // Setup dummy test_t struct
+    test *test_t = (test *) test_setup(trigger_test1);
+    ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
+
+    // Setup dummy cpu_info array
+    int cpu_num = 2;
+    cpu_info = new struct cpu_info[cpu_num];
+    cpu_info[1].cpu_number = 1;
+
+    // Loop over each cpu
+    for (size_t i=0; i < cpu_num; i++)
+    {
+        char contents[256], expected[256];
+        EXPECT_EQ(scan_run_helper(test_t, i), EXIT_SUCCESS);
+
+        // Check we trigger the right cpu
+        read_sysfs_file(ifs_info->sys_dir, "run_test", contents);
+        sprintf(expected, "%ld", i);
+        EXPECT_STREQ(contents, expected);
+    }
+
+    delete [] cpu_info;
+    test_cleanup(test_t, ifs_info, trigger_test1);
+}
+
+/*
+ * @test Trigger IFS on all cores available and all cores fail.
+ */
+TEST(IFSTrigger, AllCoresFail)
+{
+    // Setup dummy test_t struct
+    test *test_t = (test *) test_setup(trigger_test2);
+    ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
+
+    // Setup dummy cpu_info array
+    int cpu_num = 2;
+    cpu_info = new struct cpu_info[cpu_num];
+    cpu_info[1].cpu_number = 1;
+
+    // Loop over each cpu
+    for (size_t i=0; i < cpu_num; i++)
+    {
+        char contents[256], expected[256];
+        EXPECT_EQ(scan_run_helper(test_t, i), EXIT_FAILURE);
+
+        // Check we trigger the right cpu
+        read_sysfs_file(ifs_info->sys_dir, "run_test", contents);
+        sprintf(expected, "%ld", i);
+        EXPECT_STREQ(contents, expected);
+    }
+
+    delete [] cpu_info;
+    test_cleanup(test_t, ifs_info, trigger_test2);
+}
+
+/*
+ * @test Trigger IFS on all cores available and only one core fail.
+ */
+TEST(IFSTrigger, SingleCoreFail)
+{
+    // Setup dummy test_t struct
+    test *test_t = (test *) test_setup(trigger_test3);
+    ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
+
+    // Setup dummy cpu_info array
+    int cpu_num = 2;
+    cpu_info = new struct cpu_info[cpu_num];
+    cpu_info[1].cpu_number = 1;
+
+    // First run is expected to pass
+    EXPECT_EQ(scan_run_helper(test_t, 0), EXIT_SUCCESS);
+
+    // Second run us expected to fail
+    setup_sysfs_file(ifs_info->sys_dir, "status", "fail");
+    EXPECT_EQ(scan_run_helper(test_t, 1), EXIT_FAILURE);
+
+    delete [] cpu_info;
+    test_cleanup(test_t, ifs_info, trigger_test3);
+}
+
+/*
+ * @test Trigger IFS on all cores, but none of them can run due cooldown.
+ */
+TEST(IFSTrigger, AllCoresUntested)
+{
+    // Setup dummy test_t struct
+    test *test_t = (test *) test_setup(trigger_test4);
+    ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
+
+    // Setup dummy cpu_info array
+    int cpu_num = 2;
+    cpu_info = new struct cpu_info[cpu_num];
+    cpu_info[1].cpu_number = 1;
+
+    // Loop over each cpu
+    for (size_t i=0; i < cpu_num; i++)
+    {
+        char contents[256], expected[256];
+        EXPECT_EQ(scan_run_helper(test_t, i), IFS_SW_SCAN_CANNOT_START);
+
+        // Check we trigger the right cpu
+        read_sysfs_file(ifs_info->sys_dir, "run_test", contents);
+        sprintf(expected, "%ld", i);
+        EXPECT_STREQ(contents, expected);
+    }
+
+    delete [] cpu_info;
+    test_cleanup(test_t, ifs_info, trigger_test4);
+}
+
 #endif

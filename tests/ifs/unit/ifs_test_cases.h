@@ -32,4 +32,53 @@ static ifs_unit reqs_test3 = {
     }
 };
 
+/* Trigger and execute */
+static ifs_unit trigger_test1 = {
+    "/tmp/intel_ifs_0.test1_all_cores_pass",
+    5,
+    {
+        {"current_batch", "0x1"},
+        {"details", "0x8082"},
+        {"image_version", "0x171"},
+        {"run_test", "1"},
+        {"status", "pass"}
+    }
+};
+
+static ifs_unit trigger_test2 = {
+    "/tmp/intel_ifs_0.test2_all_cores_fail",
+    5,
+    {
+        {"current_batch", "0x2"},
+        {"details", "0x8082"},
+        {"image_version", "0x172"},
+        {"run_test", "1"},
+        {"status", "fail"}
+    }
+};
+
+static ifs_unit trigger_test3 = {
+    "/tmp/intel_ifs_0.test3_only_one_core_fail",
+    5,
+    {
+        {"current_batch", "0x3"},
+        {"details", "0x8082"},
+        {"image_version", "0x173"},
+        {"run_test", "3"},
+        {"status", "pass"}
+    }
+};
+
+static ifs_unit trigger_test4 = {
+    "/tmp/intel_ifs_0.test4_all_cores_untested",
+    5,
+    {
+        {"current_batch", "0x4"},
+        {"details", "0x600008082"},
+        {"image_version", "0x174"},
+        {"run_test", ""},
+        {"status", "untested"}
+    }
+};
+
 #endif //IFS_TEST_CASES_H_INCLUDED
