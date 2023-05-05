@@ -56,8 +56,12 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
             next_test = DEFAULT_TEST_ID;
         else
         {
-            current_test = (int) strtoul(current_buf, NULL, 0);
-            if (current_test < 0 && errno == ERANGE)
+            /* parse current test */
+            char *end_ptr;
+            current_test = (int) strtoul(current_buf, &end_ptr, 16);
+            int saved_errno = errno;
+            /* assure the buffer was completely parsed and we have no errors */
+            if (strcmp(end_ptr, "\0") != 0 || saved_errno == ERANGE)
             {
                 log_info("Cannot parse current_batch value: %s", current_buf);
                 return false;
