@@ -52,6 +52,10 @@ if host_machine.cpu_family() == 'x86_64'
     ]
     if cc.has_argument('-Wa,-muse-unaligned-vector-move')
         march_flags += [ '-Wa,-muse-unaligned-vector-move' ]
+    elif target_machine.system() == 'windows' and cpp.get_id() == 'gcc'
+        warning('GCC for Windows is unable to generate 32-byte-aligned stacks necessary for AVX content. ' +
+                'Please upgrade to a version of binutils that supports the option -muse-unaligned-vector-move (2.38 or later). ' +
+                'The application will randomly crash at runtime otherwise.')
     endif
 endif
 

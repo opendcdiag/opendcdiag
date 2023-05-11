@@ -9,31 +9,6 @@
 #ifndef WIN32_STDLIB_H
 #define WIN32_STDLIB_H
 
-// Force the assembler to not to emit aligned AVX instructions
-//
-// printf 'asm(\n'
-// for i in vmovapd vmovaps vmovdqa vmovdqa32 vmovdqa64; do
-//     printf '    \".macro %s args:vararg\\n\"\n    \"    %s \\\\args\\n\"\n    \".endm\\n\"\n' $i ${i/a/u}
-// done
-// printf ');\n'
-asm(
-    ".macro vmovapd args:vararg\n"
-    "    vmovupd \\args\n"
-    ".endm\n"
-    ".macro vmovaps args:vararg\n"
-    "    vmovups \\args\n"
-    ".endm\n"
-    ".macro vmovdqa args:vararg\n"
-    "    vmovdqu \\args\n"
-    ".endm\n"
-    ".macro vmovdqa32 args:vararg\n"
-    "    vmovdqu32 \\args\n"
-    ".endm\n"
-    ".macro vmovdqa64 args:vararg\n"
-    "    vmovdqu64 \\args\n"
-    ".endm\n"
-);
-
 #define _CRT_RAND_S
 #include <stdlib.h>
 
