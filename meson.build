@@ -50,6 +50,9 @@ if host_machine.cpu_family() == 'x86_64'
         '-mno-rdrnd',
         '-falign-loops=32',
     ]
+    if cc.has_argument('-Wa,-muse-unaligned-vector-move')
+        march_flags += [ '-Wa,-muse-unaligned-vector-move' ]
+    endif
 endif
 
 debug_nasm_flags = ''
