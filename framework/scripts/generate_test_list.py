@@ -74,28 +74,32 @@ def main():
 
     # generate the .cpp file
     with open(cpp_file, 'w') as f:
+        f.write('#include <span>\n')
         f.write(f'#include "{h_file_basename}"\n\n')
+        f.write('using namespace std;\n\n')
         decls = [ f'extern struct test _test_{test};' for test in sorted(all_tests.keys()) ]
         f.write('\n'.join(decls))
         f.write('\n\n')
         for name, tests in test_lists.items():
-            f.write(f'static constexpr struct test *{name}_test_list[] = {{')
+            f.write(f'static constexpr struct test * const {name}_test_list_[] = {{')
             test_list = [ f'    &_test_{test}' for test in tests ]
             f.write(',\n'.join(test_list))
             f.write('\n};\n\n')
+            f.write(f'static constinit const span<struct test * const> {name}_test_list({name}_test_list_);\n\n');
         # write selector function
-        f.write('struct test * const *get_test_list(const char *platform, size_t *size) {\n')
+        f.write('const span<struct test * const> *get_test_list(const char *test_list_name) {\n')
         if default_name is not None:
-            f.write(f'    if (!platform) {{ *size = sizeof({default_name}_test_list)/sizeof(struct test *); return (struct test * const *)&{default_name}_test_list; }}\n')
+            f.write(f'    if (!test_list_name) return &{default_name}_test_list;\n')
         for name in test_lists.keys():
-            f.write(f'    if  (!strcmp(platform, "{name}")) {{ *size = sizeof({name}_test_list)/sizeof(struct test *); return (struct test * const *)&{name}_test_list; }}\n')
+            f.write(f'    if  (!strcmp(test_list_name, "{name}")) return &{name}_test_list;\n')
         f.write('    return nullptr;\n')
         f.write('}\n')
 
     # generate .h file
     with open(h_file, 'w') as f:
-        f.write('#include "sandstone.h"\n')
-        f.write('struct test * const *get_test_list(const char *, size_t *);\n')
+        f.write('#include <span>\n')
+        f.write('#include "sandstone.h"\n\n')
+        f.write('const std::span<struct test * const> *get_test_list(const char *);\n')
 
     exit(0)
 

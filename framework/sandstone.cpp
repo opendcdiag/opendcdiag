@@ -97,13 +97,6 @@ using AutoClosingHandle = std::unique_ptr<void, HandleCloser>;
 #endif
 
 #include "sandstone_test_lists.h"
-static size_t builtin_test_list_sz;
-static struct test * const *builtin_test_list
-#if SANDSTONE_BUILTIN_TEST_LIST
-        ; // do nothing here
-#else
-        = { nullptr }; // statically initialize to empty list
-#endif
 
 #define RESTART_OF_TESTS            ((struct test *)~(uintptr_t)0)
 
@@ -3774,6 +3767,7 @@ int main(int argc, char **argv)
                                                        test_list_randomize);
     } else {
         if (use_builtin_test_list) {
+            const std::span<struct test * const> *builtin_test_list = nullptr;
             if (test_list.size()) {
                 if (!SandstoneConfig::RestrictedCommandLine) {
                     logging_printf(LOG_LEVEL_QUIET,
@@ -3783,14 +3777,14 @@ int main(int argc, char **argv)
                     logging_printf(LOG_LEVEL_QUIET, "# WARNING: test list is not empty while built-in test list provided.\n");
                 }
             }
-            builtin_test_list = get_test_list(builtin_test_list_name, &builtin_test_list_sz);
+            builtin_test_list = get_test_list(builtin_test_list_name);
             if (!builtin_test_list) {
                 logging_printf(LOG_LEVEL_QUIET,
                         "# ERROR: the list '%s' specified with --use-builtin-test-list does not exist.\n", builtin_test_list_name);
                 exit(EX_USAGE);
             }
-            for (int i = 0; i < builtin_test_list_sz; i++) {
-                add_test(test_list, builtin_test_list[i]);
+            for (auto &test : *builtin_test_list) {
+                add_test(test_list, test);
             }
         } else {
             generate_test_list(test_list);
