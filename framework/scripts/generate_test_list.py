@@ -2,19 +2,23 @@
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-# Arguments are:
-#   - the name of the .h file to generate;
-#   - the name of the .cpp file to generate;
-#   - the absolute path to the repo (needed to locate the list files);
-#   - comma-separated list of tuples <id>:<test list file>;
-#     e.g. default:data/default_test_list.csv,skylake:data/skylake_test_list.csv
+arguments_desc="""
+Arguments are (in order, all required):
+  - the name of the .h file to generate;
+  - the name of the .cpp file to generate;
+  - the absolute path to the repo (needed to locate the list files);
+  - comma-separated list of tuples <id>:<test list file>;
+    e.g. default:data/default_test_list.csv,skylake:data/skylake_test_list.csv
+"""
 
 import sys
 import os
 
 # print usage
 def usage():
-    print("Usage: ")
+    name = os.path.basename(sys.argv[0])
+    print(f'Usage: {name} [ARGS]')
+    print(arguments_desc)
 
 def main():
     if len(sys.argv) < 5:
