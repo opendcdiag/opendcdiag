@@ -3767,7 +3767,6 @@ int main(int argc, char **argv)
                                                        test_list_randomize);
     } else {
         if (use_builtin_test_list) {
-            const std::span<struct test * const> *builtin_test_list = nullptr;
             if (test_list.size()) {
                 if (!SandstoneConfig::RestrictedCommandLine) {
                     logging_printf(LOG_LEVEL_QUIET,
@@ -3777,7 +3776,9 @@ int main(int argc, char **argv)
                     logging_printf(LOG_LEVEL_QUIET, "# WARNING: test list is not empty while built-in test list provided.\n");
                 }
             }
-            builtin_test_list = get_test_list(builtin_test_list_name);
+
+            auto builtin_test_list = get_test_list(builtin_test_list_name);
+
             if (!builtin_test_list) {
                 logging_printf(LOG_LEVEL_QUIET,
                         "# ERROR: the list '%s' specified with --use-builtin-test-list does not exist.\n", builtin_test_list_name);

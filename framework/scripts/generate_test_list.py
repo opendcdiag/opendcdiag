@@ -81,25 +81,25 @@ def main():
         f.write('\n'.join(decls))
         f.write('\n\n')
         for name, tests in test_lists.items():
-            f.write(f'static constexpr struct test * const {name}_test_list_[] = {{')
+            f.write(f'static constexpr struct test * const {name}_test_list[] = {{')
             test_list = [ f'    &_test_{test}' for test in tests ]
             f.write(',\n'.join(test_list))
             f.write('\n};\n\n')
-            f.write(f'static constinit const span<struct test * const> {name}_test_list({name}_test_list_);\n\n');
         # write selector function
-        f.write('const span<struct test * const> *get_test_list(const char *test_list_name) {\n')
+        f.write('optional<const span<struct test * const>> get_test_list(const char *test_list_name) {\n')
         if default_name is not None:
-            f.write(f'    if (!test_list_name) return &{default_name}_test_list;\n')
+            f.write(f'    if (!test_list_name) return {default_name}_test_list;\n')
         for name in test_lists.keys():
-            f.write(f'    if  (!strcmp(test_list_name, "{name}")) return &{name}_test_list;\n')
-        f.write('    return nullptr;\n')
+            f.write(f'    if  (!strcmp(test_list_name, "{name}")) return {name}_test_list;\n')
+        f.write('    return nullopt;\n')
         f.write('}\n')
 
     # generate .h file
     with open(h_file, 'w') as f:
+        f.write('#include <optional>\n')
         f.write('#include <span>\n')
         f.write('#include "sandstone.h"\n\n')
-        f.write('const std::span<struct test * const> *get_test_list(const char *);\n')
+        f.write('std::optional<const std::span<struct test * const>> get_test_list(const char *);\n')
 
     exit(0)
 
