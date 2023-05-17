@@ -14,12 +14,14 @@ tests_common_c_args = [
     debug_c_flags,
     default_c_warn,
     default_c_flags,
+    march_flags,
 ]
 
 tests_common_cpp_args = [
     debug_c_flags,
     default_cpp_warn,
     default_cpp_flags,
+    march_flags,
 ]
 
 tests_common_incdirs = [
@@ -104,11 +106,9 @@ tests_base_a = static_library(
     ],
     c_args : [
         tests_common_c_args,
-        march_flags,
     ],
     cpp_args : [
         tests_common_cpp_args,
-        march_flags,
     ],
 )
 
