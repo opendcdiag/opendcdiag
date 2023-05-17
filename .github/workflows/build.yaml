@@ -52,6 +52,12 @@ jobs:
       run: |
         ulimit -St 120
         SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
+    - name: run tests quickly
+      run: |
+        ulimit -St 120
+        nproc=`nproc`
+        nproc=$((nproc > 4 ? 4 : nproc))
+        builddir/opendcdiag --quick -o -n$nproc
 
   build-windows:
     runs-on: ubuntu-latest
@@ -100,3 +106,9 @@ jobs:
         wine builddir-windows-cross/opendcdiag.exe --dump-cpu-info
     - name: run selftests
       run: SANDSTONE_BIN=builddir-windows-cross/opendcdiag.exe bats -t bats/sanity-check
+    - name: run tests quickly
+      run: |
+        ulimit -St 120
+        nproc=`nproc`
+        nproc=$((nproc > 4 ? 4 : nproc))
+        wine builddir/opendcdiag.exe --quick -o -n$nproc
