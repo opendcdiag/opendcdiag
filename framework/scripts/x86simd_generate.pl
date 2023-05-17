@@ -259,7 +259,7 @@ print "\nenum X86CpuidLeaves {";
 map { print "    $_," } @leafNames;
 print "    X86CpuidMaxLeaf\n};";
 
-my $type = scalar %leaves > 8 ? "uint16_t" : "uint8_t";
+my $type = scalar keys %leaves > 8 ? "uint16_t" : "uint8_t";
 printf "\nstatic const %s x86_locators[] = {\n",
     $type, $type;
 for (my $j = 0; $j < scalar @features; ++$j) {
