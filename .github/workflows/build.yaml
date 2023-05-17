@@ -57,7 +57,7 @@ jobs:
         ulimit -St 120
         nproc=`nproc`
         nproc=$((nproc > 4 ? 4 : nproc))
-        builddir/opendcdiag --quick -o -n$nproc
+        builddir/opendcdiag --quick -n$nproc -o -
 
   build-windows:
     runs-on: ubuntu-latest
@@ -111,4 +111,4 @@ jobs:
         ulimit -St 120
         nproc=`nproc`
         nproc=$((nproc > 4 ? 4 : nproc))
-        wine builddir/opendcdiag.exe --quick -o -n$nproc
+        wine builddir/opendcdiag.exe --quick -n$nproc -o -
