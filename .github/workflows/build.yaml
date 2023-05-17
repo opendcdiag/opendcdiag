@@ -57,12 +57,13 @@ jobs:
         ulimit -St 120
         nproc=`nproc`
         nproc=$((nproc > 4 ? 4 : nproc))
-        builddir/opendcdiag --quick -n$nproc -o -
+        builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
 
   build-windows:
     runs-on: ubuntu-latest
     container: fedora:34
     env:
+      WINEDEBUG: fixme-all,-dbghelp_stabs
       WINEPREFIX: /tmp/wine_root
       WINEPATH: d:/bin
     steps:
@@ -99,6 +100,8 @@ jobs:
         winecfg
         rpm -ql mingw64-zlib | sed -n '/bin\/zlib1.dll/s///p' | \
             xargs -rtI@ ln -s @ $WINEPREFIX/dosdevices/d:
+        # Disable the GUI debugger
+        wine reg add 'HKEY_LOCAL_MACHINE\Software\Wine\winedbg' /v ShowCrashDialog /t REG_DWORD /d 00000000
     - name: confirm Wine works
       run: |
         wine cmd /c ver
@@ -111,4 +114,4 @@ jobs:
         ulimit -St 120
         nproc=`nproc`
         nproc=$((nproc > 4 ? 4 : nproc))
-        wine builddir/opendcdiag.exe --quick -n$nproc -o -
+        wine builddir-windows-cross/opendcdiag.exe --quick --retest-on-failure=0 -n$nproc -o -
