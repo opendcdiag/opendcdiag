@@ -762,13 +762,9 @@ selftest_crash_common() {
     if ! $is_windows; then
         skip "Windows-only test"
     fi
-    if [[ "$SANDSTONE" = "wine "* ]]; then
-        # WINE doesn't handle __fastfail very well / at all
-        selftest_crash_common selftest_fastfail x x 0xC0000005 'Access violation'
-    else
-        # I don't know *why* we get this error, but we do
-        selftest_crash_common selftest_fastfail x x 0xC0000409 "Stack buffer overrun"
-    fi
+
+    # I don't know *why* we get this error, but we do
+    selftest_crash_common selftest_fastfail x x 0xC0000409 "Stack buffer overrun"
 }
 
 @test "selftest_sigkill" {

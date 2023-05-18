@@ -61,7 +61,7 @@ jobs:
 
   build-windows:
     runs-on: ubuntu-latest
-    container: fedora:34
+    container: fedora:38
     env:
       WINEDEBUG: fixme-all,-dbghelp_stabs
       WINEPREFIX: /tmp/wine_root
@@ -69,7 +69,7 @@ jobs:
     steps:
     - name: Install distro packages
       run: |
-        dnf install -y \
+        dnf install --setopt=install_weak_deps=False -y \
             cmake \
             git \
             meson \
