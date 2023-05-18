@@ -1339,7 +1339,7 @@ template <typename Prototype> void SharedMemorySynchronization::transfer(Prototy
 #if (__GLIBC__ * 1000 + __GLIBC_MINOR__) >= 2032
             // new API added in glibc 2.32 to replace the old, BSD one below
             errname = strerrordesc_np(errno);
-#else
+#elif !defined(_UCRT)
             if (errno < sys_nerr)
                 errname = sys_errlist[errno];
 #endif
