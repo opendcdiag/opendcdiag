@@ -264,6 +264,7 @@ executable(
     'unittests',
     files(
         'framework/sysdeps/linux/malloc.cpp',
+        'framework/sandstone_unittests_utils.cpp',
     ),
     unittests_sources,
     dependencies: [
