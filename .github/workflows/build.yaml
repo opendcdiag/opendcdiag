@@ -35,7 +35,7 @@ jobs:
     - name: setup Git
       run: git config --system safe.directory '*'
     - name: meson setup -Dbuildtype=debugoptimized
-      run: meson setup builddir -Dssl_link_type=dynamic
+      run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized
     - name: ninja build
       run: ninja -C builddir
     - name: ninja build unittests
@@ -86,7 +86,7 @@ jobs:
     - name: setup Git
       run: git config --system safe.directory '*'
     - name: meson setup
-      run: meson setup builddir-windows-cross --cross-file meson-cross-win32.ini
+      run: meson setup builddir-windows-cross -Dbuildtype=release --cross-file meson-cross-win32.ini
     - name: ninja build
       run: ninja -C builddir-windows-cross
     - name: install Wine
