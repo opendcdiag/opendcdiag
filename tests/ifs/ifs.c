@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Intel Corporation.
+ * Copyright 2022-2023 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,7 +25,6 @@
 #include <limits.h>
 #include <paths.h>
 #include <stdio.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include "sandstone_ifs.h"
@@ -57,8 +56,12 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
             next_test = DEFAULT_TEST_ID;
         else
         {
-            current_test = (int) strtoul(current_buf, NULL, 0);
-            if (current_test < 0 && errno == ERANGE)
+            /* parse current test */
+            char *end_ptr;
+            current_test = (int) strtoul(current_buf, &end_ptr, 16);
+            int saved_errno = errno;
+            /* assure the buffer was completely parsed and we have no errors */
+            if (strcmp(end_ptr, "\0") != 0 || saved_errno == ERANGE)
             {
                 log_info("Cannot parse current_batch value: %s", current_buf);
                 return false;
@@ -107,7 +110,7 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
 static int scan_common_init(struct test *test)
 {
         /* Get info struct */
-        ifs_test_t *ifs_info = test->data;
+        ifs_test_t *ifs_info = (ifs_test_t *) test->data;
 
         /* see if driver is loaded */
         char sys_path[PATH_MAX];
@@ -170,7 +173,7 @@ static int scan_common_init(struct test *test)
 static int scan_run_helper(struct test *test, int cpu)
 {
         /* Get info struct */
-        ifs_test_t *ifs_info = test->data;
+        ifs_test_t *ifs_info = (ifs_test_t *) test->data;
         char result[BUFLEN] = {}, my_cpu[BUFLEN] = {};
         unsigned long long code;
 
@@ -283,11 +286,11 @@ static int scan_saf_init(struct test *test)
 }
 
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
-    .quality_level = TEST_QUALITY_PROD,
     .test_init = scan_saf_init,
     .test_run = scan_run,
     .desired_duration = -1,
     .fracture_loop_count = -1,
+    .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
 
 #endif // __x86_64__ && __linux__

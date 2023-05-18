@@ -36,6 +36,7 @@ endif
 
 tests_set_base.add(
     files(
+        'ifs/sandstone_ifs.c',
         'ifs/ifs.c',
     )
 )
@@ -167,4 +168,9 @@ if host_machine.cpu_family() == 'x86_64'
         tests_hsw_a,
         tests_skx_a,
     ]
+
+    unittests_sources += files(
+        'ifs/unit/ifs_unit_utils.cpp',
+        'ifs/unit/ifs_unittests.cpp',
+        )
 endif
