@@ -6,28 +6,15 @@
 #if defined(__x86_64__) && defined(__linux__)
 
 #include "gtest/gtest.h"
-#include "sandstone.h"
-
-#undef log_warning
-#define log_warning
-#undef log_error
-#define log_error
-#undef log_info
-#define log_info
-#undef log_debug
-#define log_debug
+#include "sandstone_unittests_utils.h"
 
 #include "../sandstone_ifs.c"
-
 #undef PATH_SYS_IFS_BASE
 #define PATH_SYS_IFS_BASE
 
 #include "../ifs.c"
 #include "ifs_test_cases.h"
 #include "ifs_unit_utils.h"
-
-struct cpu_info *cpu_info = nullptr;
-int num_cpus() { return IFS_UNIT_NUM_CPUS; }
 
 /*
  * @brief Setup all structs, directory and files needed by test

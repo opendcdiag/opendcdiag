@@ -7,7 +7,6 @@
 #define IFS_UNIT_UTILS_H_INCLUDED
 
 #define IFS_UNIT_MAX_FILES 5
-#define IFS_UNIT_NUM_CPUS  2
 #define IFS_MAX_PATH       256
 
 typedef struct {
