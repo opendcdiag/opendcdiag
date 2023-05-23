@@ -261,13 +261,7 @@ static int scan_run(struct test *test, int cpu)
     for (int i = 0; i < count; i++)
     {
         int scan_ret = scan_run_helper(test, i);
-        if (scan_ret >= EXIT_FAILURE)
-        {
-            /* scan_run_helper has called log error, so the thread "i" has been
-             * mark as failed. */
-            break;
-        }
-        else if (scan_ret == IFS_EXIT_CANNOT_START)
+        if (scan_ret == IFS_EXIT_CANNOT_START)
         {
             return EXIT_SKIP;
         }
