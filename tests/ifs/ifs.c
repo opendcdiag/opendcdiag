@@ -43,7 +43,8 @@
 #include "sandstone_ifs.h"
 
 
-static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info, char *status_buf)
+static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info,
+                           const char *status_buf)
 {
     char current_buf[BUFLEN] = {};
     int next_test, current_test;
