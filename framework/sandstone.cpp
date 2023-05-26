@@ -2600,7 +2600,7 @@ static int exec_mode_run(int argc, char **argv)
     if (!test_to_run) return EX_DATAERR;
 
     logging_init_global_child();
-    random_global_init(argv[1]);
+    random_init_global(argv[1]);
 
     std::vector<struct test *> test_list;
     add_test(test_list, test_to_run);
@@ -3640,7 +3640,7 @@ int main(int argc, char **argv)
     print_application_banner();
     logging_init_global();
     cpu_specific_init();
-    random_global_init(seed);
+    random_init_global(seed);
     background_scan_init();
 
     if (sApp->verbosity == -1)
