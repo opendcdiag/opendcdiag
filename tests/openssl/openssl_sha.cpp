@@ -112,6 +112,7 @@ static int ssl_sha_init(struct test* test)
         return EXIT_SUCCESS;
     }
     else {
+        log_skip(ResourceIssueSkipCategory, "OpenSSL library is not available or the current version is not supported");
         return EXIT_SKIP;
     }
 }

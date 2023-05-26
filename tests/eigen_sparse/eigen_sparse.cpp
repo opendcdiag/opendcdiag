@@ -59,7 +59,7 @@ static int initialize_problem(EigenSparseTestData *d)
         d->A.setFromTriplets(trip.begin(), trip.end());
         d->b = Eigen::VectorXd::Random(n);
     } catch (...) {
-        log_error("Exception on Eigen code, most probably OOM");
+        log_skip(ResourceIssueSkipCategory, "Exception on Eigen code, most probably OOM");
         return EXIT_SKIP;
     }
 
@@ -75,7 +75,7 @@ static int eigen_sparse_init(struct test *test) {
     try {
         d->golden = solver.compute(d->A).solve(d->b);
     } catch (...) {
-        log_error("Exception on Eigen code, most probably OOM");
+        log_skip(ResourceIssueSkipCategory, "Exception on Eigen code, most probably OOM");
         return EXIT_SKIP;
     }
     if (solver.info() != Eigen::Success) {
