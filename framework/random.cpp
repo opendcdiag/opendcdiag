@@ -408,7 +408,7 @@ static inline int open_random_file(const char *filename)
     return open(filename, O_RDONLY | O_CLOEXEC);
 }
 
-void random_global_init(const char *seed_from_user)
+void random_init_global(const char *seed_from_user)
 {
     auto make_engine = [](EngineType engine_type) {
         switch (engine_type) {

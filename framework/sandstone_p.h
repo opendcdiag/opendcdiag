@@ -537,7 +537,7 @@ static inline void logging_stream_close(FILE *log)
 TestResult logging_print_results(ChildExitStatus status, int *tc, const struct test *test);
 
 /* random.cpp */
-void random_global_init(const char *argument);
+void random_init_global(const char *argument);
 void random_advance_seed();
 std::string random_format_seed();
 void random_init();
