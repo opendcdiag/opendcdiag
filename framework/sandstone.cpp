@@ -3632,6 +3632,7 @@ int main(int argc, char **argv)
 
     load_cpu_info(sApp->enabled_cpus);
     signals_init_global();
+    resource_init_global();
 
     init_shmem(UseSharedMemory);
     debug_init_global(on_hang_arg, on_crash_arg);
