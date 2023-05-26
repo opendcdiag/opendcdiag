@@ -312,11 +312,11 @@ DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
 END_DECLARE_TEST
 
 DECLARE_TEST(array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware selftest for cache and registers")
-    .quality_level = TEST_QUALITY_BETA,
     .test_init = scan_array_init,
     .test_run = scan_run,
     .desired_duration = -1,
     .fracture_loop_count = -1,
+    .quality_level = TEST_QUALITY_BETA,
 END_DECLARE_TEST
 
 #endif // __x86_64__ && __linux__
