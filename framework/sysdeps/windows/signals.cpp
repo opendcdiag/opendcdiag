@@ -9,12 +9,12 @@
 #include <windows.h>
 
 #warning "Check if we need to handle SIGINT in one or both of these functions"
-void setup_signals()
+void signals_init_global()
 {
     SetErrorMode(SEM_FAILCRITICALERRORS);
 }
 
-void setup_child_signals()
+void signals_init_child()
 {
     SetErrorMode(SEM_FAILCRITICALERRORS);
 }

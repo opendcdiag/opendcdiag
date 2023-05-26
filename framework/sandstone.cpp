@@ -1857,7 +1857,7 @@ static TestResult run_child(/*nonconst*/ struct test *test, SharedMemorySynchron
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
         pin_to_logical_processor(LogicalProcessor(-1), "control");
-        setup_child_signals();
+        signals_init_child();
         debug_init_child();
         shmemsync.prepare_child();
     }
@@ -3631,7 +3631,7 @@ int main(int argc, char **argv)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
     load_cpu_info(sApp->enabled_cpus);
-    setup_signals();
+    signals_init_global();
 
     init_shmem(UseSharedMemory);
     debug_init_global(on_hang_arg, on_crash_arg);

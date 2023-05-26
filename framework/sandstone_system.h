@@ -15,8 +15,8 @@ struct SignalState
     intptr_t count;
 };
 
-void setup_signals();
-void setup_child_signals();
+void signals_init_global();
+void signals_init_child();
 SignalState last_signal();
 void enable_interrupt_catch();      // Unix only
 void disable_interrupt_catch();     // Unix only
