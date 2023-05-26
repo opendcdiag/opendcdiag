@@ -2592,6 +2592,8 @@ static struct test *get_next_test(int tc)
     }
 
     auto next_test = test_selector->get_next_test();
+    while (next_test && next_test->quality_level < sApp->requested_quality)
+        next_test = test_selector->get_next_test();
 
     if (next_test == nullptr){
         return get_next_test_iteration();
