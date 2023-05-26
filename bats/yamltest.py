@@ -19,7 +19,7 @@ def validate_time(test, timetype):
 
 def validate_message(name, message):
     level = message['level']
-    if not level in ("error", "warning", "info", "debug"):
+    if not level in ("error", "warning", "info", "debug", "skip"):
         fail("found invalid message level in test {} (was: {})".format(name, level))
     if 'text' in message:
         if not type('text') is str:
