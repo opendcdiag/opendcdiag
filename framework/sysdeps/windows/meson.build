@@ -9,6 +9,7 @@ sysdeps_a = static_library(
         'cpu_affinity.cpp',
         'fcntl.c',
         'mman.c',
+        'signals.cpp',
         'splitlock_detect.c',
         'tmpfile.c',
         'ucrt-mapping.c',

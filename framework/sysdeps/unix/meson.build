@@ -3,6 +3,7 @@
 
 sysdeps_unix_files = files(
     'child_debug.cpp',
+    'signals.cpp',
     'splitlock_detect.c',
     'stacksize.cpp',
     'tmpfile.c',
