@@ -19,7 +19,7 @@
 /*
  * @brief Setup all structs, directory and files needed by test
  */
-void *test_setup(ifs_unit setup_data)
+void *test_setup(const ifs_unit &setup_data)
 {
     // Setup dummy sysfs tree
     setup_sysfs_directory(setup_data);
@@ -39,7 +39,7 @@ void *test_setup(ifs_unit setup_data)
 /*
  * @brief Remove files, directory and free structs memory
  */
-void test_cleanup(test *test_t, ifs_test_t *ifs_info, ifs_unit setup_data)
+void test_cleanup(test *test_t, ifs_test_t *ifs_info, const ifs_unit &setup_data)
 {
     // Remove files first
     for (size_t i = 0; i < setup_data.files_sz; i++)
