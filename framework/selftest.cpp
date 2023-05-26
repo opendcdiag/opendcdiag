@@ -168,6 +168,45 @@ static int selftest_skip_run(struct test *test, int cpu)
     return EXIT_FAILURE;
 }
 
+static int selftest_log_skip_init(struct test *test)
+{
+    log_skip(SelftestSkipCategory, "This is a skip in init");
+    return EXIT_SKIP;
+}
+
+static int selftest_log_skip_run(struct test *test, int cpu)
+{
+    log_skip(SelftestSkipCategory, "Control shouldn't reach here");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_log_skip_run_all_threads(struct test *test, int cpu)
+{
+    log_skip(SelftestSkipCategory, "Skipping on all threads");
+    return EXIT_SKIP;
+}
+
+static int selftest_log_skip_run_even_threads(struct test *test, int cpu)
+{
+    if (cpu % 2 == 0) {
+        log_skip(SelftestSkipCategory, "Skipping on even numbered threads");
+        return EXIT_SKIP;
+    }
+    return EXIT_SUCCESS;
+}
+
+static int selftest_log_skip_newline_init(struct test *test)
+{
+    log_skip(SelftestSkipCategory, "This is a skip in init \nwith a new line.\nWill it work?");
+    return EXIT_SKIP;
+}
+
+static int selftest_log_skip_newline_run(struct test *test, int cpu)
+{
+    log_skip(RuntimeSkipCategory, "This message should never be displayed");
+    return EXIT_FAILURE;
+}
+
 static int selftest_uses_too_much_mem_run(struct test *, int)
 {
     static constexpr int Size = 1024 * test_the_test_data<true>::MaxAcceptableMemoryUseKB * 2;
@@ -740,6 +779,36 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
+    .id = "selftest_log_skip_init",
+    .description = "This test will test the log_skip feature in the init function",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_log_skip_init,
+    .test_run = selftest_log_skip_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_log_skip_run_all_threads",
+    .description = "This test will test the log_skip feature in the run function where all threads skip",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_log_skip_run_all_threads,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_log_skip_run_even_threads",
+    .description = "This test will test the log_skip feature in the run function where only even numbered threads skip",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_log_skip_run_even_threads,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_log_skip_newline",
+    .description = "This test will test the log_skip feature in the init function where there are newlines in the message",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_log_skip_newline_init,
+    .test_run = selftest_log_skip_newline_run,
+    .desired_duration = -1,
+},
+{
     .id = "selftest_maybe_skip_750ms",
     .description = "Requests to run for 750 ms (could be skipped)",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
@@ -1079,7 +1148,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .test_kvm_config = selftest_kvm_config_real_16bit_fail,
     .desired_duration = -1,
     .flags = test_type_kvm,
-},
+}
 #endif // __linux__
 };
 
