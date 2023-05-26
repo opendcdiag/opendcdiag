@@ -2323,16 +2323,17 @@ static auto collate_test_groups()
         std::vector<const struct test *> entries;
     };
     std::map<std::string_view, Group> groups;
-    for (struct test &test : test_set) {
-        for (auto ptr = test.groups; ptr && *ptr; ++ptr) {
+    for (auto test = test_selector->get_next_test(); test; test = test_selector->get_next_test()) {
+        for (auto ptr = test->groups; ptr && *ptr; ++ptr) {
             Group &g = groups[(*ptr)->id];
             g.definition = *ptr;
-            g.entries.push_back(&test);
+            g.entries.push_back(test);
         }
     }
 
     return groups;
 }
+
 
 static void list_tests(int opt)
 {
@@ -2343,7 +2344,7 @@ static void list_tests(int opt)
     auto groups = collate_test_groups();
     int i = 0;
 
-    for (auto test = test_set.begin(); test != test_set.end(); ++test) {
+    for (auto test = test_selector->get_next_test(); test; test = test_selector->get_next_test()) {
         if (test->quality_level >= sApp->requested_quality) {
             if (include_tests) {
                 if (include_descriptions) {
@@ -3240,6 +3241,8 @@ int main(int argc, char **argv)
     const char *on_crash_arg = nullptr;
 
     // test selection
+    int list_tests_action = 0; /* if we were asked to list tests instead of execute, remember what exactly were requested. */
+    const char *list_tests_action_arg = nullptr;
     const char *test_list_file_path = nullptr;
     bool test_list_randomize = false;
     bool use_builtin_test_list = false;
@@ -3304,11 +3307,10 @@ int main(int argc, char **argv)
         case 'l':
         case raw_list_tests:
         case raw_list_groups:
-            list_tests(opt);
-            return EXIT_SUCCESS;
         case raw_list_group_members:
-            list_group_members(optarg);
-            return EXIT_SUCCESS;
+            list_tests_action = opt;
+            list_tests_action_arg = optarg;
+            break;
         case 'n':
             sApp->thread_count = ParseIntArgument<>{
                     .name = "-n / --threads",
@@ -3704,21 +3706,11 @@ int main(int argc, char **argv)
         return EX_USAGE;
     }
 
+    // initialize system topology early
+    load_cpu_info(sApp->enabled_cpus);
+
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
-
-    load_cpu_info(sApp->enabled_cpus);
-    setup_signals();
-
-    init_shmem(UseSharedMemory);
-    debug_init_global(on_hang_arg, on_crash_arg);
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
-
-    print_application_banner();
-    logging_init_global();
-    cpu_specific_init();
-    random_global_init(seed);
-    background_scan_init();
 
     if (sApp->verbosity == -1)
         sApp->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
@@ -3736,10 +3728,6 @@ int main(int argc, char **argv)
 
         sApp->mce_count_last = std::accumulate(sApp->mce_counts_start.begin(), sApp->mce_counts_start.end(), uint64_t(0));
     }
-
-#ifndef __OPTIMIZE__
-    logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
-#endif
 
     // If we want to use the weighted testrunner we need to initialize it
     if (test_list_file_path) {
@@ -3792,6 +3780,31 @@ int main(int argc, char **argv)
         }
     }
 
+    if (list_tests_action) {
+        if (list_tests_action == raw_list_group_members) {
+            logging_printf(LOG_LEVEL_QUIET, "listing group members for group %s\n", list_tests_action_arg);
+            list_group_members(list_tests_action_arg);
+        } else {
+            list_tests(list_tests_action);
+        }
+        return EXIT_SUCCESS;
+    }
+
+#ifndef __OPTIMIZE__
+    logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
+#endif
+
+    setup_signals();
+
+    init_shmem(UseSharedMemory);
+    debug_init_global(on_hang_arg, on_crash_arg);
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
+
+    print_application_banner();
+    logging_init_global();
+    cpu_specific_init();
+    random_global_init(seed);
+    background_scan_init();
 #if SANDSTONE_SSL_BUILD
     sandstone_ssl_init();
 #endif
