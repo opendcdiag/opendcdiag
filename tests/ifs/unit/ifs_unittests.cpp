@@ -57,6 +57,15 @@ void test_cleanup(test *test_t, ifs_test_t *ifs_info, const ifs_unit &setup_data
     free(test_t);
 }
 
+static const char *file_contents_by_name(const ifs_unit &setup_data, const char *name)
+{
+    for (size_t i = 0; i < setup_data.files_sz; ++i) {
+        if (strcmp(name, setup_data.files[i].file) == 0) {
+            return setup_data.files[i].contents;
+        }
+    }
+    return nullptr;
+}
 
 /*
  * @test Sysfs driver directory is not present, driver is not supported.
@@ -135,8 +144,9 @@ TEST(IFSLoadImage, PreviousImageFail)
     int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    const char *status_buf = file_contents_by_name(load_test1, "status");
 
-    EXPECT_FALSE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info));
+    EXPECT_FALSE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
     close(batch_fd);
     close(ifs_fd);
 
@@ -162,8 +172,9 @@ TEST(IFSLoadImage, PreviousImageNone)
     int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    const char *status_buf = file_contents_by_name(load_test2, "status");
 
-    EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info));
+    EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
     close(batch_fd);
     close(ifs_fd);
 
@@ -189,8 +200,9 @@ TEST(IFSLoadImage, PreviousImageCannotBeParsed)
     int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    const char *status_buf = file_contents_by_name(load_test3, "status");
 
-    EXPECT_FALSE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info));
+    EXPECT_FALSE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
     close(batch_fd);
     close(ifs_fd);
 
@@ -216,8 +228,9 @@ TEST(IFSLoadImage, PreviousImageUntested)
     int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    const char *status_buf = file_contents_by_name(load_test4, "status");
 
-    EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info));
+    EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
     close(batch_fd);
     close(ifs_fd);
 
@@ -243,8 +256,9 @@ TEST(IFSLoadImage, LoadNextImage)
     int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    const char *status_buf = file_contents_by_name(load_test5, "status");
 
-    EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info));
+    EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
     close(batch_fd);
     close(ifs_fd);
 
