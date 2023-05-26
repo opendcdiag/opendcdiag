@@ -8,6 +8,9 @@
 
 #include <stdint.h>
 
+/* resource.cpp */
+void resource_init_global();
+
 /* signals.cpp */
 struct SignalState
 {
