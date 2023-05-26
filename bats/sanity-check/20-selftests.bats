@@ -233,11 +233,59 @@ selftest_pass() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_skip
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/threads/0/messages/0/level" info
-    test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*skip.*'
     i=$((-1 + yamldump[/tests/0/threads/0/messages@len]))
     test_yaml_regexp "/tests/0/threads/0/messages/$i/level" info
-    test_yaml_regexp "/tests/0/threads/0/messages/$i/text" '.*requested skip.*'
+    test_yaml_regexp "/tests/0/threads/0/messages/$i/text" '.*skip.*'
+}
+
+@test "selftest_log_skip_init" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_log_skip_init
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_log_skip_init
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
+    test_yaml_regexp "/tests/0/skip-reason" '.*skip.*'
+}
+
+@test "selftest_log_skip_run_all_threads" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_log_skip_run_all_threads
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_log_skip_run_all_threads
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" RuntimeSkipCategory
+    test_yaml_regexp "/tests/0/skip-reason" '.*test_run().*'
+    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" skip
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.*Skipping.*'
+    done
+}
+
+@test "selftest_log_skip_run_even_threads" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_log_skip_run_even_threads
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_log_skip_run_even_threads
+    test_yaml_regexp "/tests/0/result" pass
+    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" skip
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.*Skipping.*'
+    done
+}
+
+@test "selftest_log_skip_newline" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_log_skip_newline
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_log_skip_newline
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
+    test_yaml_regexp "/tests/0/skip-reason" $'.*\n.*\n.*'
 }
 
 @test "selftest_skip --fatal-skips" {
