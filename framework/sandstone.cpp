@@ -64,6 +64,7 @@
 #include "sandstone_p.h"
 #include "sandstone_iovec.h"
 #include "sandstone_kvm.h"
+#include "sandstone_system.h"
 #include "test_selectors/SelectorFactory.h"
 
 #include "sandstone_tests.h"
@@ -305,79 +306,6 @@ static bool duration_is_forever(std::chrono::duration<Rep, Period> duration)
 {
     return duration == duration.max();
 }
-
-#ifdef _WIN32
-#  warning "Check if we need to handle SIGINT in one or both of these functions"
-static void setup_signals()
-{
-    SetErrorMode(SEM_FAILCRITICALERRORS);
-}
-static void setup_child_signals()
-{
-    SetErrorMode(SEM_FAILCRITICALERRORS);
-}
-#else
-static constexpr std::initializer_list<int> termination_signals = {
-    SIGHUP, SIGINT, SIGTERM, SIGPIPE
-};
-
-#  if (defined(__WAIT_INT) && defined(__linux__)) || defined(__APPLE__)
-// glibc prior to 2.24 defined WTERMSIG with compatibility with BSD union wait
-// Apple libc does the same
-static constexpr uint32_t SignalMask = 0x7f;
-#  else
-static constexpr uint32_t SignalMask = WTERMSIG(~0);
-#  endif
-static constexpr int SignalBits = __builtin_clz(SignalMask + 1);
-static_assert(SignalMask >> SignalBits == 0, "Sanity check");
-static std::atomic<uint32_t> signal_control;
-
-static void signal_handler(int signum)
-{
-    // communicate which signal we've received
-    uint32_t expected = 0;
-    if (signal_control.compare_exchange_strong(expected, W_EXITCODE(1, signum), std::memory_order_relaxed)) {
-        // initial clean up
-    } else {
-        // just increment the counter
-        signal_control.fetch_add(W_EXITCODE(1, 0), std::memory_order_relaxed);
-    }
-}
-
-static void setup_signals(std::initializer_list<int> signals = termination_signals)
-{
-    struct sigaction sa = {};
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESETHAND;
-    sa.sa_handler = signal_handler;
-    for (int sig : signals)
-        sigaction(sig, &sa, nullptr);
-}
-
-static void setup_child_signals()
-{
-    // create a new session so the parent will get SIGHUP/SIGINT instead of us
-    IGNORE_RETVAL(setsid());
-
-    // restore termination signals
-    struct sigaction sa = {};
-    sigemptyset(&sa.sa_mask);
-    sa.sa_handler = SIG_DFL;
-    for (int sig : termination_signals)
-        sigaction(sig, &sa, nullptr);
-}
-
-static void enable_interrupt_catch()
-{
-    setup_signals({ SIGINT });
-}
-
-static void disable_interrupt_catch()
-{
-    signal(SIGINT, SIG_DFL);
-}
-#endif
-
 
 static Duration calculate_runtime(MonotonicTimePoint start_time, MonotonicTimePoint *ref = nullptr)
 {
@@ -1469,15 +1397,14 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 
     /* first wait: normal exit */
     MonotonicTimePoint deadline  = steady_clock::now() + remaining;
-    uint32_t last_sig_state = signal_control.load(std::memory_order_relaxed);
     for (;;) {
         exit_status = do_wait(remaining);
         if (exit_status != Interrupted)
             break;
 
         // we've received a signal, which one?
-        uint32_t cur_sig_state = signal_control.load(std::memory_order_relaxed);
-        if (last_sig_state == cur_sig_state) {
+        auto [signal, count] = last_signal();
+        if (signal == 0) {
             // it was SIGCHLD, so restart the loop
             remaining = deadline - steady_clock::now() + remaining;
             if (remaining.count() < 0) {
@@ -1486,9 +1413,6 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
             }
         } else {
             // caught a termination signal...
-            int signal = WTERMSIG(cur_sig_state);
-            int count = cur_sig_state >> SignalBits;
-            last_sig_state = cur_sig_state;
 
             // forward the signal to the child
             kill(child, signal);
@@ -1506,7 +1430,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
         }
     }
 
-    if (__builtin_expect(last_sig_state, 0)) {
+    if (auto [sig, count] = last_signal(); __builtin_expect(sig, 0)) {
         // we caught a SIGINT
         // child has likely not been able to write results
         logging_print_results({ TestInterrupted }, tc, test);
@@ -1514,7 +1438,6 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
         logging_flush();
 
         // now exit with the same signal
-        int sig = WTERMSIG(last_sig_state);
         disable_interrupt_catch();
         raise(sig);
         _exit(128 | sig);           // just in case

@@ -545,16 +545,6 @@ void random_init();
 /* sandstone.cpp */
 TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails);
 
-/* stacksize.cpp */
-#ifdef _WIN32
-static inline void setup_stack_size(int, char **)
-{
-    // On Windows, we know the OS obeys the -Wl,--stack= argument
-}
-#else
-void setup_stack_size(int argc, char **argv);
-#endif
-
 #endif
 
 #if SANDSTONE_NO_LOGGING
