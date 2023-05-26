@@ -51,12 +51,12 @@ static void setup_signals(std::initializer_list<int> signals)
         sigaction(sig, &sa, nullptr);
 }
 
-void setup_signals()
+void signals_init_global()
 {
      setup_signals(termination_signals);
 }
 
-void setup_child_signals()
+void signals_init_child()
 {
     // create a new session so the parent will get SIGHUP/SIGINT instead of us
     IGNORE_RETVAL(setsid());
