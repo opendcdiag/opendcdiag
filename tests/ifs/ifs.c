@@ -123,7 +123,7 @@ static int scan_common_init(struct test *test)
         int ifs_fd = open_sysfs_ifs_base(sys_path);
         if (ifs_fd < 0) {
             int saved_errno = errno;
-            log_info("could not find IFS control files in %s: either IFS is not supported on this system"
+            log_skip(OsNotSupportedSkipCategory, "could not find IFS control files in %s: either IFS is not supported on this system"
                      " or this kernel does not support IFS (%m)", ifs_info->sys_dir);
             return -saved_errno;
         }
@@ -134,7 +134,7 @@ static int scan_common_init(struct test *test)
         int enforce_run = get_testspecific_knob_value_uint(test, "enforce_run", -1);
         if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
         {
-            log_warning("Previous run failure found! This test will skip until enforced adding flag: "
+            log_skip(ResourceIssueSkipCategory, "Previous run failure found! This test will skip until enforced adding flag: "
                         "-O %s.enforce_run=1", test->id);
             return EXIT_SKIP;
         }
@@ -143,7 +143,7 @@ static int scan_common_init(struct test *test)
         int run_fd = openat(ifs_fd, "run_test", O_WRONLY);
         int saved_errno = errno;
         if (run_fd < 0) {
-                log_info("could not open %s/run_test for writing (not running as root?): %m", ifs_info->sys_dir);
+                log_skip(ResourceIssueSkipCategory, "could not open %s/run_test for writing (not running as root?): %m", ifs_info->sys_dir);
                 close(run_fd);
                 return -saved_errno;
         }
@@ -165,14 +165,16 @@ static int scan_common_init(struct test *test)
             ifs_info->image_support = true;
 
             if (batch_fd < 0) {
-                    log_info("could not open %s/current_batch for writing (not running as root?): %m", ifs_info->sys_dir);
+                    log_skip(ResourceIssueSkipCategory, "could not open %s/current_batch for writing (not running as root?): %m", ifs_info->sys_dir);
                     close(batch_fd);
                     return -saved_errno;
             }
 
             /* load test file */
-            if (!load_test_file(ifs_fd, batch_fd, test, ifs_info, status_buf))
+            if (!load_test_file(ifs_fd, batch_fd, test, ifs_info, status_buf)) {
+                log_skip(ResourceIssueSkipCategory, "cannot load test file");
                 return EXIT_SKIP;
+            }
 
             /* read image version if available and log it */
             if (read_file(ifs_fd, "image_version", ifs_info->image_version) <= 0) {
@@ -196,7 +198,7 @@ static int scan_run_helper(struct test *test, int cpu)
          * DON'T use report_fail_msg() */
         int thread_num = cpu;
 
-        if (cpu_info[cpu].thread_id != 0)
+        if (cpu_info[cpu].thread_id != 0) 
                 return EXIT_SKIP;
 
         snprintf(my_cpu, sizeof(my_cpu), "%d\n", cpu_info[cpu].cpu_number);
@@ -206,20 +208,20 @@ static int scan_run_helper(struct test *test, int cpu)
         assert(n < sizeof(sys_path));
         int ifsfd = open(sys_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
         if (ifsfd < 0) {
-                log_warning("Could not start test for \"%s\": %m", ifs_info->sys_dir);
+                log_skip(ResourceIssueSkipCategory, "Could not start test for \"%s\": %m", ifs_info->sys_dir);
                 return EXIT_SKIP;
         }
 
         /* start the test; this blocks until the test has finished */
         if (!write_file(ifsfd, "run_test", my_cpu)) {
-                log_warning("Could not start test for \"%s\": %m", ifs_info->sys_dir);
+                log_skip(ResourceIssueSkipCategory, "Could not start test for \"%s\": %m", ifs_info->sys_dir);
                 close(ifsfd);
                 return EXIT_SKIP;
         }
 
         /* read result */
         if (read_file(ifsfd, "status", result) < 0) {
-                log_warning("Could not obtain result for \"%s\": %m", ifs_info->sys_dir);
+                log_skip(ResourceIssueSkipCategory, "Could not obtain result for \"%s\": %m", ifs_info->sys_dir);
                 close(ifsfd);
                 return EXIT_SKIP;
         }
@@ -235,7 +237,7 @@ static int scan_run_helper(struct test *test, int cpu)
                 } else {
                         // Compare common driver error codes
                         if (sscanf(result, "%llx", &code) == 1 && (compare_error_codes(code, IFS_SW_TIMEOUT) || compare_error_codes(code, IFS_SW_PARTIAL_COMPLETION))) {
-                                log_warning("Test \"%s\" did not run to completion, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                                log_skip(ResourceIssueSkipCategory, "Test \"%s\" did not run to completion, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
                                 return EXIT_SKIP; // not a failure condition
                         }
                         log_error("Test \"%s\" failed with condition: %s image: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
@@ -247,7 +249,7 @@ static int scan_run_helper(struct test *test, int cpu)
                 if (n < 0)
                 {
                     strncpy(result, "unknown", BUFLEN);
-                    log_warning("Test \"%s\" remains unstested, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                    log_skip(ResourceIssueSkipCategory, "Test \"%s\" remains unstested, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
                 }
                 else
                 {
@@ -278,6 +280,7 @@ static int scan_run(struct test *test, int cpu)
         int scan_ret = scan_run_helper(test, i);
         if (scan_ret == IFS_EXIT_CANNOT_START)
         {
+            log_skip(CpuNotSupportedSkipCategory, "Not supported on this CPU");
             return EXIT_SKIP;
         }
     }
