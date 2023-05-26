@@ -9,40 +9,32 @@
 #include <initializer_list>
 
 #include <signal.h>
-#include <sys/wait.h>
 
 static constexpr std::initializer_list<int> termination_signals = {
     SIGHUP, SIGINT, SIGTERM, SIGPIPE
 };
 
-#  if (defined(__WAIT_INT) && defined(__linux__)) || defined(__APPLE__)
-// glibc prior to 2.24 defined WTERMSIG with compatibility with BSD union wait
-// Apple libc does the same
-static constexpr uint32_t SignalMask = 0x7f;
-#  else
-static constexpr uint32_t SignalMask = WTERMSIG(~0);
-#  endif
-static constexpr int SignalBits = __builtin_clz(SignalMask + 1);
-static_assert(SignalMask >> SignalBits == 0, "Sanity check");
-static std::atomic<uint32_t> signal_control;
+static std::atomic<uint64_t> signal_control;
 
+// runs with a blocked signal mask, so this function doesn't need to be atomic
 static void signal_handler(int signum)
 {
     // communicate which signal we've received
-    uint32_t expected = 0;
-    if (signal_control.compare_exchange_strong(expected, W_EXITCODE(1, signum), std::memory_order_relaxed)) {
-        // initial clean up
-    } else {
-        // just increment the counter
-        signal_control.fetch_add(W_EXITCODE(1, 0), std::memory_order_relaxed);
+    uint64_t value = signal_control.load(std::memory_order_relaxed);
+    if (value == 0) {
+        // first time we've received a signal, indicate which one
+        value = uint64_t(signum) << 32;
     }
+
+    ++value;
+    signal_control.store(value, std::memory_order_relaxed);
 }
 
 SignalState last_signal()
 {
-    uint32_t cur_sig_state = signal_control.load(std::memory_order_relaxed);
-    int signal = WTERMSIG(cur_sig_state);
-    int count = cur_sig_state >> SignalBits;
+    uint64_t value = signal_control.load(std::memory_order_relaxed);
+    int signal = int(value >> 32);
+    int count = int(value);
     return { .signal = signal, .count = count };
 }
 
@@ -52,6 +44,9 @@ static void setup_signals(std::initializer_list<int> signals)
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESETHAND;
     sa.sa_handler = signal_handler;
+
+    for (int sig : signals)
+        sigaddset(&sa.sa_mask, sig);
     for (int sig : signals)
         sigaction(sig, &sa, nullptr);
 }
@@ -83,4 +78,3 @@ void disable_interrupt_catch()
 {
     signal(SIGINT, SIG_DFL);
 }
-
