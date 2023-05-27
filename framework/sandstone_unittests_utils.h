@@ -16,3 +16,5 @@
 #define log_info
 #undef  log_debug
 #define log_debug
+#undef log_skip
+#define log_skip
