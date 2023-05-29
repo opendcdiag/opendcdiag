@@ -241,9 +241,15 @@ struct SandstoneBackgroundScan
     std::span<MonotonicTimePoint> timestamp;
     float load_idle_threshold = 0.0;
 
+#ifdef _WIN32
+    static constexpr float load_idle_threshold_init = 0.35;
+    static constexpr float load_idle_threshold_inc_val = 0.05;
+    static constexpr float load_idle_threshold_max = 1.0;
+#else
     static constexpr float load_idle_threshold_init = 0.2;
     static constexpr float load_idle_threshold_inc_val = 0.05;
     static constexpr float load_idle_threshold_max = 0.8;
+#endif
 };
 
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
