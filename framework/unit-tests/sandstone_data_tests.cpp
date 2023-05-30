@@ -20,7 +20,7 @@ static inline BFloat16 tobf16_avx512(float f)
 {
     BFloat16 r;
     __m128bh m = _mm_cvtneps_pbh(_mm_set_ss(f));
-    r.payload = m[0];
+    r.payload = std::bit_cast<uint16_t>(m[0]);
     return r;
 }
 
