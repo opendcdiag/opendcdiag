@@ -366,7 +366,7 @@ TEST(IFSTrigger, AllCoresUntested)
     for (size_t i=0; i < cpu_num; i++)
     {
         char contents[256], expected[256];
-        EXPECT_EQ(scan_run_helper(test_t, i), IFS_SW_SCAN_CANNOT_START);
+        EXPECT_EQ(scan_run_helper(test_t, i), IFS_EXIT_CANNOT_START);
 
         // Check we trigger the right cpu
         read_sysfs_file(ifs_info->sys_dir, "run_test", contents);
