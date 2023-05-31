@@ -32,9 +32,7 @@ static ifs_unit reqs_test3 = {
     }
 };
 
-/* Load image */
-
-static ifs_unit load_test1 = {
+static ifs_unit reqs_test4 = {
     "/tmp/intel_ifs_0.test1_previous_image_fail",
     5,
     {
@@ -45,6 +43,8 @@ static ifs_unit load_test1 = {
         {"status", "fail"}
     }
 };
+
+/* Load image */
 
 static ifs_unit load_test2 = {
     "/tmp/intel_ifs_0.test2_previous_image_none",

@@ -256,7 +256,7 @@ static int scan_run_helper(struct test *test, int cpu)
                     if (sscanf(result, "%llx", &code) == 1 && compare_error_codes(code, IFS_SW_SCAN_CANNOT_START))
                     {
                         log_info("Test \"%s\" cannot be started at the moment, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
-                        return IFS_SW_SCAN_CANNOT_START;
+                        return IFS_EXIT_CANNOT_START;
                     }
                 }
                 return EXIT_SKIP;
@@ -280,7 +280,7 @@ static int scan_run(struct test *test, int cpu)
         int scan_ret = scan_run_helper(test, i);
         if (scan_ret == IFS_EXIT_CANNOT_START)
         {
-            log_skip(CpuNotSupportedSkipCategory, "Not supported on this CPU");
+            log_skip(ResourceIssueSkipCategory, "IFS feature is not available at the moment");
             return EXIT_SKIP;
         }
     }

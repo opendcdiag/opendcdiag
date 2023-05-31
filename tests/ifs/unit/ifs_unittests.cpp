@@ -131,31 +131,23 @@ TEST(IFSRequirements, CurrentBatchNotFound)
 /*
  * @test Previous image failed, current_batch file won't be updated.
  */
-TEST(IFSLoadImage, PreviousImageFail)
+TEST(IFSRequirements, PreviousImageFail)
 {
-    GTEST_SKIP_("Unimplemented");
-
     // Setup dummy test_t struct
-    test *test_t = (test *) test_setup(load_test1);
+    test *test_t = (test *) test_setup(reqs_test4);
     ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
 
-    // Open dir and files
-    char sys_path[PATH_MAX];
-    int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
-    int ifs_fd = open_sysfs_ifs_base(sys_path);
-    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
-    const char *status_buf = file_contents_by_name(load_test1, "status");
+    EXPECT_EQ(scan_common_init(test_t), EXIT_SKIP);
+    EXPECT_FALSE(ifs_info->image_support);
+    EXPECT_STREQ(ifs_info->image_id, "");
+    EXPECT_STREQ(ifs_info->image_version, "");
 
-    EXPECT_FALSE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
-    close(batch_fd);
-    close(ifs_fd);
-
-    // Check we load the right image
+    // Check image wasn't updated
     char contents[256];
     read_sysfs_file(ifs_info->sys_dir, "current_batch", contents);
-    EXPECT_STREQ(contents, load_test1.files[0].contents);
+    EXPECT_STREQ(contents, reqs_test4.files[0].contents);
 
-    test_cleanup(test_t, ifs_info, load_test1);
+    test_cleanup(test_t, ifs_info, reqs_test4);
 }
 
 /*
@@ -374,7 +366,7 @@ TEST(IFSTrigger, AllCoresUntested)
     for (size_t i=0; i < cpu_num; i++)
     {
         char contents[256], expected[256];
-        EXPECT_EQ(scan_run_helper(test_t, i), IFS_SW_SCAN_CANNOT_START);
+        EXPECT_EQ(scan_run_helper(test_t, i), IFS_EXIT_CANNOT_START);
 
         // Check we trigger the right cpu
         read_sysfs_file(ifs_info->sys_dir, "run_test", contents);
