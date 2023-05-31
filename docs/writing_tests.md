@@ -605,7 +605,7 @@ thread. In this case, it is because we've deliberately induced a failure on the
 first hardware thread discovered by OpenDCDiag.
 
 In addition to memcmp_or_fail, the OpenDCDiag has some additional logging
-functions that can be used. Among these functions are *log_debug*, *log_info*,
+functions that can be used. Among these functions are *log_skip*, *log_debug*, *log_info*,
 *log_warning* and *log_error*. They all behave like printf and are declared in
 [sandstone.h](../framework/sandstone.h). OpenDCDiag also provides an additional
 function that is useful for logging binary data, *log_data*, also declared and
@@ -746,8 +746,10 @@ given machine. For example, the test may make use of an OS feature that is not
 present on all platforms or it may require root or administrator access to run.
 The framework doesn't provide any support for detecting
 these conditions so it is up to individual tests to 'self skip' if they detect
-conditions that will prevent them from running. This is done by performing a
-test in the *test_init* function and returning *EXIT_SKIP* if the test fails.
+conditions that will prevent them from running. This is done by performing a test 
+in *test_init* function and then using *log_skip* to specify a category and message 
+for the skip and finally returning *EXIT_SKIP* if the test fails. Pre-defined set 
+of categories are defined using enum *SkipCategory* in sandstone.h file.
 For example, suppose we write a test that will work fine on Linux\* but will not run
 on Windows\*.  In this case we might write an *test_init* function that looks like
 this:
@@ -756,7 +758,7 @@ this:
 static int linux_only_init(struct test *test)
 {
 #ifdef _WIN32
-        log_info("The linux_only test is not supported on Windows");
+        log_skip(OsNotSupportedSkipCategory, "The linux_only test is not supported on Windows");
         return EXIT_SKIP;
 #endif
         return EXIT_SUCCESS;
