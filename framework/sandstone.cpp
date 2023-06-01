@@ -1549,7 +1549,7 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
     if (uint64_t missing = required_cpu_features & ~cpu_features) {
         // for brevity, don't report the bits that the framework itself needs
         missing &= ~_compilerCpuFeatures;
-        log_info("SKIP reason: test requires %s\n", cpu_features_to_string(missing).c_str());
+        log_skip(CpuNotSupportedSkipCategory, "SKIP reason: test requires %s\n", cpu_features_to_string(missing).c_str());
         (void) missing;
         return TestSkipped;
     }
