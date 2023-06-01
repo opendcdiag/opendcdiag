@@ -101,7 +101,7 @@ test_yaml_regexp() {
     for test in selftest_failinit selftest_fail; do
         bash -c "$SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 -e $test -o -; [[ $? -eq 1 ]]" | \
             sed 's,\r$,,' | tee /tmp/output.tap
-        egrep -qx "\[[ 0-9.]+\] exit: fail" /tmp/output.tap
+        grep -E -qx "\[[ 0-9.]+\] exit: fail" /tmp/output.tap
         not_oks=`grep -E 'not ok +([0-9] )'$test /tmp/output.tap`
         [[ `echo "$not_oks" | wc -l` -eq 5 ]]
     done
