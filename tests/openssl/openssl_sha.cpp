@@ -152,5 +152,5 @@ static int ssl_sha_run(struct test* test, int cpu)
 DECLARE_TEST(openssl_sha, "Test calculating differnt sha checksums")
     .test_init = ssl_sha_init,
     .test_run = ssl_sha_run,
-    .quality_level = TEST_QUALITY_BETA,
+    .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
