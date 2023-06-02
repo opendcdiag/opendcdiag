@@ -3717,7 +3717,8 @@ int main(int argc, char **argv)
     }
 
 #if SANDSTONE_SSL_BUILD
-    sandstone_ssl_init();
+    if (SANDSTONE_SSL_LINKED || sApp->current_fork_mode() != SandstoneApplication::exec_each_test)
+        sandstone_ssl_init();
 #endif
 
     logging_print_header(argc, argv, test_duration(0, 0, 0), test_timeout(test_duration(0, 0, 0)));
