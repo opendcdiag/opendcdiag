@@ -863,10 +863,8 @@ selftest_crash_common() {
     fi
 
     # Check that gdb works
-    have_working_gdb=false
     on_crash_arg=
     if gdb -batch -ex 'python 1' -ex run /bin/true 2>/dev/null; then
-        have_working_gdb=true
         on_crash_arg=--on-crash=backtrace
     fi
 
@@ -880,7 +878,18 @@ selftest_crash_common() {
     test_yaml_regexp "/tests/0/threads/1/state" "failed"
     test_yaml_regexp "/tests/0/threads/1/messages/0/level" "error"
     test_yaml_regexp "/tests/0/threads/1/messages/0/text" ".*Received signal $signum \((Segmentation fault|Access violation)\) code=[0-9]+.* RIP = 0x.*"
-    if $have_working_gdb; then
+
+    if [[ `uname -m` = x86_64 ]]; then
+        # OpenDCDiag's built-in register dumper is only implemented for x86-64
+        msgidx=$((yamldump[/tests/0/threads/1/messages@len] - 1))
+        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/level" "info"
+        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/text" "Registers:"
+        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/text" " rax += 0x[0-9a-f]{16}.*"
+    fi
+
+    # optionally check the backtrace from gdb, because on some container
+    # environments gdb simply fails
+    if [[ ${yamldump[/tests/0/threads/0/messages@len]-0} -gt 0 ]]; then
         test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
         test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
         test_yaml_regexp "/tests/0/threads/1/messages/1/level" "warning"
@@ -894,14 +903,6 @@ selftest_crash_common() {
                 test_yaml_regexp "/tests/0/threads/1/messages/1/text" ".*\bldr\b.*"
                 ;;
         esac
-    fi
-
-    if [[ `uname -m` = x86_64 ]]; then
-        # OpenDCDiag's built-in register dumper is only implemented for x86-64
-        msgidx=$((yamldump[/tests/0/threads/1/messages@len] - 1))
-        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/level" "info"
-        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/text" "Registers:"
-        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/text" " rax += 0x[0-9a-f]{16}.*"
     fi
 }
 
