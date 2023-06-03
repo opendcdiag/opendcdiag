@@ -1264,7 +1264,7 @@ void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ..
     if (msg[msg.size() - 1] == '\n')
         msg.pop_back(); // remove trailing newline
              
-    int level = LOG_LEVEL_QUIET;
+    int level = LOG_LEVEL_VERBOSE(1);
     FILE *log = log_for_thread(thread_num).log;
     fflush(log);
     fputc(message_code(SkipMessages, level), log);
@@ -2358,7 +2358,8 @@ void YamlLogger::print_result_line(ChildExitStatus status)
                 if (init_skip_message.size() > 0) {
                     logging_printf(loglevel, "  skip-category: %s\n", char_to_skip_category(init_skip_message[0]));
                     std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
-                    format_and_print_message(real_stdout_fd, -1, message, false);
+                    if (loglevel <= sApp->verbosity)
+                        format_and_print_message(real_stdout_fd, -1, message, false);
                     if (file_log_fd != real_stdout_fd)
                         format_and_print_message(file_log_fd, -1, message, false);
                 } else {
