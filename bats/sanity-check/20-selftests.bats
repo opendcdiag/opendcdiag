@@ -107,6 +107,55 @@ test_yaml_regexp() {
     done
 }
 
+@test "TAP silent output" {
+    opts="--output-format=tap --quick --selftests --quiet --disable=mce_check -e @positive -o $BATS_TEST_TMPDIR/fulloutput.tap"
+    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.tap || \
+        cat $BATS_TEST_TMPDIR/fulloutput.tap
+
+    sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.tap
+    {
+        read line
+        echo line 1: $line
+        [[ "$line" = "# ${SANDSTONE##*/} $opts" ]]
+
+        read line
+        echo line 2: $line
+        [[ "$line" = "Ran "*" tests without error"* ]]
+
+        read line
+        echo line 3: $line
+        [[ "$line" = "exit: pass" ]]
+
+        # There's no line 4
+        ! read line
+    } < $BATS_TEST_TMPDIR/output.tap
+}
+
+@test "YAML silent output" {
+    opts="-Y --quick --selftests --quiet --disable=mce_check -e @positive -o $BATS_TEST_TMPDIR/fulloutput.tap"
+    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.yaml || \
+        cat $BATS_TEST_TMPDIR/fulloutput.yaml
+
+    sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.yaml
+    {
+        read line
+        echo line 1: $line
+        [[ "$line" = "command-line: '${SANDSTONE##*/} $opts'" ]]
+
+        read line
+        echo line 2: $line
+        [[ "$line" = "version: "* ]]
+
+        read line
+        echo line 3: $line
+
+        [[ "$line" = "exit: pass" ]]
+
+        # There's no line 4
+        ! read line
+    } < $BATS_TEST_TMPDIR/output.yaml
+}
+
 @test "YAML header output" {
     declare -A yamldump
     local args="-e selftest_pass -Y4 -e selftest_skip -t 1234 --timeout=12345"
