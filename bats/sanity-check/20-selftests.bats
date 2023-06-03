@@ -862,10 +862,16 @@ selftest_crash_common() {
         skip "Not executing directly (executing '$SANDSTONE')"
     fi
 
-    # Check that gdb works
+    # Check that gdb can attach to running processes
+    have_working_gdb=false
     on_crash_arg=
-    if gdb -batch -ex 'python 1' -ex run /bin/true 2>/dev/null; then
+    sleep 1h &
+    pid=$!
+    if gdb -batch -pid $pid -ex 'python 1' -ex kill >/dev/null 2>/dev/null; then
+        have_working_gdb=true
         on_crash_arg=--on-crash=backtrace
+    else
+        kill $pid
     fi
 
     declare -A yamldump
@@ -887,9 +893,7 @@ selftest_crash_common() {
         test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/text" " rax += 0x[0-9a-f]{16}.*"
     fi
 
-    # optionally check the backtrace from gdb, because on some container
-    # environments gdb simply fails
-    if [[ ${yamldump[/tests/0/threads/0/messages@len]-0} -gt 0 ]]; then
+    if $have_working_gdb; then
         test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
         test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
         test_yaml_regexp "/tests/0/threads/1/messages/1/level" "warning"
