@@ -911,21 +911,27 @@ selftest_crash_common() {
         skip "Not executing directly (executing '$SANDSTONE')"
     fi
 
+    # Check that we have gdb
+    if ! gdb -batch -ex 'python 1' 2>/dev/null; then
+        skip "No GDB in this installation."
+    fi
+
     # Check that gdb can attach to running processes
     have_working_gdb=false
-    on_crash_arg=
-    sleep 1h &
+    sleep 2m &
     pid=$!
-    if gdb -batch -pid $pid -ex 'python 1' -ex kill >/dev/null 2>/dev/null; then
+    if gdb -batch -pid $pid -ex kill >/dev/null 2>/dev/null; then
+        echo >&3 '# testing gdb backtraces'
         have_working_gdb=true
-        on_crash_arg=--on-crash=backtrace
     else
+        echo >&3 '# testing only the internal register dump'
         kill $pid
+        ps h $pid ||:
     fi
 
     declare -A yamldump
     local signum=`kill -l SEGV`
-    sandstone_selftest $on_crash_arg -n1 -vvv -e selftest_sigsegv
+    sandstone_selftest --on-crash=backtrace -n1 -vvv -e selftest_sigsegv
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/result" "crash"
