@@ -341,6 +341,16 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     return EXIT_SUCCESS;
 }
 
+static int selftest_datacompare_nodifference_run(struct test *, int cpu)
+{
+    uint8_t actual[16], expected[16];
+    memset_random(actual, sizeof(actual));
+    memcpy(expected, actual, sizeof(actual));
+
+    memcmp_or_fail(actual, expected, sizeof(actual));        // won't fail
+    memcmp_fail_report(actual, expected, sizeof(actual), nullptr);
+}
+
 static int selftest_cxxthrow_run(struct test *, int cpu) noexcept(false)
 {
     throw SelftestException();
@@ -991,6 +1001,13 @@ static struct test selftests_array[] = {
 },
 FOREACH_DATATYPE(DATACOMPARE_TEST)
 #undef DATACOMPARE_TEST
+{
+    .id = "selftest_datacompare_nodifference",
+    .description = "Fakes a memcmp_or_fail that finds a difference that isn't there",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+            .test_run = selftest_datacompare_nodifference_run,
+    .desired_duration = -1,
+},
 
 {
     .id = "selftest_cxxthrow",

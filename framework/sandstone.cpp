@@ -387,7 +387,6 @@ void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size
         auto actual = static_cast<const uint8_t *>(_actual);
         auto expected = static_cast<const uint8_t *>(_expected);
         ptrdiff_t offset = memcmp_offset(actual, expected, size);
-        assert(offset >= 0);
 
         va_list va;
         va_start(va, fmt);
