@@ -771,6 +771,22 @@ function selftest_logerror_common() {
     done
 }
 
+@test "selftest_datacompare_nodifference" {
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_datacompare_nodifference
+    fail_common
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/type" 'uint8_t'
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/offset" None
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/address" '(0x)?[0-9a-f]+'
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/actual" None
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/expected" None
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/mask" None
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/remark" '.+'
+    done
+}
+
 @test "selftest_freeze" {
     declare -A yamldump
     sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze --timeout=1s
