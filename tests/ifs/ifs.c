@@ -274,6 +274,11 @@ static int scan_run(struct test *test, int cpu)
     if (cpu != 0)
         return EXIT_SKIP;
 
+    /* all_skip is a flag to keep track when all threads return "EXIT_SKIP". In the same
+     * way framework behaves, a single "EXIT_SUCCESS" is enough to set flag to false and
+     * therefore, report the whole test as "ok" */
+    bool all_skip = true;
+
     int count = num_cpus();
     for (int i = 0; i < count; i++)
     {
@@ -283,7 +288,12 @@ static int scan_run(struct test *test, int cpu)
             log_skip(ResourceIssueSkipCategory, "IFS feature is not available at the moment");
             return EXIT_SKIP;
         }
+        if (scan_ret == EXIT_SUCCESS)
+            all_skip = false;
     }
+
+    if (all_skip)
+        return EXIT_SKIP;
 
     return EXIT_SUCCESS;
 }
