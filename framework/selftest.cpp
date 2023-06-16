@@ -155,6 +155,22 @@ static int selftest_logs_options_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int selftest_logs_random_init(struct test *test)
+{
+    // print 4 ints
+    int r1 = random();
+    int r2 = random();
+    int r3 = random();
+    int r4 = random();
+    log_info("%u %u %u %u", r1, r2, r3, r4);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_logs_random_run(struct test *test, int cpu)
+{
+    return selftest_logs_random_init(test);
+}
+
 static int selftest_skip_init(struct test *test)
 {
     log_info("Requesting skip (this message should be visible)");
@@ -796,6 +812,21 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_logs_options_init,
     .test_run = selftest_pass_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_logs_random_init",
+    .description = "Logs some random numbers in the init function",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_logs_random_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_logs_random",
+    .description = "Logs some random numbers",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_logs_random_run,
     .desired_duration = -1,
 },
 {

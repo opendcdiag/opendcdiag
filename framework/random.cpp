@@ -99,7 +99,7 @@ struct RandomEngineWrapper
     virtual void printGlobalState(std::ostringstream &ss) = 0;
     virtual void reloadGlobalState(const char *argument) = 0;
     virtual void seedGlobalEngine(SeedSequence &sseq) = 0;
-    virtual void createEngines(std::span<thread_rng> threads) = 0;
+    virtual void seedThread(thread_rng *thread_buffer, uint32_t mixin) = 0;
     virtual uint32_t generate32(thread_rng *thread_buffer) = 0;
     virtual uint64_t generate48(thread_rng *thread_buffer) = 0;
     virtual uint64_t generate64(thread_rng *thread_buffer) = 0;
@@ -165,12 +165,12 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
         new (rng_for_thread(-1)->u8) engine_type(sseq);
     }
 
-    void createEngines(std::span<thread_rng> threads) override
+    void seedThread(thread_rng *buffer, uint32_t mixin) override
     {
-        // copy the global engine so we don't modify it
-        engine_type copy = globalEngine();
-        for (auto &thr : threads)
-            new (thr.u8) engine_type(copy());
+        // generic version: just XOR the mixin to the global engine's current state
+        thread_rng *global = rng_for_thread(-1);
+        for (size_t i = 0; i < std::size(buffer->u32); ++i)
+            buffer->u32[i] = global->u32[i] ^ mixin;
     }
 
     uint32_t generate32(thread_rng *buffer) override
@@ -250,6 +250,14 @@ template <> void EngineWrapper<std::minstd_rand>::staticAssertions()
 }
 
 template <>
+void EngineWrapper<std::minstd_rand>::seedThread(thread_rng *generator, uint32_t mixin)
+{
+    mixin &= engine_type::max();
+    std::minstd_rand global = globalEngine();   // copies, so we don't modify the global
+    new (&engine(generator)) std::minstd_rand(global() ^ mixin);
+}
+
+template <>
 uint32_t EngineWrapper<std::minstd_rand>::generate32(thread_rng *generator)
 {
     // need two samples to make 32 bits
@@ -303,17 +311,6 @@ struct aes_engine
         return v1;
     }
 };
-
-template<>
-void EngineWrapper<aes_engine>::createEngines(std::span<thread_rng> threads)
-{
-    // copy the global engine so we don't modify it
-    engine_type copy = globalEngine();
-    for (auto &thr : threads) {
-        __m128i newseed = copy.generateM128();
-        new (thr.u8) engine_type(reinterpret_cast<uint32_t *>(&newseed));
-    }
-}
 
 template<>
 void EngineWrapper<aes_engine>::printGlobalState(std::ostringstream &ss)
@@ -512,10 +509,34 @@ void random_advance_seed()
     rand();
 }
 
-void random_init()
+void random_init_thread(int thread_num)
 {
-    std::span threads(rng_for_thread(0), num_cpus());
-    sApp->random_engine->createEngines(threads);
+    // Create a pattern based exclusively on the topology that we'll use
+    // to seed the thread's generator. Algorithm very loosely inspired by
+    // https://en.wikipedia.org/wiki/MurmurHash version 3.
+    struct cpu_info &info = cpu_info[thread_num];
+    auto scramble = [](uint32_t k) {
+        k *= 0xcc9e2d51;
+        k = (k << 15) | (k >> 17);              // rotl(mixin, 15);
+        k *= 0x1b873593;
+        return k;
+    };
+    uint32_t mixin = scramble(info.core_id);
+    mixin = (mixin << 13) | (mixin >> 19);      // rotl(mixin, 13);
+    mixin = mixin * 5 + 0xe6546b64;
+    mixin ^= scramble(info.package_id);
+    mixin ^= [=](){
+        switch (info.thread_id & 3) {
+        case 0:     return 0x00000000U; // 0b00
+        case 1:     return 0x55555555U; // 0b01
+        case 2:     return 0xaaaaaaaaU; // 0b10
+        case 3:     return 0xffffffffU; // 0b11
+        }
+        __builtin_unreachable();
+    }();
+
+    // nothing should be modifying the global engine now
+    sApp->random_engine->seedThread(rng_for_thread(thread_num), mixin);
 }
 
 template <typename FP> static inline FP random_template(FP scale)
