@@ -21,8 +21,6 @@
 #define IFS_SW_PARTIAL_COMPLETION               0xFE
 #define IFS_SW_SCAN_CANNOT_START                0x6
 
-#define IFS_EXIT_CANNOT_START                   -2
-
 typedef struct {
     const char *sys_dir;
     bool image_support;
