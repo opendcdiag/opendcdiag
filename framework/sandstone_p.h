@@ -362,11 +362,13 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 
     ForkMode current_fork_mode() const
     {
-#ifndef _WIN32
         if (SandstoneConfig::RestrictedCommandLine) {
+#ifdef _WIN32
+            return SandstoneApplication::exec_each_test;
+#else
             return SandstoneApplication::fork_each_test;
-        }
 #endif
+        }
         return fork_mode;
     }
 
