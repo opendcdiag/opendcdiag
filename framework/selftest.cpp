@@ -207,6 +207,24 @@ static int selftest_log_skip_newline_run(struct test *test, int cpu)
     return EXIT_FAILURE;
 }
 
+static std::atomic<int> selftest_sequential_last_cpu = -1;
+static int selftest_check_sequential_init(struct test *test)
+{
+    selftest_sequential_last_cpu = thread_num;      // -1
+    return EXIT_SUCCESS;
+}
+
+static int selftest_check_sequential_run(struct test *test, int cpu)
+{
+    usleep(1'000 * (random() % 16u));   // sleep up to 16 ms
+    int n = selftest_sequential_last_cpu.load(std::memory_order_relaxed);
+    log_debug("Last CPU was %d", n);
+    if (n != cpu - 1)
+        report_fail_msg("Last CPU %d was not expected", n);
+    selftest_sequential_last_cpu.store(cpu, std::memory_order_relaxed);
+    return EXIT_SUCCESS;
+}
+
 static int selftest_uses_too_much_mem_run(struct test *, int)
 {
     static constexpr int Size = 1024 * test_the_test_data<true>::MaxAcceptableMemoryUseKB * 2;
@@ -872,6 +890,14 @@ static struct test selftests_array[] = {
     .description = "Runs for the requested time, but on single thread",
     .test_run = selftest_timedpass_noloop_run<(50000us).count()>,
     .max_threads = 1,
+},
+{
+    .id = "selftest_check_sequential",
+    .description = "Checks that threads were run sequentially",
+    .test_init = selftest_check_sequential_init,
+    .test_run = selftest_check_sequential_run,
+    .desired_duration = -1,
+    .flags = test_schedule_sequential,
 },
 
 #if defined(__linux__) && defined(__x86_64__)
