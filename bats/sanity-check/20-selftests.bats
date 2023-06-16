@@ -476,6 +476,101 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/threads/0/messages/2/text" '.*Numbers: 1 4097'
 }
 
+@test "selftest_logs_random_init" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logs_random_init -s Constant:1234
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1234 1234 1234 1234"
+
+    sandstone_selftest -e selftest_logs_random_init -s LCG:1348219713
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 421843888 386376794 2046232626 184745881"
+
+    sandstone_selftest -e selftest_logs_random_init -s AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1242137224 1378217084 1525375882 474233533"
+}
+
+test_random() {
+    if ! $is_debug; then
+        skip "Test only works with Debug builds (to mock the topology)"
+    fi
+    local results=()
+    local cpus=()
+    seed=$1
+    shift
+    for cpu; do
+        r=${random_results[$cpu]}
+        [[ -n "$r" ]]
+        results+=("$r")
+        cpus+=($cpu)
+    done
+
+    declare -A yamldump
+    SANDSTONE_MOCK_TOPOLOGY="${cpus[*]}" sandstone_selftest -e selftest_logs_random -s $seed
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    #test_yaml_regexp "/tests/0/result" pass
+    #test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> [0-9]+ [0-9]+ [0-9]+ [0-9]+"
+
+    # Compare the printed numbers to what was expected
+    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+        numbers=${yamldump[/tests/0/threads/$i/messages/0/text]}
+        numbers=${numbers#I> }
+        if [[ "$numbers" != "${results[$i]}" ]]; then
+            echo "Random numbers for CPU ${cpus[$i]} ($numbers) don't match expected (${results[$i]})" >&2
+            false
+        fi
+    done
+}
+
+@test "selftest_logs_random_lcg" {
+    local -Ar random_results=(
+        [0:0:0]="2008263207 1313955870 34286625 1487267185"
+        [0:0:1]="1704585366 1204267381 955907608 1782506326"
+        [0:1:0]="1719058115 1886149085 1585783823 316322718"
+        [0:1:1]="151737293 1591634133 1396278971 1007948046"
+        [0:2:0]="1775100370 1272444970 2011359023 428234716"
+        [0:3:0]="1929298235 1379265883 107930352 110693770"
+        [1:0:0]="1694270094 1491978773 1295765691 296967739"
+        [2:0:0]="566941671 1457287120 1732228388 1973237556"
+        [3:0:0]="235862816 1523178389 1946393080 1930808430"
+    )
+
+    # Mocking 4 sockets of 1 core each
+    test_random LCG:1348219713 0:0:0 1:0:0 2:0:0 3:0:0
+
+    # Mocking 1 socket of 4 single-thread cores
+    test_random LCG:1348219713 0:0:0 0:1:0 0:2:0 0:3:0
+
+    # Mocking 1 socket of 4 hyperthreaded cores
+    test_random LCG:1348219713 0:0:0 0:0:1 0:1:0 0:1:1
+}
+
+@test "selftest_logs_random_aes" {
+    local -r SEED=AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
+    local -Ar random_results=(
+        [0:0:0]="1442152966 848034066 1178242204 1152613460"
+        [0:0:1]="801863574 1764783886 468436526 1150421294"
+        [0:1:0]="1318899296 1591921602 1551294054 1334527618"
+        [0:1:1]="517627017 379261874 2001880952 937361294"
+        [0:2:0]="1041439551 1150890517 375859362 2139318920"
+        [0:3:0]="563921477 676951712 16315069 1235380647"
+        [1:0:0]="672773493 1071973933 867607355 1164627367"
+        [2:0:0]="65707667 538845702 2142028653 158189198"
+        [3:0:0]="647518054 617961218 490776568 784171714"
+    )
+
+    # Mocking 4 sockets of 1 core each
+    test_random $SEED 0:0:0 1:0:0 2:0:0 3:0:0
+
+    # Mocking 1 socket of 4 single-thread cores
+    test_random $SEED 0:0:0 0:1:0 0:2:0 0:3:0
+
+    # Mocking 1 socket of 4 hyperthreaded cores
+    test_random $SEED 0:0:0 0:0:1 0:1:0 0:1:1
+}
+
 test_list_file() {
     local -a list=("$@")
     local -i count=${#list[@]}

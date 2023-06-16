@@ -720,8 +720,6 @@ static void init_internal(const struct test *test)
     memset(reinterpret_cast<void *>(sApp->shmem), 0, sizeof(*sApp->shmem));
     print_temperature_and_throttle();
 
-    random_init();
-
     logging_init(test);
 }
 
@@ -849,6 +847,7 @@ static void *thread_runner(void *arg)
               thread_number(thread_number)
         {
             thread_num = thread_number;
+            random_init_thread(thread_number);
             this_thread->inner_loop_count = 0;
         }
 
@@ -2428,7 +2427,6 @@ static int exec_mode_run(int argc, char **argv)
 
     std::vector<struct test *> test_list;
     add_test(test_list, test_to_run);
-    random_init();
     return run_child(test_to_run, &app_state);
 }
 
