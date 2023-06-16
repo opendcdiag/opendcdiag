@@ -281,7 +281,7 @@ TEST(IFSTrigger, AllCoresPass)
     for (size_t i=0; i < cpu_num; i++)
     {
         char contents[256], expected[256];
-        EXPECT_EQ(scan_run_helper(test_t, i), EXIT_SUCCESS);
+        EXPECT_EQ(scan_run(test_t, i), EXIT_SUCCESS);
 
         // Check we trigger the right cpu
         read_sysfs_file(ifs_info->sys_dir, "run_test", contents);
@@ -311,7 +311,7 @@ TEST(IFSTrigger, AllCoresFail)
     for (size_t i=0; i < cpu_num; i++)
     {
         char contents[256], expected[256];
-        EXPECT_EQ(scan_run_helper(test_t, i), EXIT_FAILURE);
+        EXPECT_EQ(scan_run(test_t, i), EXIT_FAILURE);
 
         // Check we trigger the right cpu
         read_sysfs_file(ifs_info->sys_dir, "run_test", contents);
@@ -338,11 +338,11 @@ TEST(IFSTrigger, SingleCoreFail)
     cpu_info[1].cpu_number = 1;
 
     // First run is expected to pass
-    EXPECT_EQ(scan_run_helper(test_t, 0), EXIT_SUCCESS);
+    EXPECT_EQ(scan_run(test_t, 0), EXIT_SUCCESS);
 
     // Second run us expected to fail
     setup_sysfs_file(ifs_info->sys_dir, "status", "fail");
-    EXPECT_EQ(scan_run_helper(test_t, 1), EXIT_FAILURE);
+    EXPECT_EQ(scan_run(test_t, 1), EXIT_FAILURE);
 
     delete [] cpu_info;
     test_cleanup(test_t, ifs_info, trigger_test3);
@@ -366,7 +366,7 @@ TEST(IFSTrigger, AllCoresUntested)
     for (size_t i=0; i < cpu_num; i++)
     {
         char contents[256], expected[256];
-        EXPECT_EQ(scan_run_helper(test_t, i), IFS_EXIT_CANNOT_START);
+        EXPECT_EQ(scan_run(test_t, i), -EAGAIN);
 
         // Check we trigger the right cpu
         read_sysfs_file(ifs_info->sys_dir, "run_test", contents);

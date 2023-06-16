@@ -187,7 +187,7 @@ static int scan_common_init(struct test *test)
         return EXIT_SUCCESS;
 }
 
-static int scan_run_helper(struct test *test, int cpu)
+static int scan_run(struct test *test, int cpu)
 {
         /* Get info struct */
         ifs_test_t *ifs_info = (ifs_test_t *) test->data;
@@ -249,53 +249,30 @@ static int scan_run_helper(struct test *test, int cpu)
                 if (n < 0)
                 {
                     strncpy(result, "unknown", BUFLEN);
-                    log_skip(ResourceIssueSkipCategory, "Test \"%s\" remains unstested, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                    log_skip(ResourceIssueSkipCategory, "Test \"%s\" remains untested, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
                 }
                 else
                 {
                     if (sscanf(result, "%llx", &code) == 1 && compare_error_codes(code, IFS_SW_SCAN_CANNOT_START))
                     {
-                        log_info("Test \"%s\" cannot be started at the moment, code: %s image ID: %s version: %s", ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
-                        return IFS_EXIT_CANNOT_START;
+                        log_skip(ResourceIssueSkipCategory,
+                                 "Test \"%s\" cannot be started at the moment, code: %s image ID: %s version: %s",
+                                 ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
+                    }
+                    else
+                    {
+                        log_skip(ResourceIssueSkipCategory,
+                                 "Test \"%s\" did not complete scanning, code: %s image ID: %s version: %s",
+                                 ifs_info->sys_dir, result, ifs_info->image_id, ifs_info->image_version);
                     }
                 }
-                return EXIT_SKIP;
+                return -EAGAIN;     // Try again
         } else if (memcmp(result, "pass", strlen("pass")) == 0) {
                 log_debug("Test \"%s\" passed", ifs_info->sys_dir);
         }
 
         close(ifsfd);
         return EXIT_SUCCESS;
-}
-
-static int scan_run(struct test *test, int cpu)
-{
-    /* cpu 0 will orchestrate the execution for all cpus */
-    if (cpu != 0)
-        return EXIT_SKIP;
-
-    /* all_skip is a flag to keep track when all threads return "EXIT_SKIP". In the same
-     * way framework behaves, a single "EXIT_SUCCESS" is enough to set flag to false and
-     * therefore, report the whole test as "ok" */
-    bool all_skip = true;
-
-    int count = num_cpus();
-    for (int i = 0; i < count; i++)
-    {
-        int scan_ret = scan_run_helper(test, i);
-        if (scan_ret == IFS_EXIT_CANNOT_START)
-        {
-            log_skip(ResourceIssueSkipCategory, "IFS feature is not available at the moment");
-            return EXIT_SKIP;
-        }
-        if (scan_ret == EXIT_SUCCESS)
-            all_skip = false;
-    }
-
-    if (all_skip)
-        return EXIT_SKIP;
-
-    return EXIT_SUCCESS;
 }
 
 static int scan_saf_init(struct test *test)
@@ -322,6 +299,7 @@ DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
     .desired_duration = -1,
     .fracture_loop_count = -1,
     .quality_level = TEST_QUALITY_PROD,
+    .flags = test_schedule_sequential,
 END_DECLARE_TEST
 
 DECLARE_TEST(array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware selftest for cache and registers")
@@ -330,6 +308,7 @@ DECLARE_TEST(array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware selftes
     .desired_duration = -1,
     .fracture_loop_count = -1,
     .quality_level = TEST_QUALITY_BETA,
+    .flags = test_schedule_sequential,
 END_DECLARE_TEST
 
 #endif // __x86_64__ && __linux__
