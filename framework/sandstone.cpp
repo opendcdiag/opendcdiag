@@ -1201,25 +1201,51 @@ static void restart_init(int iterations)
 {
 }
 
-static void run_threads(const struct test *test)
+static void run_threads_in_parallel(const struct test *test, const pthread_attr_t *thread_attr)
 {
     pthread_t pt[MAX_THREADS];
-    pthread_attr_t thread_attr;
     int i;
 
-    pthread_attr_init(&thread_attr);
-    pthread_attr_setstacksize(&thread_attr, THREAD_STACK_SIZE);
-
-    current_test = test;
     for (i = 0; i < num_cpus(); i++) {
-        pthread_create(&pt[i], &thread_attr, thread_runner, (void *) (uint64_t) i);
+        pthread_create(&pt[i], thread_attr, thread_runner, (void *) (uint64_t) i);
     }
     /* wait for threads to end */
     for (i = 0; i < num_cpus(); i++) {
         pthread_join(pt[i], nullptr);
     }
-    current_test = nullptr;
+}
 
+static void run_threads_sequentially(const struct test *test, const pthread_attr_t *thread_attr)
+{
+    // we still start one thread, in case the test uses report_fail_msg()
+    // (which uses pthread_cancel())
+    pthread_t thread;
+    pthread_create(&thread, thread_attr, [](void *) -> void* {
+        for (int i = 0; i < num_cpus(); ++i)
+            thread_runner(reinterpret_cast<void *>(i));
+        return nullptr;
+    }, nullptr);
+    pthread_join(thread, nullptr);
+}
+
+static void run_threads(const struct test *test)
+{
+    pthread_attr_t thread_attr;
+    pthread_attr_init(&thread_attr);
+    pthread_attr_setstacksize(&thread_attr, THREAD_STACK_SIZE);
+    current_test = test;
+
+    switch (test->flags & test_schedule_mask) {
+    case test_schedule_default:
+        run_threads_in_parallel(test, &thread_attr);
+        break;
+
+    case test_schedule_sequential:
+        run_threads_sequentially(test, &thread_attr);
+        break;
+    }
+
+    current_test = nullptr;
     pthread_attr_destroy(&thread_attr);
 }
 
