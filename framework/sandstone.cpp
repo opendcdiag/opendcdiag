@@ -1795,6 +1795,10 @@ static int call_forkfd(intptr_t *child)
 #endif
 
     int ffd = forkfd(FFD_CLOEXEC | ffd_extra_flags, &pid);
+    if (ffd == -1) {
+        perror("fork");
+        exit(EX_OSERR);
+    }
     *child = pid;
     return ffd;
 }
@@ -1874,10 +1878,6 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
     ret = 0;
 #else
     ret = call_forkfd(hpid);
-    if (ret == -1) {
-        perror("fork");
-        exit(EX_OSERR);
-    }
     if (ret == FFD_CHILD_PROCESS) {
         logging_init_child_preexec();
 
@@ -1930,10 +1930,7 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
         ret = spawn_child(test, &child, shmemsync.pipe.out());
     }
 
-    if (ret == -1) {
-        perror("forkfd");
-        exit(EX_OSERR);
-    } else if (ret == FFD_CHILD_PROCESS) {
+    if (ret == FFD_CHILD_PROCESS) {
         /* child - run test's code */
         logging_init_child_preexec();
         state.result = run_child(const_cast<struct test *>(test), shmemsync);
