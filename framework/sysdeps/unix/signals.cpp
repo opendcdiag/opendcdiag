@@ -9,6 +9,7 @@
 #include <initializer_list>
 
 #include <signal.h>
+#include <unistd.h>
 
 static constexpr std::initializer_list<int> termination_signals = {
     SIGHUP, SIGINT, SIGTERM, SIGPIPE
