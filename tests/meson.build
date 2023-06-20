@@ -107,7 +107,10 @@ tests_base_a = static_library(
     ],
     dependencies: [
         boost_dep,
+        crypto_dep,
         eigen3_dep,
+        zlib_dep,
+        zstd_dep,
     ],
     c_args : [
         tests_common_c_args,
