@@ -17,11 +17,6 @@
 #ifdef __unix__
 #  include <dlfcn.h>
 #endif
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuninitialized"
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#include <immintrin.h>
-#pragma GCC diagnostic pop
 #include <inttypes.h>
 #include <string.h>
 #include <x86intrin.h>
