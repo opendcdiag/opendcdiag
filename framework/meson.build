@@ -155,6 +155,9 @@ framework_a = static_library(
         sysdeps_a.extract_all_objects(recursive: true),
         framework_main_a.extract_all_objects(recursive: false),
     ],
+    dependencies: [
+        boost_dep,
+    ],
     c_args : [
         debug_c_flags,
         march_flags,
