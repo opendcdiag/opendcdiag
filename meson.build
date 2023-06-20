@@ -166,13 +166,15 @@ endif
 default_c_warn = [
     '-Wall',
     '-Wextra',
-    '-Werror=discarded-qualifiers',
     '-Werror=incompatible-pointer-types',
     '-Werror=implicit-function-declaration',
     '-Werror=int-conversion',
     '-Wno-unused-parameter',
     '-Wno-sign-compare',
 ]
+if cc.has_argument('-Werror=discarded-qualifiers')
+    default_c_warn += '-Werror=discarded-qualifiers'
+endif
 
 default_cpp_warn = [
     '-Wall',
