@@ -16,8 +16,10 @@
 
 #ifdef __x86_64__
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuninitialized"
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#  ifndef __clang__
+#    pragma GCC diagnostic ignored "-Wuninitialized"
+#    pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#  endif
 #include <immintrin.h>
 #pragma GCC diagnostic pop
 #endif
