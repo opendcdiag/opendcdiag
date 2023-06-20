@@ -114,6 +114,12 @@ bool must_ignore_sigpipe()
 struct CrashContext
 {
     struct Fixed {
+        pid_t pid = getpid();
+#ifdef __linux__
+        tid_t handle = sys_gettid();
+#else
+        uintptr_t handle = reinterpret_cast<uintptr_t>(pthread_self());
+#endif
         void *crash_address;
         const void *rip;
         int thread_num;
@@ -121,11 +127,6 @@ struct CrashContext
         int signal_code;
         int trap_nr = -1;
         long error_code = 0;
-#ifdef __linux__
-        tid_t handle = sys_gettid();
-#else
-        uintptr_t handle = reinterpret_cast<uintptr_t>(pthread_self());
-#endif
     } fixed;
     static_assert(std::is_trivially_copyable_v<Fixed>, "Must be trivial to transfer over sockets");
     static_assert(std::is_trivially_destructible_v<Fixed>, "Must be trivial to transfer over sockets");
@@ -997,23 +998,25 @@ intptr_t debug_child_watch()
     return crashpipe[CrashPipeParent];
 }
 
-void debug_crashed_child(pid_t child)
+void debug_crashed_child()
 {
     if (!SandstoneConfig::ChildBacktrace || crashpipe[CrashPipeParent] == -1)
         return;
-
-    char buf[std::numeric_limits<pid_t>::digits10 + 2];
-    sprintf(buf, "%d", child);
 
     // receive the context
     alignas(16) uint8_t xsave_area[xsave_size];     // Variable Length Array, a.k.a. alloca
     CrashContext ctx = CrashContext::receive(crashpipe[CrashPipeParent],
                                              { xsave_area, size_t(xsave_size) });
 
-    if (on_crash_action == attach_gdb_on_crash)
-        attach_gdb(buf);
-    else
-        print_crash_info(buf, ctx);
+    if (ctx.contents != CrashContext::NoContents) {
+        char buf[std::numeric_limits<pid_t>::digits10 + 2];
+        sprintf(buf, "%d", ctx.fixed.pid);
+
+        if (on_crash_action == attach_gdb_on_crash)
+            attach_gdb(buf);
+        else
+            print_crash_info(buf, ctx);
+    }
 
     // release the child
     char c = 1;
