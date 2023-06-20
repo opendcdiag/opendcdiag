@@ -1237,7 +1237,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 
         if (pfd[1].revents & POLLIN) {
             /* child is crashing */
-            debug_crashed_child(child);
+            debug_crashed_child();
 
             // debug_crashed_child kill()s the child process, so we can block
             // on forkfd_wait() until it finally does exit

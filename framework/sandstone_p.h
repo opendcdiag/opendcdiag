@@ -96,7 +96,7 @@ void cpu_specific_init(void);
 void debug_init_child(void);
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg);
 intptr_t debug_child_watch(void);
-void debug_crashed_child(pid_t child);
+void debug_crashed_child();
 void debug_hung_child(pid_t child);
 
 /* splitlock_detect.c */
