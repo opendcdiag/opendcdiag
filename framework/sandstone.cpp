@@ -175,7 +175,6 @@ enum {
     total_retest_on_failure,
     ud_on_failure_option,
     use_builtin_test_list_option,
-    use_predictable_file_names_option,
     version_option,
     weighted_testrun_option,
 };
@@ -2970,7 +2969,6 @@ int main(int argc, char **argv)
         { "gdb-server", required_argument, nullptr, gdb_server_option },
         { "is-debug-build", no_argument, nullptr, is_debug_option },
         { "test-tests", no_argument, nullptr, test_tests_option },
-        { "use-predictable-file-names", no_argument, nullptr, use_predictable_file_names_option },
 #endif
         { nullptr, 0, nullptr, 0 }
     };
@@ -3222,11 +3220,6 @@ int main(int argc, char **argv)
             test_selection_strategy = Ordered;
             if (optarg)
                 builtin_test_list_name = optarg;
-            break;
-        case use_predictable_file_names_option:
-#ifndef NDEBUG
-            sApp->use_predictable_file_names = true;
-#endif
             break;
         case temperature_threshold_option:
             if (strcmp(optarg, "disable") == 0)
