@@ -306,10 +306,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 #else
             fork_each_test;
 #endif
-#ifdef NDEBUG
-    static constexpr
-#endif
-    bool use_predictable_file_names = false;
     bool log_test_knobs = false;
     bool ignore_os_errors = false;
     bool force_test_time = false;
@@ -382,14 +378,7 @@ private:
 };
 
 // state from SandstoneApplication:
-#ifdef NDEBUG
-#define APP_STATE_VARIABLES_DEBUGONLY(F)
-#else
-#define APP_STATE_VARIABLES_DEBUGONLY(F)    \
-    F(use_predictable_file_names)
-#endif
 #define APP_STATE_VARIABLES(F)              \
-    APP_STATE_VARIABLES_DEBUGONLY(F)        \
     F(shmemfd)                              \
     F(verbosity)                            \
     F(max_messages_per_thread)              \

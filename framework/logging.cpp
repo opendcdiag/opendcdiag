@@ -497,34 +497,10 @@ int logging_stdout_fd(void)
     return real_stdout_fd;
 }
 
-static ThreadLog open_predictable_file(int cpu, const char *mode)
-{
-    char buf[sizeof(SANDSTONE_STRINGIFY(INT_MIN) ".log")];
-    const char *name = "main.log";
-    if (cpu >= 0) {
-        snprintf(buf, sizeof(buf), "%d.log", cpu);
-        name = buf;
-    }
-
-    ThreadLog result;
-    if (mode) {
-        // open the file
-        result.log = fopen(name, mode);
-        if (result.log)
-            result.log_fd = fileno(result.log);
-    } else {
-        // unlink the file
-        remove(name);
-    }
-    return result;
-}
-
-static inline ThreadLog open_new_log(int cpu)
+static inline ThreadLog open_new_log()
 {
     ThreadLog result;
-    if (sApp->use_predictable_file_names) {
-        result = open_predictable_file(cpu, "w+b" FOPEN_SHORTLIVED FOPEN_EXTRA);
-    } else if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
+    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
         result.log_fd = open_memfd(MemfdInheritOnExec);
         result.log = fdopen(result.log_fd, "w+b" FOPEN_SHORTLIVED FOPEN_EXTRA);
     } else {
@@ -538,18 +514,6 @@ static inline ThreadLog open_new_log(int cpu)
 
     setvbuf(result.log, NULL, _IONBF, 0);           // disable buffering
     return result;
-}
-
-static inline ThreadLog reopen_log(int cpu)
-{
-    assert(sApp->use_predictable_file_names);
-    return open_predictable_file(cpu, "rb" FOPEN_CLOEXEC FOPEN_SHORTLIVED FOPEN_EXTRA);
-}
-
-static inline void unlink_log(int cpu)
-{
-    assert(sApp->use_predictable_file_names);
-    open_predictable_file(cpu, nullptr);
 }
 
 void logging_init_global_child()
@@ -1128,18 +1092,16 @@ void logging_init(const struct test *test)
         return;                 // short-circuit
     }
 
-    if (!sApp->use_predictable_file_names) {
-        // must match logging_init_child_postexec() below
-        auto &all_logs = all_thread_logs();
-        for (size_t i = 0; i < all_logs.size(); ++i)
-            all_logs[i] = open_new_log(i - 1);
-    }
+    // must match logging_init_child_postexec() below
+    auto &all_logs = all_thread_logs();
+    for (size_t i = 0; i < all_logs.size(); ++i)
+        all_logs[i] = open_new_log();
 }
 
 void logging_init_child_prefork(SandstoneApplication::ExecState *state)
 {
     size_t i = 0;
-    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test && !sApp->use_predictable_file_names) {
+    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
         assert(state && "internal error: mismatch in fork mode and when this function was called");
         auto &all_logs = all_thread_logs();
         for ( ; i < all_logs.size(); ++i)
@@ -1162,36 +1124,31 @@ void logging_init_child_postexec(const SandstoneApplication::ExecState *state)
     // see logging_init() above
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
-    if (sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test
-            && !sApp->use_predictable_file_names)
+    if (sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test)
         return;
 
     auto &all_logs = all_thread_logs();
     for (size_t i = 0; i < all_logs.size(); ++i) {
         ThreadLog l;
-        if (sApp->use_predictable_file_names) {
-            // child process needs to open an actual log file
-            l = open_new_log(i - 1);
-        } else {
-            // reopen an inherited file descriptor
-            l.log_fd = state->thread_log_fds[i];
+
+        // reopen an inherited file descriptor
+        l.log_fd = state->thread_log_fds[i];
 
 #ifndef NDEBUG
-            if (__builtin_expect(l.log_fd == -1, false)) {
-                fprintf(stderr, "%s: file descriptor for thread %d is -1\n",
-                        program_invocation_name, int(i) - 1);
-                abort();
-            }
-            struct stat st;
-            if (fstat(l.log_fd, &st) == -1) {
-                fprintf(stderr, "%s: invalid file descriptor for thread %d: %s\n",
-                        program_invocation_name, int(i) - 1, strerror(errno));
-                abort();
-            }
+        if (__builtin_expect(l.log_fd == -1, false)) {
+            fprintf(stderr, "%s: file descriptor for thread %d is -1\n",
+                    program_invocation_name, int(i) - 1);
+            abort();
+        }
+        struct stat st;
+        if (fstat(l.log_fd, &st) == -1) {
+            fprintf(stderr, "%s: invalid file descriptor for thread %d: %s\n",
+                    program_invocation_name, int(i) - 1, strerror(errno));
+            abort();
+        }
 #endif
 
-            l.log = fdopen(l.log_fd, "w+b" FOPEN_CLOEXEC FOPEN_SHORTLIVED FOPEN_EXTRA);
-        }
+        l.log = fdopen(l.log_fd, "w+b" FOPEN_CLOEXEC FOPEN_SHORTLIVED FOPEN_EXTRA);
 
         all_logs[i] = l;
     }
@@ -1203,8 +1160,6 @@ void logging_finish()
     for (size_t i = 0; i < all.size(); ++i) {
         fclose(all[i].log);
         all[i] = {};
-        if (sApp->use_predictable_file_names)
-            unlink_log(i - 1);
     }
     if (stderr_fd != -1)
         close(stderr_fd);
@@ -1784,15 +1739,9 @@ format_duration(uint64_t tp, FormatDurationOptions opts = FormatDurationOptions:
 inline AbstractLogger::AbstractLogger(const struct test *test, TestResult state_)
     : test(test), state(state_)
 {
-    auto &all_logs = all_thread_logs();
-    const bool need_to_reopen_logs = sApp->use_predictable_file_names &&
-            sApp->current_fork_mode() != SandstoneApplication::no_fork &&
-            current_output_format() != SandstoneApplication::OutputFormat::no_output;
-    if (need_to_reopen_logs)
-        all_logs[0] = reopen_log(-1);   // main thread
-
     if (state == TestSkipped)
-        return;         // no threads were started    
+        return;         // no threads were started
+
     for (int i = 0; i < num_cpus(); ++i) {
         struct per_thread_data *data = cpu_data_for_thread(i);
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
@@ -1806,11 +1755,6 @@ inline AbstractLogger::AbstractLogger(const struct test *test, TestResult state_
             // thread passed test
             ++pc;
             if (thr_state == thread_skipped) ++sc;
-        }
-
-        if (need_to_reopen_logs) {
-            // reopen this thread's log file
-            all_logs[i + 1] = reopen_log(i);
         }
     }
 
