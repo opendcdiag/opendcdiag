@@ -24,7 +24,7 @@ public:
     {
         cpu_number = cpu_info[thread_num].cpu_number;
         ns = MonotonicTimePoint::clock::now();
-        tsc = _rdtscp(&tsc_aux);
+        tsc = __rdtscp(&tsc_aux);
 
         if (!read_msr(cpu_number, APERF_MSR, &aperf))
             aperf = 0;
