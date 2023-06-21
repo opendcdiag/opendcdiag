@@ -159,7 +159,7 @@ public:
     static std::string get_current_time();
 
     // non-virtual override
-    void print(int tc, ChildExitStatus status);
+    void print(ChildExitStatus status);
     static void print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout);
 
 private:
@@ -2264,7 +2264,7 @@ std::string YamlLogger::get_current_time()
              iso8601_time_now(Iso8601Format::WithoutMs));
 }
 
-void YamlLogger::print(int, ChildExitStatus status)
+void YamlLogger::print(ChildExitStatus status)
 {
     Duration test_duration = MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
@@ -2388,7 +2388,7 @@ TestResult logging_print_results(ChildExitStatus status, int *tc, const struct t
 
     case SandstoneApplication::OutputFormat::yaml: {
         YamlLogger l(test, status.result);
-        l.print(n, status);
+        l.print(status);
         return l.state;
     }
 
