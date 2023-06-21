@@ -580,7 +580,7 @@ static int selftest_libc_fatal_run(struct test *, int)
 }
 #endif
 
-#if defined(__linux__) && defined(__x86_64__)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
 BEGIN_ASM_FUNCTION(payload_long_64bit)
     asm("movabs $0x1234deadbeaf5678, %rax\n"
         "mov    $0x12345, %ebx\n"
@@ -900,7 +900,7 @@ static struct test selftests_array[] = {
     .flags = test_schedule_sequential,
 },
 
-#if defined(__linux__) && defined(__x86_64__)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
 {
     .id = "kvm_long_64bit",
     .description = "Runs simple 64-bit KVM workload successfully",
@@ -1175,7 +1175,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .desired_duration = -1,
 },
 
-#if defined(__linux__) && defined(__x86_64__)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
 {
     .id = "kvm_prot_64bit_fail",
     .description = "Runs simple 64-bit KVM workload that fails",
