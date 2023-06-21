@@ -58,20 +58,20 @@ struct Float128
     Float128() = default;
     Float128(long double f) : payload(f) {}
 
-    static constexpr int digits = __FLT128_MANT_DIG__;
-    static constexpr int digits10 = __FLT128_DIG__;
+    static constexpr int digits = 113;
+    static constexpr int digits10 = 33;
     static constexpr int max_digits10 = 6;  // log2(digits)
-    static constexpr int min_exponent = __FLT128_MIN_EXP__;
-    static constexpr int min_exponent10 = __FLT128_MIN_10_EXP__;
-    static constexpr int max_exponent = __FLT128_MAX_EXP__;
-    static constexpr int max_exponent10 = __FLT128_MAX_10_EXP__;
+    static constexpr int min_exponent = -16381;
+    static constexpr int min_exponent10 = -4931;
+    static constexpr int max_exponent = 16384;
+    static constexpr int max_exponent10 = 4932;
 
     static constexpr bool radix = 2;
     static constexpr bool is_signed = true;
     static constexpr bool is_integer = false;
     static constexpr bool is_exact = false;
-    static constexpr bool has_infinity = __FLT128_HAS_INFINITY__;
-    static constexpr bool has_quiet_NaN = __FLT128_HAS_QUIET_NAN__;
+    static constexpr bool has_infinity = true;
+    static constexpr bool has_quiet_NaN = true;
     static constexpr bool has_signaling_NaN = has_quiet_NaN;
     static constexpr std::float_denorm_style has_denorm = std::denorm_present;
     static constexpr bool has_denorm_loss = false;
