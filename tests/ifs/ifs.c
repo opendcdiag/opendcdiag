@@ -53,7 +53,7 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
     read_file_fd(batch_fd, current_buf);
 
     /* get interactive test file if provided by user */
-    next_test = get_testspecific_knob_value_uint(test, "test_file", -1);
+    next_test = get_testspecific_knob_value_int(test, "test_file", -1);
     if (next_test == -1)
     {
         if (memcmp(current_buf, "none", strlen("none")) == 0)
@@ -131,7 +131,7 @@ static int scan_common_init(struct test *test)
         /* when previous run has a status of fail, skip test */
         char status_buf[BUFLEN] = {};
         read_file(ifs_fd, "status", status_buf);
-        int enforce_run = get_testspecific_knob_value_uint(test, "enforce_run", -1);
+        int enforce_run = get_testspecific_knob_value_int(test, "enforce_run", -1);
         if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
         {
             log_skip(ResourceIssueSkipCategory, "Previous run failure found! This test will skip until enforced adding flag: "
