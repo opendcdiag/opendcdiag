@@ -1498,40 +1498,35 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
         return;
 
     struct Visitor {
-        FILE *f;
-
-        void operator()(uint64_t v)
+        std::string operator()(uint64_t v)
         {
             if (v < 4096)
-                fprintf(f, "%u", unsigned(v));
+                return stdprintf("%u", unsigned(v));
             else
-                fprintf(f, "0x%" PRIx64, v);
+                return stdprintf("0x%" PRIx64, v);
         }
-        void operator()(int64_t v)
+        std::string operator()(int64_t v)
         {
             if (v >= 0)
-                operator()(uint64_t(v));
+                return operator()(uint64_t(v));
             else if (v >= -4096)
-                fprintf(f, "%d", int(v));
+                return stdprintf("%d", int(v));
             else
-                fprintf(f, "-0x%" PRIx64, -v);
+                return stdprintf("-0x%" PRIx64, -v);
         }
-        void operator()(std::string_view v)
+        std::string operator()(std::string_view v)
         {
             if (v.data() == nullptr) {
-                fprintf(f, "null");
+                return "null";
             } else {
                 std::string storage;
-                fprintf(f, "'%s'", escape_for_single_line(v, storage).data());
+                return stdprintf("'%s'", escape_for_single_line(v, storage).data());
             }
         }
     };
-    Visitor nana = { log_for_thread(-1).log };
-    fputc(message_code(UsedKnobValue, UsedKnobValueLoggingLevel), nana.f);
-    fwrite(key.data(), 1, key.size(), nana.f);
-    fputs(": ", nana.f);
-    std::visit(nana, value);
-    fputc('\0', nana.f);
+    std::string formatted = std::visit(Visitor{}, value);
+    log_message_for_thread(-1, UsedKnobValue, UsedKnobValueLoggingLevel,
+                           key, ": ", formatted);
 }
 
 static void print_content_indented(int fd, std::string_view indent, std::string_view content)
