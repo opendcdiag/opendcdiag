@@ -2547,11 +2547,10 @@ static int run_tests_on_cpu_set(vector<const struct test *> &tests, const Logica
 
     for (auto &t: tests) {
         ret = run_one_test(&test_count, t, per_cpu_failures);
-        if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
-        test_count++;
+        if (ret != EXIT_SUCCESS) break;
     }
 
-    return (ret > EXIT_SUCCESS) ? ret : EXIT_SUCCESS; // do not return SKIP from here
+    return ret;
 }
 
 static int exec_mode_run(int argc, char **argv)
@@ -2611,76 +2610,99 @@ static int exec_mode_run(int argc, char **argv)
 // Triage run attempts to figure out which socket(s) are causing test failures.
 // It simply removes sockets from the cpu_set_t one by one until the failures no
 // longer observed.
-// Returns the list of faulty sockets. Memory is allocated, caller must free.
-// TODO: Current implementation only returns 1 socket. However, the signature is
-// generic vector<int> for the future improvements.
+// Returns the list with "suspected" faulty socket or empty list if no signle
+// suspected socket is isolated
 static vector<int> run_triage(vector<const struct test *> &triage_tests, const LogicalProcessorSet &enabled_cpus)
 {
     using Socket = Topology::Package;
 
-    int orig_verbosity;
     Topology topo = Topology::topology();
     vector<Socket>::iterator it;
-    vector<int> disabled_sockets;
-    vector<int> result; // faulty sockets
-    int ret = EXIT_SUCCESS;
-    bool ever_failed = false;
 
-    it = topo.packages.begin();
-    if (topo.packages.empty())
-        return result;                  // shouldn't happen!
+    // "non-empty" package being "removed" from the list
+    vector<Socket>::iterator suspect_it = topo.packages.end();
+    // first "non-empty" package found in the topology
+    vector<Socket>::iterator first_it = topo.packages.end();
 
-    if (topo.packages.size() == 1) {
-        result.push_back(it->id);
-        return result;
-    }
-
-    // backup the original verbosity
-    orig_verbosity = sApp->verbosity;
-    sApp->verbosity = -1;
-
-    for (; it != topo.packages.end(); disabled_sockets.push_back(it->id), ++it) {
-        vector<Socket>::iterator eit = it;
-        LogicalProcessorSet run_cpus = {};
-        int k = 0;
-
-        for (; eit != topo.packages.end(); ++eit)
-            run_cpus.add_package(*eit);
-
-        sApp->enabled_cpus = run_cpus;
-        do {
-            ret = run_tests_on_cpu_set(triage_tests, run_cpus);
-        } while (!ret && ++k < sApp->retest_count);
-
-        if (ret) ever_failed = true; /* we've seen a failure */
-
-        if (!ret && ever_failed) {
-            // the last socket removed is the main suspect
-            result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
-            break;
+    // check how many individual "non-empty" packages were used during test.
+    uint32_t num = 0;
+    for (it = topo.packages.begin(); it != topo.packages.end(); it++) {
+        if (!(*it).cores.empty()) {
+            if (num++ == 0) {
+                first_it = it;
+            } else {
+                break;
+            }
         }
     }
+    if (num == 0) {
+        // no packages being tested: should not be possible
+    } else if (num == 1) {
+        // do not re-run the test for "the only" package
+        suspect_it = first_it;
+    } else {
+        // at least 2 packages were used during testing
 
-    if (ret) { // failed on the last socket as well, so it's the main suspect
+        // backup the original verbosity
+        int orig_verbosity = sApp->verbosity;
+        sApp->verbosity = -1;
+
+        int ret = EXIT_SUCCESS;
+        it = first_it;
+        do {
+            // first in current list is considered as suspect, "strip" it from the list
+            suspect_it = it;
+            it++;
+            it = std::find_if(it, topo.packages.end(), [](auto& socket) { return !socket.cores.empty(); });
+            if (it == topo.packages.end()) {
+                break;
+            }
+
+            // merge all CPUs from all packages in the remaining list
+            LogicalProcessorSet run_cpus = {};
+            for (vector<Socket>::iterator eit = it; eit != topo.packages.end(); eit++) {
+                if (!(*eit).cores.empty()) {
+                    run_cpus.add_package(*eit);
+                }
+            }
+
+            sApp->enabled_cpus = run_cpus;
+            // Keep the loop running only for SUCCESSes
+            int k = 0;
+            do {
+                ret = run_tests_on_cpu_set(triage_tests, run_cpus);
+            } while ((ret == EXIT_SUCCESS) && (++k < sApp->retest_count));
+            // on success or skip last "suspected" package is reported
+            if (ret <= EXIT_SUCCESS) {
+                break;
+            }
+        } while (true);
+
+        // failed on the last socket as well, so it's the main suspect
         // re-run on the first to make sure the last one is faulty
-        LogicalProcessorSet run_cpus = {};
-        int k = 0;
+        if (ret > EXIT_SUCCESS) {
+            LogicalProcessorSet run_cpus = {};
+            run_cpus.add_package(*first_it);
 
-        run_cpus.add_package(topo.packages.at(0));
-        sApp->enabled_cpus = run_cpus;
-
-        do {
-            ret = run_tests_on_cpu_set(triage_tests, run_cpus);
-        } while (!ret && ++k < sApp->retest_count);
-
-        if (!ret && ever_failed) {
-            result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
+            sApp->enabled_cpus = run_cpus;
+            int k = 0;
+            do {
+                ret = run_tests_on_cpu_set(triage_tests, run_cpus);
+            } while ((ret == EXIT_SUCCESS) && (++k < sApp->retest_count));
+            // first has failed as well, cannot report any particular package
+            if (ret > EXIT_SUCCESS) {
+                suspect_it = topo.packages.end();
+            }
         }
+
+        // restore the original verbosity
+        sApp->verbosity = orig_verbosity;
     }
 
-    // restore the original verbosity
-    sApp->verbosity = orig_verbosity;
-
+    vector<int> result{}; // faulty sockets
+    if (suspect_it != topo.packages.end()) {
+        result.push_back((*suspect_it).id);
+    }
     return result;
 }
 
