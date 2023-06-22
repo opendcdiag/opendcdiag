@@ -492,6 +492,14 @@ static ThreadLog &log_for_thread(int cpu) noexcept
     return all[cpu];
 }
 
+template <typename... Args> static ssize_t
+log_message_for_thread(int thread_num, LogTypes logType, int level, Args &&... args)
+{
+    int fd = log_for_thread(thread_num).log_fd;
+    uint8_t code = message_code(logType, level);
+    return writevec(fd, code, std::forward<Args>(args)..., '\0');
+}
+
 int logging_stdout_fd(void)
 {
     return real_stdout_fd;
@@ -741,9 +749,7 @@ static void log_message_preformatted(int thread_num, std::string_view msg)
     if (msg[msg.size() - 1] == '\n')
         msg.remove_suffix(1);           // remove trailing newline
 
-    FILE *log = logging_stream_open(thread_num, level);
-    fwrite(msg.data(), 1, msg.size(), log);
-    logging_stream_close(log);
+    log_message_for_thread(thread_num, UserMessages, level, msg);
 }
 
 static __attribute__((cold)) void log_message_to_syslog(const char *msg)
@@ -1211,12 +1217,7 @@ void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ..
     if (msg[msg.size() - 1] == '\n')
         msg.pop_back(); // remove trailing newline
              
-    int level = LOG_LEVEL_VERBOSE(1);
-    FILE *log = log_for_thread(thread_num).log;
-    fflush(log);
-    fputc(message_code(SkipMessages, level), log);
-    fwrite(msg.c_str(), 1, msg.size(), log);
-    logging_stream_close(log);
+    log_message_for_thread(thread_num, SkipMessages, LOG_LEVEL_VERBOSE(1), msg);
 }
 
 #undef log_message
@@ -1265,10 +1266,6 @@ static std::string_view escape_for_single_line(std::string_view message, std::st
 
 static void log_data_common(const char *message, const uint8_t *ptr, size_t size, bool from_memcmp)
 {
-    // data logging is informational (verbose level 2)
-    FILE *log = log_for_thread(thread_num).log;
-    fputc(message_code(Preformatted, LOG_LEVEL_VERBOSE(2)), log);
-
     std::string spaces;
     std::string buffer;
 
@@ -1323,9 +1320,10 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
         }
         buffer += stdprintf(" %02x", (unsigned)ptr[i]);
     }
-
     buffer += '\n';
-    fwrite(buffer.c_str(), 1, buffer.size() + 1, log);  // include the null
+
+    // data logging is informational (verbose level 2)
+    log_message_for_thread(thread_num, Preformatted, LOG_LEVEL_VERBOSE(2), buffer);
 }
 
 #undef log_data
@@ -1350,7 +1348,7 @@ static void logging_format_data(DataType type, std::string_view description, con
                                 const uint8_t *data2, ptrdiff_t offset)
 {
     std::string spaces(sApp->output_yaml_indent + 7, ' ');
-    std::string buffer = { char(message_code(Preformatted, LOG_LEVEL_QUIET)) };
+    std::string buffer;
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::tap:
     case SandstoneApplication::OutputFormat::key_value:
@@ -1424,9 +1422,7 @@ static void logging_format_data(DataType type, std::string_view description, con
                             spaces.c_str(), spaces.c_str(), spaces.c_str(), spaces.c_str());
     }
 
-    // +1 so will include the terminating NUL
-    IGNORE_RETVAL(write(log_for_thread(thread_num).log_fd,
-                        buffer.c_str(), buffer.size() + 1));
+    log_message_for_thread(thread_num, Preformatted, LOG_LEVEL_QUIET, buffer);
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
