@@ -13,26 +13,49 @@
 #include <unistd.h>
 
 namespace {
-[[maybe_unused]] static struct iovec IoVec(struct iovec vec)
+template <typename... Args>
+inline ssize_t writevec(int fd, const Args &... args)
 {
-    return vec;
-}
+    struct IoVecMaker {
+        struct iovec operator()(struct iovec vec)
+        {
+            return vec;
+        }
 
-[[maybe_unused]] static struct iovec IoVec(std::string_view str = {})
-{
-    return { .iov_base = const_cast<char *>(str.data()), .iov_len = str.size() };
-}
+        struct iovec operator()(const void *ptr, size_t size)
+        {
+            return { .iov_base = const_cast<void *>(ptr), .iov_len = size };
+        }
 
-[[maybe_unused]] static struct iovec IoVec(const char *str)
-{
-    return IoVec(std::string_view(str));
+        struct iovec operator()(std::string_view str)
+        {
+            return operator()(str.data(), str.size());
+        }
+
+        struct iovec operator()(const char *str)
+        {
+            return operator()(str, strlen(str));
+        }
+
+        struct iovec operator()(const char &c)
+        {
+            return operator()(&c, 1);
+        }
+
+        struct iovec operator()(const uint8_t &b)
+        {
+            return operator()(&b, 1);
+        }
+    } maker;
+
+    iovec vec[] = { maker(args)... };
+    return writev(fd, vec, std::size(vec));
 }
 
 template <typename... Args>
-[[maybe_unused]] ssize_t writeln(int fd, Args &&... args)
+inline ssize_t writeln(int fd, Args &&... args)
 {
-    iovec vec[] = { IoVec(args)..., IoVec("\n") };
-    return writev(fd, vec, std::size(vec));
+    return writevec(fd, std::forward<Args>(args)..., '\n');
 }
 }
 

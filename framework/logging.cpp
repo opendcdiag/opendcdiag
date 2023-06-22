@@ -799,31 +799,25 @@ void logging_printf(int level, const char *fmt, ...)
     if (msg.empty())
         return;     // can happen if fmt was "%s" and the string ended up empty
 
-    iovec vec[] = {
-        IoVec(indent_spaces()),
-        IoVec(std::string_view(msg))
-    };
-
     if (level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
         progress_bar_flush();
         int fd = real_stdout_fd;
         if (level < 0)
             fd = STDERR_FILENO;
-        IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
-    }
-
-    // include the timestamp in each line, unless we're using YAML format
-    // (timestamps are elsewhere there)
-    std::string timestamp;
-    if (current_output_format() != SandstoneApplication::OutputFormat::yaml) {
-        timestamp = log_timestamp();
-        vec[0] = IoVec(std::string_view(timestamp));
+        writevec(fd, indent_spaces(), msg);
     }
 
     int fd = file_log_fd;
     if (level < 0 && file_log_fd == real_stdout_fd)
         fd = STDERR_FILENO;         // no stderr logging above, so do it here
-    IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+
+    // include the timestamp in each line, unless we're using YAML format
+    // (timestamps are elsewhere there)
+    if (current_output_format() != SandstoneApplication::OutputFormat::yaml) {
+        writevec(fd, log_timestamp(), msg);
+    } else {
+        writevec(fd, indent_spaces(), msg);
+    }
 
     if (level < 0)
         log_message_to_syslog(msg.c_str());
@@ -1553,13 +1547,7 @@ static void print_content_indented(int fd, std::string_view indent, std::string_
         if (!newline)
             newline = end;
 
-        iovec vec[] = {
-            IoVec(indent_spaces()),
-            IoVec(indent),
-            IoVec(std::string_view(line, newline - line)),
-            IoVec("\n")
-        };
-        IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+        writevec(fd, indent_spaces(), indent, std::string_view(line, newline - line), '\n');
         line = newline + 1;
     }
 }
@@ -1607,12 +1595,10 @@ static void format_and_print_message(int fd, int message_level, std::string_view
         /* single line */
         if (current_output_format() == SandstoneApplication::OutputFormat::yaml) {
             if (from_thread_message) {
-                iovec vec[] = { IoVec(indent_spaces()), IoVec("    - { level: "), IoVec(levels[message_level]) };
-                IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+                writevec(fd, indent_spaces(), "    - { level: ", levels[message_level]);
                 print_content_single_line(fd, ", text: '", message, "' }");
             } else {
-                iovec vec[] = { IoVec(indent_spaces()) };
-                IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+                writevec(fd, indent_spaces());
                 print_content_single_line(fd, "  skip-reason: '", message, "'");
             }
         } else {
