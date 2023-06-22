@@ -156,10 +156,12 @@ if host_machine.cpu_family() == 'x86_64'
         c_args : [
             tests_common_c_args,
             '-march=skylake-avx512',
+            '-mtune=skylake-avx512',
         ],
         cpp_args : [
             tests_common_cpp_args,
             '-march=skylake-avx512',
+            '-mtune=skylake-avx512',
             '-DEigen=EigenAVX512',
         ],
     )
