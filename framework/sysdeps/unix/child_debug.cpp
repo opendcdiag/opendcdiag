@@ -828,7 +828,9 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
 
     // now include the register state
     if (handle && ctx.contents & CrashContext::MachineContext) {
-        FILE *log = logging_stream_open(cpu, LOG_LEVEL_VERBOSE(2));
+        char *buffer = nullptr;
+        size_t buflen = 0;
+        FILE *log = open_memstream(&buffer, &buflen);
         fprintf(log, "Registers:\n");
 
 #ifdef __x86_64__
@@ -836,7 +838,11 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
         dump_xsave(log, ctx.xsave_buffer.data(), ctx.xsave_buffer.size(), -1);
 #endif
 
+        fclose(log);
+        log = logging_stream_open(cpu, LOG_LEVEL_VERBOSE(2));
+        IGNORE_RETVAL(fwrite(buffer, 1, buflen, log));
         logging_stream_close(log);
+        free(buffer);
     }
 }
 
