@@ -116,10 +116,11 @@ enum LogTypes {
 class AbstractLogger
 {
 public:
-    AbstractLogger(const struct test *test, TestResult state);
+    AbstractLogger(const struct test *test, ChildExitStatus state);
 
     const struct test *test;
     uint64_t earliest_fail = UINT64_MAX;
+    ChildExitStatus status;
     TestResult state = TestPassed;
     int pc = 0;
     int sc = 0;
@@ -128,11 +129,11 @@ public:
 class TapFormatLogger : public AbstractLogger
 {
 public:
-    TapFormatLogger(const struct test *test, TestResult state)
+    TapFormatLogger(const struct test *test, ChildExitStatus state)
         : AbstractLogger(test, state)
     {}
 
-    void print(int tc, ChildExitStatus status);
+    void print(int tc);
 
 protected:
     // shared with the pure YAML logger
@@ -143,23 +144,23 @@ private:
     const char *stdout_terminator = nullptr;
 
     void maybe_print_yaml_marker(int fd);
-    void print_thread_messages(ChildExitStatus status);
+    void print_thread_messages();
     void print_thread_header(int fd, int cpu, int verbosity);
     void print_child_stderr();
-    static std::string format_status_code(ChildExitStatus status);
+    std::string format_status_code();
 };
 
 class YamlLogger : public TapFormatLogger
 {
 public:
-    YamlLogger(const struct test *test, TestResult state)
+    YamlLogger(const struct test *test, ChildExitStatus state)
         : TapFormatLogger(test, state)
     { }
 
     static std::string get_current_time();
 
     // non-virtual override
-    void print(ChildExitStatus status);
+    void print();
     static void print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout);
 
 private:
@@ -171,7 +172,7 @@ private:
     void print_thread_header(int fd, int cpu, int verbosity);
     static int print_test_knobs(int fd, mmap_region r);
     static int print_one_thread_messages(int fd, mmap_region r, int level, ChildExitStatus status);
-    void print_result_line(ChildExitStatus status);
+    void print_result_line();
 
     enum TestHeaderTime { AtStart, OnFirstFail };
     static void print_tests_header(TestHeaderTime mode);
@@ -180,20 +181,20 @@ private:
 class KeyValuePairLogger : public AbstractLogger
 {
 public:
-    KeyValuePairLogger(const struct test *test, TestResult state)
+    KeyValuePairLogger(const struct test *test, ChildExitStatus state)
         : AbstractLogger(test, state)
     {
         prepare_line_prefix();
     }
 
-    void print(int tc, ChildExitStatus status);
+    void print(int tc);
 
 private:
     std::string timestamp_prefix;
 
     void prepare_line_prefix();
     void print_thread_header(int fd, int cpu, const char *prefix);
-    void print_thread_messages(ChildExitStatus status);
+    void print_thread_messages();
     void print_child_stderr();
 };
 
@@ -1610,8 +1611,8 @@ format_duration(uint64_t tp, FormatDurationOptions opts = FormatDurationOptions:
     return format_duration(earliest_tp - sApp->current_test_starttime, opts);
 }
 
-inline AbstractLogger::AbstractLogger(const struct test *test, TestResult state_)
-    : test(test), state(state_)
+inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus state_)
+    : test(test), status(state_), state(state_.result)
 {
     if (state == TestSkipped)
         return;         // no threads were started
@@ -1634,7 +1635,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, TestResult state_
 
     // condense the internal state variable to the three main possibilities
     state = TestFailed;
-    if (state_ == TestPassed && pc == num_cpus() && !sApp->shmem->main_thread_data.has_failed()) {
+    if (state_.result == TestPassed && pc == num_cpus() && !sApp->shmem->main_thread_data.has_failed()) {
         if (sc == num_cpus())
             state = TestSkipped;
         else
@@ -1648,7 +1649,7 @@ void KeyValuePairLogger::prepare_line_prefix()
     timestamp_prefix += test->id;
 }
 
-void KeyValuePairLogger::print(int tc, ChildExitStatus status)
+void KeyValuePairLogger::print(int tc)
 {
     logging_printf(LOG_LEVEL_QUIET, "%s_result = %s\n", test->id,
                    state == TestSkipped ? "skip" :
@@ -1690,7 +1691,7 @@ void KeyValuePairLogger::print(int tc, ChildExitStatus status)
     }
 
     logging_flush();
-    print_thread_messages(status);
+    print_thread_messages();
     print_child_stderr();
     logging_flush();
 }
@@ -1726,7 +1727,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
     dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
 }
 
-void KeyValuePairLogger::print_thread_messages(ChildExitStatus status)
+void KeyValuePairLogger::print_thread_messages()
 {
     for (int i = -1; i < num_cpus(); i++) {
         struct per_thread_data *data = cpu_data_for_thread(i);
@@ -1757,7 +1758,7 @@ void KeyValuePairLogger::print_child_stderr()
     });
 }
 
-void TapFormatLogger::print(int tc, ChildExitStatus status)
+void TapFormatLogger::print(int tc)
 {
     // build the ok / not ok line
     const char *qual = quality_string(test);
@@ -1805,7 +1806,7 @@ void TapFormatLogger::print(int tc, ChildExitStatus status)
         if (extra)
             tap_line += extra;
         if (status.extra)
-            tap_line += format_status_code(status);
+            tap_line += format_status_code();
         if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
             tap_line += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' function, check log for details)";
         } else if (status.result == TestSkipped) {  //if skipped in init
@@ -1822,7 +1823,7 @@ void TapFormatLogger::print(int tc, ChildExitStatus status)
     logging_printf(loglevel, "%s\n", tap_line.c_str());
 
     logging_flush();
-    print_thread_messages(status);
+    print_thread_messages();
     if (sApp->verbosity >= 1)
         print_child_stderr();
 
@@ -1923,7 +1924,7 @@ std::string TapFormatLogger::fail_info_details()
     return "unknown error";
 }
 
-std::string TapFormatLogger::format_status_code(ChildExitStatus status)
+std::string TapFormatLogger::format_status_code()
 {
     if (status.result == TestOperatingSystemError)
         return sysexit_reason(status);
@@ -1993,7 +1994,7 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
     }
 }
 
-void TapFormatLogger::print_thread_messages(ChildExitStatus status)
+void TapFormatLogger::print_thread_messages()
 {
     for (int i = -1; i < num_cpus(); i++) {
         struct per_thread_data *data = cpu_data_for_thread(i);
@@ -2166,7 +2167,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
     return lowest_level;
 }
 
-void YamlLogger::print_result_line(ChildExitStatus status)
+void YamlLogger::print_result_line()
 {
     int loglevel = LOG_LEVEL_QUIET;
     if (state == TestPassed || (state == TestSkipped && !sApp->fatal_skips))
@@ -2185,7 +2186,7 @@ void YamlLogger::print_result_line(ChildExitStatus status)
     switch (status.result) {
     case TestSkipped:   // can only be "result: skip"...
     case TestPassed:
-        // recheck, as status.result does not take failing threads into account
+        // recheck, as childExitStatus.result does not take failing threads into account
         switch (state) {
         case TestSkipped:
             logging_printf(loglevel, "  result: skip\n");
@@ -2264,12 +2265,11 @@ std::string YamlLogger::get_current_time()
              iso8601_time_now(Iso8601Format::WithoutMs));
 }
 
-void YamlLogger::print(ChildExitStatus status)
+void YamlLogger::print()
 {
     Duration test_duration = MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
-
-    print_result_line(status);
+    print_result_line();
     if (state == TestFailed)
         logging_printf(LOG_LEVEL_QUIET, "%s", fail_info_details().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  time-at-end:   %s\n", get_current_time().c_str());
@@ -2375,20 +2375,20 @@ TestResult logging_print_results(ChildExitStatus status, int *tc, const struct t
     int n = ++*tc;
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value: {
-        KeyValuePairLogger l(test, status.result);
-        l.print(n, status);
+        KeyValuePairLogger l(test, status);
+        l.print(n);
         return l.state;
     }
 
     case SandstoneApplication::OutputFormat::tap: {
-        TapFormatLogger l(test, status.result);
-        l.print(n, status);
+        TapFormatLogger l(test, status);
+        l.print(n);
         return l.state;
     }
 
     case SandstoneApplication::OutputFormat::yaml: {
-        YamlLogger l(test, status.result);
-        l.print(status);
+        YamlLogger l(test, status);
+        l.print();
         return l.state;
     }
 
@@ -2396,5 +2396,5 @@ TestResult logging_print_results(ChildExitStatus status, int *tc, const struct t
         break;
     }
 
-    return AbstractLogger(test, status.result).state;
+    return AbstractLogger(test, status).state;
 }
