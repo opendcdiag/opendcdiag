@@ -1323,35 +1323,39 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
     fputc(message_code(Preformatted, LOG_LEVEL_VERBOSE(2)), log);
 
     std::string spaces;
+    std::string buffer;
 
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::yaml:
         spaces.resize(sApp->output_yaml_indent + 4 + (from_memcmp ? 3 : 0), ' ');
         if (from_memcmp) {
             // no escaping, the message is proper YAML
-            fputs(message, log);
+            buffer = message;
         } else {
             // need to escape message from user
             std::string storage;
             std::string_view escaped = escape_for_single_line(message, storage);
-            fprintf(log, "%s- level: info\n"
-                         "%s  text: '%.*s'\n"
-                         "%s  data:",     // no newline
-                    spaces.c_str(),
-                    spaces.c_str(), int(escaped.length()), escaped.data(),
-                    spaces.c_str());
+            buffer = stdprintf("%s- level: info\n"
+                               "%s  text: '%.*s'\n"
+                               "%s  data:",     // no newline
+                               spaces.c_str(),
+                               spaces.c_str(), int(escaped.length()), escaped.data(),
+                               spaces.c_str());
             spaces += "  ";     // two more spaces
         }
         break;
 
     case SandstoneApplication::OutputFormat::tap:
         if (!from_memcmp)
-            fprintf(log, "  - >-\n");
+            buffer = "  - >-\n";
         [[fallthrough]];
 
     case SandstoneApplication::OutputFormat::key_value:
         spaces.resize(4 + (from_memcmp ? 3 : 0), ' ');
-        fprintf(log, "%sdata(%s):", spaces.c_str(), message);
+        buffer += spaces;
+        buffer += "data(";
+        buffer += message;
+        buffer += ')';
         break;
 
     case SandstoneApplication::OutputFormat::no_output:
@@ -1360,20 +1364,21 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
         break;
     }
 
+    spaces = '\n' + std::move(spaces);
     for (size_t i = 0; i < size; ++i) {
         if (current_output_format() != SandstoneApplication::OutputFormat::key_value) {
             if ((i % 32) == 0)
-                fprintf(log, "\n%s", spaces.c_str());
+                buffer += spaces;
             else if ((i % 16) == 0)
-                fputs("  ", log);
+                buffer += "  ";
             else if ((i % 4) == 0)
-                fputs(" ", log);
+                buffer += ' ';
         }
-        fprintf(log, " %02x", (unsigned)ptr[i]);
+        buffer += stdprintf(" %02x", (unsigned)ptr[i]);
     }
 
-    fputc('\n', log);
-    fputc(0, log);
+    buffer += '\n';
+    fwrite(buffer.c_str(), 1, buffer.size() + 1, log);  // include the null
 }
 
 #undef log_data
