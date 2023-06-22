@@ -17,6 +17,7 @@
 
 #include <stdarg.h>
 #include <sysexits.h>
+#include <unistd.h>
 
 /*
  * Extra exit codes, from systemd.exec(3)
@@ -39,5 +40,13 @@
 std::string format_single_type(DataType type, int typeSize, const uint8_t *data, bool detailed);
 std::string stdprintf(const char *fmt, ...) ATTRIBUTE_PRINTF(1, 2);
 std::string vstdprintf(const char *fmt, va_list va);
+
+#ifdef _WIN32
+inline int dprintf(int fd, const char *fmt, ...)
+{
+    std::string msg = va_start_and_stdprintf(fmt);
+    return write(fd, msg.data(), msg.size());
+}
+#endif
 
 #endif //SANDSTONE_UTILS_H_INCLUDED

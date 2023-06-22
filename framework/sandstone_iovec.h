@@ -34,14 +34,6 @@ template <typename... Args>
     iovec vec[] = { IoVec(args)..., IoVec("\n") };
     return writev(fd, vec, std::size(vec));
 }
-
-#ifdef _WIN32
-[[maybe_unused]] int dprintf(int fd, const char *fmt, ...)
-{
-    std::string msg = va_start_and_stdprintf(fmt);
-    return write(fd, msg.data(), msg.size());
-}
-#endif
 }
 
 #endif  // SANDSTONE_IOVEC_H
