@@ -926,15 +926,14 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             }
         }
     } else {
-#  ifdef __linux__
+#  ifdef __x86_64__
+        on_crash_action = context_on_crash;
+#  endif
         // do we have gdb?
         if (gdb_available == -1)
             gdb_available = check_gdb_available();
         if (gdb_available)
             on_crash_action = backtrace_on_crash;
-#  else
-        on_crash_action = context_on_crash;
-#  endif
     }
 
     if (on_crash_action & (backtrace_on_crash | attach_gdb_on_crash)) {
