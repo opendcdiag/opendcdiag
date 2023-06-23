@@ -621,10 +621,10 @@ static void generate_backtrace(const char *pidstr, uintptr_t handle = 0, int cpu
         sigaction(SIGPIPE, &ign_sigpipe, &old_sigpipe);
     }
 
-    FILE *log = logging_stream_open(-1, LOG_LEVEL_VERBOSE(2));
-    int log_fd = fileno_unlocked(log);
-    communicate_gdb_backtrace(log_fd, gdb_out.in(), gdb_in.out(), handle, cpu);
-    logging_stream_close(log);
+    {
+        LoggingStream stream = logging_user_messages_stream(-1, LOG_LEVEL_VERBOSE(2));
+        communicate_gdb_backtrace(stream, gdb_out.in(), gdb_in.out(), handle, cpu);
+    }
 
     // close the pipes and wait for gdb to exit
     gdb_in.close_output();
@@ -865,9 +865,8 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
 #endif
 
         fclose(log);
-        log = logging_stream_open(cpu, LOG_LEVEL_VERBOSE(2));
-        IGNORE_RETVAL(fwrite(buffer, 1, buflen, log));
-        logging_stream_close(log);
+        logging_user_messages_stream(cpu, LOG_LEVEL_VERBOSE(2))
+                .write(std::string_view(buffer, buflen));
         free(buffer);
     }
 }
@@ -1048,9 +1047,8 @@ void debug_hung_child(pid_t child)
     if (on_hang_action == print_ps_on_hang) {
         const char *ps_args[] =
             { "ps", "Hww", "-opid,tid,psr,vsz,rss,wchan,%cpu,stat,time,comm,args", buf, nullptr };
-        FILE *log = logging_stream_open(-1, LOG_LEVEL_VERBOSE(2));
-        run_process(fileno_unlocked(log), ps_args);
-        logging_stream_close(log);
+        LoggingStream stream = logging_user_messages_stream(-1, LOG_LEVEL_VERBOSE(2));
+        run_process(stream, ps_args);
     } else if (on_hang_action == attach_gdb_on_hang) {
         attach_gdb(buf);
     } else if (on_hang_action == backtrace_on_hang) {
