@@ -35,10 +35,6 @@
 #  include <cpuid.h>
 #endif
 
-#ifdef __FreeBSD__
-#  include <sys/thr.h>
-#endif
-
 #ifndef MSG_NOSIGNAL
 #  define MSG_NOSIGNAL  0
 #endif
@@ -81,26 +77,6 @@ static inline tid_t sys_gettid()
 #  ifndef BUS_MCEERR_AO
 #  define BUS_MCEERR_AO 5
 #  endif
-#endif
-
-#ifdef __FreeBSD__
-using tid_t = long;
-static tid_t sys_gettid()
-{
-    tid_t result;
-    thr_self(&result);
-    return result;
-}
-#endif
-
-#ifdef __APPLE__
-using tid_t = uint64_t;
-static tid_t sys_gettid()
-{
-    tid_t result;
-    pthread_threadid_np(nullptr, &result);
-    return result;
-}
 #endif
 
 extern char **environ;
