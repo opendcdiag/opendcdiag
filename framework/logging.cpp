@@ -120,8 +120,8 @@ public:
 
     const struct test *test;
     uint64_t earliest_fail = UINT64_MAX;
-    ChildExitStatus status;
-    TestResult state = TestPassed;
+    ChildExitStatus childExitStatus;
+    TestResult testResult = TestPassed;
     int pc = 0;
     int sc = 0;
 };
@@ -1612,9 +1612,9 @@ format_duration(uint64_t tp, FormatDurationOptions opts = FormatDurationOptions:
 }
 
 inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus state_)
-    : test(test), status(state_), state(state_.result)
+    : test(test), childExitStatus(state_), testResult(state_.result)
 {
-    if (state == TestSkipped)
+    if (testResult == TestSkipped)
         return;         // no threads were started
 
     for (int i = 0; i < num_cpus(); ++i) {
@@ -1624,7 +1624,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
             if (data->fail_time != 0 && data->fail_time < earliest_fail)
                 earliest_fail = data->fail_time;
         } else if (thr_state == thread_running) {
-            if (state == TestTimedOut)
+            if (testResult == TestTimedOut)
                 log_message(i, SANDSTONE_LOG_ERROR "Thread is stuck");
         } else {
             // thread passed test
@@ -1634,12 +1634,12 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
     }
 
     // condense the internal state variable to the three main possibilities
-    state = TestFailed;
+    testResult = TestFailed;
     if (state_.result == TestPassed && pc == num_cpus() && !sApp->shmem->main_thread_data.has_failed()) {
         if (sc == num_cpus())
-            state = TestSkipped;
+            testResult = TestSkipped;
         else
-            state = TestPassed;
+            testResult = TestPassed;
     }
 }
 
@@ -1652,13 +1652,13 @@ void KeyValuePairLogger::prepare_line_prefix()
 void KeyValuePairLogger::print(int tc)
 {
     logging_printf(LOG_LEVEL_QUIET, "%s_result = %s\n", test->id,
-                   state == TestSkipped ? "skip" :
-                   state == TestFailed ? "fail" : "pass");
+                   testResult == TestSkipped ? "skip" :
+                   testResult == TestFailed ? "fail" : "pass");
     
-    if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
+    if (childExitStatus.result == TestPassed && testResult == TestSkipped) { // if test passed in init and skipped on all threads in run
         logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "RuntimeSkipCategory");
         logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id, "All CPUs skipped while executing 'test_run()' function, check log for details");
-    } else if (status.result == TestSkipped) {  //if skipped in init
+    } else if (childExitStatus.result == TestSkipped) {  //if skipped in init
         std::string init_skip_message = get_skip_message(-1);
         if (init_skip_message.size() > 0) {
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, char_to_skip_category(init_skip_message[0]));
@@ -1679,7 +1679,7 @@ void KeyValuePairLogger::print(int tc)
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_pass_count = %d\n", test->id, pc);
     logging_printf(LOG_LEVEL_VERBOSE(2), "%s_virtualized = %s\n", test->id,
                    cpu_has_feature(cpu_feature_hypervisor) ? "yes" : "no");
-    if (state == TestFailed) {
+    if (testResult == TestFailed) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_percent = %.1f\n", test->id,
                        100. * (num_cpus() - pc) / num_cpus());
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_random_generator_state = %s\n", test->id,
@@ -1737,11 +1737,11 @@ void KeyValuePairLogger::print_thread_messages()
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, status);
+        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, childExitStatus);
 
         if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, test->id);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity, status);
+            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity, childExitStatus);
         }
 
         munmap_file(r);
@@ -1763,14 +1763,14 @@ void TapFormatLogger::print(int tc)
     // build the ok / not ok line
     const char *qual = quality_string(test);
     const char *extra = nullptr;
-    switch (status.result) {
+    switch (childExitStatus.result) {
     case TestSkipped:
     case TestPassed:
         // recheck, as status.result does not take failing threads into account
-        if (state == TestSkipped) {
+        if (testResult == TestSkipped) {
             extra = "SKIP";
             break;
-        } else if (state== TestPassed) {
+        } else if (testResult== TestPassed) {
             break;      // no suffix necessary
         }
 
@@ -1795,8 +1795,8 @@ void TapFormatLogger::print(int tc)
         break;
     }
 
-    std::string tap_line = stdprintf("%s %3i %s", state == TestFailed ? "not ok" : "ok", tc, test->id);
-    if (qual || extra || status.extra) {
+    std::string tap_line = stdprintf("%s %3i %s", testResult == TestFailed ? "not ok" : "ok", tc, test->id);
+    if (qual || extra || childExitStatus.extra) {
         tap_line.reserve(128);
         if (tap_line.size() < 32)
             tap_line.resize(32, ' ');
@@ -1805,11 +1805,11 @@ void TapFormatLogger::print(int tc)
             tap_line += qual;
         if (extra)
             tap_line += extra;
-        if (status.extra)
+        if (childExitStatus.extra)
             tap_line += format_status_code();
-        if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
+        if (childExitStatus.result == TestPassed && testResult == TestSkipped) { // if test passed in init and skipped on all threads in run
             tap_line += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' function, check log for details)";
-        } else if (status.result == TestSkipped) {  //if skipped in init
+        } else if (childExitStatus.result == TestSkipped) {  //if skipped in init
             std::string init_skip_message = get_skip_message(-1);
             if (init_skip_message.size() != 0)
                 tap_line += " (" + std::string(char_to_skip_category(init_skip_message[0])) + " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
@@ -1818,7 +1818,7 @@ void TapFormatLogger::print(int tc)
         }       
     }
     int loglevel = LOG_LEVEL_VERBOSE(1);
-    if (state == TestFailed || (sApp->fatal_skips && state == TestSkipped))
+    if (testResult == TestFailed || (sApp->fatal_skips && testResult == TestSkipped))
         loglevel = LOG_LEVEL_QUIET;
     logging_printf(loglevel, "%s\n", tap_line.c_str());
 
@@ -1840,7 +1840,7 @@ void TapFormatLogger::print(int tc)
 std::string TapFormatLogger::fail_info_details()
 {
     std::string result;
-    if (state == TestPassed || state == TestSkipped)
+    if (testResult == TestPassed || testResult == TestSkipped)
         return result;
 
     auto add_value = [&result](std::string s, char separator) {
@@ -1926,16 +1926,16 @@ std::string TapFormatLogger::fail_info_details()
 
 std::string TapFormatLogger::format_status_code()
 {
-    if (status.result == TestOperatingSystemError)
-        return sysexit_reason(status);
-    std::string msg = crash_reason(status);
+    if (childExitStatus.result == TestOperatingSystemError)
+        return sysexit_reason(childExitStatus);
+    std::string msg = crash_reason(childExitStatus);
     if (msg.empty()) {
         // format the number
 #ifdef _WIN32
-        msg = stdprintf("Child process caused error %#08x", status.extra);
+        msg = stdprintf("Child process caused error %#08x", childExitStatus.extra);
 #else
         // probably a real-time signal
-        msg = stdprintf("Child process died with signal %d", status.extra);
+        msg = stdprintf("Child process died with signal %d", childExitStatus.extra);
 #endif
     }
     return msg;
@@ -2004,11 +2004,11 @@ void TapFormatLogger::print_thread_messages()
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, status);
+        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, childExitStatus);
 
         if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, sApp->verbosity);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity, status);
+            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity, childExitStatus);
         }
 
         munmap_file(r);
@@ -2170,7 +2170,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
 void YamlLogger::print_result_line()
 {
     int loglevel = LOG_LEVEL_QUIET;
-    if (state == TestPassed || (state == TestSkipped && !sApp->fatal_skips))
+    if (testResult == TestPassed || (testResult == TestSkipped && !sApp->fatal_skips))
         loglevel = LOG_LEVEL_VERBOSE(1);
     if (loglevel == LOG_LEVEL_QUIET && file_log_fd != real_stdout_fd && sApp->verbosity < 1) {
         // logging_init won't have printed "- test:" to stdout, so do it now
@@ -2183,17 +2183,17 @@ void YamlLogger::print_result_line()
     bool coredumped = false;
     std::string reason;
 
-    switch (status.result) {
+    switch (childExitStatus.result) {
     case TestSkipped:   // can only be "result: skip"...
     case TestPassed:
         // recheck, as childExitStatus.result does not take failing threads into account
-        switch (state) {
+        switch (testResult) {
         case TestSkipped:
             logging_printf(loglevel, "  result: skip\n");
-            if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
+            if (childExitStatus.result == TestPassed && testResult == TestSkipped) { // if test passed in init and skipped on all threads in run
                 logging_printf(loglevel, "  skip-category: %s\n", "RuntimeSkipCategory");
                 return logging_printf(loglevel, "  skip-reason: %s\n", "All CPUs skipped while executing 'test_run()' function, check log for details");
-            } else if (status.result == TestSkipped) {  //if skipped in init
+            } else if (childExitStatus.result == TestSkipped) {  //if skipped in init
                 std::string init_skip_message = get_skip_message(-1);
                 if (init_skip_message.size() > 0) {
                     logging_printf(loglevel, "  skip-category: %s\n", char_to_skip_category(init_skip_message[0]));
@@ -2224,7 +2224,7 @@ void YamlLogger::print_result_line()
     case TestOperatingSystemError:
         logging_printf(loglevel, "  result: operating system error\n");
         reason = "Operating system error: ";
-        reason += sysexit_reason(status);
+        reason += sysexit_reason(childExitStatus);
         break;
     case TestCoreDumped:
         coredumped = true;
@@ -2232,14 +2232,14 @@ void YamlLogger::print_result_line()
     case TestOutOfMemory:
     case TestKilled:
         logging_printf(loglevel, "  result: crash\n");
-        reason = crash_reason(status);
+        reason = crash_reason(childExitStatus);
         crashed = true;
         break;
     }
 
     // format the code for us first
     char code[std::numeric_limits<unsigned>::digits10 + 2]; // sufficient for 0x + hex too
-    snprintf(code, sizeof(code), status.extra > 4096 ? "%#08x" : "%u", status.extra);
+    snprintf(code, sizeof(code), childExitStatus.extra > 4096 ? "%#08x" : "%u", childExitStatus.extra);
 
     // print result details now
     auto booleanstr = [](bool cond) { return cond ? "true" : "false"; };
@@ -2270,7 +2270,7 @@ void YamlLogger::print()
     Duration test_duration = MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
     print_result_line();
-    if (state == TestFailed)
+    if (testResult == TestFailed)
         logging_printf(LOG_LEVEL_QUIET, "%s", fail_info_details().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  time-at-end:   %s\n", get_current_time().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  test-runtime: %s\n",
@@ -2305,11 +2305,11 @@ void YamlLogger::print()
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX, status);
+        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX, childExitStatus);
 
         if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, sApp->verbosity);
-            print_one_thread_messages(real_stdout_fd, r, sApp->verbosity, status);
+            print_one_thread_messages(real_stdout_fd, r, sApp->verbosity, childExitStatus);
         }
 
         munmap_file(r);
@@ -2377,24 +2377,24 @@ TestResult logging_print_results(ChildExitStatus status, int *tc, const struct t
     case SandstoneApplication::OutputFormat::key_value: {
         KeyValuePairLogger l(test, status);
         l.print(n);
-        return l.state;
+        return l.testResult;
     }
 
     case SandstoneApplication::OutputFormat::tap: {
         TapFormatLogger l(test, status);
         l.print(n);
-        return l.state;
+        return l.testResult;
     }
 
     case SandstoneApplication::OutputFormat::yaml: {
         YamlLogger l(test, status);
         l.print();
-        return l.state;
+        return l.testResult;
     }
 
     case SandstoneApplication::OutputFormat::no_output:
         break;
     }
 
-    return AbstractLogger(test, status).state;
+    return AbstractLogger(test, status).testResult;
 }
