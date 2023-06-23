@@ -178,7 +178,7 @@ enum CrashPipe {
 
 #if SANDSTONE_CHILD_BACKTRACE
 static uint8_t on_hang_action = print_ps_on_hang;
-static uint8_t on_crash_action;
+static uint8_t on_crash_action = context_on_crash;
 #else
 static constexpr uint8_t on_hang_action = kill_on_hang;
 static constexpr uint8_t on_crash_action = kill_on_crash;
@@ -902,6 +902,10 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
     if (on_crash_arg) {
         if (strcmp(on_crash_arg, "gdb") == 0) {
             on_crash_action = attach_gdb_on_crash;
+        } else if (strcmp(on_crash_arg, "context") == 0) {
+            on_crash_action = context_on_crash;
+        } else if (strcmp(on_crash_arg, "context+core") == 0 || strcmp(on_crash_arg, "core+context") == 0) {
+            on_crash_action = coredump_on_crash | context_on_crash;
         } else if (strcmp(on_crash_arg, "backtrace") == 0) {
             on_crash_action = backtrace_on_crash;
         } else if (strcmp(on_crash_arg, "core") == 0 || strcmp(on_crash_arg, "coredump") == 0) {

@@ -896,7 +896,7 @@ selftest_crash_common() {
     test_yaml_regexp "/tests/0/stderr messages" 'Out of memory condition'
 }
 
-@test "backtrace" {
+selftest_crash_context_common() {
     if $is_asan; then
         skip "Crashing tests skipped with ASAN"
     fi
@@ -906,6 +906,34 @@ selftest_crash_common() {
     if [[ `uname -r` = *-azure ]]; then
         skip "GitHub Hosted Actions somehow make this impossible"
     fi
+
+    local signum=`kill -l SEGV`
+    sandstone_selftest -n1 -e selftest_sigsegv "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" "crash"
+    test_yaml_regexp "/tests/0/result-details/crashed" True
+
+    local threadidx=$((yamldump[/tests/0/threads@len] - 1))
+    test_yaml_regexp "/tests/0/threads/$threadidx/state" "failed"
+    test_yaml_regexp "/tests/0/threads/$threadidx/messages/0/level" "error"
+    test_yaml_regexp "/tests/0/threads/$threadidx/messages/0/text" ".*Received signal $signum \((Segmentation fault|Access violation)\) code=[0-9]+.* RIP = 0x.*"
+
+    if [[ `uname -m` = x86_64 ]]; then
+        # OpenDCDiag's built-in register dumper is only implemented for x86-64
+        msgidx=$((yamldump[/tests/0/threads/$threadidx/messages@len] - 1))
+        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$msgidx/level" "info"
+        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$msgidx/text" "Registers:"
+        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$msgidx/text" " rax += 0x[0-9a-f]{16}.*"
+    fi
+}
+
+@test "crash context" {
+    declare -A yamldump
+    selftest_crash_context_common --on-crash=context
+}
+
+@test "crash backtrace" {
     if [[ "$SANDSTONE" != "$SANDSTONE_BIN" ]] &&
        [[ "$SANDSTONE" != "$SANDSTONE_BIN "* ]]; then
         skip "Not executing directly (executing '$SANDSTONE')"
@@ -917,52 +945,31 @@ selftest_crash_common() {
     fi
 
     # Check that gdb can attach to running processes
-    have_working_gdb=false
     sleep 2m &
     pid=$!
-    if gdb -batch -pid $pid -ex kill >/dev/null 2>/dev/null; then
-        echo >&3 '# testing gdb backtraces'
-        have_working_gdb=true
-    else
-        echo >&3 '# testing only the internal register dump'
+    if ! gdb -batch -pid $pid -ex kill >/dev/null 2>/dev/null; then
         kill $pid
         ps h $pid ||:
+        skip "GDB can't attach to running processes"
     fi
+    wait $pid ||:
 
     declare -A yamldump
-    local signum=`kill -l SEGV`
-    sandstone_selftest --on-crash=backtrace -n1 -vvv -e selftest_sigsegv
-    [[ "$status" -eq 1 ]]
-    test_yaml_regexp "/exit" fail
-    test_yaml_regexp "/tests/0/result" "crash"
-    test_yaml_regexp "/tests/0/result-details/crashed" True
-    test_yaml_regexp "/tests/0/threads/1/state" "failed"
-    test_yaml_regexp "/tests/0/threads/1/messages/0/level" "error"
-    test_yaml_regexp "/tests/0/threads/1/messages/0/text" ".*Received signal $signum \((Segmentation fault|Access violation)\) code=[0-9]+.* RIP = 0x.*"
+    selftest_crash_context_common --on-crash=backtrace
 
-    if [[ `uname -m` = x86_64 ]]; then
-        # OpenDCDiag's built-in register dumper is only implemented for x86-64
-        msgidx=$((yamldump[/tests/0/threads/1/messages@len] - 1))
-        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/level" "info"
-        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/text" "Registers:"
-        test_yaml_regexp "/tests/0/threads/1/messages/$msgidx/text" " rax += 0x[0-9a-f]{16}.*"
-    fi
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
+    test_yaml_regexp "/tests/0/threads/1/messages/1/level" "warning"
 
-    if $have_working_gdb; then
-        test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
-        test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
-        test_yaml_regexp "/tests/0/threads/1/messages/1/level" "warning"
-
-        # The crashing instruction varies with the target architecture
-        case `uname -m` in
-            x86_64)
-                test_yaml_regexp "/tests/0/threads/1/messages/1/text" ".*\bmov\b.*"
-                ;;
-            aarch64)
-                test_yaml_regexp "/tests/0/threads/1/messages/1/text" ".*\bldr\b.*"
-                ;;
-        esac
-    fi
+    # The crashing instruction varies with the target architecture
+    case `uname -m` in
+        x86_64)
+            test_yaml_regexp "/tests/0/threads/1/messages/1/text" ".*\bmov\b.*"
+            ;;
+        aarch64)
+            test_yaml_regexp "/tests/0/threads/1/messages/1/text" ".*\bldr\b.*"
+            ;;
+    esac
 }
 
 @test "selftest_oserror" {
