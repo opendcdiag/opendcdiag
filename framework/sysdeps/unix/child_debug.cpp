@@ -215,7 +215,7 @@ if thr is not None:
         gdb.execute("x/i $pc")
     except gdb.MemoryError as e:
         print(e)
-print("Done")
+print("..Done..")
 end
 )gdb";
 
@@ -533,7 +533,7 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
 
         // wait until the Python reply is complete
         for (;;) {
-            static const char needle[] = "\nDone\n";
+            static const char needle[] = "..Done..\n";
             if (ret >= strlen(needle) && strcmp(buf + ret - strlen(needle), needle) == 0) {
                 buf[ret - strlen(needle)] = '\0';
                 break;
