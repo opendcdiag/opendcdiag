@@ -11,6 +11,8 @@
 #include "sandstone_context_dump.h"
 #include "sandstone_iovec.h"
 
+#include "futex.h"
+
 #include <initializer_list>
 #include <limits>
 #include <span>
@@ -201,6 +203,9 @@ static void child_crash_handler(int, siginfo_t *si, void *ucontext)
     // mark thread as failed
     logging_mark_thread_failed(thread_num);
 
+    auto &thread_state = cpu_data_for_thread(-1)->thread_state;
+    thread_state.store(thread_failed, std::memory_order_release);
+
     if (crashpipe[CrashPipeChild] == -1)
         return;
 
@@ -211,8 +216,8 @@ static void child_crash_handler(int, siginfo_t *si, void *ucontext)
 
         if (on_crash_action & attach_gdb_on_crash) {
             // now wait for the parent process to be done with us
-            char c;
-            IGNORE_RETVAL(read(crashpipe[CrashPipeChild], &c, sizeof(c)));
+            while (thread_state.load(std::memory_order_relaxed) == thread_failed)
+                futex_wait(&thread_state, int(thread_failed));
         }
 
         // restore the signal handler so we can be killed
@@ -871,6 +876,8 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
 {
 #if SANDSTONE_CHILD_BACKTRACE
     int gdb_available = -1;
+    if (!FutexAvailable)
+        gdb_available = 0;      // we can't synchronize without futexes
 
     if (on_hang_arg) {
         if (strcmp(on_hang_arg, "gdb") == 0 || strcmp(on_hang_arg, "attach-gdb") == 0) {
@@ -1022,9 +1029,11 @@ void debug_crashed_child()
     }
 
     // release the child
+    auto &thread_state = cpu_data_for_thread(-1)->thread_state;
+    thread_state.load(std::memory_order_acquire);
     if (on_crash_action != context_on_crash) {
-        char c = 1;
-        IGNORE_RETVAL(write(crashpipe[CrashPipeParent], &c, sizeof(c)));
+        thread_state.store(thread_debugged, std::memory_order_relaxed);
+        futex_wake_all(&thread_state);
     }
 }
 
