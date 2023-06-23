@@ -146,7 +146,6 @@ enum {
     mem_sample_time_option,
     mem_samples_per_log_option,
     no_mem_sampling_option,
-    no_shared_memory_option,
     no_slicing_option,
     no_triage_option,
     on_crash_option,
@@ -3094,7 +3093,6 @@ int main(int argc, char **argv)
         { "mem-samples-per-log", required_argument, nullptr, mem_samples_per_log_option},
         { "no-memory-sampling", no_argument, nullptr, no_mem_sampling_option },
         { "no-slicing", no_argument, nullptr, no_slicing_option },
-        { "no-shared-memory", no_argument, nullptr, no_shared_memory_option },
         { "no-triage", no_argument, nullptr, no_triage_option },
         { "on-crash", required_argument, nullptr, on_crash_option },
         { "on-hang", required_argument, nullptr, on_hang_option },
@@ -3309,8 +3307,6 @@ int main(int argc, char **argv)
         case mce_check_period_option:
             sApp->mce_check_period = ParseIntArgument<>{"--mce-check-every"}();
             break;
-        case no_shared_memory_option:
-            init_shmem(DoNotUseSharedMemory);
             break;
         case no_triage_option:
             do_not_triage = true;
