@@ -386,10 +386,6 @@ static void create_crash_pipe(int xsave_size)
     int ret = fcntl(crashpipe[CrashPipeParent], F_GETFL);
     if (ret >= 0)
         fcntl(crashpipe[CrashPipeParent], F_SETFL, ret | O_NONBLOCK);
-
-#ifdef F_SETNOSIGPIPE
-    fcntl(crashpipe[CrashPipeChild], F_SETNOSIGPIPE, 1);
-#endif
 }
 #endif
 
