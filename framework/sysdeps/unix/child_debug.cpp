@@ -852,9 +852,6 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             on_hang_action = backtrace_on_hang;
         } else if (strcmp(on_hang_arg, "ps") == 0) {
             on_hang_action = print_ps_on_hang;
-        } else if (strcmp(on_hang_arg, "smaps") == 0 || strcmp(on_hang_arg, "print-smaps") == 0) {
-            // deprecated
-            on_hang_action = print_ps_on_hang;
         } else if (strcmp(on_hang_arg, "kill") == 0) {
             on_hang_action = kill_on_hang;
         } else {
