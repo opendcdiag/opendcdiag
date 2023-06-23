@@ -1230,124 +1230,6 @@ static void run_threads(const struct test *test)
     pthread_attr_destroy(&thread_attr);
 }
 
-namespace {
-struct SharedMemorySynchronization
-{
-    Pipe pipe;
-    static bool needsWork()
-    {
-        return !__builtin_expect(sApp->shared_memory_is_shared, true);
-    }
-
-    SharedMemorySynchronization() : pipe(Pipe::DontCreate)
-    {
-        if (needsWork())
-            prepare();
-    }
-
-    SharedMemorySynchronization(int outpipe) : pipe(Pipe::DontCreate)
-    {
-        if (outpipe >= 0)
-            assert(needsWork());
-        pipe.out() = outpipe;
-    }
-
-    void prepare_child()
-    {
-        if (needsWork()) {
-            // install a SIGQUIT handler to initiate the memory transfer
-            static SharedMemorySynchronization *self;
-            self = this;
-            signal(SIGQUIT, [](int /*signum*/) {
-                self->send_to_parent();
-
-                /* terminate */
-                signal(SIGQUIT, SIG_DFL);
-                raise(SIGQUIT);
-            });
-        }
-    }
-    void send_to_parent()
-    {
-        if (needsWork()) {
-            pipe.close_input();
-            transfer(write, pipe.out());
-        }
-    }
-    void receive_from_child()
-    {
-        if (needsWork()) {
-            pipe.close_output();
-            transfer(read, pipe.in());
-        }
-    }
-
-private:
-    void prepare();
-    template <typename Prototype> void transfer(Prototype rwfunction, int fd) noexcept;
-};
-
-inline void SharedMemorySynchronization::prepare()
-{
-    // create a pipe for sending the data from parent to child
-    int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
-    if (pipe.open(size) < 0) {
-        perror("Could not create shared memory segment");
-        exit(EX_OSERR);
-    }
-}
-
-// This function must be async-signal safe on the child side. It uses:
-//  - abort
-//  - _exit
-//  - write
-//  - writev (not officially async-signal-safe, but it is)
-template <typename Prototype> void SharedMemorySynchronization::transfer(Prototype rwfunction, int fd) noexcept
-{
-    const ssize_t size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
-    ssize_t offset = 0;
-    char *ptr = reinterpret_cast<char *>(sApp->shmem);
-    while (offset < size) {
-        ssize_t n = rwfunction(fd, ptr + offset, size - offset);
-        if (n < 0) {
-            if (errno == EPIPE)
-                _exit(255);     // this is the child side and the parent has disappeared
-
-            const char *errname = nullptr;
-#if (__GLIBC__ * 1000 + __GLIBC_MINOR__) >= 2032
-            // new API added in glibc 2.32 to replace the old, BSD one below
-            errname = strerrordesc_np(errno);
-#else
-            if (errno < sys_nerr)
-                errname = sys_errlist[errno];
-#endif
-            static const char msg[] = "internal error synchronizing shared memory";
-            IGNORE_RETVAL(write(STDERR_FILENO, msg, strlen(msg)));
-
-            if (errname)
-                writeln(STDERR_FILENO, ": ", errname);
-
-#ifdef _WIN32
-            // can't be a signal handler, so add a bit more information
-            fprintf(stderr, "fd=%d, bytes written=%td, bytes to write=%td\n",
-                    fd, offset, size - offset);
-#endif
-
-            // this error is not expected to ever happen, so we won't bother
-            // closing log files properly
-            abort();
-        } else if (n == 0) {
-            // this is probably the parent side
-            logging_printf(LOG_LEVEL_ERROR, "# internal error: too few bytes received on shared memory pipe (%zd). "
-                                    "Attempting to continue execution.\n", offset);
-            break;
-        }
-
-        offset += n;
-    }
-}
-} // unnamed namespace
-
 static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const struct test *test)
 {
     Duration remaining = test_timeout(sApp->current_test_duration);
@@ -1752,22 +1634,9 @@ static int call_forkfd(intptr_t *child)
     return ffd;
 }
 
-static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
+static int spawn_child(const struct test *test, intptr_t *hpid)
 {
-    std::array<char, std::numeric_limits<int>::digits10 + 2> shmempipefdstr, statefdstr;
-    if (shmempipefd >= 0) {
-        // Create an inheritable copy of the shmemsyncfd
-        assert(!sApp->shared_memory_is_shared);
-        shmempipefd = dup(shmempipefd);
-        if (shmempipefd == -1) {
-            perror("dup");
-            exit(EX_OSERR);
-        }
-        // non-negative
-        snprintf(shmempipefdstr.begin(), shmempipefdstr.size(), "%u", unsigned(shmempipefd));
-    }
-
-
+    std::array<char, std::numeric_limits<int>::digits10 + 2> statefdstr;
     int statefd = open_memfd(MemfdInheritOnExec);
     if (statefd < 0) {
         perror("internal error: can't create state-transfer file");
@@ -1788,7 +1657,7 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
     const char *argv[] = {
         // argument order must match exec_mode_run()
         argv0, "-x", test->id, random_seed.c_str(),
-        statefdstr.begin(), shmempipefd >= 0 ? shmempipefdstr.begin() : nullptr,
+        statefdstr.begin(),
         nullptr
     };
 
@@ -1843,24 +1712,20 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
 #endif /* __linux__ */
 
     close(statefd);
-    if (shmempipefd >= 0)
-        close(shmempipefd);
     return ret;
 }
 
-static TestResult run_child(/*nonconst*/ struct test *test, SharedMemorySynchronization &shmemsync,
+static TestResult run_child(/*nonconst*/ struct test *test,
                             const SandstoneApplication::ExecState *app_state = nullptr)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
         pin_to_logical_processor(LogicalProcessor(-1), "control");
         signals_init_child();
         debug_init_child();
-        shmemsync.prepare_child();
     }
 
     logging_init_child_postexec(app_state);
     TestResult result = run_thread_slices(test);
-    shmemsync.send_to_parent();
 
     return result;
 }
@@ -1871,24 +1736,21 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
     intptr_t child;
     int ret = FFD_CHILD_PROCESS;
 
-    SharedMemorySynchronization shmemsync;
-
     if (__builtin_expect(sApp->current_fork_mode() == SandstoneApplication::fork_each_test, true)) {
         ret = call_forkfd(&child);
     } else if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        ret = spawn_child(test, &child, shmemsync.pipe.out());
+        ret = spawn_child(test, &child);
     }
 
     if (ret == FFD_CHILD_PROCESS) {
         /* child - run test's code */
         logging_init_child_preexec();
-        state.result = run_child(const_cast<struct test *>(test), shmemsync);
+        state.result = run_child(const_cast<struct test *>(test));
         if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
             _exit(state.result);
     } else {
         /* parent - wait */
         state = wait_for_child(ret, child, tc, test);
-        shmemsync.receive_from_child();
     }
 
     // print results and find out if the test failed
@@ -2556,21 +2418,12 @@ static int exec_mode_run(int argc, char **argv)
         }
         return nullptr;
     };
-    int shmempipefd = -1;
     if (argc < 3)
         return EX_DATAERR;
-    if (argc > 3)
-        shmempipefd = atoi(argv[3]);
 
     SandstoneApplication::ExecState app_state = read_app_state(atoi(argv[2]));
-    if (shmempipefd >= 0) {
-        init_shmem(DoNotUseSharedMemory);
-    } else {
-        assert(app_state.shmemfd != -1);
-        init_shmem(UseSharedMemory, app_state.shmemfd);
-    }
-
-    SharedMemorySynchronization shmemsync(shmempipefd);
+    assert(app_state.shmemfd != -1);
+    init_shmem(UseSharedMemory, app_state.shmemfd);
 
     // reload the app state
 #define COPY_STATE_TO_SAPP(id)  \
@@ -2598,7 +2451,7 @@ static int exec_mode_run(int argc, char **argv)
     std::vector<struct test *> test_list;
     add_test(test_list, test_to_run);
     random_init();
-    return run_child(test_to_run, shmemsync, &app_state);
+    return run_child(test_to_run, &app_state);
 }
 
 // Triage run attempts to figure out which socket(s) are causing test failures.
