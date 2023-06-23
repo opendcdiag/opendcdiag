@@ -1701,7 +1701,6 @@ static SandstoneApplication::ExecState read_app_state(int fd)
 
 static int call_forkfd(intptr_t *child)
 {
-    static int ffd_extra_flags = -1;
     pid_t pid;
 
 #ifdef __linux__
@@ -1720,6 +1719,7 @@ static int call_forkfd(intptr_t *child)
         PidProperlyUpdated = 2,
         PidIncorrectlyCached = 1
     };
+    static int ffd_extra_flags = -1;
     if (__builtin_expect(ffd_extra_flags < 0, false)) {
         // determine if we need to pass FFD_USE_FORK
         pid_t parentpid = getpid();
@@ -1761,6 +1761,8 @@ static int call_forkfd(intptr_t *child)
             ffd_extra_flags = FFD_USE_FORK;
         }
     }
+#else
+    static constexpr int ffd_extra_flags = 0;
 #endif
 
     int ffd = forkfd(FFD_CLOEXEC | ffd_extra_flags, &pid);
