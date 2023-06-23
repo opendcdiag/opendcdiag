@@ -29,10 +29,11 @@
 #ifdef __cplusplus
 #include <memory>
 #include <map>
+#include <span>
 
 #include <sandstone_config.h>
 #include <sandstone_chrono.h>
-#include <span>
+#include <sandstone_iovec.h>
 #include <sandstone_utils.h>
 
 #include "effective_cpu_freq.hpp"
@@ -251,6 +252,42 @@ struct SandstoneBackgroundScan
     static constexpr float load_idle_threshold_inc_val = 0.05;
     static constexpr float load_idle_threshold_max = 0.8;
 #endif
+};
+
+class LoggingStream
+{
+public:
+    LoggingStream(int fd = -1) : fd(fd) {}
+    LoggingStream(const LoggingStream &) = delete;
+    LoggingStream &operator=(const LoggingStream &) = delete;
+    constexpr LoggingStream(LoggingStream &&other) : fd(other.fd)
+    {
+        other.fd = -1;
+    }
+    constexpr LoggingStream &operator=(LoggingStream &&other)
+    {
+        std::swap(fd, other.fd);
+        return *this;
+    }
+
+    ~LoggingStream()
+    {
+        if (fd != -1)
+            write('\0');
+    }
+    operator int() const
+    {
+        return fd;
+    }
+
+    template <typename... Args> ssize_t write(Args &&... args)
+    {
+        return writevec(fd, std::forward<Args>(args)...);
+    }
+
+private:
+    int fd;
+    friend LoggingStream logging_user_messages_stream(int thread_num, int level);
 };
 
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
@@ -515,11 +552,7 @@ void logging_init_child_prefork(SandstoneApplication::ExecState *state);
 void logging_init_child_preexec();
 void logging_init_child_postexec(const SandstoneApplication::ExecState *state);
 void logging_finish();
-FILE *logging_stream_open(int thread_num, int level);
-static inline void logging_stream_close(FILE *log)
-{
-    fputc(0, log);
-}
+LoggingStream logging_user_messages_stream(int thread_num, int level);
 TestResult logging_print_results(ChildExitStatus status, int *tc, const struct test *test);
 
 /* random.cpp */

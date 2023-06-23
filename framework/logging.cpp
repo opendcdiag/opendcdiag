@@ -1156,19 +1156,19 @@ void logging_finish()
 {
     auto &all = all_thread_logs();
     for (size_t i = 0; i < all.size(); ++i) {
-        fclose(all[i].log);
+        close(all[i].log_fd);
         all[i] = {};
     }
     if (stderr_fd != -1)
         close(stderr_fd);
 }
 
-FILE *logging_stream_open(int thread_num, int level)
+LoggingStream logging_user_messages_stream(int thread_num, int level)
 {
-    FILE *log = log_for_thread(thread_num).log;
-    fflush(log);
-    fputc(message_code(UserMessages, level), log);
-    return log;
+    LoggingStream stream(log_for_thread(thread_num).log_fd);
+    uint8_t code = message_code(UserMessages, level);
+    stream.write(code);
+    return stream;
 }
 
 static inline void assert_log_message(const char *fmt)
