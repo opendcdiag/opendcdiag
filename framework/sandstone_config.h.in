@@ -33,6 +33,10 @@
 #mesondefine SANDSTONE_NO_LOGGING
 #mesondefine SANDSTONE_RESTRICTED_CMDLINE
 #mesondefine SANDSTONE_CHILD_BACKTRACE
+#mesondefine SANDSTONE_CHILD_DEBUG_CRASHES
+#mesondefine SANDSTONE_CHILD_DEBUG_HANGS
+
+#define SANDSTONE_CHILD_DEBUG (SANDSTONE_CHILD_DEBUG_CRASHES || SANDSTONE_CHILD_DEBUG_HANGS)
 
 #ifdef __cplusplus
 
@@ -44,6 +48,9 @@ static constexpr bool GeneralAvailability = SANDSTONE_GA;
 
 // keep alphabetical order, please
 static constexpr bool ChildBacktrace = SANDSTONE_CHILD_BACKTRACE;
+static constexpr bool ChildDebug = SANDSTONE_CHILD_DEBUG;
+static constexpr bool ChildDebugCrashes = SANDSTONE_CHILD_DEBUG_CRASHES;
+static constexpr bool ChildDebugHangs = SANDSTONE_CHILD_DEBUG_HANGS;
 static constexpr bool NoLogging = SANDSTONE_NO_LOGGING;
 static constexpr bool RestrictedCommandLine = SANDSTONE_RESTRICTED_CMDLINE;
 static constexpr bool HasBuiltinTestList = SANDSTONE_BUILTIN_TEST_LIST;

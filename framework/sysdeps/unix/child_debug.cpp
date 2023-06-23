@@ -155,13 +155,8 @@ enum CrashPipe {
     CrashPipeChild
 };
 
-#if SANDSTONE_CHILD_BACKTRACE
-static uint8_t on_hang_action = print_ps_on_hang;
 static uint8_t on_crash_action = context_on_crash;
-#else
-static constexpr uint8_t on_hang_action = kill_on_hang;
-static constexpr uint8_t on_crash_action = kill_on_crash;
-#endif
+static uint8_t on_hang_action = print_ps_on_hang;
 static int xsave_size = 0;
 static int crashpipe[2] = { -1, -1 };
 
@@ -355,9 +350,11 @@ void CrashContext::receive_internal(int sockfd)
     }
 }
 
-#if SANDSTONE_CHILD_BACKTRACE
 static bool check_gdb_available()
 {
+    if (!SandstoneConfig::ChildBacktrace)
+        return false;
+
     std::string path;
     if (const char *env = getenv("PATH"); env && *env)
         path = env;
@@ -413,7 +410,6 @@ static bool create_crash_pipe(int xsave_size)
 
     return true;
 }
-#endif
 
 static void set_nonblock(int fd)
 {
@@ -584,6 +580,11 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
 
 static void generate_backtrace(const char *pidstr, uintptr_t handle = 0, int cpu = -1)
 {
+    if (!SandstoneConfig::ChildBacktrace) {
+        assert(false && "Should not have reached here");
+        __builtin_unreachable();
+    }
+
     Pipe gdb_in, gdb_out;
     if (!gdb_in || !gdb_out)
         return;
@@ -640,6 +641,10 @@ static void generate_backtrace(const char *pidstr, uintptr_t handle = 0, int cpu
 
 static void attach_gdb(const char *pidstr)
 {
+    if (!SandstoneConfig::ChildBacktrace) {
+        assert(false && "Should not have reached here");
+        __builtin_unreachable();
+    }
     const char *gdb_args[] = { "gdb", "-p", pidstr, nullptr };
     run_process(logging_stdout_fd(), gdb_args);
 }
@@ -847,8 +852,9 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
             handle = 0;
     }
 
-    if ((on_crash_action & backtrace_on_crash) == backtrace_on_crash) {
-        // generate the backtrace as a second stepping
+    if (SandstoneConfig::ChildBacktrace
+            && (on_crash_action & backtrace_on_crash) == backtrace_on_crash) {
+        // generate the backtrace as a second step
         generate_backtrace(pidstr, handle, cpu);
     }
 
@@ -873,26 +879,28 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
 
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
 {
-#if SANDSTONE_CHILD_BACKTRACE
     int gdb_available = -1;
     if (!FutexAvailable)
         gdb_available = 0;      // we can't synchronize without futexes
+    if (SandstoneConfig::RestrictedCommandLine)
+        on_hang_arg = on_crash_arg = nullptr;       // enforce the defaults
 
-    if (on_hang_arg) {
-        if (strcmp(on_hang_arg, "gdb") == 0 || strcmp(on_hang_arg, "attach-gdb") == 0) {
+    if (SandstoneConfig::ChildDebugHangs && on_hang_arg) {
+        std::string_view arg = on_hang_arg;
+        if (SandstoneConfig::ChildBacktrace && (arg == "gdb" || arg == "attach-gdb")) {
             on_hang_action = attach_gdb_on_hang;
-        } else if (strcmp(on_hang_arg, "backtrace") == 0) {
+        } else if (SandstoneConfig::ChildBacktrace && arg == "backtrace") {
             on_hang_action = backtrace_on_hang;
-        } else if (strcmp(on_hang_arg, "ps") == 0) {
+        } else if (arg == "ps") {
             on_hang_action = print_ps_on_hang;
-        } else if (strcmp(on_hang_arg, "kill") == 0) {
+        } else if (arg == "kill") {
             on_hang_action = kill_on_hang;
         } else {
             fprintf(stderr, "%s: unknown action for --on-hang: %s\n", program_invocation_name, on_hang_arg);
             exit(EX_USAGE);
         }
 
-        if (on_hang_action >= backtrace_on_hang) {
+        if (SandstoneConfig::ChildBacktrace && on_hang_action >= backtrace_on_hang) {
             if (gdb_available == -1)
                 gdb_available = check_gdb_available();
             if (!gdb_available) {
@@ -902,27 +910,28 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
         }
     }
 
-    if (on_crash_arg) {
-        if (strcmp(on_crash_arg, "gdb") == 0) {
+    if (SandstoneConfig::ChildDebugCrashes && on_crash_arg) {
+        std::string_view arg = on_crash_arg;
+        if (SandstoneConfig::ChildBacktrace && (arg == "gdb" || arg == "attach-gdb")) {
             on_crash_action = attach_gdb_on_crash;
-        } else if (strcmp(on_crash_arg, "context") == 0) {
+        } else if (arg == "context") {
             on_crash_action = context_on_crash;
-        } else if (strcmp(on_crash_arg, "context+core") == 0 || strcmp(on_crash_arg, "core+context") == 0) {
+        } else if (arg == "context+core" || arg == "core+context") {
             on_crash_action = coredump_on_crash | context_on_crash;
-        } else if (strcmp(on_crash_arg, "backtrace") == 0) {
+        } else if (SandstoneConfig::ChildBacktrace && arg == "backtrace") {
             on_crash_action = backtrace_on_crash;
-        } else if (strcmp(on_crash_arg, "core") == 0 || strcmp(on_crash_arg, "coredump") == 0) {
+        } else if (arg == "core" || arg == "coredump") {
             on_crash_action = coredump_on_crash;
-        } else if (strcmp(on_crash_arg, "backtrace+core") == 0 || strcmp(on_crash_arg, "core+backtrace") == 0) {
+        } else if (SandstoneConfig::ChildBacktrace && (arg == "backtrace+core" || arg == "core+backtrace")) {
             on_crash_action = coredump_on_crash | backtrace_on_crash;
-        } else if (strcmp(on_crash_arg, "kill") == 0) {
+        } else if (arg == "kill") {
             on_crash_action = kill_on_crash;
         } else {
             fprintf(stderr, "%s: unknown action for --on-crash: %s\n", program_invocation_name, on_crash_arg);
             exit(EX_USAGE);
         }
 
-        if (on_crash_action & backtrace_on_hang) {
+        if (SandstoneConfig::ChildBacktrace && on_crash_action & backtrace_on_hang) {
             if (gdb_available == -1)
                 gdb_available = check_gdb_available();
             if (!gdb_available) {
@@ -958,7 +967,6 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             on_crash_action &= ~(context_on_crash | attach_gdb_on_crash);
         }
     }
-#endif
 
     /* set us up for producing core dumps if wanted */
     struct rlimit core_limit;
@@ -985,10 +993,10 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
 
 void debug_init_child()
 {
-    if (!SandstoneConfig::ChildBacktrace)
+    if (!SandstoneConfig::ChildDebug)
         return;
 
-    if (on_crash_action & (context_on_crash | attach_gdb_on_crash)) {
+    if (SandstoneConfig::ChildBacktrace && on_crash_action & (context_on_crash | attach_gdb_on_crash)) {
         struct sigaction action = {};
         sigemptyset(&action.sa_mask);
         action.sa_sigaction = child_crash_handler;
@@ -1009,7 +1017,7 @@ intptr_t debug_child_watch()
 
 void debug_crashed_child()
 {
-    if (!SandstoneConfig::ChildBacktrace || crashpipe[CrashPipeParent] == -1)
+    if (!SandstoneConfig::ChildDebugCrashes || crashpipe[CrashPipeParent] == -1)
         return;
 
     // receive the context
@@ -1038,7 +1046,7 @@ void debug_crashed_child()
 
 void debug_hung_child(pid_t child)
 {
-    if (!SandstoneConfig::ChildBacktrace)
+    if (!SandstoneConfig::ChildDebugHangs)
         return;
 
     char buf[std::numeric_limits<pid_t>::digits10 + 2];
@@ -1049,9 +1057,11 @@ void debug_hung_child(pid_t child)
             { "ps", "Hww", "-opid,tid,psr,vsz,rss,wchan,%cpu,stat,time,comm,args", buf, nullptr };
         LoggingStream stream = logging_user_messages_stream(-1, LOG_LEVEL_VERBOSE(2));
         run_process(stream, ps_args);
-    } else if (on_hang_action == attach_gdb_on_hang) {
-        attach_gdb(buf);
-    } else if (on_hang_action == backtrace_on_hang) {
-        generate_backtrace(buf);
+    } else if (SandstoneConfig::ChildBacktrace) {
+        if (on_hang_action == attach_gdb_on_hang) {
+            attach_gdb(buf);
+        } else if (on_hang_action == backtrace_on_hang) {
+            generate_backtrace(buf);
+        }
     }
 }
