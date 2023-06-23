@@ -130,10 +130,11 @@ enum TestResult : int8_t {
     TestSkipped = -1,
 };
 
-enum ThreadState : int_least8_t {
+enum ThreadState : int {
     thread_not_started = 0,
     thread_running = 1,
     thread_failed = 2,
+    thread_debugged = 3,
     thread_succeeded = -1,
     thread_skipped = -2,
 };
