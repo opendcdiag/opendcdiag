@@ -116,7 +116,6 @@ enum LogTypes {
 struct ThreadLog
 {
     // simple holder (we ought to do RAII...)
-    FILE *log = nullptr;
     int log_fd = -1;
 };
 
@@ -505,23 +504,12 @@ int logging_stdout_fd(void)
     return real_stdout_fd;
 }
 
-static inline ThreadLog open_new_log()
+static inline int open_new_log()
 {
-    ThreadLog result;
-    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        result.log_fd = open_memfd(MemfdInheritOnExec);
-        result.log = fdopen(result.log_fd, "w+b" FOPEN_SHORTLIVED FOPEN_EXTRA);
-    } else {
-        result.log_fd = open_memfd(MemfdCloseOnExec);
-        result.log = fdopen(result.log_fd, "w+b" FOPEN_CLOEXEC FOPEN_SHORTLIVED FOPEN_EXTRA);
-    }
-    if (result.log == nullptr) {
-        perror("fopen on temporary file for logging:");
-        exit(EX_OSERR);
-    }
-
-    setvbuf(result.log, NULL, _IONBF, 0);           // disable buffering
-    return result;
+    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test)
+        return open_memfd(MemfdInheritOnExec);
+    else
+        return open_memfd(MemfdCloseOnExec);
 }
 
 void logging_init_global_child()
@@ -1093,7 +1081,7 @@ void logging_init(const struct test *test)
     // must match logging_init_child_postexec() below
     auto &all_logs = all_thread_logs();
     for (size_t i = 0; i < all_logs.size(); ++i)
-        all_logs[i] = open_new_log();
+        all_logs[i].log_fd = open_new_log();
 }
 
 void logging_init_child_prefork(SandstoneApplication::ExecState *state)
@@ -1145,8 +1133,6 @@ void logging_init_child_postexec(const SandstoneApplication::ExecState *state)
             abort();
         }
 #endif
-
-        l.log = fdopen(l.log_fd, "w+b" FOPEN_CLOEXEC FOPEN_SHORTLIVED FOPEN_EXTRA);
 
         all_logs[i] = l;
     }
