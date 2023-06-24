@@ -918,38 +918,31 @@ static LogicalProcessorSet init_cpus()
     return result;
 }
 
-enum ShmemMode { DoNotUseSharedMemory, UseSharedMemory };
-static void init_shmem(ShmemMode mode, int fd = -1)
+static void init_shmem(int fd = -1)
 {
     if (sApp->shmem)
         return;                 // already initialized
 
     // a file descriptor is only allowed in the child side of -fexec
     assert(fd == -1 || sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
-    assert(fd == -1 || mode == UseSharedMemory);
 
     int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
     switch (sApp->current_fork_mode()) {
     case SandstoneApplication::exec_each_test:
         // our child will inherit this file descriptor
-        // (error ignored: we'll fall back to the pipe if we can't pass it)
-        if (mode == UseSharedMemory) {
-            fd = open_memfd(MemfdInheritOnExec);
-            if (fd < 0 || ftruncate(fd, size) < 0) {
-                perror("internal error creating temporary file");
-                exit(EX_CANTCREAT);
-            }
+        fd = open_memfd(MemfdInheritOnExec);
+        if (fd < 0 || ftruncate(fd, size) < 0) {
+            perror("internal error: could not create temporary file for sharing memory");
+            exit(EX_CANTCREAT);
         }
         break;
 
     case SandstoneApplication::child_exec_each_test:
-        // we may have inherited a file descriptor
+        // we must have inherited a file descriptor
         break;
 
     case SandstoneApplication::no_fork:
         // in no-fork mode, there's no one to share with in the first place
-        sApp->shared_memory_is_shared = true;
-        mode = DoNotUseSharedMemory;
         break;
 
     case SandstoneApplication::fork_each_test:
@@ -962,27 +955,12 @@ static void init_shmem(ShmemMode mode, int fd = -1)
 
 
     void *base = MAP_FAILED;
-    if (mode != DoNotUseSharedMemory) {
-        int flags = MAP_SHARED | (fd == -1 ? MAP_ANONYMOUS : 0);
-        base = mmap(NULL, size, PROT_READ | PROT_WRITE, flags, fd, 0);
-        if (base == MAP_FAILED && fd != -1) {
-            fprintf(stderr, "internal error: could not map the shared memory file to memory: %s\n",
-                    strerror(errno));
-            abort();
-        }
+    int flags = MAP_SHARED | (fd == -1 ? MAP_ANONYMOUS : 0);
+    base = mmap(NULL, size, PROT_READ | PROT_WRITE, flags, fd, 0);
+    if (base == MAP_FAILED && fd != -1) {
+        perror("internal error: could not map the shared memory file to memory");
+        exit(EX_CANTCREAT);
     }
-    if (base == MAP_FAILED) {
-        // mmap failed (!!) or not using shared memory
-        if (fd != -1) {
-            close(fd);
-            fd = -1;
-        }
-        base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        assert(base != MAP_FAILED);
-    } else {
-        sApp->shared_memory_is_shared = true;
-    }
-
 
     if (fd != -1 && sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test)
         close(fd);
@@ -990,8 +968,8 @@ static void init_shmem(ShmemMode mode, int fd = -1)
         sApp->shmemfd = fd;
     sApp->shmem = new (base) SandstoneApplication::SharedMemory;
 
-    // this is just to cause a crash if the mmap failed and we're in release mode
-    (void) sApp->shmem->per_thread[0].thread_state.load(std::memory_order_relaxed);
+    // barrier with the parent process
+    sApp->shmem->main_thread_data.thread_state.exchange(thread_not_started, std::memory_order_acquire);
 }
 
 __attribute__((weak, noclone, noinline)) void print_application_banner()
@@ -2423,7 +2401,7 @@ static int exec_mode_run(int argc, char **argv)
 
     SandstoneApplication::ExecState app_state = read_app_state(atoi(argv[2]));
     assert(app_state.shmemfd != -1);
-    init_shmem(UseSharedMemory, app_state.shmemfd);
+    init_shmem(app_state.shmemfd);
 
     // reload the app state
 #define COPY_STATE_TO_SAPP(id)  \
@@ -3471,7 +3449,7 @@ int main(int argc, char **argv)
     signals_init_global();
     resource_init_global();
 
-    init_shmem(UseSharedMemory);
+    init_shmem();
     debug_init_global(on_hang_arg, on_crash_arg);
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
 
