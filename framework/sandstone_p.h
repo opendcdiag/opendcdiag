@@ -306,7 +306,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 #else
             fork_each_test;
 #endif
-    bool shared_memory_is_shared = false;
 #ifdef NDEBUG
     static constexpr
 #endif
