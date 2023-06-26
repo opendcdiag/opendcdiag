@@ -178,6 +178,9 @@ struct alignas(64) per_thread_data
 {
     std::atomic<ThreadState> thread_state;
 
+    /* file descriptor for logging */
+    int log_fd;
+
     /* Records number of messages logged per thread of each test */
     std::atomic<int> messages_logged;
 
@@ -434,8 +437,6 @@ private:
 
 struct SandstoneApplication::ExecState
 {
-    int thread_log_fds[MAX_THREADS + 1];        // +1 for the main thread's log
-
 #define DECLARE_APP_STATE_VARIABLES(id)     decltype(SandstoneApplication::id) id;
     APP_STATE_VARIABLES(DECLARE_APP_STATE_VARIABLES)
 #undef DECLARE_APP_STATE_VARIABLES
@@ -543,9 +544,7 @@ void logging_print_triage_results(const std::vector<int> &sockets);
 void logging_print_version(void);
 void logging_flush(void);
 void logging_init(const struct test *test);
-void logging_init_child_prefork(SandstoneApplication::ExecState *state);
 void logging_init_child_preexec();
-void logging_init_child_postexec(const SandstoneApplication::ExecState *state);
 void logging_finish();
 LoggingStream logging_user_messages_stream(int thread_num, int level);
 TestResult logging_print_results(ChildExitStatus status, int *tc, const struct test *test);
