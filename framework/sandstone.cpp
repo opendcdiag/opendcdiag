@@ -1479,7 +1479,6 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
 static SandstoneApplication::ExecState make_app_state()
 {
     SandstoneApplication::ExecState app_state;
-    logging_init_child_prefork(&app_state);
 
 #define COPY_STATE_FROM_SAPP(id)    \
     app_state.id = sApp->id;
@@ -1693,8 +1692,7 @@ static int spawn_child(const struct test *test, intptr_t *hpid)
     return ret;
 }
 
-static TestResult run_child(/*nonconst*/ struct test *test,
-                            const SandstoneApplication::ExecState *app_state = nullptr)
+static TestResult run_child(/*nonconst*/ struct test *test)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
         pin_to_logical_processor(LogicalProcessor(-1), "control");
@@ -1702,7 +1700,6 @@ static TestResult run_child(/*nonconst*/ struct test *test,
         debug_init_child();
     }
 
-    logging_init_child_postexec(app_state);
     TestResult result = run_thread_slices(test);
 
     return result;
@@ -2436,7 +2433,7 @@ static int exec_mode_run(int argc, char **argv)
 
     std::vector<struct test *> test_list;
     add_test(test_list, test_to_run);
-    return run_child(test_to_run, &app_state);
+    return run_child(test_to_run);
 }
 
 // Triage run attempts to figure out which socket(s) are causing test failures.

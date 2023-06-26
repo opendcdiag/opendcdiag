@@ -113,12 +113,6 @@ enum LogTypes {
     SkipMessages = 3,
 };
 
-struct ThreadLog
-{
-    // simple holder (we ought to do RAII...)
-    int log_fd = -1;
-};
-
 class AbstractLogger
 {
 public:
@@ -466,35 +460,10 @@ static const char *char_to_skip_category(int val)
     return "NO CATEGORY PRESENT";
 }
 
-static std::vector<ThreadLog> &all_thread_logs() noexcept
-{
-    size_t count = num_cpus();
-    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
-        count = 0;
-    else
-        ++count;        // account for the main thread
-    static std::vector<ThreadLog> all(count);
-    assert(all.size() >= count);
-    return all;
-}
-
-static ThreadLog &log_for_thread(int cpu) noexcept
-{
-    // same adjustment as random.cpp's rng_for_thread
-    assert(cpu < num_cpus());
-    assert(cpu >= -1);
-
-    ++cpu;
-
-    auto &all = all_thread_logs();
-    assert(all.size() > size_t(cpu));
-    return all[cpu];
-}
-
 template <typename... Args> static ssize_t
 log_message_for_thread(int thread_num, LogTypes logType, int level, Args &&... args)
 {
-    int fd = log_for_thread(thread_num).log_fd;
+    int fd = cpu_data_for_thread(thread_num)->log_fd;
     uint8_t code = message_code(logType, level);
     return writevec(fd, code, std::forward<Args>(args)..., '\0');
 }
@@ -1043,7 +1012,7 @@ void logging_flush(void)
     // we don't need to fflush() because all our log files are opened without
     // buffering
     do_flush(file_log_fd);
-    do_flush(log_for_thread(-1).log_fd);
+    do_flush(cpu_data_for_thread(-1)->log_fd);
 }
 
 void logging_init(const struct test *test)
@@ -1078,25 +1047,8 @@ void logging_init(const struct test *test)
         return;                 // short-circuit
     }
 
-    // must match logging_init_child_postexec() below
-    auto &all_logs = all_thread_logs();
-    for (size_t i = 0; i < all_logs.size(); ++i)
-        all_logs[i].log_fd = open_new_log();
-}
-
-void logging_init_child_prefork(SandstoneApplication::ExecState *state)
-{
-    size_t i = 0;
-    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        assert(state && "internal error: mismatch in fork mode and when this function was called");
-        auto &all_logs = all_thread_logs();
-        for ( ; i < all_logs.size(); ++i)
-            state->thread_log_fds[i] = all_logs[i].log_fd;
-    }
-
-    // "zero" the rest
-    if (state)
-        std::fill(std::begin(state->thread_log_fds) + i, std::end(state->thread_log_fds), -1);
+    for (int i = -1; i < num_cpus(); ++i)
+        cpu_data_for_thread(i)->log_fd = open_new_log();
 }
 
 void logging_init_child_preexec()
@@ -1105,53 +1057,17 @@ void logging_init_child_preexec()
         dup2(stderr_fd, STDERR_FILENO);
 }
 
-void logging_init_child_postexec(const SandstoneApplication::ExecState *state)
-{
-    // see logging_init() above
-    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
-        return;
-    if (sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test)
-        return;
-
-    auto &all_logs = all_thread_logs();
-    for (size_t i = 0; i < all_logs.size(); ++i) {
-        ThreadLog l;
-
-        // reopen an inherited file descriptor
-        l.log_fd = state->thread_log_fds[i];
-
-#ifndef NDEBUG
-        if (__builtin_expect(l.log_fd == -1, false)) {
-            fprintf(stderr, "%s: file descriptor for thread %d is -1\n",
-                    program_invocation_name, int(i) - 1);
-            abort();
-        }
-        struct stat st;
-        if (fstat(l.log_fd, &st) == -1) {
-            fprintf(stderr, "%s: invalid file descriptor for thread %d: %s\n",
-                    program_invocation_name, int(i) - 1, strerror(errno));
-            abort();
-        }
-#endif
-
-        all_logs[i] = l;
-    }
-}
-
 void logging_finish()
 {
-    auto &all = all_thread_logs();
-    for (size_t i = 0; i < all.size(); ++i) {
-        close(all[i].log_fd);
-        all[i] = {};
-    }
+    for (int i = -1; i < num_cpus(); ++i)
+        close(cpu_data_for_thread(i)->log_fd);
     if (stderr_fd != -1)
         close(stderr_fd);
 }
 
 LoggingStream logging_user_messages_stream(int thread_num, int level)
 {
-    LoggingStream stream(log_for_thread(thread_num).log_fd);
+    LoggingStream stream(cpu_data_for_thread(thread_num)->log_fd);
     uint8_t code = message_code(UserMessages, level);
     stream.write(code);
     return stream;
@@ -1588,8 +1504,7 @@ static void format_and_print_message(int fd, int message_level, std::string_view
 static std::string get_skip_message(int thread_num)
 {
     std::string skip_message;
-    auto log = log_for_thread(thread_num);
-    struct mmap_region r = mmap_file(log.log_fd);
+    struct mmap_region r = mmap_file(cpu_data_for_thread(thread_num)->log_fd);
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
     const char *delim;
@@ -1815,8 +1730,7 @@ void KeyValuePairLogger::print_thread_messages(ChildExitStatus status)
 {
     for (int i = -1; i < num_cpus(); i++) {
         struct per_thread_data *data = cpu_data_for_thread(i);
-        auto log = log_for_thread(i);
-        struct mmap_region r = mmap_file(log.log_fd);
+        struct mmap_region r = mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
             continue;           /* nothing to be printed, on any level */
@@ -2083,8 +1997,7 @@ void TapFormatLogger::print_thread_messages(ChildExitStatus status)
 {
     for (int i = -1; i < num_cpus(); i++) {
         struct per_thread_data *data = cpu_data_for_thread(i);
-        auto log = log_for_thread(i);
-        struct mmap_region r = mmap_file(log.log_fd);
+        struct mmap_region r = mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
             continue;           /* nothing to be printed, on any level */
@@ -2375,7 +2288,7 @@ void YamlLogger::print(int, ChildExitStatus status)
 
     logging_flush();
 
-    struct mmap_region main_mmap = mmap_file(log_for_thread(-1).log_fd);
+    struct mmap_region main_mmap = mmap_file(cpu_data_for_thread(-1)->log_fd);
     if (main_mmap.size && sApp->log_test_knobs) {
         int count = print_test_knobs(file_log_fd, main_mmap);
         if (count && real_stdout_fd != file_log_fd
@@ -2386,8 +2299,7 @@ void YamlLogger::print(int, ChildExitStatus status)
     // print the thread messages
     for (int i = -1; i < num_cpus(); i++) {
         struct per_thread_data *data = cpu_data_for_thread(i);
-        auto log = log_for_thread(i);
-        struct mmap_region r = i == -1 ? main_mmap : mmap_file(log.log_fd);
+        struct mmap_region r = i == -1 ? main_mmap : mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
             continue;           /* nothing to be printed, on any level */
