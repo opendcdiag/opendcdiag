@@ -716,9 +716,6 @@ static void print_temperature_and_throttle()
 
 static void init_internal(const struct test *test)
 {
-    sApp->main_thread_data()->init();
-    for (int i = 0; i < num_cpus(); ++i)
-        sApp->test_thread_data(i)->init();
     print_temperature_and_throttle();
 
     logging_init(test);
@@ -1438,6 +1435,9 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
         int ret = 0;
         test->per_thread = sApp->user_thread_data.data();
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
+        sApp->main_thread_data()->init();
+        for (int i = 0; i < num_cpus(); ++i)
+            sApp->test_thread_data(i)->init();
 
         sApp->test_tests_init(test);
         if (test->test_init) {
