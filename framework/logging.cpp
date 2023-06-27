@@ -119,7 +119,7 @@ public:
     AbstractLogger(const struct test *test, ChildExitStatus state);
 
     const struct test *test;
-    uint64_t earliest_fail = UINT64_MAX;
+    MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
     ChildExitStatus childExitStatus;
     TestResult testResult = TestPassed;
     int pc = 0;
@@ -686,9 +686,7 @@ void logging_mark_thread_failed(int thread_num)
     // note: must use std::chrono::steady_clock here instead of
     // get_monotonic_time_now() because we'll compare to
     // sApp->current_test_starttime.
-    auto now = std::chrono::steady_clock::now().time_since_epoch();
-    static_assert(sizeof(thr->fail_time) == sizeof(now.count()));
-    thr->fail_time = now.count();
+    thr->fail_time = std::chrono::steady_clock::now();
     if (thread_num >= 0) {
         auto tthr = static_cast<PerThreadData::Test *>(thr);
         tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
@@ -1605,13 +1603,12 @@ static void print_child_stderr_common(std::function<void(int)> header)
 }
 
 static std::string
-format_duration(uint64_t tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
+format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
 {
-    if (tp == 0 || tp == UINT64_MAX)
+    if (tp == MonotonicTimePoint() || tp == MonotonicTimePoint::max())
         return {};
 
-    MonotonicTimePoint earliest_tp{Duration(tp)};
-    return format_duration(earliest_tp - sApp->current_test_starttime, opts);
+    return format_duration(tp - sApp->current_test_starttime, opts);
 }
 
 inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus state_)
@@ -1624,8 +1621,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
         PerThreadData::Common *data = sApp->thread_data(i);
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
         if (data->has_failed()) {
-            if (data->fail_time != 0 && data->fail_time < earliest_fail)
-                earliest_fail = data->fail_time;
+            earliest_fail = std::min(earliest_fail, data->fail_time);
         } else if (thr_state == thread_running) {
             if (testResult == TestTimedOut)
                 log_message(i, SANDSTONE_LOG_ERROR "Thread is stuck");
