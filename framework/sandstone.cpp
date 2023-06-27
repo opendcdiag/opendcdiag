@@ -1494,7 +1494,6 @@ static SandstoneApplication::ExecState make_app_state()
     app_state.selftest = (test_set.data() == selftests.data());
 #endif
     memcpy(app_state.cpu_mask, sApp->enabled_cpus.array, sizeof(LogicalProcessorSet::array));
-    app_state.thread_count = sApp->thread_count;
     return app_state;
 }
 
@@ -2454,7 +2453,7 @@ static int exec_mode_run(int argc, char **argv)
 
     LogicalProcessorSet enabled_cpus = {};
     memcpy(enabled_cpus.array, app_state.cpu_mask, sizeof(LogicalProcessorSet::array));
-    sApp->thread_count = app_state.thread_count;
+    sApp->thread_count = enabled_cpus.count();
     sApp->user_thread_data.resize(sApp->thread_count);
     load_cpu_info(enabled_cpus);
 
