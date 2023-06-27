@@ -193,6 +193,14 @@ struct Common
     {
         return fail_time > 0;
     }
+
+    void init()
+    {
+        thread_state.store(thread_not_started, std::memory_order_relaxed);
+        fail_time = 0;
+        messages_logged.store(0, std::memory_order_relaxed);
+        data_bytes_logged.store(0, std::memory_order_relaxed);
+    }
 };
 
 struct alignas(64) Main : Common
@@ -208,6 +216,13 @@ struct alignas(64) Test : Common
 
     /* Thread's effective CPU frequency during execution */
     double effective_freq_mhz;
+
+    void init()
+    {
+        Common::init();
+        inner_loop_count = inner_loop_count_at_fail = 0;
+        effective_freq_mhz = 0.0;
+    }
 };
 } // namespace PerThreadData
 

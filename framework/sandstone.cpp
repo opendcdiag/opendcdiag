@@ -716,7 +716,9 @@ static void print_temperature_and_throttle()
 
 static void init_internal(const struct test *test)
 {
-    memset(reinterpret_cast<void *>(sApp->shmem), 0, sizeof(*sApp->shmem));
+    sApp->main_thread_data()->init();
+    for (int i = 0; i < num_cpus(); ++i)
+        sApp->test_thread_data(i)->init();
     print_temperature_and_throttle();
 
     logging_init(test);
@@ -847,7 +849,6 @@ static void *thread_runner(void *arg)
         {
             thread_num = thread_number;
             random_init_thread(thread_number);
-            this_thread->inner_loop_count = 0;
         }
 
         ~TestRunWrapper()
