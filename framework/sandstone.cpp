@@ -933,6 +933,9 @@ static LogicalProcessorSet init_cpus()
     LogicalProcessorSet result = ambient_logical_processor_set();
     sApp->thread_count = result.count();
     sApp->user_thread_data.resize(sApp->thread_count);
+#ifdef M_ARENA_MAX
+    mallopt(M_ARENA_MAX, sApp->thread_count * 2);
+#endif
     return result;
 }
 
@@ -3204,9 +3207,6 @@ int main(int argc, char **argv)
     find_thyself(argv[0]);
     setup_stack_size(argc, argv);
     sApp->enabled_cpus = init_cpus();
-#ifdef M_ARENA_MAX
-    mallopt(M_ARENA_MAX, sApp->enabled_cpus.count() * 2);
-#endif
 #ifdef __linux__
     prctl(PR_SET_TIMERSLACK, 1, 0, 0, 0);
 #endif
