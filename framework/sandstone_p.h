@@ -188,16 +188,16 @@ struct Common
     /* Records the number of bytes log_data'ed per thread */
     std::atomic<size_t> data_bytes_logged;
 
-    uint64_t fail_time;
+    MonotonicTimePoint fail_time;
     bool has_failed() const
     {
-        return fail_time > 0;
+        return fail_time < MonotonicTimePoint::max();
     }
 
     void init()
     {
         thread_state.store(thread_not_started, std::memory_order_relaxed);
-        fail_time = 0;
+        fail_time = MonotonicTimePoint::max();
         messages_logged.store(0, std::memory_order_relaxed);
         data_bytes_logged.store(0, std::memory_order_relaxed);
     }
