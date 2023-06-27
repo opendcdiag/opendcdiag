@@ -330,6 +330,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         key_value,
         yaml,
     };
+    static constexpr auto DefaultOutputFormat = SANDSTONE_DEFAULT_LOGGING;
 
     enum ForkMode : int8_t {
         no_fork,
@@ -339,13 +340,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     };
 
     using PerCpuFailures = std::vector<uint64_t>;
+    struct SharedMemory;
 
-    struct ExecState;
-
-    struct SharedMemory {
-        PerThreadData::Main main_thread_data;
-        PerThreadData::Test per_thread[MAX_THREADS];
-    };
     std::vector<test_data_per_thread> user_thread_data;
     SharedMemory *shmem = nullptr;
     int shmemfd = -1;
@@ -353,16 +349,9 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     std::string file_log_path;
     static constexpr int DefaultQualityLevel = 50;
     int requested_quality = DefaultQualityLevel;
-    int verbosity = -1;
-    int max_messages_per_thread = 5;
-    unsigned max_logdata_per_thread = 128;
     const char *syslog_ident = nullptr;
-    static constexpr auto DefaultOutputFormat = SANDSTONE_DEFAULT_LOGGING;
-    OutputFormat output_format = DefaultOutputFormat;
-    uint8_t output_yaml_indent = 0;
 
     bool fatal_skips = false;
-    bool use_strict_runtime = false;
 
     ScheduleBy schedule_by = ScheduleBy::Thread;
     ForkMode fork_mode =
@@ -371,31 +360,24 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 #else
             fork_each_test;
 #endif
-    bool log_test_knobs = false;
     bool ignore_os_errors = false;
     bool force_test_time = false;
-    bool ud_on_failure = false;
     bool service_background_scan = false;
     static constexpr int MaxRetestCount = 64;
     int retest_count = 10;
     int total_retest_count = -2;
     int max_test_count = INT_MAX;
     int max_test_loop_count = 0;
-    int current_max_loop_count;
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
     MonotonicTimePoint starttime;
     MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;
-    MonotonicTimePoint current_test_endtime;
     Duration current_test_duration;
     Duration test_time = Duration::zero();
     Duration max_test_time = Duration::zero();
     Duration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
-
-    LogicalProcessorSet enabled_cpus;
-    int thread_count;
 
 #ifndef __linux__
     std::string path_to_self;
@@ -418,6 +400,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     std::vector<uint32_t> mce_counts_start;
     std::map<int, uint64_t> smi_counts_start;
 
+    int thread_count;
     ForkMode current_fork_mode() const
     {
         if (SandstoneConfig::RestrictedCommandLine) {
@@ -446,29 +429,24 @@ private:
     friend SandstoneApplication *_sApp() noexcept;
 };
 
-// state from SandstoneApplication:
-#define APP_STATE_VARIABLES(F)              \
-    F(shmemfd)                              \
-    F(verbosity)                            \
-    F(max_messages_per_thread)              \
-    F(max_logdata_per_thread)               \
-    F(output_format)                        \
-    F(output_yaml_indent)                   \
-    F(use_strict_runtime)                   \
-    F(log_test_knobs)                       \
-    F(ud_on_failure)                        \
-    F(current_max_loop_count)               \
-    F(current_test_endtime)                 \
-    /**/
-
-struct SandstoneApplication::ExecState
+struct SandstoneApplication::SharedMemory
 {
-#define DECLARE_APP_STATE_VARIABLES(id)     decltype(SandstoneApplication::id) id;
-    APP_STATE_VARIABLES(DECLARE_APP_STATE_VARIABLES)
-#undef DECLARE_APP_STATE_VARIABLES
+    int verbosity = -1;
+    int max_messages_per_thread = 5;
+    unsigned max_logdata_per_thread = 128;
+    OutputFormat output_format = DefaultOutputFormat;
+    uint8_t output_yaml_indent = 0;
+    bool log_test_knobs = false;
+    bool ud_on_failure = false;
+    bool use_strict_runtime = false;
+    bool selftest = false;
+    int current_max_loop_count = 0;
+    MonotonicTimePoint current_test_endtime = {};
 
-    uint8_t cpu_mask[sizeof(LogicalProcessorSet::array)];
-    bool selftest;
+    LogicalProcessorSet enabled_cpus;
+
+    PerThreadData::Main main_thread_data;
+    PerThreadData::Test per_thread[MAX_THREADS];
 };
 
 inline SandstoneApplication *_sApp() noexcept
@@ -559,8 +537,6 @@ private:
 
 static_assert(std::is_trivially_copyable_v<SandstoneApplication::SharedMemory>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::SharedMemory>);
-static_assert(std::is_trivially_copyable_v<SandstoneApplication::ExecState>);
-static_assert(std::is_trivially_destructible_v<SandstoneApplication::ExecState>);
 
 /* logging.cpp */
 int logging_stdout_fd(void);
