@@ -155,6 +155,24 @@ static int selftest_logs_options_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int selftest_logs_getcpu_run(struct test *test, int cpu)
+{
+    int cpu_number = -1;
+#if defined(_WIN32)
+    PROCESSOR_NUMBER number;
+    GetCurrentProcessorNumberEx(&number);
+    cpu_number = number.Group * 64 + number.Number;
+#elif defined(__linux__) || defined(__FreeBSD__)
+    cpu_number = sched_getcpu();
+#else
+    log_skip(OsNotSupportedSkipCategory, "No API to get the CPU number on this OS");
+#endif
+    if (cpu_number == -1)
+        log_skip(ResourceIssueSkipCategory, "OS failed: %m");
+    log_info("%d", cpu_number);
+    return EXIT_SUCCESS;
+}
+
 static int selftest_skip_init(struct test *test)
 {
     log_info("Requesting skip (this message should be visible)");
@@ -796,6 +814,13 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_logs_options_init,
     .test_run = selftest_pass_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_logs_getcpu",
+    .description = "Logs the getcpu() result",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_logs_getcpu_run,   // may skip
     .desired_duration = -1,
 },
 {

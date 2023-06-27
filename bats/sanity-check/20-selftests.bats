@@ -1039,3 +1039,27 @@ selftest_crash_context_common() {
     test_yaml_numeric "/triage-results@len" 'value == 1'
     test_yaml_numeric "/triage-results/0" 'value == 1'
 }
+
+# Confirm that we are roughly using the threads we said we would
+@test "thread usage" {
+    local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
+    nproc=${#cpuset[@]}
+    if $is_windows && ((nproc > 64)); then
+        skip "FIXME: Too many CPUs on Windows"
+    fi
+
+    # Don't use sandstone_selftest to avoid -n$MAX_PROC
+    VALIDATION=dump
+    declare -A yamldump
+    run_sandstone_yaml --disable=mce_check --no-triage --selftests --timeout=20s --retest-on-failure=0 -e selftest_logs_getcpu
+
+    # Did we get anything?
+    if [[ ${yamldump[/tests/0/result]} = skip ]]; then
+        skip "Test did not report results: ${yamldump/tests/0/threads/0/messages/0/text}"
+    fi
+
+    test_yaml_numeric "/tests/0/threads@len" "value == $nproc"
+    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" "I> ${cpuset[$i]}\$"
+    done
+}
