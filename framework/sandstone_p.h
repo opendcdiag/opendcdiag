@@ -292,11 +292,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     int max_messages_per_thread = 5;
     unsigned max_logdata_per_thread = 128;
     const char *syslog_ident = nullptr;
-#if SANDSTONE_NO_LOGGING
-    static constexpr auto DefaultOutputFormat = OutputFormat::no_output;
-#else
     static constexpr auto DefaultOutputFormat = SANDSTONE_DEFAULT_LOGGING;
-#endif
     OutputFormat output_format = DefaultOutputFormat;
     uint8_t output_yaml_indent = 0;
 
