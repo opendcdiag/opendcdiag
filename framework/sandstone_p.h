@@ -431,7 +431,6 @@ private:
     F(ud_on_failure)                        \
     F(current_max_loop_count)               \
     F(current_test_endtime)                 \
-    F(current_test_duration)                \
     F(test_time)                            \
     F(max_test_time)
 
