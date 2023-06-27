@@ -405,7 +405,6 @@ struct SandstoneApplication::ExecState
 #undef DECLARE_APP_STATE_VARIABLES
 
     uint8_t cpu_mask[sizeof(LogicalProcessorSet::array)];
-    int thread_count;
     bool selftest;
 };
 
