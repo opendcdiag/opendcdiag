@@ -343,7 +343,7 @@ static void __attribute__((noreturn)) report_fail_common()
 void _report_fail(const struct test *test, const char *file, int line)
 {
     /* Keep this very early */
-    if (sApp->ud_on_failure)
+    if (sApp->shmem->ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging)
@@ -354,7 +354,7 @@ void _report_fail(const struct test *test, const char *file, int line)
 void _report_fail_msg(const char *file, int line, const char *fmt, ...)
 {
     /* Keep this very early */
-    if (sApp->ud_on_failure)
+    if (sApp->shmem->ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging)
@@ -377,7 +377,7 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
 void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, DataType type, const char *fmt, ...)
 {
     // Execute UD2 early if we've failed
-    if (sApp->ud_on_failure)
+    if (sApp->shmem->ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging) {
@@ -476,8 +476,8 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
         return;                     // no point in reporting timing of failed tests
 
     // check the overall time
-    if (sApp->current_test_endtime != MonotonicTimePoint::max() && the_test->desired_duration >= 0) {
-        Duration expected_runtime = sApp->current_test_endtime - sApp->current_test_starttime;
+    if (sApp->shmem->current_test_endtime != MonotonicTimePoint::max() && the_test->desired_duration >= 0) {
+        Duration expected_runtime = sApp->shmem->current_test_endtime - sApp->current_test_starttime;
         Duration min_expected_runtime = expected_runtime - expected_runtime / 4;
         Duration max_expected_runtime = expected_runtime + expected_runtime / 4;
         Duration actual_runtime = now - sApp->current_test_starttime;
@@ -633,7 +633,7 @@ static bool wallclock_deadline_has_expired(MonotonicTimePoint deadline)
 
     if (now > deadline)
         return true;
-    if (sApp->use_strict_runtime && now > sApp->endtime)
+    if (sApp->shmem->use_strict_runtime && now > sApp->endtime)
         return true;
     return false;
 }
@@ -643,7 +643,7 @@ static bool max_loop_count_exceeded(const struct test *the_test)
     PerThreadData::Test *data = sApp->test_thread_data(thread_num);
 
     // unsigned comparisons so sApp->current_max_loop_count == -1 causes an always false
-    if (unsigned(data->inner_loop_count) >= unsigned(sApp->current_max_loop_count))
+    if (unsigned(data->inner_loop_count) >= unsigned(sApp->shmem->current_max_loop_count))
         return true;
 
     /* Desired duration -1 means "runs once" */
@@ -664,7 +664,7 @@ int test_time_condition(const struct test *the_test) noexcept
     if (max_loop_count_exceeded(the_test))
         return 0;  // end the test if max loop count exceeded
 
-    return !wallclock_deadline_has_expired(sApp->current_test_endtime);
+    return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
 }
 
 // Creates a string containing all socket temperatures like: "P0:30oC P2:45oC"
@@ -862,7 +862,7 @@ static void *thread_runner(void *arg)
             this_thread->thread_state.store(new_state, std::memory_order_relaxed);
 
             if (new_state == thread_failed) {
-                if (sApp->ud_on_failure)
+                if (sApp->shmem->ud_on_failure)
                     ud2();
                 logging_mark_thread_failed(thread_number);
             }
@@ -871,7 +871,7 @@ static void *thread_runner(void *arg)
             after.Snapshot(thread_number);
             this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
 
-            if (sApp->verbosity >= 3)
+            if (sApp->shmem->verbosity >= 3)
                 log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
                             thread_number, this_thread->inner_loop_count);
         }
@@ -900,7 +900,8 @@ static void *thread_runner(void *arg)
     return reinterpret_cast<void *>(wrapper.ret);
 }
 
-int num_cpus() {
+int num_cpus()
+{
     return sApp->thread_count;
 }
 
@@ -1470,7 +1471,7 @@ static TestResult child_run(/*nonconst*/ struct test *test)
         logging_flush();
         run_threads(test);
 
-        if (sApp->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime)){
+        if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime)){
             // skip cleanup on the last test when using strict runtime
         } else {
             if (test->test_cleanup)
@@ -1481,68 +1482,6 @@ static TestResult child_run(/*nonconst*/ struct test *test)
     } while (false);
 
     return state;
-}
-
-/* make_app_state(), write_app_state(), read_app_state() are used in
- * exec_each_test mode to pass the state of application to the newly spawned
- * child process (as opposed to just fork'ed child). */
-static SandstoneApplication::ExecState make_app_state()
-{
-    SandstoneApplication::ExecState app_state;
-
-#define COPY_STATE_FROM_SAPP(id)    \
-    app_state.id = sApp->id;
-    APP_STATE_VARIABLES(COPY_STATE_FROM_SAPP)
-#undef COPY_STATE_FROM_SAPP
-
-#ifndef NO_SELF_TESTS
-    app_state.selftest = (test_set.data() == selftests.data());
-#endif
-    memcpy(app_state.cpu_mask, sApp->enabled_cpus.array, sizeof(LogicalProcessorSet::array));
-    return app_state;
-}
-
-static bool write_app_state(int fd, const SandstoneApplication::ExecState &app_state)
-{
-    size_t total = 0;
-    auto ptr = reinterpret_cast<const uint8_t *>(&app_state);
-    while (total < sizeof(app_state)) {
-        ssize_t bytes = write(fd, ptr + total, sizeof(app_state) - total);
-        if (bytes < 0 && errno != EINTR) {
-            logging_printf(LOG_LEVEL_ERROR,
-                           "# ERROR: writing state to child process: %s. Test will likely fail.\n",
-                           strerror(errno));
-            break;
-        }
-        if (bytes >= 0)
-            total += bytes;
-    }
-    return total == sizeof(app_state);
-}
-
-static SandstoneApplication::ExecState read_app_state(int fd)
-{
-    SandstoneApplication::ExecState app_state;
-    auto ptr = reinterpret_cast<uint8_t *>(&app_state);
-    size_t total = 0;
-
-    while (total < sizeof(app_state)) {
-        ssize_t bytes = read(fd, ptr + total, sizeof(app_state) - total);
-        if (bytes < 0 && errno != EINTR) {
-            fprintf(stderr, "internal error while loading application state: %s\n", strerror(errno));
-            break;
-        }
-        if (bytes == 0)
-            break;
-        if (bytes >= 0)
-            total += bytes;
-    }
-    if (total != sizeof(app_state)) {
-        fprintf(stderr, "internal error: incomplete application state (%zu bytes read, needed %zu)\n",
-                total, sizeof(app_state));
-        exit(EX_IOERR);
-    }
-    return app_state;
 }
 
 static int call_forkfd(intptr_t *child)
@@ -1622,16 +1561,8 @@ static int call_forkfd(intptr_t *child)
 
 static int spawn_child(const struct test *test, intptr_t *hpid)
 {
-    std::array<char, std::numeric_limits<int>::digits10 + 2> statefdstr;
-    int statefd = open_memfd(MemfdInheritOnExec);
-    if (statefd < 0) {
-        perror("internal error: can't create state-transfer file");
-        exit(EX_CANTCREAT);
-    }
-    write_app_state(statefd, make_app_state());
-    lseek(statefd, 0, SEEK_SET);
-    snprintf(statefdstr.begin(), statefdstr.size(), "%u", unsigned(statefd));
-
+    assert(sApp->shmemfd != -1);
+    std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
     std::string random_seed = random_format_seed();
 
 #ifdef _WIN32
@@ -1643,7 +1574,7 @@ static int spawn_child(const struct test *test, intptr_t *hpid)
     const char *argv[] = {
         // argument order must match exec_mode_run()
         argv0, "-x", test->id, random_seed.c_str(),
-        statefdstr.begin(),
+        shmemfdstr.c_str(),
         nullptr
     };
 
@@ -1697,7 +1628,6 @@ static int spawn_child(const struct test *test, intptr_t *hpid)
     }
 #endif /* __linux__ */
 
-    close(statefd);
     return ret;
 }
 
@@ -1897,18 +1827,18 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
 
     if (sApp->max_test_loop_count) {
-        sApp->current_max_loop_count = sApp->max_test_loop_count;
+        sApp->shmem->current_max_loop_count = sApp->max_test_loop_count;
     } else if (test->desired_duration == -1) {
-        sApp->current_max_loop_count = -1;
+        sApp->shmem->current_max_loop_count = -1;
     } else if (sApp->test_tests_enabled()) {
         // don't fracture in the test-the-test mode
-        sApp->current_max_loop_count = -1;
+        sApp->shmem->current_max_loop_count = -1;
     } else if (test->fracture_loop_count == 0) {
         /* for automatic fracture mode, do a 40 loop count */
-        sApp->current_max_loop_count = 40;
+        sApp->shmem->current_max_loop_count = 40;
         auto_fracture = true;
     } else {
-        sApp->current_max_loop_count = test->fracture_loop_count;
+        sApp->shmem->current_max_loop_count = test->fracture_loop_count;
     }
 
     assert(sApp->retest_count >= 0);
@@ -1918,14 +1848,17 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         init_internal(test);
 
         // calculate starttime->endtime, reduce the overhead to have better test runtime calculations
-        sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration - runtime, &sApp->current_test_starttime);
+        sApp->shmem->current_test_endtime =
+                calculate_wallclock_deadline(sApp->current_test_duration - runtime,
+                                             &sApp->current_test_starttime);
         state = run_one_test_once(tc, test);
         runtime += MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
         cleanup_internal(test);
 
-        if ((sApp->current_max_loop_count > 0 && MonotonicTimePoint::clock::now() < first_iteration_target && auto_fracture))
-            sApp->current_max_loop_count *= 2;
+        if ((sApp->shmem->current_max_loop_count > 0
+             && MonotonicTimePoint::clock::now() < first_iteration_target && auto_fracture))
+            sApp->shmem->current_max_loop_count *= 2;
 
         if (state > EXIT_SUCCESS) {
             // this counts as the first failure regardless of how many fractures we've run
@@ -1942,7 +1875,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
             goto out;
 
         // do we fracture?
-        if (sApp->current_max_loop_count <= 0 || sApp->max_test_loop_count
+        if (sApp->shmem->current_max_loop_count <= 0 || sApp->max_test_loop_count
                 || (runtime >= sApp->current_test_duration))
             goto out;
 
@@ -1954,8 +1887,9 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     /* now we process retries */
     if (fail_count > 0) {
         // disable fracture
-        if (sApp->current_max_loop_count > 0 && sApp->current_max_loop_count != sApp->max_test_loop_count)
-            sApp->current_max_loop_count = -1;
+        if (sApp->shmem->current_max_loop_count > 0 &&
+                sApp->shmem->current_max_loop_count != sApp->max_test_loop_count)
+            sApp->shmem->current_max_loop_count = -1;
 
         auto should_retry_test = [&]() {
             // allow testing double the regular count if we've only ever
@@ -1972,7 +1906,9 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
                 --sApp->total_retest_count;
             sApp->current_iteration_count = -iterations;
             init_internal(test);
-            sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration, &sApp->current_test_starttime);
+            sApp->shmem->current_test_endtime =
+                    calculate_wallclock_deadline(sApp->current_test_duration,
+                                                 &sApp->current_test_starttime);
             state = run_one_test_once(tc, test);
             cleanup_internal(test);
 
@@ -2003,7 +1939,7 @@ static void apply_cpuset_param(char *param)
     if (cpu_info == nullptr)
         load_cpu_info(sys_cpuset);
 
-    LogicalProcessorSet &result = sApp->enabled_cpus;
+    LogicalProcessorSet &result = sApp->shmem->enabled_cpus;
     result.clear();
 
     for (char *arg = strtok(param, ","); arg; arg = strtok(nullptr, ",")) {
@@ -2138,7 +2074,7 @@ static void list_tests(int opt)
             if (include_tests) {
                 if (include_descriptions) {
                     printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
-                } else if (sApp->verbosity > 0) {
+                } else if (sApp->shmem->verbosity > 0) {
                     // don't report the FW minimum CPU features
                     uint64_t cpuf = test->compiler_minimum_cpu & ~_compilerCpuFeatures;
                     cpuf |= test->minimum_cpu;
@@ -2356,7 +2292,7 @@ static struct test *get_next_test_iteration(void)
                    std::chrono::nanoseconds(elapsed_time).count() / 1000. / 1000);
 
 
-    if (!sApp->use_strict_runtime) {
+    if (!sApp->shmem->use_strict_runtime) {
         /* do we have time for one more run? */
         MonotonicTimePoint end = sApp->endtime;
         if (end != MonotonicTimePoint::max())
@@ -2371,7 +2307,7 @@ static struct test *get_next_test_iteration(void)
 
 static struct test *get_next_test(int tc)
 {
-    if (sApp->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
+    if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
         return nullptr;
 
     if constexpr (InterruptMonitor::InterruptMonitorWorks) {
@@ -2433,24 +2369,20 @@ static int exec_mode_run(int argc, char **argv)
     if (argc < 3)
         return EX_DATAERR;
 
-    SandstoneApplication::ExecState app_state = read_app_state(atoi(argv[2]));
-    assert(app_state.shmemfd != -1);
-    attach_shmem(app_state.shmemfd);
+    {
+        char *end;
+        long shmemfd = strtol(argv[2], &end, 10);
+        if (__builtin_expect(int(shmemfd) != shmemfd || shmemfd < 0 || *end, false))
+            return EX_DATAERR;
+        attach_shmem(shmemfd);
+    }
 
-    // reload the app state
-#define COPY_STATE_TO_SAPP(id)  \
-    sApp->id = app_state.id;
-    APP_STATE_VARIABLES(COPY_STATE_TO_SAPP)
-#undef COPY_STATE_TO_SAPP
-
-    LogicalProcessorSet enabled_cpus = {};
-    memcpy(enabled_cpus.array, app_state.cpu_mask, sizeof(LogicalProcessorSet::array));
-    sApp->thread_count = enabled_cpus.count();
+    sApp->thread_count = sApp->shmem->enabled_cpus.count();
     sApp->user_thread_data.resize(sApp->thread_count);
-    load_cpu_info(enabled_cpus);
+    load_cpu_info(sApp->shmem->enabled_cpus);
 
 #ifndef NO_SELF_TESTS
-    if (app_state.selftest && !SandstoneConfig::RestrictedCommandLine)
+    if (sApp->shmem->selftest && !SandstoneConfig::RestrictedCommandLine)
         test_set = selftests;
 #endif
 
@@ -2493,8 +2425,8 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests, const L
     }
 
     // backup the original verbosity
-    orig_verbosity = sApp->verbosity;
-    sApp->verbosity = -1;
+    orig_verbosity = sApp->shmem->verbosity;
+    sApp->shmem->verbosity = -1;
 
     for (; it != topo.packages.end(); disabled_sockets.push_back(it->id), ++it) {
         vector<Socket>::iterator eit = it;
@@ -2504,7 +2436,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests, const L
         for (; eit != topo.packages.end(); ++eit)
             run_cpus.add_package(*eit);
 
-        sApp->enabled_cpus = run_cpus;
+        sApp->shmem->enabled_cpus = run_cpus;
         do {
             ret = run_tests_on_cpu_set(triage_tests, run_cpus);
         } while (!ret && ++k < sApp->retest_count);
@@ -2524,7 +2456,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests, const L
         int k = 0;
 
         run_cpus.add_package(topo.packages.at(0));
-        sApp->enabled_cpus = run_cpus;
+        sApp->shmem->enabled_cpus = run_cpus;
 
         do {
             ret = run_tests_on_cpu_set(triage_tests, run_cpus);
@@ -2536,7 +2468,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests, const L
     }
 
     // restore the original verbosity
-    sApp->verbosity = orig_verbosity;
+    sApp->shmem->verbosity = orig_verbosity;
 
     return result;
 }
@@ -3033,7 +2965,6 @@ int main(int argc, char **argv)
     thread_num = -1;            /* indicate main thread */
     find_thyself(argv[0]);
     setup_stack_size(argc, argv);
-    sApp->enabled_cpus = init_cpus();
 #ifdef __linux__
     prctl(PR_SET_TIMERSLACK, 1, 0, 0, 0);
 #endif
@@ -3048,6 +2979,7 @@ int main(int argc, char **argv)
     }
 
     init_shmem();
+    sApp->shmem->enabled_cpus = init_cpus();
     while (!SandstoneConfig::RestrictedCommandLine &&
            (opt = simple_getopt(argc, argv, long_options)) != -1) {
         switch (opt) {
@@ -3099,7 +3031,7 @@ int main(int argc, char **argv)
             sApp->file_log_path = optarg;
             break;
         case 'O':
-            sApp->log_test_knobs = true;
+            sApp->shmem->log_test_knobs = true;
             if ( ! set_knob_from_key_value_string(optarg)){
                 fprintf(stderr, "Malformed test knob: %s (should be in the form KNOB=VALUE)\n", optarg);
                 return EX_USAGE;
@@ -3107,7 +3039,7 @@ int main(int argc, char **argv)
             break;
 
         case 'q':
-            sApp->verbosity = 0;
+            sApp->shmem->verbosity = 0;
             break;
         case 's':
             seed = optarg;
@@ -3126,15 +3058,15 @@ int main(int argc, char **argv)
             }
             break;
         case 'v':
-            if (sApp->verbosity < 0)
-                sApp->verbosity = 1;
+            if (sApp->shmem->verbosity < 0)
+                sApp->shmem->verbosity = 1;
             else
-                ++sApp->verbosity;
+                ++sApp->shmem->verbosity;
             break;
         case 'Y':
-            sApp->output_format = SandstoneApplication::OutputFormat::yaml;
+            sApp->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
             if (optarg)
-                sApp->output_yaml_indent = ParseIntArgument<>{
+                sApp->shmem->output_yaml_indent = ParseIntArgument<>{
                         .name = "-Y / --yaml",
                         .max = 160,     // arbitrary
                 }();
@@ -3143,7 +3075,7 @@ int main(int argc, char **argv)
             apply_cpuset_param(optarg);
             break;
         case dump_cpu_info_option:
-            dump_cpu_info(sApp->enabled_cpus);
+            dump_cpu_info(sApp->shmem->enabled_cpus);
             return EXIT_SUCCESS;
         case fatal_skips_option:
             sApp->fatal_skips = true;
@@ -3179,15 +3111,15 @@ int main(int argc, char **argv)
             break;
         case output_format_option:
             if (strcmp(optarg, "key-value") == 0) {
-                sApp->output_format = SandstoneApplication::OutputFormat::key_value;
+                sApp->shmem->output_format = SandstoneApplication::OutputFormat::key_value;
             } else if (strcmp(optarg, "tap") == 0) {
-                sApp->output_format = SandstoneApplication::OutputFormat::tap;
+                sApp->shmem->output_format = SandstoneApplication::OutputFormat::tap;
             } else if (strcmp(optarg, "yaml") == 0) {
-                sApp->output_format = SandstoneApplication::OutputFormat::yaml;
+                sApp->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
             } else if (SandstoneConfig::Debug && strcmp(optarg, "none") == 0) {
                 // for testing only
-                sApp->output_format = SandstoneApplication::OutputFormat::no_output;
-                sApp->verbosity = -1;
+                sApp->shmem->output_format = SandstoneApplication::OutputFormat::no_output;
+                sApp->shmem->verbosity = -1;
             } else {
                 fprintf(stderr, "%s: unknown output format: %s\n", argv[0], optarg);
                 return EX_USAGE;
@@ -3217,7 +3149,7 @@ int main(int argc, char **argv)
             weighted_testrunner_runtimes = ShortenedTestrunTimes;
             break;
         case strict_runtime_option:
-            sApp->use_strict_runtime = true;
+            sApp->shmem->use_strict_runtime = true;
             break;
         case syslog_runtime_option:
             sApp->syslog_ident = program_invocation_name;
@@ -3229,6 +3161,7 @@ int main(int argc, char **argv)
                 return EX_USAGE;
             }
             sApp->requested_quality = 0;
+            sApp->shmem->selftest = true;
             test_set = selftests;
             break;
 #endif
@@ -3239,7 +3172,7 @@ int main(int argc, char **argv)
             sApp->service_background_scan = true;
             break;
         case ud_on_failure_option:
-            sApp->ud_on_failure = true;
+            sApp->shmem->ud_on_failure = true;
             break;
         case use_builtin_test_list_option:
             if (!SandstoneConfig::HasBuiltinTestList) {
@@ -3318,25 +3251,25 @@ int main(int argc, char **argv)
             break;
 
         case max_logdata_option: {
-            sApp->max_logdata_per_thread = ParseIntArgument<unsigned>{
+            sApp->shmem->max_logdata_per_thread = ParseIntArgument<unsigned>{
                     .name = "--max-log-data",
                     .explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))",
                     .base = 0,      // accept hex
                     .range_mode = OutOfRangeMode::Saturate
             }();
-            if (sApp->max_logdata_per_thread == 0)
-                sApp->max_logdata_per_thread = UINT_MAX;
+            if (sApp->shmem->max_logdata_per_thread == 0)
+                sApp->shmem->max_logdata_per_thread = UINT_MAX;
             break;
         }
         case max_messages_option:
-            sApp->max_messages_per_thread = ParseIntArgument<>{
+            sApp->shmem->max_messages_per_thread = ParseIntArgument<>{
                     .name = "--max-messages",
                     .explanation = "maximum number of messages (per thread) to log in each test (0 is unlimited)",
                     .min = -1,
                     .range_mode = OutOfRangeMode::Saturate
             }();
-            if (sApp->max_messages_per_thread <= 0)
-                sApp->max_messages_per_thread = INT_MAX;
+            if (sApp->shmem->max_messages_per_thread <= 0)
+                sApp->shmem->max_messages_per_thread = INT_MAX;
             break;
         case schedule_by_option:
             if (strcmp(optarg, "thread") == 0) {
@@ -3355,25 +3288,25 @@ int main(int argc, char **argv)
         case one_sec_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
-            sApp->use_strict_runtime = true;
+            sApp->shmem->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(1s, &sApp->starttime);
             break;
         case thirty_sec_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
-            sApp->use_strict_runtime = true;
+            sApp->shmem->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(30s, &sApp->starttime);
             break;
         case two_min_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
-            sApp->use_strict_runtime = true;
+            sApp->shmem->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(2min, &sApp->starttime);
             break;
         case five_min_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
-            sApp->use_strict_runtime = true;
+            sApp->shmem->use_strict_runtime = true;
             sApp->endtime = calculate_wallclock_deadline(5min, &sApp->starttime);
             break;
 
@@ -3445,9 +3378,9 @@ int main(int argc, char **argv)
         }
 
         if (SandstoneConfig::NoLogging) {
-            sApp->output_format = SandstoneApplication::OutputFormat::no_output;
+            sApp->shmem->output_format = SandstoneApplication::OutputFormat::no_output;
         } else  {
-            sApp->verbosity = 1;
+            sApp->shmem->verbosity = 1;
         }
 
         sApp->delay_between_tests = 50ms;
@@ -3471,9 +3404,9 @@ int main(int argc, char **argv)
 
     if (unsigned(thread_count) < unsigned(sApp->thread_count)) {
         sApp->thread_count = thread_count;
-        sApp->enabled_cpus.limit_to(thread_count);
+        sApp->shmem->enabled_cpus.limit_to(thread_count);
     }
-    load_cpu_info(sApp->enabled_cpus);
+    load_cpu_info(sApp->shmem->enabled_cpus);
     commit_shmem();
 
     signals_init_global();
@@ -3487,8 +3420,8 @@ int main(int argc, char **argv)
     random_init_global(seed);
     background_scan_init();
 
-    if (sApp->verbosity == -1)
-        sApp->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
+    if (sApp->shmem->verbosity == -1)
+        sApp->shmem->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
 
     if (InterruptMonitor::InterruptMonitorWorks) {
         sApp->last_thermal_event_count = sApp->count_thermal_events();
@@ -3636,11 +3569,11 @@ int main(int argc, char **argv)
 
     if (total_failures) {
         if (!do_not_triage) {
-            vector<int> sockets = run_triage(triage_tests, sApp->enabled_cpus);
+            vector<int> sockets = run_triage(triage_tests, sApp->shmem->enabled_cpus);
             logging_print_triage_results(sockets);
         }
         logging_print_footer();
-    } else if (sApp->verbosity == 0 && sApp->output_format == SandstoneApplication::OutputFormat::tap) {
+    } else if (sApp->shmem->verbosity == 0 && sApp->shmem->output_format == SandstoneApplication::OutputFormat::tap) {
         logging_printf(LOG_LEVEL_QUIET, "Ran %d tests without error (%d skipped)\n",
                        total_successes, total_tests_run - total_successes);
     }
