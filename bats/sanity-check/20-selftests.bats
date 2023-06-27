@@ -267,12 +267,16 @@ selftest_pass() {
 
 @test "selftest_pass wildcard" {
     # This should NOT run selftest_pass_low_quality
+    declare -A yamldump
     selftest_pass -e 'selftest_pass*'
+    [[ ${yamldump[/tests]} != *selftest_pass_low_quality* ]]
 }
 
 @test "selftest_pass_low_quality" {
     # This should NOT run selftest_pass_low_quality
+    declare -A yamldump
     selftest_pass -e 'selftest_pass_low_quality' -e selftest_pass
+    [[ ${yamldump[/tests]} != *selftest_pass_low_quality* ]]
 }
 
 @test "selftest_skip" {
