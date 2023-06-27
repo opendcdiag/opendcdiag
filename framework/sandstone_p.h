@@ -346,9 +346,9 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     SharedMemory *shmem = nullptr;
     int shmemfd = -1;
 
+    int requested_quality = DefaultQualityLevel;
     std::string file_log_path;
     static constexpr int DefaultQualityLevel = 50;
-    int requested_quality = DefaultQualityLevel;
     const char *syslog_ident = nullptr;
 
     bool fatal_skips = false;
@@ -431,20 +431,25 @@ private:
 
 struct SandstoneApplication::SharedMemory
 {
+    // state shared with child processes (input only)
+    // test execution
+    MonotonicTimePoint current_test_endtime = {};
+    int current_max_loop_count = 0;
+    bool selftest = false;
+    bool ud_on_failure = false;
+    bool use_strict_runtime = false;
+
+    // logging parameters
     int verbosity = -1;
     int max_messages_per_thread = 5;
     unsigned max_logdata_per_thread = 128;
     OutputFormat output_format = DefaultOutputFormat;
     uint8_t output_yaml_indent = 0;
     bool log_test_knobs = false;
-    bool ud_on_failure = false;
-    bool use_strict_runtime = false;
-    bool selftest = false;
-    int current_max_loop_count = 0;
-    MonotonicTimePoint current_test_endtime = {};
 
     LogicalProcessorSet enabled_cpus;
 
+    // in/out per-thread data
     PerThreadData::Main main_thread_data;
     PerThreadData::Test per_thread[MAX_THREADS];
 };
