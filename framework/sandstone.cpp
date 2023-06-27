@@ -2007,6 +2007,7 @@ static LogicalProcessorSet parse_cpuset_param(char *arg)
     LogicalProcessorSet sys_cpuset = ambient_logical_processor_set();
     LogicalProcessorSet result = {};
     int max_cpu_count = sys_cpuset.count();
+    int total_matches = 0;
     if (cpu_info == nullptr)
         load_cpu_info(sys_cpuset);
 
@@ -2066,7 +2067,14 @@ static LogicalProcessorSet parse_cpuset_param(char *arg)
 
             if (match_count == 0)
                 fprintf(stderr, "%s: warning: CPU selection '%c%lu' matched nothing\n", program_invocation_name, c, n);
+            total_matches += match_count;
         }
+    }
+
+    if (total_matches == 0) {
+        fprintf(stderr, "%s: error: --cpuset matched nothing, this is probably not what you wanted.\n",
+                program_invocation_name);
+        exit(EX_USAGE);
     }
 
     return result;
@@ -3108,10 +3116,6 @@ int main(int argc, char **argv)
         case cpuset_option:
             sApp->enabled_cpus = parse_cpuset_param(optarg);
             sApp->thread_count = sApp->enabled_cpus.count();
-            if (sApp->thread_count == 0) {
-                fprintf(stderr, "%s: error: --cpuset matched nothing, this is probably not what you wanted.\n", argv[0]);
-                return EX_USAGE;
-            }
             break;
         case dump_cpu_info_option:
             dump_cpu_info(sApp->enabled_cpus);
