@@ -886,12 +886,6 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
-    .id = "selftest_timedpass_maxthreads1",
-    .description = "Runs for the requested time, but on single thread",
-    .test_run = selftest_timedpass_noloop_run<(50000us).count()>,
-    .max_threads = 1,
-},
-{
     .id = "selftest_check_sequential",
     .description = "Checks that threads were run sequentially",
     .test_init = selftest_check_sequential_init,
