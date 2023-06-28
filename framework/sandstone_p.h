@@ -348,6 +348,14 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 #if !defined(__linux__) && !defined(_WIN32)
     std::string path_to_self;
 #endif
+#ifdef NDEBUG
+    static constexpr struct {
+        size_t size() const { return 0; }
+        char *c_str() const { return nullptr; }
+    } gdb_server_comm = {};
+#else
+    std::string gdb_server_comm;
+#endif
 
     static constexpr int DefaultTemperatureThreshold = -1;
     int thermal_throttle_temp = DefaultTemperatureThreshold;
