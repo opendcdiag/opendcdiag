@@ -1418,8 +1418,14 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 #endif
 }
 
-static TestResult run_thread_slices(/*nonconst*/ struct test *test)
+static TestResult child_run(/*nonconst*/ struct test *test)
 {
+    if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
+        pin_to_logical_processor(LogicalProcessor(-1), "control");
+        signals_init_child();
+        debug_init_child();
+    }
+
     uint64_t required_cpu_features = test->minimum_cpu | test->compiler_minimum_cpu;
     if (uint64_t missing = required_cpu_features & ~cpu_features) {
         // for brevity, don't report the bits that the framework itself needs
@@ -1702,19 +1708,6 @@ static int spawn_child(const struct test *test, intptr_t *hpid)
     return ret;
 }
 
-static TestResult run_child(/*nonconst*/ struct test *test)
-{
-    if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
-        pin_to_logical_processor(LogicalProcessor(-1), "control");
-        signals_init_child();
-        debug_init_child();
-    }
-
-    TestResult result = run_thread_slices(test);
-
-    return result;
-}
-
 static TestResult run_one_test_once(int *tc, const struct test *test)
 {
     ChildExitStatus state = {};
@@ -1730,7 +1723,7 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
     if (ret == FFD_CHILD_PROCESS) {
         /* child - run test's code */
         logging_init_child_preexec();
-        state.result = run_child(const_cast<struct test *>(test));
+        state.result = child_run(const_cast<struct test *>(test));
         if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
             _exit(state.result);
     } else {
@@ -2476,7 +2469,7 @@ static int exec_mode_run(int argc, char **argv)
 
     std::vector<struct test *> test_list;
     add_test(test_list, test_to_run);
-    return run_child(test_to_run);
+    return child_run(test_to_run);
 }
 
 // Triage run attempts to figure out which socket(s) are causing test failures.
