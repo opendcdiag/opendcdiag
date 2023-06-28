@@ -962,11 +962,13 @@ static void init_shmem(int fd = -1)
         exit(EX_CANTCREAT);
     }
 
-    if (fd != -1 && sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test)
+    if (fd != -1 && sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test) {
         close(fd);
-    else
+        sApp->shmem = static_cast<SandstoneApplication::SharedMemory *>(base);
+    } else {
         sApp->shmemfd = fd;
-    sApp->shmem = new (base) SandstoneApplication::SharedMemory;
+        sApp->shmem = new (base) SandstoneApplication::SharedMemory;
+    }
 
     // barrier with the parent process
     sApp->shmem->main_thread_data.thread_state.exchange(thread_not_started, std::memory_order_acquire);
