@@ -604,14 +604,11 @@ static Duration test_timeout(Duration regular_duration)
 {
     // use the override value if there is one
     if (sApp->max_test_time != Duration::zero())
-        return sApp->max_test_time * sApp->current_slice_count;
+        return sApp->max_test_time;
 
     Duration result = regular_duration * 5 + 30s;
     if (result < 300s)
         result = 300s;
-
-    // Multiply by the number of slices needed to run on all cpus.
-    result = result * sApp->current_slice_count;
 
     return result;
 }
@@ -727,23 +724,6 @@ static void init_internal(const struct test *test)
     random_init();
 
     logging_init(test);
-
-    int slice_count = 1;
-    int max_threads = num_cpus();
-    if (sApp->slicing) {
-        // if either sApp->max_concurrent_thread_count or test->max_threads is
-        // set, use the smaller of the two as the thread count.
-        int max_concurrent_threads = sApp->max_concurrent_thread_count;
-        int test_max_threads = test->max_threads;
-        if (test_max_threads)
-            max_threads = test_max_threads;
-        if (max_concurrent_threads && max_concurrent_threads < max_threads)
-            max_threads = max_concurrent_threads;
-        if (max_threads < num_cpus())
-            slice_count = (num_cpus() + max_threads - 1) / max_threads;
-    }
-    sApp->current_slice_count = slice_count;
-    sApp->current_max_threads = max_threads;
 }
 
 static void initialize_smi_counts()
@@ -3329,9 +3309,6 @@ int main(int argc, char **argv)
         case mce_check_period_option:
             sApp->mce_check_period = ParseIntArgument<>{"--mce-check-every"}();
             break;
-        case no_slicing_option:
-            sApp->slicing = false;
-            break;
         case no_shared_memory_option:
             init_shmem(DoNotUseSharedMemory);
             break;
@@ -3489,14 +3466,6 @@ int main(int argc, char **argv)
             test_list_randomize = true;
             break;
 
-        case max_concurrent_threads_option:
-            sApp->max_concurrent_thread_count = ParseIntArgument<>{
-                    .name = "--max-concurrent-threads",
-                    .min = 2,
-                    .max = sApp->thread_count,
-                    .range_mode = OutOfRangeMode::Saturate
-            }();
-            break;
         case max_logdata_option: {
             sApp->max_logdata_per_thread = ParseIntArgument<unsigned>{
                     .name = "--max-log-data",
@@ -3568,6 +3537,8 @@ int main(int argc, char **argv)
             break;
 
             /* deprecated options */
+        case no_slicing_option:
+        case max_concurrent_threads_option:
         case mem_sample_time_option:
         case mem_samples_per_log_option:
         case no_mem_sampling_option:

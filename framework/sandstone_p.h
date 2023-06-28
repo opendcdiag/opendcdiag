@@ -312,7 +312,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 #endif
     bool use_predictable_file_names = false;
     bool log_test_knobs = false;
-    bool slicing = true;
     bool ignore_os_errors = false;
     bool force_test_time = false;
     bool ud_on_failure = false;
@@ -322,10 +321,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     int total_retest_count = -2;
     int max_test_count = INT_MAX;
     int max_test_loop_count = 0;
-    int max_concurrent_thread_count = 0;
     int current_max_loop_count;
-    int current_max_threads;
-    int current_slice_count = 1;
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
     MonotonicTimePoint starttime;
     MonotonicTimePoint endtime;
@@ -403,12 +399,9 @@ private:
     F(output_yaml_indent)                   \
     F(use_strict_runtime)                   \
     F(log_test_knobs)                       \
-    F(slicing)                              \
     F(force_test_time)                      \
     F(ud_on_failure)                        \
     F(current_max_loop_count)               \
-    F(current_max_threads)                  \
-    F(current_slice_count)                  \
     F(current_test_endtime)                 \
     F(current_test_duration)                \
     F(test_time)                            \
