@@ -485,8 +485,6 @@ static ThreadLog &log_for_thread(int cpu) noexcept
     assert(cpu < num_cpus());
     assert(cpu >= -1);
 
-    if (cpu >= 0)
-        cpu += sApp->thread_offset;
     ++cpu;
 
     auto &all = all_thread_logs();
