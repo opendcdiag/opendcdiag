@@ -130,6 +130,7 @@ enum {
     disable_option,
     dump_cpu_info_option,
     fatal_skips_option,
+    gdb_server_option,
     ignore_os_errors_option,
     is_asan_option,
     is_debug_option,
@@ -1833,12 +1834,23 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
         nullptr
     };
 
+    const char *gdbserverargs[std::size(argv) + 3] = {
+        "gdbserver", "--no-startup-with-shell", sApp->gdb_server_comm.c_str(),
+        program_invocation_name
+    };
+    std::copy(argv + 1, std::end(argv), gdbserverargs + 4);
+
     intptr_t ret = -1;
 #ifdef _WIN32
 
     // save stderr
     static int saved_stderr = _dup(STDERR_FILENO);
     logging_init_child_preexec();
+
+    if (sApp->gdb_server_comm.size()) {
+        // launch gdbserver instead
+        _spawnv(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+    }
 
     *hpid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
     int saved_errno = errno;
@@ -1863,6 +1875,11 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
     }
     if (ret == FFD_CHILD_PROCESS) {
         logging_init_child_preexec();
+
+        if (sApp->gdb_server_comm.size()) {
+            // launch gdbserver instead
+            execvp(gdbserverargs[0], const_cast<char **>(gdbserverargs));
+        }
 
         execv(path_to_exe(), const_cast<char **>(argv));
         /* does not return */
@@ -3169,6 +3186,7 @@ int main(int argc, char **argv)
 #endif
 #ifndef NDEBUG
         // debug-mode only options:
+        { "gdb-server", required_argument, nullptr, gdb_server_option },
         { "is-debug-build", no_argument, nullptr, is_debug_option },
         { "test-tests", no_argument, nullptr, test_tests_option },
         { "use-predictable-file-names", no_argument, nullptr, use_predictable_file_names_option },
@@ -3323,6 +3341,11 @@ int main(int argc, char **argv)
         case fatal_skips_option:
             sApp->fatal_skips = true;
             break;
+#ifndef NDEBUG
+        case gdb_server_option:
+            sApp->gdb_server_comm = optarg;
+            break;
+#endif
         case ignore_os_errors_option:
             sApp->ignore_os_errors = true;
             break;
