@@ -9,6 +9,7 @@
 #include <sandstone.h>
 
 #include <array>
+#include <bit>
 #include <optional>
 #include <string>
 #include <vector>
@@ -82,7 +83,7 @@ public:
     {
         int total = 0;
         for (const Word &w : array)
-            total += __builtin_popcountll(w);
+            total += std::popcount(w);
         return total;
     }
 
