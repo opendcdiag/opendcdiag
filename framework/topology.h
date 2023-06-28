@@ -102,6 +102,28 @@ public:
                 set(LogicalProcessor(thread.oscpu));
     }
 
+    void limit_to(int limit)
+    {
+        // find the first Word we need to change
+        auto it = std::begin(array);
+        for ( ; it != std::end(array) && limit > 0; ++it) {
+            int n = std::popcount(*it);
+            limit -= n;
+        }
+
+        if (limit < 0) {
+            // clear enough upper bits on the last Word
+            Word &x = it[-1];
+            for ( ; limit < 0; ++limit) {
+                Word bit = std::bit_floor(x);
+                x &= ~bit;
+            }
+        }
+
+        if (it != std::end(array))
+            std::fill(it, std::end(array), 0);      // clear to the end
+    }
+
 private:
 
     Word &wordFor(LogicalProcessor n)
