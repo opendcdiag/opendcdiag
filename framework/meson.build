@@ -186,4 +186,5 @@ unittests_sources += files(
     'unit-tests/tests_dummy.cpp',
     'unit-tests/test_knob_tests.cpp',
     'unit-tests/thermal_monitor_tests.cpp',
+    'unit-tests/topology_tests.cpp',
 )
