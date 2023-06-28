@@ -67,7 +67,8 @@ public:
 #endif
 
     using Word = unsigned long long;
-    Word array[Size / (CHAR_BIT * sizeof(Word))];
+    static constexpr int ProcessorsPerWord = CHAR_BIT * sizeof(Word);
+    Word array[Size / ProcessorsPerWord];
 
     void clear()
     { *this = LogicalProcessorSet{}; }
@@ -94,7 +95,8 @@ public:
                 return false;
         return true;
     }
-    void add_package(Topology::Package pkg) {
+    void add_package(Topology::Package pkg)
+    {
         for (Topology::Core& core : pkg.cores)
             for (Topology::Thread& thread : core.threads)
                 set(LogicalProcessor(thread.oscpu));
@@ -103,16 +105,16 @@ public:
 private:
 
     Word &wordFor(LogicalProcessor n)
-    { return array[int(n) / (CHAR_BIT * sizeof(Word))]; }
+    { return array[int(n) / ProcessorsPerWord]; }
     const Word &wordFor(LogicalProcessor n) const
-    { return array[int(n) / (CHAR_BIT * sizeof(Word))]; }
+    { return array[int(n) / ProcessorsPerWord]; }
     static constexpr Word bitFor(LogicalProcessor n)
-    { return 1ULL << (unsigned(n) % (CHAR_BIT * sizeof(Word))); }
+    { return 1ULL << (unsigned(n) % ProcessorsPerWord); }
 };
 
 LogicalProcessorSet ambient_logical_processor_set();
 bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullptr);
 
-void load_cpu_info(/*in/out*/ const LogicalProcessorSet &enabled_cpus);
+void load_cpu_info(/*in*/ const LogicalProcessorSet &enabled_cpus);
 
 #endif /* INC_TOPOLOGY_H */
