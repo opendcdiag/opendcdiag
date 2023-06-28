@@ -130,6 +130,7 @@ enum {
     disable_option,
     dump_cpu_info_option,
     fatal_skips_option,
+    gdb_server_option,
     ignore_os_errors_option,
     is_asan_option,
     is_debug_option,
@@ -387,7 +388,6 @@ void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size
         auto actual = static_cast<const uint8_t *>(_actual);
         auto expected = static_cast<const uint8_t *>(_expected);
         ptrdiff_t offset = memcmp_offset(actual, expected, size);
-        assert(offset >= 0);
 
         va_list va;
         va_start(va, fmt);
@@ -934,6 +934,9 @@ static LogicalProcessorSet init_cpus()
     LogicalProcessorSet result = ambient_logical_processor_set();
     sApp->thread_count = result.count();
     sApp->user_thread_data.resize(sApp->thread_count);
+#ifdef M_ARENA_MAX
+    mallopt(M_ARENA_MAX, sApp->thread_count * 2);
+#endif
     return result;
 }
 
@@ -1201,25 +1204,51 @@ static void restart_init(int iterations)
 {
 }
 
-static void run_threads(const struct test *test)
+static void run_threads_in_parallel(const struct test *test, const pthread_attr_t *thread_attr)
 {
     pthread_t pt[MAX_THREADS];
-    pthread_attr_t thread_attr;
     int i;
 
-    pthread_attr_init(&thread_attr);
-    pthread_attr_setstacksize(&thread_attr, THREAD_STACK_SIZE);
-
-    current_test = test;
     for (i = 0; i < num_cpus(); i++) {
-        pthread_create(&pt[i], &thread_attr, thread_runner, (void *) (uint64_t) i);
+        pthread_create(&pt[i], thread_attr, thread_runner, (void *) (uint64_t) i);
     }
     /* wait for threads to end */
     for (i = 0; i < num_cpus(); i++) {
         pthread_join(pt[i], nullptr);
     }
-    current_test = nullptr;
+}
 
+static void run_threads_sequentially(const struct test *test, const pthread_attr_t *thread_attr)
+{
+    // we still start one thread, in case the test uses report_fail_msg()
+    // (which uses pthread_cancel())
+    pthread_t thread;
+    pthread_create(&thread, thread_attr, [](void *) -> void* {
+        for (int i = 0; i < num_cpus(); ++i)
+            thread_runner(reinterpret_cast<void *>(i));
+        return nullptr;
+    }, nullptr);
+    pthread_join(thread, nullptr);
+}
+
+static void run_threads(const struct test *test)
+{
+    pthread_attr_t thread_attr;
+    pthread_attr_init(&thread_attr);
+    pthread_attr_setstacksize(&thread_attr, THREAD_STACK_SIZE);
+    current_test = test;
+
+    switch (test->flags & test_schedule_mask) {
+    case test_schedule_default:
+        run_threads_in_parallel(test, &thread_attr);
+        break;
+
+    case test_schedule_sequential:
+        run_threads_sequentially(test, &thread_attr);
+        break;
+    }
+
+    current_test = nullptr;
     pthread_attr_destroy(&thread_attr);
 }
 
@@ -1345,7 +1374,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 {
     Duration remaining = test_timeout(sApp->current_test_duration);
 
-#ifdef __unix__
+#if !defined(_WIN32)
     enum ExitStatus {
         Interrupted = -1,
         TimedOut = 0,
@@ -1701,7 +1730,6 @@ static SandstoneApplication::ExecState read_app_state(int fd)
 
 static int call_forkfd(intptr_t *child)
 {
-    static int ffd_extra_flags = -1;
     pid_t pid;
 
 #ifdef __linux__
@@ -1720,6 +1748,7 @@ static int call_forkfd(intptr_t *child)
         PidProperlyUpdated = 2,
         PidIncorrectlyCached = 1
     };
+    static int ffd_extra_flags = -1;
     if (__builtin_expect(ffd_extra_flags < 0, false)) {
         // determine if we need to pass FFD_USE_FORK
         pid_t parentpid = getpid();
@@ -1761,6 +1790,8 @@ static int call_forkfd(intptr_t *child)
             ffd_extra_flags = FFD_USE_FORK;
         }
     }
+#else
+    static constexpr int ffd_extra_flags = 0;
 #endif
 
     int ffd = forkfd(FFD_CLOEXEC | ffd_extra_flags, &pid);
@@ -1808,12 +1839,23 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
         nullptr
     };
 
+    const char *gdbserverargs[std::size(argv) + 3] = {
+        "gdbserver", "--no-startup-with-shell", sApp->gdb_server_comm.c_str(),
+        program_invocation_name
+    };
+    std::copy(argv + 1, std::end(argv), gdbserverargs + 4);
+
     intptr_t ret = -1;
 #ifdef _WIN32
 
     // save stderr
     static int saved_stderr = _dup(STDERR_FILENO);
     logging_init_child_preexec();
+
+    if (sApp->gdb_server_comm.size()) {
+        // launch gdbserver instead
+        _spawnv(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+    }
 
     *hpid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
     int saved_errno = errno;
@@ -1838,6 +1880,11 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
     }
     if (ret == FFD_CHILD_PROCESS) {
         logging_init_child_preexec();
+
+        if (sApp->gdb_server_comm.size()) {
+            // launch gdbserver instead
+            execvp(gdbserverargs[0], const_cast<char **>(gdbserverargs));
+        }
 
         execv(path_to_exe(), const_cast<char **>(argv));
         /* does not return */
@@ -3144,6 +3191,7 @@ int main(int argc, char **argv)
 #endif
 #ifndef NDEBUG
         // debug-mode only options:
+        { "gdb-server", required_argument, nullptr, gdb_server_option },
         { "is-debug-build", no_argument, nullptr, is_debug_option },
         { "test-tests", no_argument, nullptr, test_tests_option },
         { "use-predictable-file-names", no_argument, nullptr, use_predictable_file_names_option },
@@ -3177,9 +3225,6 @@ int main(int argc, char **argv)
     find_thyself(argv[0]);
     setup_stack_size(argc, argv);
     sApp->enabled_cpus = init_cpus();
-#ifdef M_ARENA_MAX
-    mallopt(M_ARENA_MAX, sApp->enabled_cpus.count() * 2);
-#endif
 #ifdef __linux__
     prctl(PR_SET_TIMERSLACK, 1, 0, 0, 0);
 #endif
@@ -3298,6 +3343,11 @@ int main(int argc, char **argv)
         case fatal_skips_option:
             sApp->fatal_skips = true;
             break;
+#ifndef NDEBUG
+        case gdb_server_option:
+            sApp->gdb_server_comm = optarg;
+            break;
+#endif
         case ignore_os_errors_option:
             sApp->ignore_os_errors = true;
             break;

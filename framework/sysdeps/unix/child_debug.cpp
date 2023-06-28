@@ -35,10 +35,6 @@
 #  include <cpuid.h>
 #endif
 
-#ifdef __FreeBSD__
-#  include <sys/thr.h>
-#endif
-
 #ifndef MSG_NOSIGNAL
 #  define MSG_NOSIGNAL  0
 #endif
@@ -81,26 +77,6 @@ static inline tid_t sys_gettid()
 #  ifndef BUS_MCEERR_AO
 #  define BUS_MCEERR_AO 5
 #  endif
-#endif
-
-#ifdef __FreeBSD__
-using tid_t = long;
-static tid_t sys_gettid()
-{
-    tid_t result;
-    thr_self(&result);
-    return result;
-}
-#endif
-
-#ifdef __APPLE__
-using tid_t = uint64_t;
-static tid_t sys_gettid()
-{
-    tid_t result;
-    pthread_threadid_np(nullptr, &result);
-    return result;
-}
 #endif
 
 extern char **environ;
@@ -178,7 +154,7 @@ enum CrashPipe {
 
 #if SANDSTONE_CHILD_BACKTRACE
 static uint8_t on_hang_action = print_ps_on_hang;
-static uint8_t on_crash_action;
+static uint8_t on_crash_action = context_on_crash;
 #else
 static constexpr uint8_t on_hang_action = kill_on_hang;
 static constexpr uint8_t on_crash_action = kill_on_crash;
@@ -215,7 +191,7 @@ if thr is not None:
         gdb.execute("x/i $pc")
     except gdb.MemoryError as e:
         print(e)
-print("Done")
+print("..Done..")
 end
 )gdb";
 
@@ -410,10 +386,6 @@ static void create_crash_pipe(int xsave_size)
     int ret = fcntl(crashpipe[CrashPipeParent], F_GETFL);
     if (ret >= 0)
         fcntl(crashpipe[CrashPipeParent], F_SETFL, ret | O_NONBLOCK);
-
-#ifdef F_SETNOSIGPIPE
-    fcntl(crashpipe[CrashPipeChild], F_SETNOSIGPIPE, 1);
-#endif
 }
 #endif
 
@@ -533,7 +505,7 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
 
         // wait until the Python reply is complete
         for (;;) {
-            static const char needle[] = "\nDone\n";
+            static const char needle[] = "..Done..\n";
             if (ret >= strlen(needle) && strcmp(buf + ret - strlen(needle), needle) == 0) {
                 buf[ret - strlen(needle)] = '\0';
                 break;
@@ -569,12 +541,13 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
         if (ret <= 0)
             return;
 
-#if 0       // for debugging with strace
+#if defined(SPLICE_F_NONBLOCK)
+        ret = splice(in, nullptr, log, nullptr, std::numeric_limits<int>::max(),
+                     SPLICE_F_NONBLOCK);
+#else
         ret = read(in, buf, sizeof(buf));
         if (ret > 0)
             IGNORE_RETVAL(write(log, buf, ret));
-#elif defined(__linux__)
-        ret = splice(in, nullptr, log, nullptr, std::numeric_limits<int>::max(), SPLICE_F_NONBLOCK);
 #endif
         if (ret == -1 && (errno == EINTR || errno == EWOULDBLOCK))
             continue;
@@ -879,9 +852,6 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             on_hang_action = backtrace_on_hang;
         } else if (strcmp(on_hang_arg, "ps") == 0) {
             on_hang_action = print_ps_on_hang;
-        } else if (strcmp(on_hang_arg, "smaps") == 0 || strcmp(on_hang_arg, "print-smaps") == 0) {
-            // deprecated
-            on_hang_action = print_ps_on_hang;
         } else if (strcmp(on_hang_arg, "kill") == 0) {
             on_hang_action = kill_on_hang;
         } else {
@@ -902,6 +872,10 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
     if (on_crash_arg) {
         if (strcmp(on_crash_arg, "gdb") == 0) {
             on_crash_action = attach_gdb_on_crash;
+        } else if (strcmp(on_crash_arg, "context") == 0) {
+            on_crash_action = context_on_crash;
+        } else if (strcmp(on_crash_arg, "context+core") == 0 || strcmp(on_crash_arg, "core+context") == 0) {
+            on_crash_action = coredump_on_crash | context_on_crash;
         } else if (strcmp(on_crash_arg, "backtrace") == 0) {
             on_crash_action = backtrace_on_crash;
         } else if (strcmp(on_crash_arg, "core") == 0 || strcmp(on_crash_arg, "coredump") == 0) {
@@ -925,15 +899,14 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             }
         }
     } else {
-#  ifdef __linux__
+#  ifdef __x86_64__
+        on_crash_action = context_on_crash;
+#  endif
         // do we have gdb?
         if (gdb_available == -1)
             gdb_available = check_gdb_available();
         if (gdb_available)
             on_crash_action = backtrace_on_crash;
-#  else
-        on_crash_action = context_on_crash;
-#  endif
     }
 
     if (on_crash_action & (backtrace_on_crash | attach_gdb_on_crash)) {

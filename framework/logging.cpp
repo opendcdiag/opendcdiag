@@ -38,7 +38,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifdef __unix__
+#ifndef _WIN32
 #  include <sys/utsname.h>
 #endif
 
@@ -1323,35 +1323,39 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
     fputc(message_code(Preformatted, LOG_LEVEL_VERBOSE(2)), log);
 
     std::string spaces;
+    std::string buffer;
 
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::yaml:
         spaces.resize(sApp->output_yaml_indent + 4 + (from_memcmp ? 3 : 0), ' ');
         if (from_memcmp) {
             // no escaping, the message is proper YAML
-            fputs(message, log);
+            buffer = message;
         } else {
             // need to escape message from user
             std::string storage;
             std::string_view escaped = escape_for_single_line(message, storage);
-            fprintf(log, "%s- level: info\n"
-                         "%s  text: '%.*s'\n"
-                         "%s  data:",     // no newline
-                    spaces.c_str(),
-                    spaces.c_str(), int(escaped.length()), escaped.data(),
-                    spaces.c_str());
+            buffer = stdprintf("%s- level: info\n"
+                               "%s  text: '%.*s'\n"
+                               "%s  data:",     // no newline
+                               spaces.c_str(),
+                               spaces.c_str(), int(escaped.length()), escaped.data(),
+                               spaces.c_str());
             spaces += "  ";     // two more spaces
         }
         break;
 
     case SandstoneApplication::OutputFormat::tap:
         if (!from_memcmp)
-            fprintf(log, "  - >-\n");
+            buffer = "  - >-\n";
         [[fallthrough]];
 
     case SandstoneApplication::OutputFormat::key_value:
         spaces.resize(4 + (from_memcmp ? 3 : 0), ' ');
-        fprintf(log, "%sdata(%s):", spaces.c_str(), message);
+        buffer += spaces;
+        buffer += "data(";
+        buffer += message;
+        buffer += ')';
         break;
 
     case SandstoneApplication::OutputFormat::no_output:
@@ -1360,20 +1364,21 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
         break;
     }
 
+    spaces = '\n' + std::move(spaces);
     for (size_t i = 0; i < size; ++i) {
         if (current_output_format() != SandstoneApplication::OutputFormat::key_value) {
             if ((i % 32) == 0)
-                fprintf(log, "\n%s", spaces.c_str());
+                buffer += spaces;
             else if ((i % 16) == 0)
-                fputs("  ", log);
+                buffer += "  ";
             else if ((i % 4) == 0)
-                fputs(" ", log);
+                buffer += ' ';
         }
-        fprintf(log, " %02x", (unsigned)ptr[i]);
+        buffer += stdprintf(" %02x", (unsigned)ptr[i]);
     }
 
-    fputc('\n', log);
-    fputc(0, log);
+    buffer += '\n';
+    fwrite(buffer.c_str(), 1, buffer.size() + 1, log);  // include the null
 }
 
 #undef log_data
@@ -1397,23 +1402,6 @@ void log_data(const char *message, const void *data, size_t size)
 static void logging_format_data(DataType type, std::string_view description, const uint8_t *data1,
                                 const uint8_t *data2, ptrdiff_t offset)
 {
-    const char *typeName = SandstoneDataDetails::type_name(type);
-    if (!typeName) {
-        // also a validity check
-        type = UInt8Data;
-        typeName = SandstoneDataDetails::type_name(type);
-    }
-    int typeSize = SandstoneDataDetails::type_real_size(type);
-    unsigned typeAlignment = SandstoneDataDetails::type_alignment(type);
-
-    // The offset may not be the first byte of the data, so realign it
-    ptrdiff_t alignedOffset = offset & ~(typeAlignment - 1);
-
-    // create an XOR mask
-    uint8_t xormask[SandstoneDataDetails::MaxDataTypeSize];
-    for (int i = 0; i < typeSize; ++i)
-        xormask[i] = data1[alignedOffset + i] ^ data2[alignedOffset + i];
-
     std::string spaces(sApp->output_yaml_indent + 7, ' ');
     std::string buffer = { char(message_code(Preformatted, LOG_LEVEL_QUIET)) };
     switch (current_output_format()) {
@@ -1435,26 +1423,59 @@ static void logging_format_data(DataType type, std::string_view description, con
         break;
     }
 
-    buffer +=
-            stdprintf("%sdescription: '%.*s'\n"
-                      "%stype:        %s\n"
-                      "%soffset:      [ %td, %td ]\n"
-                      "%saddress:     '%p'\n",
-                      spaces.c_str(), int(description.size()), description.data(),
-                      spaces.c_str(), typeName,
-                      spaces.c_str(), alignedOffset, offset - alignedOffset,
-                      spaces.c_str(), data1 + offset);
-    if (uint64_t physaddr = retrieve_physical_address(data1 + offset)) {
-        // 2^48-1 requires 12 hex digits
-        buffer +=  stdprintf("%sphysical:    '%#012" PRIx64 "'\n",
-                             spaces.c_str(), physaddr);
+    auto formatAddresses = [&spaces](const uint8_t *ptr) {
+        std::string result = stdprintf("%saddress:     '%p'\n", spaces.c_str(), ptr);
+        if (uint64_t physaddr = retrieve_physical_address(ptr)) {
+            // 2^48-1 requires 12 hex digits
+            result += stdprintf("%sphysical:    '%#012" PRIx64 "'\n",
+                                 spaces.c_str(), physaddr);
+        }
+        return result;
+    };
+
+    const char *typeName = SandstoneDataDetails::type_name(type);
+    if (!typeName) {
+        // also a validity check
+        type = UInt8Data;
+        typeName = SandstoneDataDetails::type_name(type);
     }
-    buffer += stdprintf("%sactual:      '0x%s'\n"
-                        "%sexpected:    '0x%s'\n"
-                        "%smask:        '0x%s'\n",
-                        spaces.c_str(), format_single_type(type, typeSize, data1 + alignedOffset, true).c_str(),
-                        spaces.c_str(), format_single_type(type, typeSize, data2 + alignedOffset, true).c_str(),
-                        spaces.c_str(), format_single_type(type, typeSize, xormask, false).c_str());
+    buffer += stdprintf("%sdescription: '%.*s'\n"
+                        "%stype:        %s\n",
+                        spaces.c_str(), int(description.size()), description.data(),
+                        spaces.c_str(), typeName);
+
+    if (offset >= 0) {
+        // typical case
+        int typeSize = SandstoneDataDetails::type_real_size(type);
+        unsigned typeAlignment = SandstoneDataDetails::type_alignment(type);
+
+        // The offset may not be the first byte of the data, so realign it
+        ptrdiff_t alignedOffset = offset & ~(typeAlignment - 1);
+
+        // create an XOR mask
+        uint8_t xormask[SandstoneDataDetails::MaxDataTypeSize];
+        for (int i = 0; i < typeSize; ++i)
+            xormask[i] = data1[alignedOffset + i] ^ data2[alignedOffset + i];
+
+        buffer += stdprintf("%soffset:      [ %td, %td ]\n",
+                            spaces.c_str(), alignedOffset, offset - alignedOffset);
+        buffer += formatAddresses(data1 + offset);
+        buffer += stdprintf("%sactual:      '0x%s'\n"
+                            "%sexpected:    '0x%s'\n"
+                            "%smask:        '0x%s'\n",
+                            spaces.c_str(), format_single_type(type, typeSize, data1 + alignedOffset, true).c_str(),
+                            spaces.c_str(), format_single_type(type, typeSize, data2 + alignedOffset, true).c_str(),
+                            spaces.c_str(), format_single_type(type, typeSize, xormask, false).c_str());
+    } else {
+        // no difference was found: memcmp_offset() disagrees with memcmp_or_fail()
+        buffer += stdprintf("%soffset:      null\n", spaces.c_str());
+        buffer += formatAddresses(data1);
+        buffer += stdprintf("%sactual:      null\n"
+                            "%sexpected:    null\n"
+                            "%smask:        null\n"
+                            "%sremark:      'memcmp_offset() could not locate difference'\n",
+                            spaces.c_str(), spaces.c_str(), spaces.c_str(), spaces.c_str());
+    }
 
     // +1 so will include the terminating NUL
     IGNORE_RETVAL(write(log_for_thread(thread_num).log_fd,
@@ -1468,10 +1489,17 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
 
-    // create the description of what failed
-    std::string description, escaped_description;
-    if (fmt && *fmt)
-        description = vstdprintf(fmt, va);
+    {
+        // create the description of what failed
+        std::string description, escaped_description;
+        if (fmt && *fmt)
+            description = vstdprintf(fmt, va);
+
+        logging_format_data(type, escape_for_single_line(description, escaped_description),
+                            actual, expected, offset);
+    }
+    if (offset < 0)
+        return;         // we couldn't find a difference
 
     // log the data that failed
     ptrdiff_t start;
@@ -1485,9 +1513,6 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     } else {
         start = offset - len / 2;
     }
-
-    logging_format_data(type, escape_for_single_line(description, escaped_description),
-			actual, expected, offset);
 
     auto do_log_data = [=](const char *name, const uint8_t *which) {
         std::string message;

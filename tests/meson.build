@@ -105,6 +105,13 @@ tests_base_a = static_library(
     include_directories : [
         tests_common_incdirs,
     ],
+    dependencies: [
+        boost_dep,
+        crypto_dep,
+        eigen3_dep,
+        zlib_dep,
+        zstd_dep,
+    ],
     c_args : [
         tests_common_c_args,
     ],
@@ -152,6 +159,10 @@ if host_machine.cpu_family() == 'x86_64'
         build_by_default: false,
         include_directories : [
             tests_common_incdirs,
+        ],
+        dependencies: [
+            boost_dep,
+            eigen3_dep,
         ],
         c_args : [
             tests_common_c_args,

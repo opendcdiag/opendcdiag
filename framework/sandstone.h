@@ -16,8 +16,10 @@
 
 #ifdef __x86_64__
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuninitialized"
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#  ifndef __clang__
+#    pragma GCC diagnostic ignored "-Wuninitialized"
+#    pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#  endif
 #include <immintrin.h>
 #pragma GCC diagnostic pop
 #endif
@@ -341,6 +343,13 @@ typedef int (*runfunc)(struct test *test, int cpu);
 typedef enum test_flag {
     test_type_regular       = 0x00,     ///! regular test type
     test_type_kvm           = 0x01,     ///! test using Sandstone's KVM functionality
+
+    test_schedule_default           = 0x00,
+    test_schedule_mask              = 0x0e,
+
+    /// Asks the framework to run the threads sequentially, instead of all in
+    /// parallel.
+    test_schedule_sequential        = 0x02,
 
     /// Tells the --test-tests mode to ignore memory consumption for this test
     test_flag_ignore_memory_use     = 0x0010,

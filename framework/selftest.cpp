@@ -207,6 +207,24 @@ static int selftest_log_skip_newline_run(struct test *test, int cpu)
     return EXIT_FAILURE;
 }
 
+static std::atomic<int> selftest_sequential_last_cpu = -1;
+static int selftest_check_sequential_init(struct test *test)
+{
+    selftest_sequential_last_cpu = thread_num;      // -1
+    return EXIT_SUCCESS;
+}
+
+static int selftest_check_sequential_run(struct test *test, int cpu)
+{
+    usleep(1'000 * (random() % 16u));   // sleep up to 16 ms
+    int n = selftest_sequential_last_cpu.load(std::memory_order_relaxed);
+    log_debug("Last CPU was %d", n);
+    if (n != cpu - 1)
+        report_fail_msg("Last CPU %d was not expected", n);
+    selftest_sequential_last_cpu.store(cpu, std::memory_order_relaxed);
+    return EXIT_SUCCESS;
+}
+
 static int selftest_uses_too_much_mem_run(struct test *, int)
 {
     static constexpr int Size = 1024 * test_the_test_data<true>::MaxAcceptableMemoryUseKB * 2;
@@ -339,6 +357,16 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
 
     memcmp_or_fail(values, values + 1, Count);
     return EXIT_SUCCESS;
+}
+
+static int selftest_datacompare_nodifference_run(struct test *, int cpu)
+{
+    uint8_t actual[16], expected[16];
+    memset_random(actual, sizeof(actual));
+    memcpy(expected, actual, sizeof(actual));
+
+    memcmp_or_fail(actual, expected, sizeof(actual));        // won't fail
+    memcmp_fail_report(actual, expected, sizeof(actual), nullptr);
 }
 
 static int selftest_cxxthrow_run(struct test *, int cpu) noexcept(false)
@@ -863,6 +891,14 @@ static struct test selftests_array[] = {
     .test_run = selftest_timedpass_noloop_run<(50000us).count()>,
     .max_threads = 1,
 },
+{
+    .id = "selftest_check_sequential",
+    .description = "Checks that threads were run sequentially",
+    .test_init = selftest_check_sequential_init,
+    .test_run = selftest_check_sequential_run,
+    .desired_duration = -1,
+    .flags = test_schedule_sequential,
+},
 
 #if defined(__linux__) && defined(__x86_64__)
 {
@@ -991,6 +1027,13 @@ static struct test selftests_array[] = {
 },
 FOREACH_DATATYPE(DATACOMPARE_TEST)
 #undef DATACOMPARE_TEST
+{
+    .id = "selftest_datacompare_nodifference",
+    .description = "Fakes a memcmp_or_fail that finds a difference that isn't there",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+            .test_run = selftest_datacompare_nodifference_run,
+    .desired_duration = -1,
+},
 
 {
     .id = "selftest_cxxthrow",
