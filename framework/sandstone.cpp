@@ -721,7 +721,6 @@ static void print_temperature_and_throttle()
 
 static void init_internal(const struct test *test)
 {
-    sApp->thread_offset = 0;
     memset(reinterpret_cast<void *>(sApp->shmem), 0, sizeof(*sApp->shmem));
     print_temperature_and_throttle();
 
@@ -1583,33 +1582,11 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
         return TestSkipped;
     }
 
-    int saved_thread_count = sApp->thread_count;
-    struct cpu_info *saved_cpu_info = cpu_info;
-
-    /* do we need to partition the test in multiple slices, so we respect the
-     * max_threads? */
-    int max_threads = sApp->thread_count;
     TestResult state = TestPassed;
-    bool slicing = sApp->current_slice_count > 1;
-
-    if (slicing) {
-        max_threads = sApp->current_max_threads;
-        sApp->thread_count = max_threads;
-    }
 
     do {
         int ret = 0;
-        if (slicing) {
-            int limit = sApp->thread_offset + max_threads;
-            if (limit >= saved_thread_count) {
-                limit = saved_thread_count;
-                sApp->thread_offset = limit - max_threads;
-                slicing = false;
-            }
-        }
-
-        cpu_info = saved_cpu_info + sApp->thread_offset;
-        test->per_thread = &sApp->user_thread_data[sApp->thread_offset];
+        test->per_thread = sApp->user_thread_data.data();
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
 
         sApp->test_tests_init(test);
@@ -1652,14 +1629,7 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
         }
 
         sApp->test_tests_finish(test);
-
-        sApp->thread_offset += max_threads;
-        sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration);
-    } while (slicing && state == EXIT_SUCCESS);
-
-    cpu_info = saved_cpu_info;
-    sApp->thread_count = saved_thread_count;
-    sApp->thread_offset = 0;
+    } while (false);
 
     return state;
 }
