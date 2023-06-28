@@ -362,8 +362,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     std::vector<uint32_t> mce_counts_start;
     std::map<int, uint64_t> smi_counts_start;
 
-    int thread_offset;
-
     ForkMode current_fork_mode() const
     {
         if (SandstoneConfig::RestrictedCommandLine) {
@@ -442,7 +440,7 @@ static inline per_thread_data *cpu_data_for_thread(int thread)
 {
     if (thread == -1)
         return &sApp->shmem->main_thread_data;
-    return &sApp->shmem->per_thread[thread + sApp->thread_offset];
+    return &sApp->shmem->per_thread[thread];
 }
 
 static inline per_thread_data *cpu_data()
