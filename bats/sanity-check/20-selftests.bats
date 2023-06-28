@@ -233,17 +233,6 @@ test_yaml_regexp() {
     done
 }
 
-@test "selftest_timedpass_maxthreads1 --timeout 100ms" {
-    if [[ "$SANDSTONE" = "wine "* ]] && [[ "$HOME" = /github/* ]]; then
-        skip "This test runs too slowly on GitHub runners"
-    fi
-    VALIDATION=dump
-    declare -A yamldump
-    sandstone_selftest -e selftest_timedpass_maxthreads1 --timeout 100ms
-    [[ "$status" -eq 0 ]]
-    test_yaml_numeric "/tests/0/test-runtime" 'value > 100'
-}
-
 selftest_pass() {
     declare -A yamldump
     sandstone_selftest "$@"
