@@ -2989,6 +2989,7 @@ int main(int argc, char **argv)
     int total_failures = 0;
     int total_successes = 0;
     int total_skips = 0;
+    int thread_count = -1;
     bool fatal_errors = false;
     bool do_not_triage = false;
     const char *on_hang_arg = nullptr;
@@ -3062,7 +3063,7 @@ int main(int argc, char **argv)
             list_group_members(optarg);
             return EXIT_SUCCESS;
         case 'n':
-            sApp->thread_count = ParseIntArgument<>{
+            thread_count = ParseIntArgument<>{
                     .name = "-n / --threads",
                     .min = 1,
                     .max = sApp->thread_count,
@@ -3115,7 +3116,6 @@ int main(int argc, char **argv)
             break;
         case cpuset_option:
             sApp->enabled_cpus = parse_cpuset_param(optarg);
-            sApp->thread_count = sApp->enabled_cpus.count();
             break;
         case dump_cpu_info_option:
             dump_cpu_info(sApp->enabled_cpus);
@@ -3449,6 +3449,10 @@ int main(int argc, char **argv)
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
+    if (unsigned(thread_count) < unsigned(sApp->thread_count)) {
+        sApp->thread_count = thread_count;
+        sApp->enabled_cpus.limit_to(thread_count);
+    }
     load_cpu_info(sApp->enabled_cpus);
     signals_init_global();
     resource_init_global();
