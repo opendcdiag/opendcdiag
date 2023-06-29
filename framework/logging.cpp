@@ -464,7 +464,7 @@ static const char *char_to_skip_category(int val)
 template <typename... Args> static ssize_t
 log_message_for_thread(int thread_num, LogTypes logType, int level, Args &&... args)
 {
-    int fd = cpu_data_for_thread(thread_num)->log_fd;
+    int fd = sApp->thread_data(thread_num)->log_fd;
     uint8_t code = message_code(logType, level);
     return writevec(fd, code, std::forward<Args>(args)..., '\0');
 }
@@ -679,7 +679,7 @@ static std::string create_filtered_message_string(const char *fmt, va_list va)
 // function must be async-signal-safe
 void logging_mark_thread_failed(int thread_num)
 {
-    per_thread_data *thr = cpu_data_for_thread(thread_num);
+    per_thread_data *thr = sApp->thread_data(thread_num);
     if (thr->has_failed())
         return;
 
@@ -698,7 +698,7 @@ static void log_message_preformatted(int thread_num, std::string_view msg)
     if (msg[0] == 'E')
         logging_mark_thread_failed(thread_num);
 
-    std::atomic<int> &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
+    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
     if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread)
         return;
 
@@ -1049,7 +1049,7 @@ void logging_init(const struct test *test)
     }
 
     for (int i = -1; i < num_cpus(); ++i)
-        cpu_data_for_thread(i)->log_fd = open_new_log();
+        sApp->thread_data(i)->log_fd = open_new_log();
 }
 
 void logging_init_child_preexec()
@@ -1061,14 +1061,14 @@ void logging_init_child_preexec()
 void logging_finish()
 {
     for (int i = -1; i < num_cpus(); ++i)
-        close(cpu_data_for_thread(i)->log_fd);
+        close(sApp->thread_data(i)->log_fd);
     if (stderr_fd != -1)
         close(stderr_fd);
 }
 
 LoggingStream logging_user_messages_stream(int thread_num, int level)
 {
-    LoggingStream stream(cpu_data_for_thread(thread_num)->log_fd);
+    LoggingStream stream(sApp->thread_data(thread_num)->log_fd);
     uint8_t code = message_code(UserMessages, level);
     stream.write(code);
     return stream;
@@ -1233,8 +1233,8 @@ void log_data(const char *message, const void *data, size_t size)
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;                 // short-circuit
 
-    std::atomic<int> &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
-    std::atomic<size_t> &data_bytes_logged = cpu_data_for_thread(thread_num)->data_bytes_logged;
+    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
+    std::atomic<size_t> &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
     if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread ||
             (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->max_logdata_per_thread))
         return;
@@ -1505,7 +1505,7 @@ static void format_and_print_message(int fd, int message_level, std::string_view
 static std::string get_skip_message(int thread_num)
 {
     std::string skip_message;
-    struct mmap_region r = mmap_file(cpu_data_for_thread(thread_num)->log_fd);
+    struct mmap_region r = mmap_file(sApp->thread_data(thread_num)->log_fd);
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
     const char *delim;
@@ -1618,7 +1618,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
         return;         // no threads were started
 
     for (int i = 0; i < num_cpus(); ++i) {
-        struct per_thread_data *data = cpu_data_for_thread(i);
+        struct per_thread_data *data = sApp->thread_data(i);
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
         if (data->has_failed()) {
             if (data->fail_time != 0 && data->fail_time < earliest_fail)
@@ -1731,7 +1731,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
 void KeyValuePairLogger::print_thread_messages()
 {
     for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = cpu_data_for_thread(i);
+        struct per_thread_data *data = sApp->thread_data(i);
         struct mmap_region r = mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
@@ -1999,7 +1999,7 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
 void TapFormatLogger::print_thread_messages()
 {
     for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = cpu_data_for_thread(i);
+        struct per_thread_data *data = sApp->thread_data(i);
         struct mmap_region r = mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
@@ -2281,7 +2281,7 @@ void YamlLogger::print()
 
     double freqs = 0.0;
     for (int i = 0; i < num_cpus(); i++) {
-        const struct per_thread_data *data = cpu_data_for_thread(i);
+        const struct per_thread_data *data = sApp->thread_data(i);
         freqs += data->effective_freq_mhz;
     }
 
@@ -2301,7 +2301,7 @@ void YamlLogger::print()
 
     // print the thread messages
     for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = cpu_data_for_thread(i);
+        struct per_thread_data *data = sApp->thread_data(i);
         struct mmap_region r = i == -1 ? main_mmap : mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)

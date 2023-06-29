@@ -450,7 +450,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
     // check if the test has failed
     bool has_failed = false;
     for (int i = -1; i < num_cpus() && !has_failed; ++i) {
-        if (cpu_data_for_thread(i)->has_failed())
+        if (sApp->thread_data(i)->has_failed())
             has_failed = true;
     }
 
@@ -1938,7 +1938,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         if (state > EXIT_SUCCESS) {
             // this counts as the first failure regardless of how many fractures we've run
             for (int i = 0; i < num_cpus(); ++i) {
-                if (cpu_data_for_thread(i)->has_failed())
+                if (sApp->thread_data(i)->has_failed())
                     per_cpu_fails[i] |= uint64_t(1);
             }
             ++fail_count;
@@ -1986,7 +1986,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
 
             if (state > TestPassed) {
                 for (int i = 0; iterations < 64 && i < num_cpus(); ++i) {
-                    if (cpu_data_for_thread(i)->has_failed())
+                    if (sApp->thread_data(i)->has_failed())
                         per_cpu_fails[i] |= uint64_t(1) << iterations;
                 }
                 ++fail_count;

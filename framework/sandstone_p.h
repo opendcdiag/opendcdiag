@@ -405,6 +405,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         return fork_mode;
     }
 
+    per_thread_data *thread_data(int thread);
     per_thread_data *main_thread_data() noexcept;
     per_thread_data *test_thread_data(int thread);
 
@@ -457,11 +458,11 @@ inline SandstoneApplication *_sApp() noexcept
 
 #define sApp    _sApp()
 
-static inline per_thread_data *cpu_data_for_thread(int thread)
+inline per_thread_data *SandstoneApplication::thread_data(int thread)
 {
     if (thread == -1)
-        return sApp->main_thread_data();
-    return sApp->test_thread_data(thread);
+        return main_thread_data();
+    return test_thread_data(thread);
 }
 
 inline per_thread_data *SandstoneApplication::main_thread_data() noexcept

@@ -827,7 +827,7 @@ std::string Topology::build_falure_mask(const struct test *test)
                 if (cpu_id < 0)
                     continue;
 
-                if (cpu_data_for_thread(cpu_id)->has_failed()) {
+                if (sApp->thread_data(cpu_id)->has_failed()) {
                     threadmask |= 1U << t.id;
                     ++failcount;
                 }
