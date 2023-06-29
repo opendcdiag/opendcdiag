@@ -68,7 +68,6 @@ extern "C" {
 
 extern char *program_invocation_name;       // also in glibc's <errno.h>
 
-struct per_thread_data;
 struct test;
 
 struct mmap_region
@@ -425,10 +424,6 @@ static inline per_thread_data *cpu_data_for_thread(int thread)
     return &sApp->shmem->per_thread[thread];
 }
 
-static inline per_thread_data *cpu_data()
-{
-    return cpu_data_for_thread(thread_num);
-}
 
 struct AutoClosingFile
 {
