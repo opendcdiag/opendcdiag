@@ -1040,7 +1040,7 @@ Common command-line options are:
      is milliseconds, with s, m, and h available for seconds, minutes or hours.
      Example: sandstone -T 60s     # run for at least 60 seconds.
      Example: sandstone -T 5000    # run for at least 5,000 milliseconds
---strict-runtime
+ --strict-runtime
      Use in conjunction with -T to force the program to stop execution after the
      specific time has elapsed.
  -t <test-time>
@@ -1062,6 +1062,11 @@ Common command-line options are:
      limit to the number of loop iterations.  This special value can be
      used to disable test fracturing.  When specified tests will not be
      fractured and their execution will be time limited.
+ --cpuset=<set>
+     Selects the CPUs to run tests on. The <set> option may be a comma-separated
+     list of either plain numbers that select based on the system's logical
+     processor number, or a letter  followed by a number to select based on
+     topology: p for package, c for core and t for thread.
  --dump-cpu-info
      Prints the CPU information that the tool detects (package ID, core ID,
      thread ID, microcode, and PPIN) then exit.
@@ -2002,72 +2007,103 @@ out:
     return state;
 }
 
-static LogicalProcessorSet parse_cpuset_param(char *arg)
+static void apply_cpuset_param(char *param)
 {
     LogicalProcessorSet sys_cpuset = ambient_logical_processor_set();
-    LogicalProcessorSet result = {};
     int max_cpu_count = sys_cpuset.count();
     int total_matches = 0;
     if (cpu_info == nullptr)
         load_cpu_info(sys_cpuset);
 
-    char *endptr = arg;
-    for ( ; *arg && *endptr; arg = endptr + 1) {
-        errno = 0;
-        char c = *arg;
-        if (c >= 'a' && c <= 'z')
-            ++arg;
-        else
-            c = '\0';
+    LogicalProcessorSet &result = sApp->enabled_cpus;
+    result.clear();
 
-        unsigned long n = strtoul(arg, &endptr, 0);
-        if (n == 0 && errno) {
-            fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (%m)\n", program_invocation_name, arg);
-            exit(EX_USAGE);
-        }
-        if (*endptr && *endptr != ',') {
-            fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (unable to parse)\n", program_invocation_name, endptr);
-            exit(EX_USAGE);
-        }
-
-        if (c == '\0') {
-            if (n >= max_cpu_count) {
-                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (your system doesn't have that many CPUs)\n",
-                        program_invocation_name, arg);
+    for (char *arg = strtok(param, ","); arg; arg = strtok(nullptr, ",")) {
+        const char *orig_arg = arg;
+        auto parse_int = [&arg, orig_arg]() {
+            errno = 0;
+            char *endptr = arg;
+            long n = strtol(arg, &endptr, 0);
+            if (n == 0 && errno) {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (%m)\n",
+                        program_invocation_name, orig_arg);
                 exit(EX_USAGE);
             }
-            result.set(LogicalProcessor(n));
+            if (n != int(n)) {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (out of range)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+            arg = endptr;       // advance
+            return int(n);
+        };
+
+        char c = *arg;
+        if (c >= '0' && c <= '9') {
+            // logical processor number
+            auto lp = LogicalProcessor(parse_int());
+            if (!sys_cpuset.is_set(lp)) {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (no such logical processor)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+            if (*arg != '\0') {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (could not parse)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+            result.set(lp);
             ++total_matches;
-        } else {
-            int i;
-            int match_count = 0;
-            for (i = 0; i < max_cpu_count; ++i) {
-                if (!sys_cpuset.is_set(LogicalProcessor(i)))
-                    continue;
+        } else if (c >= 'a' && c <= 'z') {
+            // topology search
+            auto set_if_unset = [orig_arg](int n, int &where, const char *what) {
+                if (where != -1) {
+                    fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (%s already defined)\n",
+                            program_invocation_name, orig_arg, what);
+                    exit(EX_USAGE);
+                }
+                where = n;
+            };
+
+            int package = -1, core = -1, thread = -1;
+            do {
+                ++arg;
+                int n = parse_int();
                 switch (c) {
                 case 'p':
-                    if (cpu_info[i].package_id != n)
-                        continue;
+                    set_if_unset(n, package, "package");
                     break;
                 case 'c':
-                    if (cpu_info[i].core_id != n)
-                        continue;
+                    set_if_unset(n, core, "core");
                     break;
                 case 't':
-                    if (cpu_info[i].thread_id != n)
-                        continue;
+                    set_if_unset(n, thread, "thread");
                     break;
                 default:
                     fprintf(stderr, "%s: error: Invalid CPU selection type \"%c\"; valid types are "
                                     "'p' (package/socket ID), 'c' (core), 't' (thread)\n", program_invocation_name, c);
                     exit(EX_USAGE);
                 }
+                c = *arg;
+            } while (c != '\0');
+
+            int match_count = 0;
+            for (int i = 0; i < max_cpu_count; ++i) {
+                if (!sys_cpuset.is_set(LogicalProcessor(i)))
+                    continue;
+                if (package != -1 && cpu_info[i].package_id != package)
+                    continue;
+                if (core != -1 && cpu_info[i].core_id != core)
+                    continue;
+                if (thread != -1 && cpu_info[i].thread_id != thread)
+                    continue;
                 ++match_count;
                 result.set(LogicalProcessor(i));
             }
 
             if (match_count == 0)
-                fprintf(stderr, "%s: warning: CPU selection '%c%lu' matched nothing\n", program_invocation_name, c, n);
+                fprintf(stderr, "%s: warning: CPU selection '%s' matched nothing\n",
+                        program_invocation_name, orig_arg);
             total_matches += match_count;
         }
     }
@@ -2078,7 +2114,8 @@ static LogicalProcessorSet parse_cpuset_param(char *arg)
         exit(EX_USAGE);
     }
 
-    return result;
+    assert(total_matches == result.count());
+    sApp->thread_count = total_matches;
 }
 
 static auto collate_test_groups()
@@ -3114,8 +3151,7 @@ int main(int argc, char **argv)
                 }();
             break;
         case cpuset_option:
-            sApp->enabled_cpus = parse_cpuset_param(optarg);
-            sApp->thread_count = sApp->enabled_cpus.count();
+            apply_cpuset_param(optarg);
             break;
         case dump_cpu_info_option:
             dump_cpu_info(sApp->enabled_cpus);
