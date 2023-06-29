@@ -19,10 +19,6 @@ framework_incdir = [
     ])
 ]
 
-if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
-    subdir('sysdeps/unix')
-endif
-subdir(sysdeps_dir)
 
 # Must be a configure_file, not custom_target, so it's created at
 # meson time and thus before everything
@@ -75,29 +71,6 @@ framework_config.set10('SANDSTONE_SSL_BUILD', get_option('ssl_link_type') != 'no
 framework_config.set10('SANDSTONE_SSL_LINKED',
   get_option('ssl_link_type') == 'static' or get_option('ssl_link_type') == 'dynamic')
 
-framework_config_h = configure_file(
-    input : 'sandstone_config.h.in',
-    output : 'sandstone_config.h',
-    configuration : framework_config,
-)
-
-framework_main_a = static_library(
-    'framework_main',
-    files(
-        'main.cpp',
-    ),
-    build_by_default: false,
-    include_directories : [
-        framework_incdir,
-    ],
-    cpp_args : [
-        debug_c_flags,
-        march_generic_flags,
-        default_cpp_flags,
-        default_cpp_warn,
-    ],
-)
-
 framework_files = files(
     'Floats.cpp',
     'generated_vectors.c',
@@ -141,6 +114,34 @@ framework_files += [
     'sandstone_sections.S',
 ]
 endif
+
+if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
+    subdir('sysdeps/unix')
+endif
+subdir(sysdeps_dir)
+
+framework_config_h = configure_file(
+    input : 'sandstone_config.h.in',
+    output : 'sandstone_config.h',
+    configuration : framework_config,
+)
+
+framework_main_a = static_library(
+    'framework_main',
+    files(
+        'main.cpp',
+    ),
+    build_by_default: false,
+    include_directories : [
+        framework_incdir,
+    ],
+    cpp_args : [
+        debug_c_flags,
+        march_generic_flags,
+        default_cpp_flags,
+        default_cpp_warn,
+    ],
+)
 
 framework_a = static_library(
     'framework',
