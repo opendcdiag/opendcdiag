@@ -174,7 +174,8 @@ inline int simple_getopt(int argc, char **argv, struct option *options, int *opt
     return getopt_long(argc, argv, cached_short_opts.c_str(), options, optind);
 }
 
-struct alignas(64) per_thread_data
+namespace PerThreadData {
+struct Common
 {
     std::atomic<ThreadState> thread_state;
 
@@ -187,19 +188,28 @@ struct alignas(64) per_thread_data
     /* Records the number of bytes log_data'ed per thread */
     std::atomic<size_t> data_bytes_logged;
 
-    /* Number of iterations of the inner loop (aka #times test_time_condition called) */
-    uint64_t inner_loop_count;
-    uint64_t inner_loop_count_at_fail;
     uint64_t fail_time;
-
-    /* Thread's effective CPU frequency during execution */
-    double effective_freq_mhz;
-
     bool has_failed() const
     {
         return fail_time > 0;
     }
 };
+
+struct alignas(64) Main : Common
+{
+    // nothing yet
+};
+
+struct alignas(64) Test : Common
+{
+    /* Number of iterations of the inner loop (aka #times test_time_condition called) */
+    uint64_t inner_loop_count;
+    uint64_t inner_loop_count_at_fail;
+
+    /* Thread's effective CPU frequency during execution */
+    double effective_freq_mhz;
+};
+} // namespace PerThreadData
 
 template <bool IsDebug> struct test_the_test_data
 {
@@ -318,8 +328,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     struct ExecState;
 
     struct SharedMemory {
-        per_thread_data main_thread_data;
-        per_thread_data per_thread[MAX_THREADS];
+        PerThreadData::Main main_thread_data;
+        PerThreadData::Test per_thread[MAX_THREADS];
     };
     std::vector<test_data_per_thread> user_thread_data;
     SharedMemory *shmem = nullptr;
@@ -405,9 +415,9 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         return fork_mode;
     }
 
-    per_thread_data *thread_data(int thread);
-    per_thread_data *main_thread_data() noexcept;
-    per_thread_data *test_thread_data(int thread);
+    PerThreadData::Common *thread_data(int thread);
+    PerThreadData::Main *main_thread_data() noexcept;
+    PerThreadData::Test *test_thread_data(int thread);
 
     SandstoneBackgroundScan background_scan;
 
@@ -455,19 +465,19 @@ inline SandstoneApplication *_sApp() noexcept
 
 #define sApp    _sApp()
 
-inline per_thread_data *SandstoneApplication::thread_data(int thread)
+inline PerThreadData::Common *SandstoneApplication::thread_data(int thread)
 {
     if (thread == -1)
         return main_thread_data();
     return test_thread_data(thread);
 }
 
-inline per_thread_data *SandstoneApplication::main_thread_data() noexcept
+inline PerThreadData::Main *SandstoneApplication::main_thread_data() noexcept
 {
     return &shmem->main_thread_data;
 }
 
-inline per_thread_data *SandstoneApplication::test_thread_data(int thread)
+inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
 {
     assert(thread >= 0);
     assert(thread < sApp->thread_count);
