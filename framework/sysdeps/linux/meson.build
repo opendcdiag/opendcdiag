@@ -42,35 +42,30 @@ _sysdeps_a = static_library(
 
 if get_option('cpp_link_args').contains('-static')
     ar = find_program('ar')
-    nm = find_program('nm')
     objcopy = find_program('objcopy')
 
     # Need to extract malloc.o from libc.a and transform it
-    # Step 1: extract it:
+    # Step 1: find libc.a by asking the compiler
     libc_a = run_command(cc.cmd_array(), '-print-file-name=libc.a',
            check: true
     )
 
-    orig_glibc_malloc_o = custom_target(
-        'extract-malloc.o',
-        output: 'malloc.o',
-        input: libc_a.stdout().strip(),
-        command: [
-            ar, 'x', '--output', '@OUTDIR@', '@INPUT@', '@OUTPUT@',
-        ]
-    )
-    # Step 2: transform it by localizing (-L) all the symbols from our malloc.cpp
+    # Step 2: run our extractor script
     glibc_malloc_o = custom_target(
         'glibc_malloc.o',
         input: [
-            _sysdeps_a.extract_objects('malloc.cpp'),
-            orig_glibc_malloc_o,
+            libc_a.stdout().strip(),
+            files('malloc.cpp'),
         ],
         output: 'glibc_malloc.o',
         command: [
-            shell, '-c', objcopy.full_path() + ' `' +
-            nm.full_path() + ' --defined $0 | sed -En "/^.* T /s//-L /p"` $1 $2',
-            '@INPUT@', '@OUTPUT@',
+            shell,
+            files('extract-malloc.sh'),
+            'AR=' + ar.full_path(),
+            'OBJCOPY=' + objcopy.full_path(),
+            '--',
+            '@INPUT@',
+            '@OUTPUT@',
         ]
     )
     # Step 3: add this file to the sysdeps library
