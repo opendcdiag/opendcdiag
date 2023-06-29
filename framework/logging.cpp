@@ -1705,13 +1705,14 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
     }
 
     struct cpu_info *info = cpu_info + cpu;
-    if (std::string time = format_duration(sApp->shmem->per_thread[cpu].fail_time); time.size()) {
+    per_thread_data *thr = sApp->test_thread_data(cpu);
+    if (std::string time = format_duration(thr->fail_time); time.size()) {
         dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, cpu, time.c_str());
         dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
-                sApp->shmem->per_thread[cpu].inner_loop_count_at_fail);
+                thr->inner_loop_count_at_fail);
     } else {
         dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
-                sApp->shmem->per_thread[cpu].inner_loop_count);
+                thr->inner_loop_count);
     }
     dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, cpu, info->cpu_number);
     dprintf(fd, "%s_messages_thread_%d_family_model_stepping = %02x-%02x-%02x\n", prefix, cpu,
@@ -1988,12 +1989,13 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
     writeln(fd, line);
 
     if (verbosity > 1) {
-        if (std::string time = format_duration(sApp->shmem->per_thread[cpu].fail_time); time.size())
+        per_thread_data *thr = sApp->test_thread_data(cpu);
+        if (std::string time = format_duration(thr->fail_time); time.size())
             writeln(fd, "  - failed: { time: ", time,
-                    ", loop-count: ", std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count_at_fail),
+                    ", loop-count: ", std::to_string(thr->inner_loop_count_at_fail),
                     " }");
         else if (verbosity > 2)
-            writeln(fd, "  - loop-count: ", std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count));
+            writeln(fd, "  - loop-count: ", std::to_string(thr->inner_loop_count));
     }
 }
 
@@ -2068,17 +2070,18 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
         dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(cpu, verbosity).c_str());
 
         if (verbosity > 1) {
+            per_thread_data *thr = sApp->test_thread_data(cpu);
             auto opts = FormatDurationOptions::WithoutUnit;
-            if (std::string time = format_duration(sApp->shmem->per_thread[cpu].fail_time, opts); time.size()) {
+            if (std::string time = format_duration(thr->fail_time, opts); time.size()) {
                 writeln(fd, indent_spaces(), "    state: failed");
                 writeln(fd, indent_spaces(), "    time-to-fail: ", time);
                 writeln(fd, indent_spaces(), "    loop-count: ",
-                        std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count_at_fail));
+                        std::to_string(thr->inner_loop_count_at_fail));
             } else if (verbosity > 2) {
                 writeln(fd, indent_spaces(), "    loop-count: ",
-                        std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count));
+                        std::to_string(thr->inner_loop_count));
             }
-            const double effective_freq_mhz = sApp->shmem->per_thread[cpu].effective_freq_mhz;
+            const double effective_freq_mhz = thr->effective_freq_mhz;
             if (std::isfinite(effective_freq_mhz))
                 dprintf(fd, "%s    freq_mhz: %.1f\n", indent_spaces().data(), effective_freq_mhz);
         }
