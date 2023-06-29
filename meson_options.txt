@@ -1,8 +1,8 @@
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'none'], value : 'yaml',
-    description : 'Set build-time default logging format to "none", "yaml" (default), or "tap".')
+option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'no_output'], value : 'yaml',
+    description : 'Set build-time default logging format to "no_output", "yaml" (default), or "tap".')
 option('march_base', type : 'string', value : '',
     description : 'Build framework with this base optimization -march= value (default: "haswell").')
 option('framework_options', type : 'array', value : [],
