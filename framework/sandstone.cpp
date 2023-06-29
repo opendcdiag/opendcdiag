@@ -2037,6 +2037,7 @@ static LogicalProcessorSet parse_cpuset_param(char *arg)
                 exit(EX_USAGE);
             }
             result.set(LogicalProcessor(n));
+            ++total_matches;
         } else {
             int i;
             int match_count = 0;

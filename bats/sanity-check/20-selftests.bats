@@ -1118,3 +1118,31 @@ selftest_crash_context_common() {
     test_yaml_numeric "/triage-results@len" 'value == 1'
     test_yaml_numeric "/triage-results/0" 'value == 1'
 }
+
+function selftest_cpuset() {
+    local expected_logical=$1
+    local expected_package=$2
+    local expected_core=$3
+    local expected_thread=$4
+    shift 4
+
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_pass "$@"
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric "/tests/0/threads/1/id/logical" "value == $expected_logical"
+    test_yaml_numeric "/tests/0/threads/1/id/package" "value == $expected_package"
+    test_yaml_numeric "/tests/0/threads/1/id/core" "value == $expected_core"
+    test_yaml_numeric "/tests/0/threads/1/id/thread" "value == $expected_thread"
+}
+
+@test "cpuset=number (first)" {
+    # Get the first logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
+    selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} --cpuset=${cpuinfo[0]}
+}
+
+@test "cpuset=number (last)" {
+    # Get the last logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '$p'`)
+    selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} --cpuset=${cpuinfo[0]}
+}
