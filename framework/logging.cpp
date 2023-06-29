@@ -1013,7 +1013,7 @@ void logging_flush(void)
     // we don't need to fflush() because all our log files are opened without
     // buffering
     do_flush(file_log_fd);
-    do_flush(cpu_data_for_thread(-1)->log_fd);
+    do_flush(sApp->main_thread_data()->log_fd);
 }
 
 void logging_init(const struct test *test)
@@ -1635,7 +1635,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
 
     // condense the internal state variable to the three main possibilities
     testResult = TestFailed;
-    if (state_.result == TestPassed && pc == num_cpus() && !sApp->shmem->main_thread_data.has_failed()) {
+    if (state_.result == TestPassed && pc == num_cpus() && !sApp->main_thread_data()->has_failed()) {
         if (sc == num_cpus())
             testResult = TestSkipped;
         else
@@ -2288,7 +2288,7 @@ void YamlLogger::print()
 
     logging_flush();
 
-    struct mmap_region main_mmap = mmap_file(cpu_data_for_thread(-1)->log_fd);
+    struct mmap_region main_mmap = mmap_file(sApp->main_thread_data()->log_fd);
     if (main_mmap.size && sApp->log_test_knobs) {
         int count = print_test_knobs(file_log_fd, main_mmap);
         if (count && real_stdout_fd != file_log_fd

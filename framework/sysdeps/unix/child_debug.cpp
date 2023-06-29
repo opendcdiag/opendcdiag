@@ -203,7 +203,7 @@ static void child_crash_handler(int, siginfo_t *si, void *ucontext)
     // mark thread as failed
     logging_mark_thread_failed(thread_num);
 
-    auto &thread_state = cpu_data_for_thread(-1)->thread_state;
+    auto &thread_state = sApp->main_thread_data()->thread_state;
     thread_state.store(thread_failed, std::memory_order_release);
 
     if (crashpipe[CrashPipeChild] == -1)
@@ -1028,7 +1028,7 @@ void debug_crashed_child()
     }
 
     // release the child
-    auto &thread_state = cpu_data_for_thread(-1)->thread_state;
+    auto &thread_state = sApp->main_thread_data()->thread_state;
     thread_state.load(std::memory_order_acquire);
     if (on_crash_action != context_on_crash) {
         thread_state.store(thread_debugged, std::memory_order_relaxed);
