@@ -186,7 +186,7 @@ struct Common
     std::atomic<int> messages_logged;
 
     /* Records the number of bytes log_data'ed per thread */
-    std::atomic<size_t> data_bytes_logged;
+    std::atomic<unsigned> data_bytes_logged;
 
     MonotonicTimePoint fail_time;
     bool has_failed() const

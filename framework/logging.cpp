@@ -1234,7 +1234,7 @@ void log_data(const char *message, const void *data, size_t size)
         return;                 // short-circuit
 
     std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
-    std::atomic<size_t> &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
+    std::atomic<unsigned> &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
     if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread ||
             (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->max_logdata_per_thread))
         return;
