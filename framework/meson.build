@@ -153,7 +153,6 @@ framework_a = static_library(
         framework_incdir,
     ],
     objects: [
-        sysdeps_a.extract_all_objects(recursive: true),
         framework_main_a.extract_all_objects(recursive: false),
     ],
     dependencies: [
