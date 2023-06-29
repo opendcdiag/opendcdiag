@@ -639,7 +639,7 @@ static bool wallclock_deadline_has_expired(MonotonicTimePoint deadline)
 
 static bool max_loop_count_exceeded(const struct test *the_test)
 {
-    per_thread_data *data = sApp->test_thread_data(thread_num);
+    PerThreadData::Test *data = sApp->test_thread_data(thread_num);
 
     // unsigned comparisons so sApp->current_max_loop_count == -1 causes an always false
     if (unsigned(data->inner_loop_count) >= unsigned(sApp->current_max_loop_count))
@@ -836,7 +836,7 @@ static void *thread_runner(void *arg)
     pin_to_logical_processor(LogicalProcessor(cpu_info[thread_number].cpu_number), current_test->id);
 
     struct TestRunWrapper {
-        struct per_thread_data *this_thread;
+        PerThreadData::Test *this_thread;
         int ret = EXIT_FAILURE;
         int thread_number;
         CPUTimeFreqStamp before, after;
@@ -918,6 +918,11 @@ static LogicalProcessorSet init_cpus()
 
 static void init_shmem(int fd = -1)
 {
+    static_assert(sizeof(PerThreadData::Main) == 64,
+            "PerThreadData::Main size grew, please check if it was intended");
+    static_assert(sizeof(PerThreadData::Test) == 64,
+            "PerThreadData::Testsize grew, please check if it was intended");
+
     if (sApp->shmem)
         return;                 // already initialized
 

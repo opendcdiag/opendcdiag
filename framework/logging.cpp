@@ -679,7 +679,7 @@ static std::string create_filtered_message_string(const char *fmt, va_list va)
 // function must be async-signal-safe
 void logging_mark_thread_failed(int thread_num)
 {
-    per_thread_data *thr = sApp->thread_data(thread_num);
+    PerThreadData::Common *thr = sApp->thread_data(thread_num);
     if (thr->has_failed())
         return;
 
@@ -689,7 +689,10 @@ void logging_mark_thread_failed(int thread_num)
     auto now = std::chrono::steady_clock::now().time_since_epoch();
     static_assert(sizeof(thr->fail_time) == sizeof(now.count()));
     thr->fail_time = now.count();
-    thr->inner_loop_count_at_fail = thr->inner_loop_count;
+    if (thread_num >= 0) {
+        auto tthr = static_cast<PerThreadData::Test *>(thr);
+        tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
+    }
 }
 
 static void log_message_preformatted(int thread_num, std::string_view msg)
@@ -1528,7 +1531,7 @@ static inline void format_skip_message(std::string &skip_message, std::string_vi
 
 /// Returns the lowest priority found
 /// (this function is shared between the TAP and key-value pair loggers)
-static int print_one_thread_messages(int fd, struct per_thread_data *data, struct mmap_region r, int level, ChildExitStatus status)
+static int print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level, ChildExitStatus status)
 {
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
@@ -1618,7 +1621,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
         return;         // no threads were started
 
     for (int i = 0; i < num_cpus(); ++i) {
-        struct per_thread_data *data = sApp->thread_data(i);
+        PerThreadData::Common *data = sApp->thread_data(i);
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
         if (data->has_failed()) {
             if (data->fail_time != 0 && data->fail_time < earliest_fail)
@@ -1704,7 +1707,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
     }
 
     struct cpu_info *info = cpu_info + cpu;
-    per_thread_data *thr = sApp->test_thread_data(cpu);
+    PerThreadData::Test *thr = sApp->test_thread_data(cpu);
     if (std::string time = format_duration(thr->fail_time); time.size()) {
         dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, cpu, time.c_str());
         dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
@@ -1731,7 +1734,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
 void KeyValuePairLogger::print_thread_messages()
 {
     for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = sApp->thread_data(i);
+        PerThreadData::Common *data = sApp->thread_data(i);
         struct mmap_region r = mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
@@ -1986,7 +1989,7 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
     writeln(fd, line);
 
     if (verbosity > 1) {
-        per_thread_data *thr = sApp->test_thread_data(cpu);
+        PerThreadData::Test *thr = sApp->test_thread_data(cpu);
         if (std::string time = format_duration(thr->fail_time); time.size())
             writeln(fd, "  - failed: { time: ", time,
                     ", loop-count: ", std::to_string(thr->inner_loop_count_at_fail),
@@ -1999,7 +2002,7 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
 void TapFormatLogger::print_thread_messages()
 {
     for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = sApp->thread_data(i);
+        PerThreadData::Common *data = sApp->thread_data(i);
         struct mmap_region r = mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
@@ -2067,7 +2070,7 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
         dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(cpu, verbosity).c_str());
 
         if (verbosity > 1) {
-            per_thread_data *thr = sApp->test_thread_data(cpu);
+            PerThreadData::Test *thr = sApp->test_thread_data(cpu);
             auto opts = FormatDurationOptions::WithoutUnit;
             if (std::string time = format_duration(thr->fail_time, opts); time.size()) {
                 writeln(fd, indent_spaces(), "    state: failed");
@@ -2281,7 +2284,7 @@ void YamlLogger::print()
 
     double freqs = 0.0;
     for (int i = 0; i < num_cpus(); i++) {
-        const struct per_thread_data *data = sApp->thread_data(i);
+        const PerThreadData::Test *data = sApp->test_thread_data(i);
         freqs += data->effective_freq_mhz;
     }
 
@@ -2301,7 +2304,7 @@ void YamlLogger::print()
 
     // print the thread messages
     for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = sApp->thread_data(i);
+        PerThreadData::Common *data = sApp->thread_data(i);
         struct mmap_region r = i == -1 ? main_mmap : mmap_file(data->log_fd);
 
         if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
