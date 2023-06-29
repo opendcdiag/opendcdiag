@@ -369,25 +369,43 @@ static bool check_gdb_available()
     return false;
 }
 
-static void create_crash_pipe(int xsave_size)
+static bool create_crash_pipe(int xsave_size)
 {
     int socktype = SOCK_DGRAM;
 #ifdef SOCK_CLOEXEC
     socktype |= SOCK_CLOEXEC;
 #endif
     if (socketpair(AF_UNIX, socktype, 0, crashpipe) == -1)
-        return;
+        return false;
 
     // set the buffer sizes
     xsave_size += sizeof(CrashContext::Fixed) + sizeof(CrashContext::mc);
+    xsave_size += 256;      // add some headroom; the Linux kernel subtracts 32
     xsave_size = ROUND_UP_TO(xsave_size, 1024U);
-    setsockopt(crashpipe[CrashPipeParent], SOL_SOCKET, SO_RCVBUF, &xsave_size, sizeof(xsave_size));
-    setsockopt(crashpipe[CrashPipeChild], SOL_SOCKET, SO_SNDBUF, &xsave_size, sizeof(xsave_size));
+
+    int rcvbuf;
+    socklen_t size = sizeof(rcvbuf);
+    if (getsockopt(crashpipe[CrashPipeParent], SOL_SOCKET, SO_RCVBUF, &rcvbuf, &size) == 0) {
+        if (rcvbuf >= xsave_size)
+            xsave_size = 0;
+    }
+    if (xsave_size) {
+        bool ok = setsockopt(crashpipe[CrashPipeChild], SOL_SOCKET, SO_SNDBUF, &xsave_size, sizeof(xsave_size)) == 0;
+        ok = ok && setsockopt(crashpipe[CrashPipeParent], SOL_SOCKET, SO_RCVBUF, &xsave_size, sizeof(xsave_size)) == 0;
+        if (!ok) {
+            close(crashpipe[CrashPipeParent]);
+            close(crashpipe[CrashPipeChild]);
+            crashpipe[CrashPipeParent] = crashpipe[CrashPipeChild] = -1;
+            return false;
+        }
+    }
 
     // set the parent end to non-blocking and leave the child end blocking
     int ret = fcntl(crashpipe[CrashPipeParent], F_GETFL);
     if (ret >= 0)
         fcntl(crashpipe[CrashPipeParent], F_SETFL, ret | O_NONBLOCK);
+
+    return true;
 }
 #endif
 
@@ -928,7 +946,10 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             xsave_size = FXSAVE_SIZE;
 #  endif
 
-        create_crash_pipe(xsave_size);
+        if (!create_crash_pipe(xsave_size)) {
+            // could not create the communications pipe, pare the action back
+            on_crash_action &= ~(context_on_crash | attach_gdb_on_crash);
+        }
     }
 #endif
 

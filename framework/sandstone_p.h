@@ -178,10 +178,10 @@ struct alignas(64) per_thread_data
     std::atomic<ThreadState> thread_state;
 
     /* Records number of messages logged per thread of each test */
-    int messages_logged;
+    std::atomic<int> messages_logged;
 
     /* Records the number of bytes log_data'ed per thread */
-    size_t data_bytes_logged;
+    std::atomic<size_t> data_bytes_logged;
 
     /* Number of iterations of the inner loop (aka #times test_time_condition called) */
     uint64_t inner_loop_count;
