@@ -689,8 +689,7 @@ static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
 
 void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
 {
-    if (!sApp->thread_count)
-        sApp->thread_count = enabled_cpus.count();
+    sApp->thread_count = enabled_cpus.count();
     assert(sApp->thread_count);
 
     delete[] cpu_info;

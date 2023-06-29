@@ -1146,3 +1146,17 @@ function selftest_cpuset() {
     local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '$p'`)
     selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} --cpuset=${cpuinfo[0]}
 }
+
+@test "cpuset=topology (first)" {
+    # Get the first logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
+    selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} \
+        --cpuset=p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]}
+}
+
+@test "cpuset=topology (last)" {
+    # Get the last logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '$p'`)
+    selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} \
+        --cpuset=p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]}
+}
