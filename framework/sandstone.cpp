@@ -3114,6 +3114,7 @@ int main(int argc, char **argv)
             break;
         case cpuset_option:
             sApp->enabled_cpus = parse_cpuset_param(optarg);
+            sApp->thread_count = sApp->enabled_cpus.count();
             break;
         case dump_cpu_info_option:
             dump_cpu_info(sApp->enabled_cpus);
