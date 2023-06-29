@@ -424,7 +424,7 @@ inline void test_the_test_data<true>::test_tests_iteration(const struct test *th
         return;
 
     int cpu = thread_num;
-    int n = cpu_data_for_thread(cpu)->inner_loop_count;
+    int n = sApp->test_thread_data(cpu)->inner_loop_count;
     if (n >= DesiredIterations)
         return;
 
@@ -639,7 +639,7 @@ static bool wallclock_deadline_has_expired(MonotonicTimePoint deadline)
 
 static bool max_loop_count_exceeded(const struct test *the_test)
 {
-    per_thread_data *data = cpu_data_for_thread(thread_num);
+    per_thread_data *data = sApp->test_thread_data(thread_num);
 
     // unsigned comparisons so sApp->current_max_loop_count == -1 causes an always false
     if (unsigned(data->inner_loop_count) >= unsigned(sApp->current_max_loop_count))
@@ -658,7 +658,7 @@ int test_time_condition(const struct test *the_test) noexcept
 {
     test_loop_iterate();
     sApp->test_tests_iteration(the_test);
-    cpu_data_for_thread(thread_num)->inner_loop_count++;
+    sApp->test_thread_data(thread_num)->inner_loop_count++;
 
     if (max_loop_count_exceeded(the_test))
         return 0;  // end the test if max loop count exceeded
@@ -820,7 +820,7 @@ void test_loop_iterate() noexcept
 void test_loop_end() noexcept
 {
     using namespace AssemblyMarker;
-    assembly_marker<TestLoop, End>(cpu_data_for_thread(thread_num)->inner_loop_count);
+    assembly_marker<TestLoop, End>(sApp->test_thread_data(thread_num)->inner_loop_count);
 }
 
 #ifndef _WIN32
@@ -842,7 +842,7 @@ static void *thread_runner(void *arg)
         CPUTimeFreqStamp before, after;
 
         TestRunWrapper(int thread_number)
-            : this_thread(cpu_data_for_thread(thread_number)),
+            : this_thread(sApp->test_thread_data(thread_number)),
               thread_number(thread_number)
         {
             thread_num = thread_number;
