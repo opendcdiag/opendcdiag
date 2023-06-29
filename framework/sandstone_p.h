@@ -374,7 +374,7 @@ private:
     SandstoneApplication &operator=(const SandstoneApplication &) = delete;
     friend int internal_main(int argc, char **argv);
     friend int main(int argc, char **argv);
-    friend SandstoneApplication *_sApp();
+    friend SandstoneApplication *_sApp() noexcept;
 };
 
 // state from SandstoneApplication:
@@ -408,7 +408,7 @@ struct SandstoneApplication::ExecState
     bool selftest;
 };
 
-inline SandstoneApplication *_sApp()
+inline SandstoneApplication *_sApp() noexcept
 {
     using App = std::aligned_storage_t<sizeof(SandstoneApplication), alignof(SandstoneApplication)>;
     static App app;
