@@ -405,6 +405,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         return fork_mode;
     }
 
+    per_thread_data *main_thread_data() noexcept;
+
     SandstoneBackgroundScan background_scan;
 
 private:
@@ -454,10 +456,16 @@ inline SandstoneApplication *_sApp() noexcept
 static inline per_thread_data *cpu_data_for_thread(int thread)
 {
     if (thread == -1)
-        return &sApp->shmem->main_thread_data;
+        return sApp->main_thread_data();
+    assert(thread >= 0);
+    assert(thread < sApp->thread_count);
     return &sApp->shmem->per_thread[thread];
 }
 
+inline per_thread_data *SandstoneApplication::main_thread_data() noexcept
+{
+    return &shmem->main_thread_data;
+}
 
 struct AutoClosingFile
 {

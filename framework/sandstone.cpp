@@ -1451,7 +1451,7 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
             ret = intptr_t(retptr);
         }
 
-        if (ret > 0 || sApp->shmem->main_thread_data.has_failed()) {
+        if (ret > 0 || sApp->main_thread_data()->has_failed()) {
             logging_mark_thread_failed(-1);
             if (ret > 0)
                 log_error("Init function failed with code %i", ret);
