@@ -30,14 +30,19 @@
 #  endif
 
 extern "C" {
-extern void *__libc_memalign(size_t alignment, size_t size);
-extern int __libc_posix_memalign (void **memptr, size_t alignment, size_t size);
-extern void *__libc_memalign (size_t alignment, size_t bytes);
-extern void *__libc_valloc (size_t bytes);
-extern void *__libc_pvalloc (size_t bytes);
-extern void *__libc_calloc (size_t n, size_t elem_size);
-extern void *__libc_malloc(size_t size);
-extern void *__libc_realloc (void *oldmem, size_t bytes);
+#define DECLARE_OVERRIDE(FUNC)  extern decltype(FUNC) __libc_ ## FUNC
+
+// The following lines are parsed by the buildsystem, so be careful when
+// modifying them. See extract-malloc.sh.
+DECLARE_OVERRIDE(calloc);
+DECLARE_OVERRIDE(malloc);
+DECLARE_OVERRIDE(memalign);
+DECLARE_OVERRIDE(posix_memalign);
+DECLARE_OVERRIDE(pvalloc);
+DECLARE_OVERRIDE(realloc);
+DECLARE_OVERRIDE(valloc);
+
+#undef DECLARE_OVERRIDE
 }
 
 static void *bzero_block(void *ptr, size_t len)

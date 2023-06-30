@@ -372,7 +372,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     LogicalProcessorSet enabled_cpus;
     int thread_count;
 
-#if !defined(__linux__) && !defined(_WIN32)
+#ifndef __linux__
     std::string path_to_self;
 #endif
 #ifdef NDEBUG

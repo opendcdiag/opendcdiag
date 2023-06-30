@@ -1,7 +1,7 @@
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-sysdeps_unix_files = files(
+framework_files += files(
     'child_debug.cpp',
     'resource.cpp',
     'signals.cpp',
