@@ -427,12 +427,10 @@ private:
     F(output_yaml_indent)                   \
     F(use_strict_runtime)                   \
     F(log_test_knobs)                       \
-    F(force_test_time)                      \
     F(ud_on_failure)                        \
     F(current_max_loop_count)               \
     F(current_test_endtime)                 \
-    F(test_time)                            \
-    F(max_test_time)
+    /**/
 
 struct SandstoneApplication::ExecState
 {
