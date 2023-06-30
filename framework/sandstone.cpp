@@ -1302,7 +1302,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
     if (auto [sig, count] = last_signal(); __builtin_expect(sig, 0)) {
         // we caught a SIGINT
         // child has likely not been able to write results
-        logging_print_results({ TestInterrupted }, tc, test);
+        logging_print_results({ TestResult::Interrupted }, tc, test);
         logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
         logging_flush();
 
@@ -1326,22 +1326,22 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
         if (sApp->count_thermal_events() != sApp->last_thermal_event_count)
             log_platform_message(SANDSTONE_LOG_WARNING "Thermal events detected, timing cannot be trusted.");
 
-        return { TestTimedOut };
+        return { TestResult::TimedOut };
     }
 
     // child exited just fine
     if (info.code == CLD_EXITED) {
         if (int8_t(info.status) <= 3)       // cast to int8_t transforms 255 into -1
             return { TestResult(info.status) };
-        return { TestOperatingSystemError, unsigned(info.status) };
+        return { TestResult::OperatingSystemError, unsigned(info.status) };
     }
 
     // child crashed - prepare some extra information text
-    ChildExitStatus r = { TestKilled, unsigned(info.status) };
+    ChildExitStatus r = { TestResult::Killed, unsigned(info.status) };
     if (info.code == CLD_DUMPED)
-        r.result = TestCoreDumped;
+        r.result = TestResult::CoreDumped;
     else if (info.status == SIGKILL)
-        r.result = TestOutOfMemory;
+        r.result = TestResult::OutOfMemory;
 
     return r;
 #elif defined(_WIN32)
@@ -1358,7 +1358,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 
     case WAIT_TIMEOUT:
         log_message(-1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
-        TerminateProcess(HANDLE(child), TestTimedOut);
+        TerminateProcess(HANDLE(child), TestResult::TimedOut);
 
         // wait for termination
         result = WaitForSingleObject(HANDLE(child), (20000ms).count());
@@ -1376,10 +1376,10 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
     }
 
     // Exit code mapping:
-    // -1: EXIT_SKIP:       TestSkipped
-    // 0: EXIT_SUCCESS:     TestPassed
-    // 1: EXIT_FAILURE:     TestFailed
-    // 2:                   TestTimedOut
+    // -1: EXIT_SKIP:       TestResult::Skipped
+    // 0: EXIT_SUCCESS:     TestResult::Passed
+    // 1: EXIT_FAILURE:     TestResult::Failed
+    // 2:                   TestResult::TimedOut
     // 3:                   Special case for abort()
     // 4-255:               exit() code (from sysexits.h)
     // anything else:       an NTSTATUS
@@ -1396,17 +1396,17 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
     }
 
     switch (status) {
-    case DWORD(TestSkipped):
-    case TestPassed:
-    case TestFailed:
-    case TestTimedOut:
+    case DWORD(TestResult::Skipped):
+    case TestResult::Passed:
+    case TestResult::Failed:
+    case TestResult::TimedOut:
         return { TestResult(status) };
     case 3:
-        return { TestKilled, unsigned(STATUS_FAIL_FAST_EXCEPTION) };
+        return { TestResult::Killed, unsigned(STATUS_FAIL_FAST_EXCEPTION) };
     }
     if (status < 255)
-        return { TestOperatingSystemError, status };
-    return { TestKilled, status };
+        return { TestResult::OperatingSystemError, status };
+    return { TestResult::Killed, status };
 #else
 #  error "What platform is this?"
 #endif
@@ -1426,10 +1426,10 @@ static TestResult child_run(/*nonconst*/ struct test *test)
         missing &= ~_compilerCpuFeatures;
         log_skip(CpuNotSupportedSkipCategory, "SKIP reason: test requires %s\n", cpu_features_to_string(missing).c_str());
         (void) missing;
-        return TestSkipped;
+        return TestResult::Skipped;
     }
 
-    TestResult state = TestPassed;
+    TestResult state = TestResult::Passed;
 
     do {
         int ret = 0;
@@ -1461,10 +1461,10 @@ static TestResult child_run(/*nonconst*/ struct test *test)
             logging_mark_thread_failed(-1);
             if (ret > 0)
                 log_error("Init function failed with code %i", ret);
-            state = TestFailed;
+            state = TestResult::Failed;
             break;
         } else if (ret < 0) {
-            state = TestSkipped;
+            state = TestResult::Skipped;
             break;
         }
 
@@ -1658,27 +1658,27 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
     TestResult real_state = logging_print_results(state, tc, test);
 
     switch (state.result) {
-    case TestPassed:
-    case TestSkipped:
-    case TestFailed:
-    case TestCoreDumped:
-    case TestKilled:
+    case TestResult::Passed:
+    case TestResult::Skipped:
+    case TestResult::Failed:
+    case TestResult::CoreDumped:
+    case TestResult::Killed:
         break;          // continue running tests
 
-    case TestOperatingSystemError:
-    case TestTimedOut:
-    case TestOutOfMemory:
+    case TestResult::OperatingSystemError:
+    case TestResult::TimedOut:
+    case TestResult::OutOfMemory:
         if (!sApp->ignore_os_errors) {
             logging_flush();
             int exit_code = print_application_footer(2, {});
             _exit(logging_close_global(exit_code));
         } else {
             // not a pass either, but won't affect the result
-            real_state = TestSkipped;
+            real_state = TestResult::Skipped;
         }
         break;
 
-    case TestInterrupted:
+    case TestResult::Interrupted:
         assert(false && "internal error: shouldn't have got here!");
         __builtin_unreachable();
         break;
@@ -1807,7 +1807,7 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
 
 TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails)
 {
-    TestResult state = TestSkipped;
+    TestResult state = TestResult::Skipped;
     int fail_count = 0;
     int iterations;
     std::unique_ptr<char[]> random_allocation;
@@ -1871,7 +1871,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         }
 
         /* don't repeat skipped tests */
-        if (state == TestSkipped)
+        if (state == TestResult::Skipped)
             goto out;
 
         // do we fracture?
@@ -1912,7 +1912,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
             state = run_one_test_once(tc, test);
             cleanup_internal(test);
 
-            if (state > TestPassed) {
+            if (state > TestResult::Passed) {
                 for (int i = 0; iterations < 64 && i < num_cpus(); ++i) {
                     if (sApp->thread_data(i)->has_failed())
                         per_cpu_fails[i] |= uint64_t(1) << iterations;
@@ -1922,7 +1922,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         }
 
         analyze_test_failures(*tc, test, fail_count, iterations, per_cpu_fails);
-        state = TestFailed;
+        state = TestResult::Failed;
     }
 
 out:
@@ -3510,14 +3510,14 @@ int main(int argc, char **argv)
 
     bool restarting = true;
     int total_tests_run = 0;
-    TestResult lastTestResult = TestSkipped;
+    TestResult lastTestResult = TestResult::Skipped;
 
     for (struct test *test = get_next_test(tc); test; test = get_next_test(tc)) {
         if (restarting){
             tc = 0;
             logging_print_iteration_start();
             initialize_smi_counts();  // used by smi_count test
-        } else if (lastTestResult != TestSkipped) {
+        } else if (lastTestResult != TestResult::Skipped) {
             if (sApp->service_background_scan)
                 background_scan_wait();
             else
@@ -3539,15 +3539,15 @@ int main(int argc, char **argv)
         lastTestResult = run_one_test(&tc, test, per_cpu_failures);
 
         total_tests_run++;
-        if (lastTestResult == TestFailed) {
+        if (lastTestResult == TestResult::Failed) {
             ++total_failures;
             // keep the record of failures to triage later
             triage_tests.push_back(test);
             if (fatal_errors)
                 break;
-        } else if (lastTestResult == TestPassed) {
+        } else if (lastTestResult == TestResult::Passed) {
             ++total_successes;
-        } else if (lastTestResult == TestSkipped) {
+        } else if (lastTestResult == TestResult::Skipped) {
             ++total_skips;
             if (sApp->fatal_skips)
                 break;
@@ -3559,7 +3559,7 @@ int main(int argc, char **argv)
     // Run the mce_test at the end of all tests to make sure no MCE errors fired
     if constexpr (InterruptMonitor::InterruptMonitorWorks) {
         if (total_failures == 0 && mce_test.quality_level != TEST_QUALITY_SKIP) {
-            if (run_one_test(&tc, &mce_test, per_cpu_failures) == TestFailed)
+            if (run_one_test(&tc, &mce_test, per_cpu_failures) == TestResult::Failed)
                 ++total_failures;
             else
                 ++total_successes;
