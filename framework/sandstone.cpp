@@ -319,6 +319,102 @@ static Duration calculate_runtime(MonotonicTimePoint start_time, MonotonicTimePo
     return now - start_time;
 }
 
+static int test_result_to_exit_code(TestResult result)
+{
+    switch (result) {
+    case TestResult::Passed:
+        break;
+    case TestResult::Skipped:
+        return -1;
+    case TestResult::Failed:
+        return EXIT_FAILURE;
+    case TestResult::OperatingSystemError:
+    case TestResult::Killed:
+    case TestResult::CoreDumped:
+    case TestResult::OutOfMemory:
+    case TestResult::TimedOut:
+    case TestResult::Interrupted:
+        assert(false && "Tests don't produce these conditions themselves");
+        __builtin_unreachable();
+    }
+    return EXIT_SUCCESS;
+}
+
+#ifndef _WIN32
+static ChildExitStatus test_result_from_exit_code(forkfd_info info)
+{
+    ChildExitStatus r = {};
+    r.extra = info.status;
+    if (info.code == CLD_EXITED) {
+        // normal exit
+        int8_t status = info.status;    // the cast to int8_t transforms 255 into -1
+        switch (status) {
+        case -1:
+            r.result = TestResult::Skipped;
+            r.extra = 0;
+            break;
+        case EXIT_SUCCESS:
+            r.result = TestResult::Passed;
+            r.extra = 0;
+            break;
+        case EXIT_FAILURE:
+            r.result = TestResult::Failed;
+            r.extra = 0;
+            break;
+        default:
+            // a FW problem getting started
+            r.result = TestResult::OperatingSystemError;
+            break;
+        }
+    } else if (info.code == CLD_KILLED || info.code == CLD_DUMPED) {
+        r.result = info.code == CLD_KILLED ? TestResult::Killed : TestResult::CoreDumped;
+        if (info.status == SIGKILL)
+            r.result = TestResult::OutOfMemory;
+        else if (info.status == SIGQUIT)
+            r.result = TestResult::TimedOut;
+    } else {
+        assert(false && "Impossible condition; did we get a CLD_STOPPED??");
+        __builtin_unreachable();
+    }
+    return r;
+}
+#else
+static constexpr DWORD EXIT_TIMEOUT = 2;
+static ChildExitStatus test_result_from_exit_code(DWORD status)
+{
+    // Exit code mapping:
+    // -1: EXIT_SKIP:       TestResult::Skipped
+    // 0: EXIT_SUCCESS:     TestResult::Passed
+    // 1: EXIT_FAILURE:     TestResult::Failed
+    // 2:                   TestResult::TimedOut
+    // 3:                   Special case for abort()
+    // 4-255:               exit() code (from sysexits.h)
+    // anything else:       an NTSTATUS
+    //
+    // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=msvc-160
+    // says: "If the Windows error reporting handler is not invoked, then abort
+    // calls _exit to terminate the process with exit code 3"
+
+    switch (status) {
+    case DWORD(-1):
+        return { TestResult::Skipped };
+    case EXIT_SUCCESS:
+        return { TestResult::Passed };
+    case EXIT_FAILURE:
+        return { TestResult::Failed };
+    case EXIT_TIMEOUT:
+        return { TestResult::TimedOut };
+    case 3:
+        return { TestResult::Killed, unsigned(STATUS_FAIL_FAST_EXCEPTION) };
+    }
+    if (status > 255)
+        return { TestResult::Killed, status };
+
+    // must be a FW problem getting started
+    return { TestResult::OperatingSystemError, status };
+}
+#endif // _WIN32
+
 static inline __attribute__((always_inline, noreturn)) void ud2()
 {
     __builtin_trap();
@@ -1328,22 +1424,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 
         return { TestResult::TimedOut };
     }
-
-    // child exited just fine
-    if (info.code == CLD_EXITED) {
-        if (int8_t(info.status) <= 3)       // cast to int8_t transforms 255 into -1
-            return { TestResult(info.status) };
-        return { TestResult::OperatingSystemError, unsigned(info.status) };
-    }
-
-    // child crashed - prepare some extra information text
-    ChildExitStatus r = { TestResult::Killed, unsigned(info.status) };
-    if (info.code == CLD_DUMPED)
-        r.result = TestResult::CoreDumped;
-    else if (info.status == SIGKILL)
-        r.result = TestResult::OutOfMemory;
-
-    return r;
+    return test_result_from_exit_code(info);
 #elif defined(_WIN32)
     (void) ffd;
     (void) tc;
@@ -1358,7 +1439,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 
     case WAIT_TIMEOUT:
         log_message(-1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
-        TerminateProcess(HANDLE(child), TestResult::TimedOut);
+        TerminateProcess(HANDLE(child), EXIT_TIMEOUT);
 
         // wait for termination
         result = WaitForSingleObject(HANDLE(child), (20000ms).count());
@@ -1375,38 +1456,13 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
         abort();
     }
 
-    // Exit code mapping:
-    // -1: EXIT_SKIP:       TestResult::Skipped
-    // 0: EXIT_SUCCESS:     TestResult::Passed
-    // 1: EXIT_FAILURE:     TestResult::Failed
-    // 2:                   TestResult::TimedOut
-    // 3:                   Special case for abort()
-    // 4-255:               exit() code (from sysexits.h)
-    // anything else:       an NTSTATUS
-    //
-    // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=msvc-160
-    // says: "If the Windows error reporting handler is not invoked, then abort
-    // calls _exit to terminate the process with exit code 3"
-
     DWORD status;
     if (GetExitCodeProcess(hChild.get(), &status) == 0) {
         fprintf(stderr, "%s: GetExitCodeProcess(child = %td) failed: %lx\n",
                 program_invocation_name, child, GetLastError());
         abort();
     }
-
-    switch (status) {
-    case DWORD(TestResult::Skipped):
-    case TestResult::Passed:
-    case TestResult::Failed:
-    case TestResult::TimedOut:
-        return { TestResult(status) };
-    case 3:
-        return { TestResult::Killed, unsigned(STATUS_FAIL_FAST_EXCEPTION) };
-    }
-    if (status < 255)
-        return { TestResult::OperatingSystemError, status };
-    return { TestResult::Killed, status };
+    return test_result_from_exit_code(status);
 #else
 #  error "What platform is this?"
 #endif
@@ -1648,7 +1704,7 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
         logging_init_child_preexec();
         state.result = child_run(const_cast<struct test *>(test));
         if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
-            _exit(state.result);
+            _exit(test_result_to_exit_code(state.result));
     } else {
         /* parent - wait */
         state = wait_for_child(ret, child, tc, test);
@@ -1860,7 +1916,11 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
              && MonotonicTimePoint::clock::now() < first_iteration_target && auto_fracture))
             sApp->shmem->current_max_loop_count *= 2;
 
-        if (state > EXIT_SUCCESS) {
+        /* don't repeat skipped tests */
+        if (state == TestResult::Skipped)
+            goto out;
+
+        if (state != TestResult::Passed) {
             // this counts as the first failure regardless of how many fractures we've run
             for (int i = 0; i < num_cpus(); ++i) {
                 if (sApp->thread_data(i)->has_failed())
@@ -1869,10 +1929,6 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
             ++fail_count;
             break;
         }
-
-        /* don't repeat skipped tests */
-        if (state == TestResult::Skipped)
-            goto out;
 
         // do we fracture?
         if (sApp->shmem->current_max_loop_count <= 0 || sApp->max_test_loop_count
@@ -2349,7 +2405,7 @@ static int run_tests_on_cpu_set(vector<const struct test *> &tests, const Logica
     load_cpu_info(set);
 
     for (auto &t: tests) {
-        ret = run_one_test(&test_count, t, per_cpu_failures);
+        ret = test_result_to_exit_code(run_one_test(&test_count, t, per_cpu_failures));
         if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
         test_count++;
     }
@@ -2394,7 +2450,7 @@ static int exec_mode_run(int argc, char **argv)
 
     std::vector<struct test *> test_list;
     add_test(test_list, test_to_run);
-    return child_run(test_to_run);
+    return test_result_to_exit_code(child_run(test_to_run));
 }
 
 // Triage run attempts to figure out which socket(s) are causing test failures.
