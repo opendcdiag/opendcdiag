@@ -119,15 +119,15 @@ struct RandomEngineWrapper;
 struct RandomEngineDeleter { void operator()(RandomEngineWrapper *) const; };
 
 enum TestResult : int8_t {
-    TestPassed = EXIT_SUCCESS,
-    TestFailed = EXIT_FAILURE,
-    TestTimedOut,
-    TestCoreDumped,
-    TestKilled,
-    TestOutOfMemory,
-    TestInterrupted,
-    TestOperatingSystemError,
-    TestSkipped = -1,
+    Passed = EXIT_SUCCESS,
+    Failed = EXIT_FAILURE,
+    TimedOut,
+    CoreDumped,
+    Killed,
+    OutOfMemory,
+    Interrupted,
+    OperatingSystemError,
+    Skipped = -1,
 };
 
 enum ThreadState : int {
