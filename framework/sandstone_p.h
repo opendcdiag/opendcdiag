@@ -118,16 +118,16 @@ int open_memfd(enum MemfdCloexecFlag);
 struct RandomEngineWrapper;
 struct RandomEngineDeleter { void operator()(RandomEngineWrapper *) const; };
 
-enum TestResult : int8_t {
-    Passed = EXIT_SUCCESS,
-    Failed = EXIT_FAILURE,
-    TimedOut,
-    CoreDumped,
-    Killed,
-    OutOfMemory,
-    Interrupted,
-    OperatingSystemError,
+enum class TestResult : int8_t {
     Skipped = -1,
+    Passed,
+    Failed,
+    Killed,
+    CoreDumped,
+    OperatingSystemError,
+    OutOfMemory,
+    TimedOut,
+    Interrupted,
 };
 
 enum ThreadState : int {
