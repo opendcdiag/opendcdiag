@@ -123,6 +123,10 @@ public:
     ChildExitStatus childExitStatus;
     TestResult testResult = TestResult::Passed;
     int pc = 0;
+
+protected:
+    // shared between the TAP and key-value loggers; YAML overrides
+    int print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level);
 };
 
 class TapFormatLogger : public AbstractLogger
@@ -170,7 +174,7 @@ private:
     void maybe_print_messages_header(int fd);
     void print_thread_header(int fd, int cpu, int verbosity);
     static int print_test_knobs(int fd, mmap_region r);
-    static int print_one_thread_messages(int fd, mmap_region r, int level, ChildExitStatus status);
+    int print_one_thread_messages(int fd, mmap_region r, int level);
     void print_result_line();
 
     enum TestHeaderTime { AtStart, OnFirstFail };
@@ -1528,7 +1532,7 @@ static inline void format_skip_message(std::string &skip_message, std::string_vi
 
 /// Returns the lowest priority found
 /// (this function is shared between the TAP and key-value pair loggers)
-static int print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level, ChildExitStatus status)
+int AbstractLogger::print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level)
 {
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
@@ -1738,11 +1742,11 @@ void KeyValuePairLogger::print_thread_messages()
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, childExitStatus);
+        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
 
         if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, test->id);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity, childExitStatus);
+            print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity);
         }
 
         munmap_file(r);
@@ -2008,11 +2012,11 @@ void TapFormatLogger::print_thread_messages()
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, childExitStatus);
+        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
 
         if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, sApp->shmem->verbosity);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity, childExitStatus);
+            print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity);
         }
 
         munmap_file(r);
@@ -2121,7 +2125,7 @@ int YamlLogger::print_test_knobs(int fd, mmap_region r)
     return print_count;
 }
 
-inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level, ChildExitStatus status)
+inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level)
 {
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
@@ -2310,11 +2314,11 @@ void YamlLogger::print()
             continue;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX, childExitStatus);
+        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX);
 
         if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, sApp->shmem->verbosity);
-            print_one_thread_messages(real_stdout_fd, r, sApp->shmem->verbosity, childExitStatus);
+            print_one_thread_messages(real_stdout_fd, r, sApp->shmem->verbosity);
         }
 
         munmap_file(r);
