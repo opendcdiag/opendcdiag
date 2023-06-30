@@ -127,6 +127,7 @@ public:
 
 protected:
     int loglevel() const;
+    bool should_print_fail_info() const;
 
     // shared between the TAP and key-value loggers; YAML overrides
     int print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level);
@@ -1672,6 +1673,25 @@ inline int AbstractLogger::loglevel() const
     __builtin_unreachable();
 }
 
+inline bool AbstractLogger::should_print_fail_info() const
+{
+    switch (testResult) {
+    case TestResult::Skipped:
+    case TestResult::Passed:
+        return false;
+    case TestResult::Failed:
+    case TestResult::CoreDumped:
+    case TestResult::Killed:
+    case TestResult::OperatingSystemError:
+    case TestResult::TimedOut:
+    case TestResult::OutOfMemory:
+        return true;
+    case TestResult::Interrupted:
+        return false;
+    }
+    __builtin_unreachable();
+}
+
 void KeyValuePairLogger::prepare_line_prefix()
 {
     timestamp_prefix = log_timestamp();
@@ -1711,7 +1731,7 @@ void KeyValuePairLogger::print(int tc)
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_pass_count = %d\n", test->id, pc);
     logging_printf(LOG_LEVEL_VERBOSE(2), "%s_virtualized = %s\n", test->id,
                    cpu_has_feature(cpu_feature_hypervisor) ? "yes" : "no");
-    if (testResult == TestResult::Failed) {
+    if (should_print_fail_info()) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_percent = %.1f\n", test->id,
                        100. * (num_cpus() - pc) / num_cpus());
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_random_generator_state = %s\n", test->id,
@@ -1878,7 +1898,7 @@ void TapFormatLogger::print(int tc)
 std::string TapFormatLogger::fail_info_details()
 {
     std::string result;
-    if (testResult == TestResult::Passed || testResult == TestResult::Skipped)
+    if (!should_print_fail_info())
         return result;
 
     auto add_value = [&result](std::string s, char separator) {
@@ -2280,6 +2300,7 @@ void YamlLogger::print_result_line()
         crashed = true;
         break;
     }
+    assert(should_print_fail_info());
 
     // format the code for us first
     char code[std::numeric_limits<unsigned>::digits10 + 2]; // sufficient for 0x + hex too
@@ -2314,7 +2335,7 @@ void YamlLogger::print()
     Duration test_duration = MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
     print_result_line();
-    if (testResult == TestResult::Failed)
+    if (should_print_fail_info())
         logging_printf(LOG_LEVEL_QUIET, "%s", fail_info_details().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  time-at-end:   %s\n", get_current_time().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  test-runtime: %s\n",
