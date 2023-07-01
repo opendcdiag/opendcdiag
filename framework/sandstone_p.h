@@ -582,10 +582,6 @@ void logging_init_child_preexec();
 void logging_finish();
 LoggingStream logging_user_messages_stream(int thread_num, int level);
 TestResult logging_print_results(std::span<const ChildExitStatus> status, int *tc, const struct test *test);
-inline TestResult logging_print_results(ChildExitStatus status, int *tc, const struct test *test)
-{
-    return logging_print_results(std::span{ &status, 1 }, tc, test);
-}
 
 /* random.cpp */
 void random_init_global(const char *argument);

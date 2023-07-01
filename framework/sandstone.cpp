@@ -88,15 +88,6 @@
 // so use the the 32-bit offset version (which calls _chsize)
 #    undef ftruncate
 #  endif
-
-namespace {
-struct HandleCloser
-{
-    void operator()(HANDLE h) { CloseHandle(h); }
-    void operator()(intptr_t h) { CloseHandle(HANDLE(h)); }
-};
-}
-using AutoClosingHandle = std::unique_ptr<void, HandleCloser>;
 #endif
 
 #include "sandstone_test_lists.h"
@@ -1304,81 +1295,80 @@ static void run_threads(const struct test *test)
     current_test = nullptr;
 }
 
-static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const struct test *test)
+namespace {
+struct StartedChild
+{
+    intptr_t pid;
+    int fd;
+};
+
+struct ChildrenList
+{
+    ChildrenList() = default;
+    ChildrenList(const ChildrenList &) = delete;
+    ChildrenList &operator=(const ChildrenList &) = delete;
+#ifdef _WIN32
+    ~ChildrenList()
+    {
+        for (auto &p : handles) {
+            HANDLE h = reinterpret_cast<HANDLE>(p);
+            if (h != INVALID_HANDLE_VALUE)
+                CloseHandle(h);
+        }
+    }
+
+    std::vector<intptr_t> handles;
+#else
+    ~ChildrenList()
+    {
+        for (auto &p : pollfds) {
+            if (p.fd != -1)
+                close(p.fd);
+        }
+    }
+
+    std::vector<pollfd> pollfds;
+    std::vector<pid_t> handles;
+#endif
+    std::vector<ChildExitStatus> results;
+
+    void add(StartedChild child)
+    {
+        handles.push_back(child.pid);
+#ifndef _WIN32
+        pollfds.emplace_back(pollfd{ .fd = child.fd, .events = POLLIN });
+#endif
+    }
+};
+} // unnamed namespace
+
+static void wait_for_children(ChildrenList &children, int *tc, const struct test *test)
 {
     Duration remaining = test_timeout(sApp->current_test_duration);
+    int children_left = children.handles.size();
+    children.results.resize(children_left);
 
 #if !defined(_WIN32)
-    enum ExitStatus {
-        Interrupted = -1,
-        TimedOut = 0,
-        Exited = 1
-    } exit_status;
-    struct forkfd_info info;
-    struct pollfd pfd[] = {
-        { .fd = ffd, .events = POLLIN },
-        { .fd = int(sApp->shmem->server_debug_socket), .events = POLLIN }
-    };
+    // add even if -1
+    children.pollfds.emplace_back(pollfd{ .fd = sApp->shmem->server_debug_socket, .events = POLLIN });
+    auto remove_debug_socket = scopeExit([&] { children.pollfds.pop_back(); });
 
-    auto do_wait = [&](Duration timeout) {
-        int ret = poll(pfd, std::size(pfd), std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count());
-        if (__builtin_expect(ret < 0, false)) {
-            if (errno == EINTR)
-                return Interrupted;
+    auto single_wait = [&](milliseconds timeout) {
+        int ret = poll(children.pollfds.data(), children.pollfds.size(), timeout.count());
+        if (__builtin_expect(ret < 0 && errno != EINTR, false)) {
             perror("poll");
             exit(EX_OSERR);
         }
-        if (ret == 0)
-            return TimedOut;    /* timed out */
-
-        if (pfd[1].revents & POLLIN) {
-            /* child is crashing */
-            debug_crashed_child();
-
-            // debug_crashed_child kill()s the child process, so we can block
-            // on forkfd_wait() until it finally does exit
-        } else {
-            /* child has exited */
-#ifndef __FreeBSD__
-            assert(pfd[0].revents & POLLIN);
-#endif
-        }
-
-        EINTR_LOOP(ret, forkfd_wait(pfd[0].fd, &info, nullptr));
-        if (ret == -1) {
-            perror("forkfd_wait");
-            exit(EX_OSERR);
-        }
-        forkfd_close(pfd[0].fd);
-        return Exited;
-    };
-    auto terminate_child = [=] {
-        log_message(-1, SANDSTONE_LOG_ERROR "Child %td did not exit, sending signal SIGQUIT", child);
-        kill(child, SIGQUIT);
-    };
-    auto kill_child = [=] { kill(child, SIGKILL); };
-
-    /* first wait: normal exit */
-    MonotonicTimePoint deadline  = steady_clock::now() + remaining;
-    for (;;) {
-        exit_status = do_wait(remaining);
-        if (exit_status != Interrupted)
-            break;
-
-        // we've received a signal, which one?
-        auto [signal, count] = last_signal();
-        if (signal == 0) {
-            // it was SIGCHLD, so restart the loop
-            remaining = deadline - steady_clock::now() + remaining;
-            if (remaining.count() < 0) {
-                exit_status = TimedOut;
-                break;
+        if (ret < 0) {
+            // we've received a signal, which one?
+            auto [signal, count] = last_signal();
+            if (signal != 0) {
+                // forward the signal to all children
+                for (pid_t child : children.handles) {
+                    if (child > 0)
+                        kill(child, signal);
+                }
             }
-        } else {
-            // caught a termination signal...
-
-            // forward the signal to the child
-            kill(child, signal);
 
             // if it was SIGINT, we print a message and wait for the test
             if (count == 1 && signal == SIGINT) {
@@ -1388,79 +1378,142 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
                 enable_interrupt_catch();       // re-arm SIGINT handler
             } else {
                 // for any other signal (e.g., SIGTERM), we don't
-                break;
+                return int(signal);
             }
         }
-    }
+        if (ret <= 0)
+            return 0;
 
-    if (auto [sig, count] = last_signal(); __builtin_expect(sig, 0)) {
-        // we caught a SIGINT
-        // child has likely not been able to write results
-        logging_print_results({ TestResult::Interrupted }, tc, test);
-        logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
-        logging_flush();
-
-        // now exit with the same signal
-        disable_interrupt_catch();
-        raise(sig);
-        _exit(128 | sig);           // just in case
-    } else if (__builtin_expect(exit_status == TimedOut, false)) {
-        /* timed out, force the child to exit */
-        debug_hung_child(child);
-        terminate_child();
-        if (!do_wait(20s)) {
-            /* timed out again, kill the process */
-            kill_child();
-            if (!do_wait(20s)) {
-                log_platform_message(SANDSTONE_LOG_ERROR "# Child %td is hung and won't exit even after SIGKILL",
-                                     child);
-            }
+        if (pollfd &pfd = children.pollfds.back(); pfd.revents & POLLIN) {
+            // one child (or more than one) is crashing
+            debug_crashed_child();
         }
 
-        return { TestResult::TimedOut };
-    }
-    return test_result_from_exit_code(info);
+        // check if any of the children have exited
+        for (int i = 0; i < children.pollfds.size() - 1; ++i) {
+            pollfd &pfd = children.pollfds[i];
+            if (pfd.revents == 0)
+                continue;
+
+            // wait for this child
+            struct forkfd_info info;
+            EINTR_LOOP(ret, forkfd_wait4(pfd.fd, &info, WNOHANG, nullptr));
+            if (ret == -1) {
+                if (errno == EAGAIN)
+                    continue;           // shouldn't happen...
+                perror("forkfd_wait");
+                exit(EX_OSERR);
+            }
+            forkfd_close(pfd.fd);
+            pfd.fd = -1;
+            pfd.events = 0;
+            children.handles[i] = 0;
+            children.results[i] = test_result_from_exit_code(info);
+            --children_left;
+        }
+        return 0;
+    };
+    auto kill_children = [&] {
+        for (pid_t child : children.handles) {
+            if (child)
+                kill(child, SIGKILL);
+        }
+    };
 #elif defined(_WIN32)
-    (void) ffd;
+    auto kill_children = [] { };
+    auto single_wait = [&](milliseconds timeout) {
+        bool bWaitAll = false;
+        auto handles = reinterpret_cast<const HANDLE *>(children.handles.data());
+        DWORD result = WaitForMultipleObjects(children.handles.size(), handles,
+                                              bWaitAll, timeout.count());
+        if (__builtin_expect(result == WAIT_FAILED, false)) {
+            fprintf(stderr, "%s: WaitForMultipleObjects() failed: %lx; children left = %d\n",
+                    program_invocation_name, GetLastError(), children_left);
+            abort();
+        }
+        if (result == WAIT_TIMEOUT)
+            return 0;
+
+        int idx = result - WAIT_OBJECT_0;
+        if (GetExitCodeProcess(handles[idx], &result) == 0) {
+            fprintf(stderr, "%s: GetExitCodeProcess(child = %p) failed: %lx\n",
+                    program_invocation_name, handles[idx], GetLastError());
+            abort();
+        }
+
+        children.results[idx] = test_result_from_exit_code(result);
+        --children_left;
+        return 0;
+    };
     (void) tc;
     (void) test;
-
-    AutoClosingHandle hChild{ HANDLE(child) };
-    DWORD result = WaitForSingleObject(hChild.get(), duration_cast<milliseconds>(remaining).count());
-    switch (result) {
-    case WAIT_OBJECT_0:
-        // child exited
-        break;
-
-    case WAIT_TIMEOUT:
-        log_message(-1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
-        TerminateProcess(HANDLE(child), EXIT_TIMEOUT);
-
-        // wait for termination
-        result = WaitForSingleObject(HANDLE(child), (20000ms).count());
-        if (result == WAIT_TIMEOUT) {
-            log_platform_message(SANDSTONE_LOG_ERROR "# Child %td is hung and won't exit even after TerminateProcess()",
-                                 child);
-
-        }
-        break;
-
-    case WAIT_FAILED:
-        fprintf(stderr, "%s: WaitForSingleObject(child = %td) failed: %lx\n",
-                program_invocation_name, child, GetLastError());
-        abort();
-    }
-
-    DWORD status;
-    if (GetExitCodeProcess(hChild.get(), &status) == 0) {
-        fprintf(stderr, "%s: GetExitCodeProcess(child = %td) failed: %lx\n",
-                program_invocation_name, child, GetLastError());
-        abort();
-    }
-    return test_result_from_exit_code(status);
 #else
 #  error "What platform is this?"
 #endif
+    auto terminate_children = [&] {
+        for (size_t i = 0; i < children.handles.size(); ++i) {
+            auto child = children.handles[i];
+            if (child) {
+#ifdef _WIN32
+                log_message(-1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
+                TerminateProcess(HANDLE(child), EXIT_TIMEOUT);
+#else
+                log_message(-1, SANDSTONE_LOG_ERROR "Child %d did not exit, sending signal SIGQUIT", child);
+                kill(child, SIGQUIT);
+#endif
+            }
+        }
+    };
+
+    auto wait_for_all_children = [&](Duration remaining) {
+        MonotonicTimePoint deadline = steady_clock::now() + remaining;
+        for ( ; children_left && remaining > 0s; remaining = deadline - steady_clock::now()) {
+            int ret = single_wait(ceil<milliseconds>(remaining));
+            if (ret >= 0)
+                continue;
+
+            for (ChildExitStatus &result : children.results)
+                result = { TestResult::Interrupted };
+
+            // Problem waiting: we must have caught a signal
+            // (child has likely not been able to write results)
+            int sig = ret;
+
+            logging_print_results(children.results, tc, test);
+            logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
+            logging_flush();
+
+            // now exit with the same signal
+            disable_interrupt_catch();
+            raise(sig);
+            _exit(128 | sig);           // just in case
+        }
+    };
+
+    /* first wait set : normal exit */
+    wait_for_all_children(remaining);
+    if (children_left == 0)
+        return;
+
+    /* at least one child timed out; force them to exit */
+    terminate_children();
+
+    /* wait for the termination to take effect */
+    wait_for_all_children(20s);
+    if (children_left) {
+        /* timed out again, take drastic measures */
+        kill_children();
+        wait_for_all_children(20s);
+    }
+    if (children_left) {
+        for (size_t i = 0; i < children.handles.size(); ++i) {
+            if (children.handles[i] == 0)
+                continue;
+            log_platform_message(SANDSTONE_LOG_ERROR "# Child %td is hung and won't exit",
+                                 intptr_t(children.handles[i]));
+            children.results[i] = { TestResult::TimedOut };
+        }
+    }
 }
 
 static TestResult child_run(/*nonconst*/ struct test *test)
@@ -1536,7 +1589,7 @@ static TestResult child_run(/*nonconst*/ struct test *test)
     return state;
 }
 
-static int call_forkfd(intptr_t *child)
+static StartedChild call_forkfd()
 {
     pid_t pid;
 
@@ -1564,7 +1617,6 @@ static int call_forkfd(intptr_t *child)
         assert(efd != -1);
 
         int ffd = forkfd(FFD_CLOEXEC, &pid);
-        *child = pid;
 
         if (ffd == -1) {
             // forkfd failed (probably CLONE_PIDFD rejected)
@@ -1578,7 +1630,7 @@ static int call_forkfd(intptr_t *child)
                 _exit(127);
 
             // no problems seen, return to caller as child process
-            return FFD_CHILD_PROCESS;
+            return { .pid = pid, .fd = FFD_CHILD_PROCESS };
         } else {
             // parent side
             int ret;
@@ -1589,7 +1641,7 @@ static int call_forkfd(intptr_t *child)
             if (result == PidProperlyUpdated) {
                 // no problems seen, return to caller as parent process
                 ffd_extra_flags = 0;
-                return ffd;
+                return { .pid = pid, .fd = ffd };
             }
 
             // found a problem, wait for the child and try again
@@ -1607,16 +1659,16 @@ static int call_forkfd(intptr_t *child)
         perror("fork");
         exit(EX_OSERR);
     }
-    *child = pid;
-    return ffd;
+    return { .pid = pid, .fd = ffd };
 }
 
-static int spawn_child(const struct test *test, intptr_t *hpid)
+static StartedChild spawn_child(const struct test *test)
 {
     assert(sApp->shmemfd != -1);
     std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
     std::string random_seed = random_format_seed();
 
+    StartedChild ret = {};
 #ifdef _WIN32
     // _spawn on Windows requires argv elements to be quoted if they contain space.
     const char * const argv0 = SANDSTONE_EXECUTABLE_NAME ".exe";
@@ -1636,36 +1688,31 @@ static int spawn_child(const struct test *test, intptr_t *hpid)
     };
     std::copy(argv + 1, std::end(argv), gdbserverargs + 4);
 
-    intptr_t ret = -1;
 #ifdef _WIN32
-
     // save stderr
     static int saved_stderr = _dup(STDERR_FILENO);
     logging_init_child_preexec();
 
     if (sApp->gdb_server_comm.size()) {
         // launch gdbserver instead
-        _spawnvp(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+        ret.pid = _spawnvp(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+    } else {
+        ret.pid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
     }
 
-    *hpid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
     int saved_errno = errno;
 
     // restore stderr
     _dup2(saved_stderr, STDERR_FILENO);
 
-    if (*hpid == -1) {
+    if (ret.pid == -1) {
         errno = saved_errno;
         perror("_spawnv");
         exit(EX_OSERR);
     }
-
-
-    // no forkfd on Windows, any value is good aside from -1 and FFD_CHILD_PROCESS
-    ret = 0;
 #else
-    ret = call_forkfd(hpid);
-    if (ret == FFD_CHILD_PROCESS) {
+    ret = call_forkfd();
+    if (ret.fd == FFD_CHILD_PROCESS) {
         logging_init_child_preexec();
 
         if (sApp->gdb_server_comm.size()) {
@@ -1685,29 +1732,34 @@ static int spawn_child(const struct test *test, intptr_t *hpid)
 
 static TestResult run_one_test_once(int *tc, const struct test *test)
 {
-    ChildExitStatus state = {};
-    intptr_t child;
-    int ret = FFD_CHILD_PROCESS;
+    ChildrenList children;
+    if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
+        assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test
+                && "child_exec_each_test mode can only happen in the child side!");
 
-    if (__builtin_expect(sApp->current_fork_mode() == SandstoneApplication::fork_each_test, true)) {
-        ret = call_forkfd(&child);
-    } else if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        ret = spawn_child(test, &child);
-    }
-
-    if (ret == FFD_CHILD_PROCESS) {
-        /* child - run test's code */
-        logging_init_child_preexec();
-        state.result = child_run(const_cast<struct test *>(test));
+        StartedChild ret = { .fd = FFD_CHILD_PROCESS };
         if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
-            _exit(test_result_to_exit_code(state.result));
+            ret = call_forkfd();
+        if (ret.fd == FFD_CHILD_PROCESS) {
+            /* child - run test's code */
+            logging_init_child_preexec();
+            TestResult result = child_run(const_cast<struct test *>(test));
+            if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
+                _exit(test_result_to_exit_code(result));
+            else
+                children.results.emplace_back(ChildExitStatus{ result });
+        } else {
+            children.add(ret);
+        }
     } else {
-        /* parent - wait */
-        state = wait_for_child(ret, child, tc, test);
+        children.add(spawn_child(test));
     }
+
+    /* wait for the children */
+    wait_for_children(children, tc, test);
 
     // print results and find out if the test failed
-    TestResult testResult = logging_print_results(state, tc, test);
+    TestResult testResult = logging_print_results(children.results, tc, test);
     switch (testResult) {
     case TestResult::Passed:
     case TestResult::Skipped:
