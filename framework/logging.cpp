@@ -1622,9 +1622,35 @@ format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurati
 inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus state_)
     : test(test), childExitStatus(state_), testResult(state_.result)
 {
-    if (testResult == TestResult::Skipped) {
+    switch (testResult) {
+    case TestResult::Skipped:
         skipInMainThread = true;
         return;         // no threads were started
+
+    case TestResult::Passed:
+        // normal condition
+        break;
+
+    case TestResult::Failed:
+        // test's test_init() failed. That's usually not supposed to happen...
+        return;
+
+    case TestResult::TimedOut:
+        // find stuck threads and insert error message
+        for (int i = 0; i < num_cpus(); ++i) {
+            ThreadState thr_state = sApp->thread_data(i)->thread_state.load(std::memory_order_relaxed);
+            if (thr_state == thread_running)
+                log_message(i, SANDSTONE_LOG_ERROR "Thread is stuck");
+        }
+        return;
+
+    case TestResult::CoreDumped:
+    case TestResult::Killed:
+    case TestResult::OperatingSystemError:
+    case TestResult::OutOfMemory:
+    case TestResult::Interrupted:
+        // child process had serious problems
+        return;
     }
 
     // scan the threads for their state
@@ -1634,9 +1660,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
         if (data->has_failed()) {
             earliest_fail = std::min(earliest_fail, data->fail_time);
-        } else if (thr_state == thread_running) {
-            if (testResult == TestResult::TimedOut)
-                log_message(i, SANDSTONE_LOG_ERROR "Thread is stuck");
+            testResult = TestResult::Failed;
         } else {
             // thread passed test
             ++pc;
@@ -1644,14 +1668,8 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
         }
     }
 
-    // condense the internal state variable to the three main possibilities
-    testResult = TestResult::Failed;
-    if (state_.result == TestResult::Passed && pc == num_cpus() && !sApp->main_thread_data()->has_failed()) {
-        if (sc == num_cpus())
-            testResult = TestResult::Skipped;
-        else
-            testResult = TestResult::Passed;
-    }
+    if (testResult == TestResult::Passed && pc == sc)
+        testResult = TestResult::Skipped;       // all threads skipped
 }
 
 inline int AbstractLogger::loglevel() const
@@ -1702,7 +1720,7 @@ void KeyValuePairLogger::print(int tc)
 {
     logging_printf(LOG_LEVEL_QUIET, "%s_result = %s\n", test->id,
                    testResult == TestResult::Skipped ? "skip" :
-                   testResult == TestResult::Failed ? "fail" : "pass");
+                   testResult == TestResult::Passed ? "pass" : "fail");
     
     if (testResult == TestResult::Skipped && !skipInMainThread) {
         logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "RuntimeSkipCategory");
@@ -1819,16 +1837,25 @@ void TapFormatLogger::print(int tc)
         extra = qual;
 
     const char *okstring = "not ok";
-    switch (childExitStatus.result) {
+    switch (testResult) {
     case TestResult::Skipped:
-    case TestResult::Passed:
-        // recheck, as status.result does not take failing threads into account
-        if (testResult == TestResult::Skipped)
-            extra += "SKIP";
-        if (testResult != TestResult::Failed)
-            okstring = "ok";
-
+        extra += "SKIP";
+        if (skipInMainThread) {
+            std::string init_skip_message = get_skip_message(-1);
+            if (init_skip_message.size() != 0)
+                extra += "(" + std::string(char_to_skip_category(init_skip_message[0])) +
+                        " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
+            else
+                extra += "(UnknownSkipCategory: check main thread message for details or "
+                            "use -vv option for more info)";
+        } else {
+            extra += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' "
+                     "function, check log for details)";
+        }
         [[fallthrough]];
+    case TestResult::Passed:
+        okstring = "ok";
+        break;
     case TestResult::Failed:
         break;          // no suffix necessary
     case TestResult::TimedOut:
@@ -1862,20 +1889,6 @@ void TapFormatLogger::print(int tc)
         tap_line += separator;
         tap_line += extra;
         extra.clear();
-        if (testResult == TestResult::Skipped) {
-            if (!skipInMainThread) {
-                tap_line += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' "
-                            "function, check log for details)";
-            } else {
-                std::string init_skip_message = get_skip_message(-1);
-                if (init_skip_message.size() != 0)
-                    tap_line += "(" + std::string(char_to_skip_category(init_skip_message[0])) +
-                            " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
-                else
-                    tap_line += "(UnknownSkipCategory: check main thread message for details or "
-                                "use -vv option for more info)";
-            }
-        }       
     }
 
     logging_printf(loglevel(), "%s\n", tap_line.c_str());
@@ -2242,43 +2255,34 @@ void YamlLogger::print_result_line()
     bool coredumped = false;
     std::string reason;
 
-    switch (childExitStatus.result) {
-    case TestResult::Skipped:   // can only be "result: skip"...
-    case TestResult::Passed:
-        // recheck, as childExitStatus.result does not take failing threads into account
-        switch (testResult) {
-        case TestResult::Skipped:
-            logging_printf(loglevel, "  result: skip\n");
-            if (!skipInMainThread) {
-                logging_printf(loglevel, "  skip-category: %s\n", "RuntimeSkipCategory");
-                logging_printf(loglevel, "  skip-reason: %s\n",
-                               "All CPUs skipped while executing 'test_run()' function, check log "
-                               "for details");
+    switch (testResult) {
+    case TestResult::Skipped:
+        logging_printf(loglevel, "  result: skip\n");
+        if (!skipInMainThread) {
+            logging_printf(loglevel, "  skip-category: %s\n", "RuntimeSkipCategory");
+            logging_printf(loglevel, "  skip-reason: %s\n",
+                           "All CPUs skipped while executing 'test_run()' function, check log "
+                           "for details");
+        } else {
+            std::string init_skip_message = get_skip_message(-1);
+            if (init_skip_message.size() > 0) {
+                logging_printf(loglevel, "  skip-category: %s\n",
+                               char_to_skip_category(init_skip_message[0]));
+                std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
+                if (loglevel <= sApp->shmem->verbosity)
+                    format_and_print_message(real_stdout_fd, -1, message, false);
+                if (file_log_fd != real_stdout_fd)
+                    format_and_print_message(file_log_fd, -1, message, false);
             } else {
-                std::string init_skip_message = get_skip_message(-1);
-                if (init_skip_message.size() > 0) {
-                    logging_printf(loglevel, "  skip-category: %s\n",
-                                   char_to_skip_category(init_skip_message[0]));
-                    std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
-                    if (loglevel <= sApp->shmem->verbosity)
-                        format_and_print_message(real_stdout_fd, -1, message, false);
-                    if (file_log_fd != real_stdout_fd)
-                        format_and_print_message(file_log_fd, -1, message, false);
-                } else {
-                    logging_printf(loglevel, "  skip-category: %s\n", "UnknownSkipCategory");  
-                    logging_printf(loglevel, "  skip-reason: %s\n",
-                                   "Unknown, check main thread message for details or use -vv "
-                                   "option for more info");
-                }
+                logging_printf(loglevel, "  skip-category: %s\n", "UnknownSkipCategory");
+                logging_printf(loglevel, "  skip-reason: %s\n",
+                               "Unknown, check main thread message for details or use -vv "
+                               "option for more info");
             }
-            return;
-        case TestResult::Passed:
-            return logging_printf(loglevel, "  result: pass\n");
-        default:
-            break;
         }
-
-        [[fallthrough]];
+        return;
+    case TestResult::Passed:
+        return logging_printf(loglevel, "  result: pass\n");
     case TestResult::Failed:
         return logging_printf(loglevel, "  result: fail\n");
     case TestResult::TimedOut:
