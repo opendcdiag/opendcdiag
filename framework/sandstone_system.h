@@ -20,9 +20,19 @@ struct SignalState
 
 void signals_init_global();
 void signals_init_child();
+#ifdef _WIN32
+inline SignalState last_signal()
+{
+    // On Windows, we don't (currently) catch any signals
+    return { };
+}
+inline void enable_interrupt_catch() {}
+inline void disable_interrupt_catch() {}
+#else
 SignalState last_signal();
-void enable_interrupt_catch();      // Unix only
-void disable_interrupt_catch();     // Unix only
+void enable_interrupt_catch();
+void disable_interrupt_catch();
+#endif
 
 /* stacksize.cpp */
 #ifdef _WIN32
