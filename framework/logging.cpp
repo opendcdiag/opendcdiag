@@ -126,6 +126,8 @@ public:
     bool skipInMainThread = false;
 
 protected:
+    int loglevel() const;
+
     // shared between the TAP and key-value loggers; YAML overrides
     int print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level);
 };
@@ -1651,6 +1653,25 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
     }
 }
 
+inline int AbstractLogger::loglevel() const
+{
+    switch (testResult) {
+    case TestResult::Skipped:
+        return sApp->fatal_skips ? LOG_LEVEL_QUIET : LOG_LEVEL_VERBOSE(1);
+    case TestResult::Passed:
+        return LOG_LEVEL_VERBOSE(1);
+    case TestResult::Failed:
+    case TestResult::CoreDumped:
+    case TestResult::Killed:
+    case TestResult::OperatingSystemError:
+    case TestResult::TimedOut:
+    case TestResult::OutOfMemory:
+    case TestResult::Interrupted:
+        return LOG_LEVEL_QUIET;
+    }
+    __builtin_unreachable();
+}
+
 void KeyValuePairLogger::prepare_line_prefix()
 {
     timestamp_prefix = log_timestamp();
@@ -1836,10 +1857,8 @@ void TapFormatLogger::print(int tc)
             }
         }       
     }
-    int loglevel = LOG_LEVEL_VERBOSE(1);
-    if (testResult == TestResult::Failed || (sApp->fatal_skips && testResult == TestResult::Skipped))
-        loglevel = LOG_LEVEL_QUIET;
-    logging_printf(loglevel, "%s\n", tap_line.c_str());
+
+    logging_printf(loglevel(), "%s\n", tap_line.c_str());
 
     logging_flush();
     print_thread_messages();
@@ -2191,9 +2210,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
 
 void YamlLogger::print_result_line()
 {
-    int loglevel = LOG_LEVEL_QUIET;
-    if (testResult == TestResult::Passed || (testResult == TestResult::Skipped && !sApp->fatal_skips))
-        loglevel = LOG_LEVEL_VERBOSE(1);
+    int loglevel = this->loglevel();
     if (loglevel == LOG_LEVEL_QUIET && file_log_fd != real_stdout_fd && sApp->shmem->verbosity < 1) {
         // logging_init won't have printed "- test:" to stdout, so do it now
         progress_bar_flush();
