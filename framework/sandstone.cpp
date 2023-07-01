@@ -1692,9 +1692,8 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
     }
 
     // print results and find out if the test failed
-    TestResult real_state = logging_print_results(state, tc, test);
-
-    switch (state.result) {
+    TestResult testResult = logging_print_results(state, tc, test);
+    switch (testResult) {
     case TestResult::Passed:
     case TestResult::Skipped:
     case TestResult::Failed:
@@ -1711,7 +1710,7 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
             _exit(logging_close_global(exit_code));
         } else {
             // not a pass either, but won't affect the result
-            real_state = TestResult::Skipped;
+            testResult = TestResult::Skipped;
         }
         break;
 
@@ -1721,7 +1720,7 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
         break;
     }
 
-    return real_state;
+    return testResult;
 }
 
 static void analyze_test_failures(int tc, const struct test *test, int fail_count, int attempt_count,
