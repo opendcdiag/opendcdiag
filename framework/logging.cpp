@@ -123,7 +123,6 @@ public:
     ChildExitStatus childExitStatus;
     TestResult testResult = TestPassed;
     int pc = 0;
-    int sc = 0;
 };
 
 class TapFormatLogger : public AbstractLogger
@@ -1617,6 +1616,8 @@ inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus s
     if (testResult == TestSkipped)
         return;         // no threads were started
 
+    // scan the threads for their state
+    int sc = 0;
     for (int i = 0; i < num_cpus(); ++i) {
         struct per_thread_data *data = cpu_data_for_thread(i);
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
