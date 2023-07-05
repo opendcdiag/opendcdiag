@@ -1762,52 +1762,54 @@ void KeyValuePairLogger::print_child_stderr()
 void TapFormatLogger::print(int tc)
 {
     // build the ok / not ok line
-    const char *qual = quality_string(test);
-    const char *extra = nullptr;
+    std::string extra;
+    if (const char *qual = quality_string(test))
+        extra = qual;
+
+    const char *okstring = "not ok";
     switch (childExitStatus.result) {
     case TestSkipped:
     case TestPassed:
         // recheck, as status.result does not take failing threads into account
-        if (testResult == TestSkipped) {
-            extra = "SKIP";
-            break;
-        } else if (testResult== TestPassed) {
-            break;      // no suffix necessary
-        }
+        if (testResult == TestSkipped)
+            extra += "SKIP";
+        if (testResult != TestFailed)
+            okstring = "ok";
 
         [[fallthrough]];
     case TestFailed:
         break;          // no suffix necessary
     case TestTimedOut:
-        extra = "timed out";
+        extra += "timed out";
         break;
     case TestCoreDumped:
-        extra = "Core Dumped: ";
+        extra += "Core Dumped: ";
+        extra += format_status_code();
         break;
     case TestOutOfMemory:
     case TestKilled:
-        extra = "Killed: ";
+        extra += "Killed: ";
+        extra += format_status_code();
         break;
     case TestInterrupted:
-        extra = "Interrupted";
+        extra += "Interrupted";
         break;
     case TestOperatingSystemError:
-        extra = "Operating system error: ";
+        extra += "Operating system error: ";
+        extra += format_status_code();
         break;
     }
 
-    std::string tap_line = stdprintf("%s %3i %s", testResult == TestFailed ? "not ok" : "ok", tc, test->id);
-    if (qual || extra || childExitStatus.extra) {
-        tap_line.reserve(128);
+    std::string tap_line = stdprintf("%s %3i %s", okstring, tc, test->id);
+    if (extra.size()) {
+        static constexpr std::string_view separator = "# ";
+        size_t newsize = std::max(tap_line.size(), size_t(32)) + separator.size() + extra.size();
+        tap_line.reserve(newsize);
         if (tap_line.size() < 32)
             tap_line.resize(32, ' ');
-        tap_line += "# ";
-        if (qual)
-            tap_line += qual;
-        if (extra)
-            tap_line += extra;
-        if (childExitStatus.extra)
-            tap_line += format_status_code();
+        tap_line += separator;
+        tap_line += extra;
+        extra.clear();
         if (childExitStatus.result == TestPassed && testResult == TestSkipped) { // if test passed in init and skipped on all threads in run
             tap_line += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' function, check log for details)";
         } else if (childExitStatus.result == TestSkipped) {  //if skipped in init

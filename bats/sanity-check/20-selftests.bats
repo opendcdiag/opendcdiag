@@ -71,8 +71,15 @@ test_yaml_regexp() {
 }
 
 @test "TAP output @positive" {
-    local tests=`$SANDSTONE --selftests --list-group-members @positive | sed 's,\r$,,'`
-    run $SANDSTONE --output-format=tap --selftests --timeout=15s --disable=mce_check -e @positive
+    # make an associative array:
+    #  tests=([selftest_pass]=1 [selftest_logs]=1 ...)
+    eval local -A tests=\( \
+         $($SANDSTONE --selftests --list-group-members @positive | \
+               sed -E 's/^/[/; s/\r?$/]=1/') \
+         \)
+
+    # Run without the timeedpass tests to run more quickly
+    run $SANDSTONE -n$MAX_PROC --output-format=tap --selftests --quick --timeout=15s --disable=mce_check --disable='*timedpass*' -e @positive
     [[ "$status" -eq 0 ]]
     while read line; do
         printf "# %s\n" "$line"
@@ -84,8 +91,16 @@ test_yaml_regexp() {
                 return 1
                 ;;
             ok*)
-                test=`echo "$line" | sed -E 's/^ok +([0-9]+ )?//;s/#.*//;s/ .*//'`
-                echo "$tests" | grep -qxF -e $test
+                if [[ "$line" =~ 'ok '[\ 0-9]+\ ([^#\ ]+)\ *#' (beta test)'? ]]; then
+                    test=${BASH_REMATCH[1]}
+                    if [[ "${tests[$test]}" != 1 ]]; then
+                        echo Unexpected test: "$test" >&2
+                        return 1
+                    fi
+                else
+                    echo "bad line: $line" >&2
+                    return 1
+                fi
                 ;;
             "exit: pass")
                 ;;
@@ -96,15 +111,77 @@ test_yaml_regexp() {
     done <<<"$output"
 }
 
-@test "TAP output @negative" {
+tap_negative_check() {
+    local line
+    local test=$1
+    local suffix=$2
+    local exit_line=${3-"exit: fail"}
+    notok=0
+    while read line; do
+        case "$line" in
+            \#* | \
+                "$exit_line" | \
+                "THIS IS AN UNOPTIMIZED BUILD"*)
+                # acceptable line
+                ;;
+            "not ok"*)
+                # inspect a little more
+                if ! [[ "$line" =~ 'not ok '[\ 0-9]+\ ([^#\ ]+)\ *#' (beta test)'?$suffix ]] ||
+                        ! [[ "${BASH_REMATCH[1]}" = "$test" ]]; then
+                    echo "bad line: $line" >&2
+                    return 1
+                fi
+                notok=$((notok + 1))
+                ;;
+            "---")
+                # beginning of YAML output, scan until its end
+                while read line; do
+                    if [[ "$line" = --- ]]; then
+                        break
+                    fi
+                done
+                ;;
+            *)
+                echo "bad line: $line" >&2
+                return 1
+                ;;
+        esac
+    done
+}
+
+@test "TAP output fails" {
     # not all tests
     for test in selftest_failinit selftest_fail; do
-        bash -c "$SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 -e $test -o -; [[ $? -eq 1 ]]" | \
-            sed 's,\r$,,' | tee /tmp/output.tap
-        grep -E -qx "\[[ 0-9.]+\] exit: fail" /tmp/output.tap
-        not_oks=`grep -E 'not ok +([0-9] )'$test /tmp/output.tap`
-        [[ `echo "$not_oks" | wc -l` -eq 5 ]]
+        local notok
+        run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 --on-crash=kill -e $test -o /dev/null -v
+        [[ $status -eq 1 ]]
+        sed 's/\r$//' <<<"$output" | {
+            tap_negative_check "$test" ''
+            [[ $notok -eq 5 ]]
+        }
     done
+}
+
+@test "TAP output crash" {
+    # not all tests
+    local -a crashtests=(selftest_abortinit selftest_abort selftest_sigsegv)
+    if $is_windows; then
+        crashtests+=(selftest_fastfail)
+    fi
+    ulimit -Sc 0                # disable core dumps
+    for test in ${crashtests[@]}; do
+        run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=0 --on-crash=kill -e $test -o /dev/null -v
+        [[ $status -eq 1 ]]
+        sed 's/\r$//; /^wine: Unhandled/d' <<<"$output" | \
+            tap_negative_check "$test" ' (Killed|Core Dumped):.*'
+    done
+}
+
+@test "TAP output OS error" {
+    run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=0 --on-crash=kill -e selftest_oserror -o /dev/null -v
+    [[ $status -eq 2 ]]
+    sed 's/\r$//' <<<"$output" | \
+        tap_negative_check selftest_oserror ' Operating system error:.*' "exit: invalid"
 }
 
 @test "TAP silent output" {
