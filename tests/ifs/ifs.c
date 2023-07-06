@@ -12,7 +12,7 @@
  * firmware test blob data in `/lib/firmware/...`. Supported since
  * 6.2
  *
- * @test array_bist
+ * @test ifs_array_bist
  *
  * Run 'Array BIST' test provided by the Linux kernel on compatible hardware
  *
@@ -302,7 +302,7 @@ DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
     .flags = test_schedule_sequential,
 END_DECLARE_TEST
 
-DECLARE_TEST(array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware selftest for cache and registers")
+DECLARE_TEST(ifs_array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware selftest for cache and registers")
     .test_init = scan_array_init,
     .test_run = scan_run,
     .desired_duration = -1,
