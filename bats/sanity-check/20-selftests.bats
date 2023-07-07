@@ -304,8 +304,11 @@ tap_negative_check() {
 
     test_yaml_numeric "/tests/0/threads@len" "value == $nproc / 2 + 1"
     for ((i = 0; i < nproc/2; ++i)); do
-        test_yaml_numeric "/cpu-info/$i/logical" "value == $i * 2"
+        test_yaml_numeric "/cpu-info/$i/logical" "(value % 2) == 0"
     done
+
+    # Verify there are no more CPUs:
+    [[ "${yamldump[/cpu-info/$i/logical]-unset}" = unset ]]
 }
 
 selftest_pass() {
