@@ -818,8 +818,7 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 
 static Topology build_topology()
 {
-    if (sApp->schedule_by == SandstoneApplication::ScheduleBy::Core)
-        reorder_cpus();
+    reorder_cpus();
 
     std::vector<Topology::Package> packages;
 

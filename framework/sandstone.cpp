@@ -3178,16 +3178,6 @@ int main(int argc, char **argv)
             if (sApp->shmem->max_messages_per_thread <= 0)
                 sApp->shmem->max_messages_per_thread = INT_MAX;
             break;
-        case schedule_by_option:
-            if (strcmp(optarg, "thread") == 0) {
-                sApp->schedule_by = SandstoneApplication::ScheduleBy::Thread;
-            } else if (strcmp(optarg, "core") == 0) {
-                sApp->schedule_by = SandstoneApplication::ScheduleBy::Core;
-            } else {
-                fprintf(stderr, "%s: unknown option for schedule-by: %s\n", argv[0], optarg);
-                return EX_USAGE;
-            }
-            break;
 
         case version_option:
             logging_print_version();
@@ -3233,6 +3223,7 @@ int main(int argc, char **argv)
         case mem_sample_time_option:
         case mem_samples_per_log_option:
         case no_mem_sampling_option:
+        case schedule_by_option:
             warn_deprecated_opt(argv[optind]);
             break;
 
