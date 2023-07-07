@@ -878,7 +878,7 @@ static char character_for_mask(uint32_t mask)
     return mask < 0xa ? '0' + mask : 'a' + mask - 0xa;
 }
 
-std::string Topology::build_falure_mask(const struct test *test)
+std::string Topology::build_falure_mask(const struct test *test) const
 {
     std::string result;
     if (!isValid())
@@ -907,7 +907,7 @@ std::string Topology::build_falure_mask(const struct test *test)
             uint32_t threadmask = 0;
             int threadcount = 0;
             int failcount = 0;
-            for (Thread &t : core.threads) {
+            for (const Thread &t : core.threads) {
                 int cpu_id = t.cpu;
                 if (cpu_id < 0)
                     continue;
