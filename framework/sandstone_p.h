@@ -352,7 +352,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 
     bool fatal_skips = false;
 
-    ScheduleBy schedule_by = ScheduleBy::Thread;
     ForkMode fork_mode =
 #ifdef _WIN32
             exec_each_test;
