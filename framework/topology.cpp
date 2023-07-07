@@ -80,7 +80,11 @@ struct linux_cpu_info
 
 struct cpu_info *cpu_info = nullptr;
 
-static int topo_gen = 0; // topology version, incremented each time load_cpu_info is executed
+static Topology &cached_topology()
+{
+    static Topology cached_topology = Topology({});
+    return cached_topology;
+}
 
 #ifdef __linux__
 static auto_fd open_sysfs_cpu_dir(int cpu)
@@ -214,7 +218,7 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
 
 static void apply_mock_topology(const std::vector<struct cpu_info> &mock_topology, const LogicalProcessorSet &enabled_cpus)
 {
-    // similar to load_cpu_info's loop below
+    // similar to init_topology_internal()'s loop below
     int count = sApp->thread_count = std::min<int>(mock_topology.size(), enabled_cpus.count());
     for (int i = 0, curr_cpu = 0; i < count; ++i, ++curr_cpu) {
         while (!enabled_cpus.is_set(LogicalProcessor(curr_cpu))) {
@@ -772,14 +776,13 @@ void apply_cpuset_param(char *param)
     sApp->thread_count = total_matches;
 }
 
-void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
+static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 {
     sApp->thread_count = enabled_cpus.count();
     assert(sApp->thread_count);
 
     delete[] cpu_info;
     cpu_info = new struct cpu_info[sApp->thread_count];
-    topo_gen++;
 
     if (SandstoneConfig::Debug) {
         static auto mock_topology = create_mock_topology(getenv("SANDSTONE_MOCK_TOPOLOGY"));
@@ -811,14 +814,13 @@ void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
     pthread_t detection_thread;
     pthread_create(&detection_thread, nullptr, detect, const_cast<LogicalProcessorSet *>(&enabled_cpus));
     pthread_join(detection_thread, nullptr);
-
-    if (sApp->schedule_by == SandstoneApplication::ScheduleBy::Core)
-        reorder_cpus();
 }
-
 
 static Topology build_topology()
 {
+    if (sApp->schedule_by == SandstoneApplication::ScheduleBy::Core)
+        reorder_cpus();
+
     std::vector<Topology::Package> packages;
 
     bool valid_topology = true;
@@ -861,15 +863,13 @@ static Topology build_topology()
 
 const Topology &Topology::topology()
 {
-    static int cached_topo_gen = -1;
-    static Topology cached_topology = Topology({});
+    return cached_topology();
+}
 
-    if (cached_topo_gen != topo_gen) {
-        cached_topology = build_topology();
-        cached_topo_gen = topo_gen;
-    }
-
-    return cached_topology;
+void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
+{
+    init_topology_internal(enabled_cpus);
+    cached_topology() = build_topology();
 }
 
 static char character_for_mask(uint32_t mask)
