@@ -6,6 +6,7 @@
 #include "topology.h"
 #include "sandstone_p.h"
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
@@ -152,49 +153,15 @@ static linux_cpu_info &proc_cpuinfo()
 
 static void reorder_cpus()
 {
-    auto find_cpu_idx_on_same_core_and_packet = [](int cpu_idx) {
-        for (int idx=0; idx < num_cpus(); ++idx)
-            if (cpu_info[idx].cpu_number != cpu_info[cpu_idx].cpu_number &&
-                cpu_info[idx].core_id    == cpu_info[cpu_idx].core_id    &&
-                cpu_info[idx].package_id == cpu_info[cpu_idx].package_id)
-                return idx;
-        return -1;
+    static auto cpu_tie = [](const struct cpu_info &cpu) {
+        return std::tie(cpu.package_id, cpu.core_id, cpu.thread_id,
+                        // in case this is a VM with no topology information
+                        cpu.cpu_number);
     };
-
-    auto find_next_unassigned_cpu_idx = [](std::vector<int> const &cpu_idx_added_to_reorder_list) {
-        for (int idx=0; idx < num_cpus(); ++idx)
-            if (cpu_idx_added_to_reorder_list[idx] == 0)
-                return idx;
-        return -1;
+    auto cpu_compare = [](const struct cpu_info &cpu1, const struct cpu_info &cpu2) {
+        return cpu_tie(cpu1) < cpu_tie(cpu2);
     };
-
-    struct cpu_info *cpu_info_reorder = new struct cpu_info[num_cpus()];
-    std::vector<int> cpu_idx_added_to_reorder_list(num_cpus(), 0);
-    int i = 0;
-    while (i<num_cpus()) {
-        int next_cpu_idx = find_next_unassigned_cpu_idx(cpu_idx_added_to_reorder_list);
-        if (next_cpu_idx == -1) {
-            fprintf(stderr, "unable to find unassigned cpu while generating cpu order");
-            exit(EX_USAGE);
-        }
-        cpu_idx_added_to_reorder_list[next_cpu_idx] = 1;
-        cpu_info_reorder[i] = cpu_info[next_cpu_idx];
-        ++i;
-        if (i==num_cpus())
-            break;
-        next_cpu_idx = find_cpu_idx_on_same_core_and_packet(next_cpu_idx);
-        if (next_cpu_idx == -1)
-            next_cpu_idx = find_next_unassigned_cpu_idx(cpu_idx_added_to_reorder_list);
-        if (next_cpu_idx == -1) {
-            fprintf(stderr, "unable to find unassigned cpu while generating cpu order");
-            exit(EX_USAGE);
-        }
-        cpu_idx_added_to_reorder_list[next_cpu_idx] = 1;
-        cpu_info_reorder[i] = cpu_info[next_cpu_idx];
-        ++i;
-    }
-    delete[] cpu_info;
-    cpu_info = cpu_info_reorder;
+    std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
 }
 
 static std::vector<struct cpu_info> create_mock_topology(const char *topo)
