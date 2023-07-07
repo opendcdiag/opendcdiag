@@ -859,7 +859,7 @@ static Topology build_topology()
     return Topology(packages);
 }
 
-Topology Topology::topology()
+const Topology &Topology::topology()
 {
     static int cached_topo_gen = -1;
     static Topology cached_topology = Topology({});

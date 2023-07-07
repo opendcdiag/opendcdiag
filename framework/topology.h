@@ -53,7 +53,7 @@ public:
     bool isValid() const        { return !packages.empty(); }
     std::string build_falure_mask(const struct test *test) const;
 
-    static Topology topology();
+    static const Topology &topology();
 };
 
 enum class LogicalProcessor : int {};
