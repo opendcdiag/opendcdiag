@@ -324,9 +324,9 @@ struct cpu_info {
     uint64_t ppin;          ///! Processor ID read from MSR
     uint64_t microcode;     ///! Microcode version read from /sys
     int cpu_number;         ///! Logical processor number as seen by OS
-    int package_id;         ///! Topology info from APIC
-    int core_id;            ///! Topology info from APIC
     int thread_id;          ///! Topology info from APIC
+    int core_id;            ///! Topology info from APIC
+    int package_id;         ///! Topology info from APIC
     struct cache_info cache[3]; ///! Cache info from OS
     uint8_t family;         ///! CPU family (usually 6)
     uint8_t stepping;       ///! CPU stepping

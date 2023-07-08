@@ -153,13 +153,16 @@ static linux_cpu_info &proc_cpuinfo()
 
 static void reorder_cpus()
 {
-    static auto cpu_tie = [](const struct cpu_info &cpu) {
-        return std::tie(cpu.package_id, cpu.core_id, cpu.thread_id,
-                        // in case this is a VM with no topology information
-                        cpu.cpu_number);
+    static auto cpu_tuple = [](const struct cpu_info &c) {
+        uint64_t h = (uint64_t(c.package_id) << 32) +
+                unsigned(c.core_id);
+        uint64_t l = ((uint64_t(c.thread_id)) << 32) +
+                unsigned(c.cpu_number);
+        return std::make_tuple(h, l);
     };
+
     auto cpu_compare = [](const struct cpu_info &cpu1, const struct cpu_info &cpu2) {
-        return cpu_tie(cpu1) < cpu_tie(cpu2);
+        return cpu_tuple(cpu1) < cpu_tuple(cpu2);
     };
     std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
 }
