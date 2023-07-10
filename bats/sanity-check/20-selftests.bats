@@ -951,6 +951,14 @@ selftest_crash_context_common() {
 @test "crash context" {
     declare -A yamldump
     selftest_crash_context_common --on-crash=context
+
+    # Ensure we can use this option even if gdb isn't found
+    # (can't use run_sandstone_yaml here because we empty $PATH)
+    (
+        PATH=
+        run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o - >/dev/null
+        [[ $status -eq 1 ]]     # instead of 64 (EX_USAGE)
+    )
 }
 
 @test "crash backtrace" {

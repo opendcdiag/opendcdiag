@@ -133,11 +133,11 @@ private:
 }
 
 enum CrashAction : uint8_t {
+    kill_on_crash           = 0x00,
     coredump_on_crash       = 0x01,
     context_on_crash        = 0x02,
-    backtrace_on_crash      = 0x06,
     attach_gdb_on_crash     = 0x10,
-    kill_on_crash           = 0x20,
+    backtrace_on_crash      = context_on_crash | attach_gdb_on_crash,
 };
 
 enum HangAction {
@@ -277,7 +277,7 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
 #  endif
 #endif // x86-64
 
-    if ((on_crash_action & backtrace_on_crash) == 0)
+    if ((on_crash_action & context_on_crash) == 0)
         count = 1;
 
     struct msghdr hdr = {};
@@ -295,7 +295,7 @@ void CrashContext::receive_internal(int sockfd)
     };
 
     // transfer our state to the parent process
-    if (on_crash_action & backtrace_on_crash) {
+    if (on_crash_action & context_on_crash) {
 #ifdef __x86_64__
 #  ifdef __linux__
         gpr_size = sizeof(mc.gregs);
@@ -907,7 +907,7 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             exit(EX_USAGE);
         }
 
-        if (on_crash_action & backtrace_on_hang) {
+        if (on_crash_action & attach_gdb_on_crash) {
             if (gdb_available == -1)
                 gdb_available = check_gdb_available();
             if (!gdb_available) {
@@ -917,18 +917,19 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             }
         }
     } else {
-#  ifdef __x86_64__
-        on_crash_action = context_on_crash;
-#  endif
+#  ifdef __linux__
         // do we have gdb?
         if (gdb_available == -1)
             gdb_available = check_gdb_available();
         if (gdb_available)
             on_crash_action = backtrace_on_crash;
+#  else
+        on_crash_action = context_on_crash;
+#  endif
     }
 
-    if (on_crash_action & (backtrace_on_crash | attach_gdb_on_crash)) {
-#  ifdef __x86_64
+    if (on_crash_action & (context_on_crash | attach_gdb_on_crash)) {
+#  ifdef __x86_64__
         // get the size of the context to transfer
         uint32_t eax, ebx, ecx, edx;
         if (__get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx))
@@ -972,7 +973,7 @@ void debug_init_child()
     if (!SandstoneConfig::ChildBacktrace)
         return;
 
-    if (on_crash_action & (backtrace_on_crash | attach_gdb_on_crash)) {
+    if (on_crash_action & (context_on_crash | attach_gdb_on_crash)) {
         struct sigaction action = {};
         sigemptyset(&action.sa_mask);
         action.sa_sigaction = child_crash_handler;
