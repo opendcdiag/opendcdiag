@@ -116,7 +116,7 @@ enum LogTypes {
 class AbstractLogger
 {
 public:
-    AbstractLogger(const struct test *test, ChildExitStatus state);
+    AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state);
 
     const struct test *test;
     MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
@@ -136,7 +136,7 @@ protected:
 class TapFormatLogger : public AbstractLogger
 {
 public:
-    TapFormatLogger(const struct test *test, ChildExitStatus state)
+    TapFormatLogger(const struct test *test, std::span<const ChildExitStatus> state)
         : AbstractLogger(test, state)
     {}
 
@@ -160,7 +160,7 @@ private:
 class YamlLogger : public TapFormatLogger
 {
 public:
-    YamlLogger(const struct test *test, ChildExitStatus state)
+    YamlLogger(const struct test *test, std::span<const ChildExitStatus> state)
         : TapFormatLogger(test, state)
     { }
 
@@ -188,7 +188,7 @@ private:
 class KeyValuePairLogger : public AbstractLogger
 {
 public:
-    KeyValuePairLogger(const struct test *test, ChildExitStatus state)
+    KeyValuePairLogger(const struct test *test, std::span<const ChildExitStatus> state)
         : AbstractLogger(test, state)
     {
         prepare_line_prefix();
@@ -1645,9 +1645,18 @@ format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurati
     return format_duration(tp - sApp->current_test_starttime, opts);
 }
 
-inline AbstractLogger::AbstractLogger(const struct test *test, ChildExitStatus state_)
-    : test(test), childExitStatus(state_), testResult(state_.result)
+static TestResult find_most_serious_result(std::span<const ChildExitStatus> results)
 {
+    auto comparator = [](ChildExitStatus s1, ChildExitStatus s2) {
+        return s1.result < s2.result;
+    };
+    return std::max_element(results.begin(), results.end(), comparator)->result;
+}
+
+inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state_)
+    : test(test), childExitStatus(state_[0]), testResult(find_most_serious_result(state_))
+{
+    // check that most serious result
     switch (testResult) {
     case TestResult::Skipped:
         skipInMainThread = true;
@@ -2468,7 +2477,7 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
 
 /// prints the results from running the test \c{test} (test number \c{tc})
 /// and returns the effective test result
-TestResult logging_print_results(ChildExitStatus status, int *tc, const struct test *test)
+TestResult logging_print_results(std::span<const ChildExitStatus> status, int *tc, const struct test *test)
 {
     int n = ++*tc;
     switch (current_output_format()) {
