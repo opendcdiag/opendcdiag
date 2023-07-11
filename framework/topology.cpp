@@ -667,8 +667,6 @@ void apply_cpuset_param(char *param)
         return;
     LogicalProcessorSet sys_cpuset = ambient_logical_processor_set();
     int total_matches = 0;
-    if (cpu_info == nullptr)
-        load_cpu_info(sys_cpuset);
 
     LogicalProcessorSet &result = sApp->shmem->enabled_cpus;
     result.clear();
@@ -773,7 +771,7 @@ void apply_cpuset_param(char *param)
     }
 
     assert(total_matches == result.count());
-    sApp->thread_count = total_matches;
+    init_topology(result);
 }
 
 static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
@@ -818,8 +816,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 
 static Topology build_topology()
 {
-    reorder_cpus();
-
     std::vector<Topology::Package> packages;
 
     bool valid_topology = true;
@@ -874,12 +870,22 @@ void update_topology(std::span<const Topology::Package> packages)
     sApp->shmem->enabled_cpus.clear();
     for (const Topology::Package &p : packages)
         sApp->shmem->enabled_cpus.add_package(p);
-    load_cpu_info(sApp->shmem->enabled_cpus);
+    init_topology(sApp->shmem->enabled_cpus);
 }
 
-void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
+void init_topology(const LogicalProcessorSet &enabled_cpus)
 {
     init_topology_internal(enabled_cpus);
+    reorder_cpus();
+    cached_topology() = build_topology();
+}
+
+void restrict_topology(int starting_cpu, int cpu_count)
+{
+    assert(starting_cpu + cpu_count <= sApp->thread_count);
+    std::move(cpu_info + starting_cpu, cpu_info + starting_cpu + cpu_count, cpu_info);
+    sApp->thread_count = cpu_count - starting_cpu;
+
     cached_topology() = build_topology();
 }
 

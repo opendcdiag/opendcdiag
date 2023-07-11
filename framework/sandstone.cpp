@@ -1082,11 +1082,9 @@ static std::string cpu_features_to_string(uint64_t f)
     return result;
 }
 
-static void dump_cpu_info(const LogicalProcessorSet &enabled_cpus)
+static void dump_cpu_info()
 {
     int i;
-
-    load_cpu_info(enabled_cpus);
 
     // find the best matching CPU
     const char *detected = "<unknown>";
@@ -2289,9 +2287,8 @@ static int exec_mode_run(int argc, char **argv)
         attach_shmem(shmemfd);
     }
 
-    sApp->thread_count = sApp->shmem->enabled_cpus.count();
+    init_topology(sApp->shmem->enabled_cpus);
     sApp->user_thread_data.resize(sApp->thread_count);
-    load_cpu_info(sApp->shmem->enabled_cpus);
 
 #ifndef NO_SELF_TESTS
     if (sApp->shmem->selftest && !SandstoneConfig::RestrictedCommandLine)
@@ -2891,6 +2888,7 @@ int main(int argc, char **argv)
 
     init_shmem();
     sApp->shmem->enabled_cpus = init_cpus();
+    init_topology(sApp->shmem->enabled_cpus);
     while (!SandstoneConfig::RestrictedCommandLine &&
            (opt = simple_getopt(argc, argv, long_options)) != -1) {
         switch (opt) {
@@ -2986,7 +2984,7 @@ int main(int argc, char **argv)
             apply_cpuset_param(optarg);
             break;
         case dump_cpu_info_option:
-            dump_cpu_info(sApp->shmem->enabled_cpus);
+            dump_cpu_info();
             return EXIT_SUCCESS;
         case fatal_skips_option:
             sApp->fatal_skips = true;
@@ -3312,8 +3310,8 @@ int main(int argc, char **argv)
     if (unsigned(thread_count) < unsigned(sApp->thread_count)) {
         sApp->thread_count = thread_count;
         sApp->shmem->enabled_cpus.limit_to(thread_count);
+        restrict_topology(0, thread_count);
     }
-    load_cpu_info(sApp->shmem->enabled_cpus);
     commit_shmem();
 
     signals_init_global();
