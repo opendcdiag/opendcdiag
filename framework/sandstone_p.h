@@ -447,7 +447,7 @@ struct SandstoneApplication::SharedMemory
 
     // in/out per-thread data
     PerThreadData::Main main_thread_data;
-    PerThreadData::Test per_thread[MAX_THREADS];
+    PerThreadData::Test per_thread[];          // C99 Flexible Array Member
 };
 
 inline SandstoneApplication *_sApp() noexcept
