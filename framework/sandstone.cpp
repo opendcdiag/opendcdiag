@@ -557,11 +557,11 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
                                 "Inner loop is FAR too short, couldn't even get accurate timings");
             } else if (average < MinimumLoopDuration) {
                 maybe_log_error(test_flag_ignore_loop_timing,
-                                "Inner loop is too short (average %s) -- suggest making the test %" PRIu64 "x longer",
+                                "Inner loop is too short (average %s) -- suggest making the test %" PRId64 "x longer",
                                 format_duration(average).c_str(), TargetLoopDuration.count() / average.count());
             } else if (average > MaximumLoopDuration) {
                 maybe_log_error(test_flag_ignore_loop_timing,
-                                "Inner loop is too long (average %s) -- suggest making the test %" PRIu64 "x shorter",
+                                "Inner loop is too long (average %s) -- suggest making the test %" PRId64 "x shorter",
                                 format_duration(average).c_str(), average.count() / TargetLoopDuration.count());
             } else {
                 log_info("Inner loop average duration: %s", format_duration(average).c_str());
