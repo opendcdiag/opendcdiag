@@ -138,5 +138,6 @@ LogicalProcessorSet ambient_logical_processor_set();
 bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullptr);
 
 void load_cpu_info(/*in*/ const LogicalProcessorSet &enabled_cpus);
+void apply_cpuset_param(char *param);
 
 #endif /* INC_TOPOLOGY_H */
