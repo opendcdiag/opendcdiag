@@ -784,11 +784,8 @@ void apply_cpuset_param(char *param)
 
 static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 {
-    sApp->thread_count = enabled_cpus.count();
-    assert(sApp->thread_count);
-
-    delete[] cpu_info;
-    cpu_info = new struct cpu_info[sApp->thread_count];
+    assert(sApp->thread_count == enabled_cpus.count());
+    cpu_info = sApp->shmem->cpu_info;
 
     if (SandstoneConfig::Debug) {
         static auto mock_topology = create_mock_topology(getenv("SANDSTONE_MOCK_TOPOLOGY"));
@@ -909,8 +906,7 @@ void init_topology(const LogicalProcessorSet &enabled_cpus)
 void restrict_topology(CpuRange range)
 {
     assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
-    std::move(cpu_info + range.starting_cpu, cpu_info + range.starting_cpu + range.cpu_count,
-              cpu_info);
+    cpu_info = sApp->shmem->cpu_info + range.starting_cpu;
     sApp->thread_count = range.cpu_count;
 
     cached_topology() = build_topology();

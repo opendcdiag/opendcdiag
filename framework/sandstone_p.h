@@ -449,6 +449,8 @@ struct SandstoneApplication::SharedMemory
 
     LogicalProcessorSet enabled_cpus;
 
+    alignas(64) struct cpu_info cpu_info[];         // C99 Flexible Array Member
+
 #if 0
     // in/out per-thread data allocated dynamically;
     // layout is:
