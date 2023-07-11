@@ -140,7 +140,8 @@ bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullpt
 
 void apply_cpuset_param(char *param);
 void init_topology(const LogicalProcessorSet &enabled_cpus);
-void update_topology(std::span<const Topology::Package> sockets);
+void update_topology(std::span<const struct cpu_info> new_cpu_info,
+                     std::span<const Topology::Package> sockets = {});
 void restrict_topology(int starting_cpu, int cpu_count);
 
 #endif /* INC_TOPOLOGY_H */

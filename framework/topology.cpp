@@ -861,16 +861,34 @@ const Topology &Topology::topology()
     return cached_topology();
 }
 
-void update_topology(std::span<const Topology::Package> packages)
+void update_topology(std::span<const struct cpu_info> new_cpu_info,
+                     std::span<const Topology::Package> packages)
 {
     if (SandstoneConfig::NoTriage)
         __builtin_unreachable();
 
-    sApp->thread_count = 0;
-    sApp->shmem->enabled_cpus.clear();
-    for (const Topology::Package &p : packages)
-        sApp->shmem->enabled_cpus.add_package(p);
-    init_topology(sApp->shmem->enabled_cpus);
+    struct cpu_info *end;
+    if (packages.empty()) {
+        // copy all
+        end = std::copy(new_cpu_info.begin(), new_cpu_info.end(), cpu_info);
+    } else {
+        // copy only if matching the socket ID
+        auto matching = [=](const struct cpu_info &ci) {
+            for (const Topology::Package &p : packages) {
+                if (p.id == ci.package_id)
+                    return true;
+            }
+            return false;
+        };
+        end = std::copy_if(new_cpu_info.begin(), new_cpu_info.end(), cpu_info, matching);
+    }
+
+    int new_thread_count = end - cpu_info;
+    if (int excess = sApp->thread_count - new_thread_count; excess > 0)
+        std::fill_n(end, excess, (struct cpu_info){});
+
+    sApp->thread_count = new_thread_count;
+    cached_topology() = build_topology();
 }
 
 void init_topology(const LogicalProcessorSet &enabled_cpus)
