@@ -662,7 +662,6 @@ void apply_cpuset_param(char *param)
     if (SandstoneConfig::RestrictedCommandLine)
         return;
     LogicalProcessorSet sys_cpuset = ambient_logical_processor_set();
-    int max_cpu_count = sys_cpuset.count();
     int total_matches = 0;
     if (cpu_info == nullptr)
         load_cpu_info(sys_cpuset);
@@ -746,16 +745,14 @@ void apply_cpuset_param(char *param)
             } while (c != '\0');
 
             int match_count = 0;
-            for (int i = 0; i < max_cpu_count; ++i) {
-                if (!sys_cpuset.is_set(LogicalProcessor(i)))
+            for (struct cpu_info &cpu : std::span(cpu_info, num_cpus())) {
+                if (package != -1 && cpu.package_id != package)
                     continue;
-                if (package != -1 && cpu_info[i].package_id != package)
+                if (core != -1 && cpu.core_id != core)
                     continue;
-                if (core != -1 && cpu_info[i].core_id != core)
+                if (thread != -1 && cpu.thread_id != thread)
                     continue;
-                if (thread != -1 && cpu_info[i].thread_id != thread)
-                    continue;
-                add_to_set(LogicalProcessor(i));
+                add_to_set(LogicalProcessor(cpu.cpu_number));
                 ++match_count;
             }
 
