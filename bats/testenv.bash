@@ -18,7 +18,7 @@ if [[ -z "$SANDSTONE" ]]; then
     SANDSTONE=$SANDSTONE_BIN
     if [[ `file $SANDSTONE_BIN` = *ELF* ]]; then
         current=`uname -m`
-        target=`eu-readelf -h $SANDSTONE_BIN | sed -n '/Machine:/{s/.* //;y/-/_/;p;q}'`
+        target=`eu-readelf -h $SANDSTONE_BIN | sed -n '/Machine:/{s/.* //;y/-/_/;p;q;}'`
         if [[ "${current,,}" != "${target,,}" ]]; then
             SANDSTONE="qemu-${target,,} $SANDSTONE"
         fi
