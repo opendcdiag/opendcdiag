@@ -2321,11 +2321,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
         int ret = EXIT_SUCCESS;
 
         // all the shady stuff needed to set up to run a test smoothly
-        sApp->thread_count = 0;
-        sApp->shmem->enabled_cpus.clear();
-        for (const Topology::Package &p : set)
-            sApp->shmem->enabled_cpus.add_package(p);
-        load_cpu_info(sApp->shmem->enabled_cpus);
+        update_topology(set);
 
         do {
             int test_count = 1;
