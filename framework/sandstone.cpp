@@ -2290,14 +2290,15 @@ static int exec_mode_run(int argc, char **argv)
     if (argc < 3)
         return EX_DATAERR;
 
-    {
+    auto parse_int = [](const char *arg) {
         char *end;
-        long shmemfd = strtol(argv[2], &end, 10);
-        if (__builtin_expect(int(shmemfd) != shmemfd || shmemfd < 0 || *end, false))
-            return EX_DATAERR;
-        attach_shmem(shmemfd);
-    }
+        long n = strtol(arg, &end, 10);
+        if (__builtin_expect(int(n) != n || n < 0 || *end, false))
+            exit(EX_DATAERR);
+        return int(n);
+    };
 
+    attach_shmem(parse_int(argv[2]));
     sApp->thread_count = sApp->shmem->total_cpu_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 
