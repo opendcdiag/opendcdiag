@@ -1008,8 +1008,6 @@ static void init_shmem()
             "PerThreadData::Test size grew, please check if it was intended");
     assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test);
     assert(sApp->shmem == nullptr);
-
-    LogicalProcessorSet enabled_cpus = init_cpus();
     assert(num_cpus());
 
     unsigned per_thread_size = sizeof(PerThreadData::Main);
@@ -1039,7 +1037,6 @@ static void init_shmem()
     sApp->shmemfd = fd;
     sApp->shmem = new (base) SandstoneApplication::SharedMemory;
     sApp->shmem->thread_data_offset = thread_data_offset;
-    sApp->shmem->enabled_cpus = enabled_cpus;
     attach_shmem_internal();
 }
 
@@ -1049,6 +1046,7 @@ static void commit_shmem()
         close(sApp->shmemfd);
         sApp->shmemfd = -1;
     }
+    sApp->shmem->total_cpu_count = num_cpus();
 }
 
 static void attach_shmem(int fd)
@@ -1489,6 +1487,7 @@ static TestResult child_run(/*nonconst*/ struct test *test)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
         protect_shmem();
+        restrict_topology({ 0, num_cpus() });
         pin_to_logical_processor(LogicalProcessor(-1), "control");
         signals_init_child();
         debug_init_child();
@@ -2317,8 +2316,7 @@ static int exec_mode_run(int argc, char **argv)
         attach_shmem(shmemfd);
     }
 
-    sApp->thread_count = sApp->shmem->enabled_cpus.count();
-    restrict_topology(0, sApp->thread_count);
+    sApp->thread_count = sApp->shmem->total_cpu_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 
 #ifndef NO_SELF_TESTS
@@ -2921,8 +2919,12 @@ int main(int argc, char **argv)
         return exec_mode_run(argc - 2, argv + 2);
     }
 
-    init_shmem();
-    init_topology(sApp->shmem->enabled_cpus);
+    {
+        LogicalProcessorSet enabled_cpus = init_cpus();
+        init_shmem();
+        init_topology(std::move(enabled_cpus));
+    }
+
     while (!SandstoneConfig::RestrictedCommandLine &&
            (opt = simple_getopt(argc, argv, long_options)) != -1) {
         switch (opt) {
@@ -3341,11 +3343,8 @@ int main(int argc, char **argv)
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
-    if (unsigned(thread_count) < unsigned(sApp->thread_count)) {
-        sApp->thread_count = thread_count;
-        sApp->shmem->enabled_cpus.limit_to(thread_count);
+    if (unsigned(thread_count) < unsigned(sApp->thread_count))
         restrict_topology({ 0, thread_count });
-    }
     commit_shmem();
 
     signals_init_global();
