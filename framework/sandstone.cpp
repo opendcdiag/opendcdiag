@@ -2314,13 +2314,14 @@ static int exec_mode_run(int argc, char **argv)
 // generic vector<int> for the future improvements.
 static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
+    std::vector<struct cpu_info> saved_cpu_info;
     auto run_tests_with_retest = [&](std::span<const Topology::Package> set) {
         SandstoneApplication::PerCpuFailures per_cpu_failures;
         int k = 0;
         int ret = EXIT_SUCCESS;
 
         // all the shady stuff needed to set up to run a test smoothly
-        update_topology(set);
+        update_topology(saved_cpu_info, set);
 
         do {
             int test_count = 1;
@@ -2345,6 +2346,9 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
         result.push_back(it->id);
         return result;
     }
+
+    // backup the original CPU info
+    saved_cpu_info.assign(cpu_info, cpu_info + num_cpus());
 
     // backup the original verbosity
     int orig_verbosity = sApp->shmem->verbosity;
@@ -2376,7 +2380,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     sApp->shmem->verbosity = orig_verbosity;
 
     // restore original topology
-    update_topology(topo.packages);
+    update_topology(std::move(saved_cpu_info));
 
     return result;
 }
