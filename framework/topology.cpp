@@ -670,8 +670,7 @@ void apply_cpuset_param(char *param)
     std::vector<struct cpu_info> new_cpu_info;
     int total_matches = 0;
 
-    LogicalProcessorSet &result = sApp->shmem->enabled_cpus;
-    result.clear();
+    LogicalProcessorSet result = {};
     new_cpu_info.reserve(old_cpu_info.size());
 
     for (char *arg = strtok(param, ","); arg; arg = strtok(nullptr, ",")) {
