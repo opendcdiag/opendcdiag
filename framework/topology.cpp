@@ -697,13 +697,14 @@ void apply_cpuset_param(char *param)
         if (c >= '0' && c <= '9') {
             // logical processor number
             auto lp = LogicalProcessor(parse_int());
-            if (!sys_cpuset.is_set(lp)) {
-                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (no such logical processor)\n",
+            if (*arg != '\0') {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (could not parse)\n",
                         program_invocation_name, orig_arg);
                 exit(EX_USAGE);
             }
-            if (*arg != '\0') {
-                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (could not parse)\n",
+
+            if (!sys_cpuset.is_set(lp)) {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (no such logical processor)\n",
                         program_invocation_name, orig_arg);
                 exit(EX_USAGE);
             }
