@@ -1014,7 +1014,16 @@ static void attach_shmem(int fd)
 {
     assert(sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
 
-    int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
+    size_t size;
+    if (struct stat st; fstat(fd, &st) >= 0) {
+        size = st.st_size;
+        assert(size == ROUND_UP_TO_PAGE(size));
+    } else {
+        fprintf(stderr, "internal error: could not get the size of shared memory (fd = %d): %m\n",
+                fd);
+        exit(EX_IOERR);
+    }
+
     void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (base == MAP_FAILED) {
         perror("internal error: could not map the shared memory file to memory");
