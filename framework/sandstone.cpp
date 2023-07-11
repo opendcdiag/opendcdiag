@@ -2376,6 +2376,9 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     // restore the original verbosity
     sApp->shmem->verbosity = orig_verbosity;
 
+    // restore original topology
+    update_topology(topo.packages);
+
     return result;
 }
 
