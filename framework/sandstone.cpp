@@ -2315,20 +2315,24 @@ static int exec_mode_run(int argc, char **argv)
 // generic vector<int> for the future improvements.
 static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
-    auto run_tests_on_cpu_set = [&](const LogicalProcessorSet &set) {
+    auto run_tests_with_retest = [&](const LogicalProcessorSet &set) {
         SandstoneApplication::PerCpuFailures per_cpu_failures;
+        int k = 0;
         int ret = EXIT_SUCCESS;
-        int test_count = 1;
 
         // all the shady stuff needed to set up to run a test smoothly
         sApp->thread_count = 0;
+        sApp->shmem->enabled_cpus = set;
         load_cpu_info(set);
 
-        for (auto &t: triage_tests) {
-            ret = test_result_to_exit_code(run_one_test(&test_count, t, per_cpu_failures));
-            if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
-            test_count++;
-        }
+        do {
+            int test_count = 1;
+            for (auto &t: triage_tests) {
+                ret = test_result_to_exit_code(run_one_test(&test_count, t, per_cpu_failures));
+                if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
+                test_count++;
+            }
+        } while (!ret && ++k < sApp->retest_count);
 
         return (ret > EXIT_SUCCESS) ? ret : EXIT_SUCCESS; // do not return SKIP from here
     };
@@ -2355,16 +2359,10 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     for (; it != topo.packages.end(); disabled_sockets.push_back(it->id), ++it) {
         auto eit = it;
         LogicalProcessorSet run_cpus = {};
-        int k = 0;
-
         for (; eit != topo.packages.end(); ++eit)
             run_cpus.add_package(*eit);
 
-        sApp->shmem->enabled_cpus = run_cpus;
-        do {
-            ret = run_tests_on_cpu_set(run_cpus);
-        } while (!ret && ++k < sApp->retest_count);
-
+        ret = run_tests_with_retest(run_cpus);
         if (ret) ever_failed = true; /* we've seen a failure */
 
         if (!ret && ever_failed) {
@@ -2377,15 +2375,10 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     if (ret) { // failed on the last socket as well, so it's the main suspect
         // re-run on the first to make sure the last one is faulty
         LogicalProcessorSet run_cpus = {};
-        int k = 0;
 
         run_cpus.add_package(topo.packages.at(0));
-        sApp->shmem->enabled_cpus = run_cpus;
 
-        do {
-            ret = run_tests_on_cpu_set(run_cpus);
-        } while (!ret && ++k < sApp->retest_count);
-
+        ret = run_tests_with_retest(run_cpus);
         if (!ret && ever_failed) {
             result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
         }
