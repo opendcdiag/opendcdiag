@@ -914,18 +914,16 @@ static LogicalProcessorSet init_cpus()
     return result;
 }
 
-static void init_shmem(int fd = -1)
+static void init_shmem()
 {
     static_assert(sizeof(PerThreadData::Main) == 64,
             "PerThreadData::Main size grew, please check if it was intended");
     static_assert(sizeof(PerThreadData::Test) == 64,
             "PerThreadData::Testsize grew, please check if it was intended");
+    assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test);
 
     if (sApp->shmem)
         return;                 // already initialized
-
-    // a file descriptor is only allowed in the child side of -fexec
-    assert(fd == -1 || sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
 
     int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
     switch (sApp->current_fork_mode()) {
@@ -939,7 +937,8 @@ static void init_shmem(int fd = -1)
         break;
 
     case SandstoneApplication::child_exec_each_test:
-        // we must have inherited a file descriptor
+        assert(false && "impossible condition");
+        __builtin_unreachable();
         break;
 
     case SandstoneApplication::no_fork:
@@ -963,13 +962,23 @@ static void init_shmem(int fd = -1)
         exit(EX_CANTCREAT);
     }
 
-    if (fd != -1 && sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test) {
-        close(fd);
-        sApp->shmem = static_cast<SandstoneApplication::SharedMemory *>(base);
-    } else {
-        sApp->shmemfd = fd;
-        sApp->shmem = new (base) SandstoneApplication::SharedMemory;
+    sApp->shmemfd = fd;
+    sApp->shmem = new (base) SandstoneApplication::SharedMemory;
+}
+
+static void attach_shmem(int fd)
+{
+    assert(sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
+
+    int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
+    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (base == MAP_FAILED) {
+        perror("internal error: could not map the shared memory file to memory");
+        exit(EX_IOERR);
     }
+
+    close(fd);
+    sApp->shmem = static_cast<SandstoneApplication::SharedMemory *>(base);
 
     // barrier with the parent process
     sApp->shmem->main_thread_data.thread_state.exchange(thread_not_started, std::memory_order_acquire);
@@ -2442,7 +2451,7 @@ static int exec_mode_run(int argc, char **argv)
 
     SandstoneApplication::ExecState app_state = read_app_state(atoi(argv[2]));
     assert(app_state.shmemfd != -1);
-    init_shmem(app_state.shmemfd);
+    attach_shmem(app_state.shmemfd);
 
     // reload the app state
 #define COPY_STATE_TO_SAPP(id)  \
