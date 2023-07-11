@@ -60,8 +60,8 @@ test_yaml_numeric() {
 test_yaml_regexp() {
     local value
     extract_from_yaml "$1"
-    if printf "%s" "$value" | grep --line-regexp -Pq -e "$2"; then
-        return 0;
+    if python3 -c "rx = r'''$2'''" -c 'import re,sys;exit(re.fullmatch(rx, sys.argv[2], re.S) is None)'; then
+        return 0
     fi
     printf "Regexp match failed:\n"
     printf "query:      %s\n" "$1"
