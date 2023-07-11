@@ -686,6 +686,12 @@ void apply_cpuset_param(char *param)
             arg = endptr;       // advance
             return int(n);
         };
+        auto add_to_set = [&](LogicalProcessor lp) {
+            if (!result.is_set(lp)) {
+                result.set(lp);
+                ++total_matches;
+            }
+        };
 
         char c = *arg;
         if (c >= '0' && c <= '9') {
@@ -701,8 +707,7 @@ void apply_cpuset_param(char *param)
                         program_invocation_name, orig_arg);
                 exit(EX_USAGE);
             }
-            result.set(lp);
-            ++total_matches;
+            add_to_set(lp);
         } else if (c >= 'a' && c <= 'z') {
             // topology search
             auto set_if_unset = [orig_arg](int n, int &where, const char *what) {
@@ -746,14 +751,13 @@ void apply_cpuset_param(char *param)
                     continue;
                 if (thread != -1 && cpu_info[i].thread_id != thread)
                     continue;
+                add_to_set(LogicalProcessor(i));
                 ++match_count;
-                result.set(LogicalProcessor(i));
             }
 
             if (match_count == 0)
                 fprintf(stderr, "%s: warning: CPU selection '%s' matched nothing\n",
                         program_invocation_name, orig_arg);
-            total_matches += match_count;
         }
     }
 
