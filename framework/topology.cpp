@@ -665,11 +665,14 @@ void apply_cpuset_param(char *param)
 {
     if (SandstoneConfig::RestrictedCommandLine)
         return;
-    LogicalProcessorSet sys_cpuset = ambient_logical_processor_set();
+
+    std::span<struct cpu_info> old_cpu_info(cpu_info, sApp->thread_count);
+    std::vector<struct cpu_info> new_cpu_info;
     int total_matches = 0;
 
     LogicalProcessorSet &result = sApp->shmem->enabled_cpus;
     result.clear();
+    new_cpu_info.reserve(old_cpu_info.size());
 
     for (char *arg = strtok(param, ","); arg; arg = strtok(nullptr, ",")) {
         const char *orig_arg = arg;
@@ -690,9 +693,11 @@ void apply_cpuset_param(char *param)
             arg = endptr;       // advance
             return int(n);
         };
-        auto add_to_set = [&](LogicalProcessor lp) {
+        auto add_to_set = [&](const struct cpu_info &cpu) {
+            LogicalProcessor lp = LogicalProcessor(cpu.cpu_number);
             if (!result.is_set(lp)) {
                 result.set(lp);
+                new_cpu_info.push_back(cpu);
                 ++total_matches;
             }
         };
@@ -700,19 +705,21 @@ void apply_cpuset_param(char *param)
         char c = *arg;
         if (c >= '0' && c <= '9') {
             // logical processor number
-            auto lp = LogicalProcessor(parse_int());
+            int cpu_number = parse_int();
             if (*arg != '\0') {
                 fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (could not parse)\n",
                         program_invocation_name, orig_arg);
                 exit(EX_USAGE);
             }
 
-            if (!sys_cpuset.is_set(lp)) {
+            auto cpu = std::find_if(old_cpu_info.begin(), old_cpu_info.end(),
+                                    [=](const struct cpu_info &cpu) { return cpu.cpu_number == cpu_number; });
+            if (cpu == old_cpu_info.end()) {
                 fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (no such logical processor)\n",
                         program_invocation_name, orig_arg);
                 exit(EX_USAGE);
             }
-            add_to_set(lp);
+            add_to_set(*cpu);
         } else if (c >= 'a' && c <= 'z') {
             // topology search
             auto set_if_unset = [orig_arg](int n, int &where, const char *what) {
@@ -747,14 +754,14 @@ void apply_cpuset_param(char *param)
             } while (c != '\0');
 
             int match_count = 0;
-            for (struct cpu_info &cpu : std::span(cpu_info, num_cpus())) {
+            for (struct cpu_info &cpu : old_cpu_info) {
                 if (package != -1 && cpu.package_id != package)
                     continue;
                 if (core != -1 && cpu.core_id != core)
                     continue;
                 if (thread != -1 && cpu.thread_id != thread)
                     continue;
-                add_to_set(LogicalProcessor(cpu.cpu_number));
+                add_to_set(cpu);
                 ++match_count;
             }
 
@@ -771,7 +778,8 @@ void apply_cpuset_param(char *param)
     }
 
     assert(total_matches == result.count());
-    init_topology(result);
+    assert(total_matches == new_cpu_info.size());
+    update_topology(new_cpu_info);
 }
 
 static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
@@ -864,7 +872,7 @@ const Topology &Topology::topology()
 void update_topology(std::span<const struct cpu_info> new_cpu_info,
                      std::span<const Topology::Package> packages)
 {
-    if (SandstoneConfig::NoTriage)
+    if (SandstoneConfig::RestrictedCommandLine && SandstoneConfig::NoTriage)
         __builtin_unreachable();
 
     struct cpu_info *end;
@@ -888,7 +896,7 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
         std::fill_n(end, excess, (struct cpu_info){});
 
     sApp->thread_count = new_thread_count;
-    cached_topology() = build_topology();
+    restrict_topology(0, new_thread_count);
 }
 
 void init_topology(const LogicalProcessorSet &enabled_cpus)
