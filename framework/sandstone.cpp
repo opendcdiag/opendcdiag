@@ -975,8 +975,20 @@ static LogicalProcessorSet init_cpus()
     return result;
 }
 
+static void attach_shmem_internal()
+{
+    assert(sApp->shmem->thread_data_offset);
+
+    auto ptr = reinterpret_cast<unsigned char *>(sApp->shmem);
+    ptr += sApp->shmem->thread_data_offset;
+    sApp->main_thread_data_ptr = reinterpret_cast<PerThreadData::Main *>(ptr);
+    ptr += sizeof(*sApp->main_thread_data_ptr);
+    sApp->test_thread_data_ptr = reinterpret_cast<PerThreadData::Test *>(ptr);
+}
+
 static void init_shmem()
 {
+    using namespace PerThreadData;
     static_assert(sizeof(PerThreadData::Main) == 64,
             "PerThreadData::Main size grew, please check if it was intended");
     static_assert(sizeof(PerThreadData::Test) == 64,
@@ -987,8 +999,13 @@ static void init_shmem()
     LogicalProcessorSet enabled_cpus = init_cpus();
     assert(num_cpus());
 
-    size_t size = sizeof(PerThreadData::Test) * num_cpus() + sizeof(SandstoneApplication::SharedMemory);
-    size = ROUND_UP_TO_PAGE(size);
+    unsigned per_thread_size = sizeof(PerThreadData::Main);
+    per_thread_size = ROUND_UP_TO(per_thread_size, alignof(PerThreadData::Test));
+    per_thread_size += sizeof(PerThreadData::Test) * num_cpus();
+    per_thread_size = ROUND_UP_TO_PAGE(per_thread_size);
+
+    unsigned thread_data_offset = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
+    size_t size = thread_data_offset + per_thread_size;
 
     // our child (if we have one) will inherit this file descriptor
     int fd = open_memfd(MemfdInheritOnExec);
@@ -1005,7 +1022,9 @@ static void init_shmem()
 
     sApp->shmemfd = fd;
     sApp->shmem = new (base) SandstoneApplication::SharedMemory;
+    sApp->shmem->thread_data_offset = thread_data_offset;
     sApp->shmem->enabled_cpus = enabled_cpus;
+    attach_shmem_internal();
 }
 
 static void commit_shmem()
@@ -1038,9 +1057,10 @@ static void attach_shmem(int fd)
 
     close(fd);
     sApp->shmem = static_cast<SandstoneApplication::SharedMemory *>(base);
+    attach_shmem_internal();
 
     // barrier with the parent process
-    sApp->shmem->main_thread_data.thread_state.exchange(thread_not_started, std::memory_order_acquire);
+    sApp->main_thread_data()->thread_state.exchange(thread_not_started, std::memory_order_acquire);
 }
 
 __attribute__((weak, noclone, noinline)) void print_application_banner()

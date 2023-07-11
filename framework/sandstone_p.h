@@ -336,6 +336,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     struct SharedMemory;
 
     std::vector<test_data_per_thread> user_thread_data;
+    PerThreadData::Main *main_thread_data_ptr;  // points to somewhere in the shmem
+    PerThreadData::Test *test_thread_data_ptr;  // points to somewhere in the shmem
     SharedMemory *shmem = nullptr;
     int shmemfd = -1;
 
@@ -423,6 +425,8 @@ private:
 struct SandstoneApplication::SharedMemory
 {
     // state shared with child processes (input only)
+    ptrdiff_t thread_data_offset = 0;
+
     // test execution
     MonotonicTimePoint current_test_endtime = {};
     int current_max_loop_count = 0;
@@ -445,9 +449,13 @@ struct SandstoneApplication::SharedMemory
 
     LogicalProcessorSet enabled_cpus;
 
-    // in/out per-thread data
+#if 0
+    // in/out per-thread data allocated dynamically;
+    // layout is:
+    alignas(PAGE_SIZE)
     PerThreadData::Main main_thread_data;
-    PerThreadData::Test per_thread[];          // C99 Flexible Array Member
+    PerThreadData::Test per_thread[];
+#endif
 };
 
 inline SandstoneApplication *_sApp() noexcept
@@ -468,14 +476,14 @@ inline PerThreadData::Common *SandstoneApplication::thread_data(int thread)
 
 inline PerThreadData::Main *SandstoneApplication::main_thread_data() noexcept
 {
-    return &shmem->main_thread_data;
+    return main_thread_data_ptr;
 }
 
 inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
 {
     assert(thread >= 0);
     assert(thread < sApp->thread_count);
-    return &shmem->per_thread[thread];
+    return &test_thread_data_ptr[thread];
 }
 
 struct AutoClosingFile
