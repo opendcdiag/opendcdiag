@@ -15,6 +15,7 @@
 #include <new>
 #include <map>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 #include <assert.h>
@@ -921,49 +922,32 @@ static void init_shmem()
     static_assert(sizeof(PerThreadData::Test) == 64,
             "PerThreadData::Testsize grew, please check if it was intended");
     assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test);
+    assert(sApp->shmem == nullptr);
 
-    if (sApp->shmem)
-        return;                 // already initialized
-
+    // our child (if we have one) will inherit this file descriptor
     int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
-    switch (sApp->current_fork_mode()) {
-    case SandstoneApplication::exec_each_test:
-        // our child will inherit this file descriptor
-        fd = open_memfd(MemfdInheritOnExec);
-        if (fd < 0 || ftruncate(fd, size) < 0) {
-            perror("internal error: could not create temporary file for sharing memory");
-            exit(EX_CANTCREAT);
-        }
-        break;
-
-    case SandstoneApplication::child_exec_each_test:
-        assert(false && "impossible condition");
-        __builtin_unreachable();
-        break;
-
-    case SandstoneApplication::no_fork:
-        // in no-fork mode, there's no one to share with in the first place
-        break;
-
-    case SandstoneApplication::fork_each_test:
-#ifdef _WIN32
-        assert(false && "impossible condition");
-        __builtin_unreachable();
-#endif
-        break;
+    int fd = open_memfd(MemfdInheritOnExec);
+    if (fd < 0 || ftruncate(fd, size) < 0) {
+        perror("internal error: could not create temporary file for sharing memory");
+        exit(EX_CANTCREAT);
     }
 
-
-    void *base = MAP_FAILED;
-    int flags = MAP_SHARED | (fd == -1 ? MAP_ANONYMOUS : 0);
-    base = mmap(NULL, size, PROT_READ | PROT_WRITE, flags, fd, 0);
-    if (base == MAP_FAILED && fd != -1) {
+    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (base == MAP_FAILED) {
         perror("internal error: could not map the shared memory file to memory");
         exit(EX_CANTCREAT);
     }
 
     sApp->shmemfd = fd;
     sApp->shmem = new (base) SandstoneApplication::SharedMemory;
+}
+
+static void commit_shmem()
+{
+    if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
+        close(sApp->shmemfd);
+        sApp->shmemfd = -1;
+    }
 }
 
 static void attach_shmem(int fd)
@@ -3070,6 +3054,7 @@ int main(int argc, char **argv)
         return exec_mode_run(argc - 2, argv + 2);
     }
 
+    init_shmem();
     while (!SandstoneConfig::RestrictedCommandLine &&
            (opt = simple_getopt(argc, argv, long_options)) != -1) {
         switch (opt) {
@@ -3496,10 +3481,10 @@ int main(int argc, char **argv)
         sApp->enabled_cpus.limit_to(thread_count);
     }
     load_cpu_info(sApp->enabled_cpus);
+    commit_shmem();
+
     signals_init_global();
     resource_init_global();
-
-    init_shmem();
     debug_init_global(on_hang_arg, on_crash_arg);
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
 
