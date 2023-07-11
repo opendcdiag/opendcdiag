@@ -1004,7 +1004,10 @@ static void init_shmem()
     per_thread_size += sizeof(PerThreadData::Test) * num_cpus();
     per_thread_size = ROUND_UP_TO_PAGE(per_thread_size);
 
-    unsigned thread_data_offset = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
+    unsigned thread_data_offset = sizeof(SandstoneApplication::SharedMemory) +
+            sizeof(struct cpu_info) * num_cpus();
+    thread_data_offset = ROUND_UP_TO_PAGE(thread_data_offset);
+
     size_t size = thread_data_offset + per_thread_size;
 
     // our child (if we have one) will inherit this file descriptor
@@ -2297,7 +2300,8 @@ static int exec_mode_run(int argc, char **argv)
         attach_shmem(shmemfd);
     }
 
-    init_topology(sApp->shmem->enabled_cpus);
+    sApp->thread_count = sApp->shmem->enabled_cpus.count();
+    restrict_topology(0, sApp->thread_count);
     sApp->user_thread_data.resize(sApp->thread_count);
 
 #ifndef NO_SELF_TESTS
@@ -3492,8 +3496,6 @@ int main(int argc, char **argv)
         logging_printf(LOG_LEVEL_QUIET, "Ran %d tests without error (%d skipped)\n",
                        total_successes, total_tests_run - total_successes);
     }
-
-    delete[] cpu_info;
 
     int exit_code = EXIT_SUCCESS;
 
