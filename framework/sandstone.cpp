@@ -2334,12 +2334,10 @@ static int exec_mode_run(int argc, char **argv)
 // generic vector<int> for the future improvements.
 static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
-    using Socket = Topology::Package;
-
     Topology topo = Topology::topology();
     vector<int> result; // faulty sockets
 
-    vector<Socket>::iterator it = topo.packages.begin();
+    auto it = topo.packages.begin();
     if (topo.packages.empty())
         return result;                  // shouldn't happen!
 
@@ -2356,7 +2354,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     bool ever_failed = false;
     vector<int> disabled_sockets;
     for (; it != topo.packages.end(); disabled_sockets.push_back(it->id), ++it) {
-        vector<Socket>::iterator eit = it;
+        auto eit = it;
         LogicalProcessorSet run_cpus = {};
         int k = 0;
 
