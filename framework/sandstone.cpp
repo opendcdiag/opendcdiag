@@ -3330,7 +3330,7 @@ int main(int argc, char **argv)
 
         sApp->delay_between_tests = 50ms;
         sApp->thermal_throttle_temp = INT_MIN;
-        do_not_triage = true;
+        do_not_triage = SandstoneConfig::NoTriage;
         fatal_errors = true;
         test_selection_strategy = Ordered;
         use_builtin_test_list = true;
