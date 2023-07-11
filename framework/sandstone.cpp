@@ -1206,7 +1206,7 @@ static void restart_init(int iterations)
 
 static void run_threads_in_parallel(const struct test *test, const pthread_attr_t *thread_attr)
 {
-    pthread_t pt[MAX_THREADS];
+    pthread_t pt[num_cpus()];       // NOLINT: -Wvla
     int i;
 
     for (i = 0; i < num_cpus(); i++) {
