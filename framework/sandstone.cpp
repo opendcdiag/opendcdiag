@@ -1063,6 +1063,14 @@ static void attach_shmem(int fd)
     sApp->main_thread_data()->thread_state.exchange(thread_not_started, std::memory_order_acquire);
 }
 
+static void protect_shmem()
+{
+    size_t protected_len = sApp->shmem->thread_data_offset;
+    assert(protected_len == ROUND_UP_TO_PAGE(protected_len) &&
+            "SharedMemory::main_thread_data is not page-aligned");
+    mprotect(sApp->shmem, protected_len, PROT_READ);
+}
+
 __attribute__((weak, noclone, noinline)) void print_application_banner()
 {
 }
@@ -1460,6 +1468,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
 static TestResult child_run(/*nonconst*/ struct test *test)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
+        protect_shmem();
         pin_to_logical_processor(LogicalProcessor(-1), "control");
         signals_init_child();
         debug_init_child();
