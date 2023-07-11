@@ -2315,15 +2315,17 @@ static int exec_mode_run(int argc, char **argv)
 // generic vector<int> for the future improvements.
 static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
-    auto run_tests_with_retest = [&](const LogicalProcessorSet &set) {
+    auto run_tests_with_retest = [&](std::span<const Topology::Package> set) {
         SandstoneApplication::PerCpuFailures per_cpu_failures;
         int k = 0;
         int ret = EXIT_SUCCESS;
 
         // all the shady stuff needed to set up to run a test smoothly
         sApp->thread_count = 0;
-        sApp->shmem->enabled_cpus = set;
-        load_cpu_info(set);
+        sApp->shmem->enabled_cpus.clear();
+        for (const Topology::Package &p : set)
+            sApp->shmem->enabled_cpus.add_package(p);
+        load_cpu_info(sApp->shmem->enabled_cpus);
 
         do {
             int test_count = 1;
@@ -2357,12 +2359,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     bool ever_failed = false;
     vector<int> disabled_sockets;
     for (; it != topo.packages.end(); disabled_sockets.push_back(it->id), ++it) {
-        auto eit = it;
-        LogicalProcessorSet run_cpus = {};
-        for (; eit != topo.packages.end(); ++eit)
-            run_cpus.add_package(*eit);
-
-        ret = run_tests_with_retest(run_cpus);
+        ret = run_tests_with_retest({ it, topo.packages.end() });
         if (ret) ever_failed = true; /* we've seen a failure */
 
         if (!ret && ever_failed) {
@@ -2374,11 +2371,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
 
     if (ret) { // failed on the last socket as well, so it's the main suspect
         // re-run on the first to make sure the last one is faulty
-        LogicalProcessorSet run_cpus = {};
-
-        run_cpus.add_package(topo.packages.at(0));
-
-        ret = run_tests_with_retest(run_cpus);
+        ret = run_tests_with_retest({ topo.packages.begin(), 1 });
         if (!ret && ever_failed) {
             result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
         }
