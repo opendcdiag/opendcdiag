@@ -866,6 +866,18 @@ const Topology &Topology::topology()
     return cached_topology();
 }
 
+void update_topology(std::span<const Topology::Package> packages)
+{
+    if (SandstoneConfig::NoTriage)
+        __builtin_unreachable();
+
+    sApp->thread_count = 0;
+    sApp->shmem->enabled_cpus.clear();
+    for (const Topology::Package &p : packages)
+        sApp->shmem->enabled_cpus.add_package(p);
+    load_cpu_info(sApp->shmem->enabled_cpus);
+}
+
 void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
 {
     init_topology_internal(enabled_cpus);

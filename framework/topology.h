@@ -11,6 +11,7 @@
 #include <array>
 #include <bit>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -139,5 +140,6 @@ bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullpt
 
 void load_cpu_info(/*in*/ const LogicalProcessorSet &enabled_cpus);
 void apply_cpuset_param(char *param);
+void update_topology(std::span<const Topology::Package> sockets);
 
 #endif /* INC_TOPOLOGY_H */
