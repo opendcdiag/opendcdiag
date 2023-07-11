@@ -2267,25 +2267,6 @@ static void wait_delay_between_tests()
     usleep(useconds);
 }
 
-static int run_tests_on_cpu_set(vector<const struct test *> &tests, const LogicalProcessorSet &set)
-{
-    SandstoneApplication::PerCpuFailures per_cpu_failures;
-    int ret = EXIT_SUCCESS;
-    int test_count = 1;
-
-    // all the shady stuff needed to set up to run a test smoothly
-    sApp->thread_count = 0;
-    load_cpu_info(set);
-
-    for (auto &t: tests) {
-        ret = test_result_to_exit_code(run_one_test(&test_count, t, per_cpu_failures));
-        if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
-        test_count++;
-    }
-
-    return (ret > EXIT_SUCCESS) ? ret : EXIT_SUCCESS; // do not return SKIP from here
-}
-
 static int exec_mode_run(int argc, char **argv)
 {
     auto find_test_by_name = [](string_view id) -> struct test * {
@@ -2334,6 +2315,24 @@ static int exec_mode_run(int argc, char **argv)
 // generic vector<int> for the future improvements.
 static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
+    auto run_tests_on_cpu_set = [&](const LogicalProcessorSet &set) {
+        SandstoneApplication::PerCpuFailures per_cpu_failures;
+        int ret = EXIT_SUCCESS;
+        int test_count = 1;
+
+        // all the shady stuff needed to set up to run a test smoothly
+        sApp->thread_count = 0;
+        load_cpu_info(set);
+
+        for (auto &t: triage_tests) {
+            ret = test_result_to_exit_code(run_one_test(&test_count, t, per_cpu_failures));
+            if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
+            test_count++;
+        }
+
+        return (ret > EXIT_SUCCESS) ? ret : EXIT_SUCCESS; // do not return SKIP from here
+    };
+
     Topology topo = Topology::topology();
     vector<int> result; // faulty sockets
 
@@ -2363,7 +2362,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
 
         sApp->shmem->enabled_cpus = run_cpus;
         do {
-            ret = run_tests_on_cpu_set(triage_tests, run_cpus);
+            ret = run_tests_on_cpu_set(run_cpus);
         } while (!ret && ++k < sApp->retest_count);
 
         if (ret) ever_failed = true; /* we've seen a failure */
@@ -2384,7 +2383,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
         sApp->shmem->enabled_cpus = run_cpus;
 
         do {
-            ret = run_tests_on_cpu_set(triage_tests, run_cpus);
+            ret = run_tests_on_cpu_set(run_cpus);
         } while (!ret && ++k < sApp->retest_count);
 
         if (!ret && ever_failed) {
