@@ -2332,7 +2332,7 @@ static int exec_mode_run(int argc, char **argv)
 // Returns the list of faulty sockets. Memory is allocated, caller must free.
 // TODO: Current implementation only returns 1 socket. However, the signature is
 // generic vector<int> for the future improvements.
-static vector<int> run_triage(vector<const struct test *> &triage_tests, const LogicalProcessorSet &enabled_cpus)
+static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
     using Socket = Topology::Package;
 
@@ -3503,7 +3503,7 @@ int main(int argc, char **argv)
 
     if (total_failures) {
         if (!do_not_triage) {
-            vector<int> sockets = run_triage(triage_tests, sApp->shmem->enabled_cpus);
+            vector<int> sockets = run_triage(triage_tests);
             logging_print_triage_results(sockets);
         }
         logging_print_footer();
