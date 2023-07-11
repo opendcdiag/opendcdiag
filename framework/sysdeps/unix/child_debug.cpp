@@ -203,7 +203,7 @@ static void child_crash_handler(int, siginfo_t *si, void *ucontext)
     if (crashpipe[CrashPipeChild] == -1)
         return;
 
-    static std::atomic_flag in_crash_handler = ATOMIC_FLAG_INIT;
+    static std::atomic_flag in_crash_handler = {};
     if (!in_crash_handler.test_and_set()) {
         // let parent process know
         CrashContext::send(crashpipe[CrashPipeChild], si, ucontext);
