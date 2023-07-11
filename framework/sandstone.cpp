@@ -2336,15 +2336,10 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
     using Socket = Topology::Package;
 
-    int orig_verbosity;
     Topology topo = Topology::topology();
-    vector<Socket>::iterator it;
-    vector<int> disabled_sockets;
     vector<int> result; // faulty sockets
-    int ret = EXIT_SUCCESS;
-    bool ever_failed = false;
 
-    it = topo.packages.begin();
+    vector<Socket>::iterator it = topo.packages.begin();
     if (topo.packages.empty())
         return result;                  // shouldn't happen!
 
@@ -2354,9 +2349,12 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     }
 
     // backup the original verbosity
-    orig_verbosity = sApp->shmem->verbosity;
+    int orig_verbosity = sApp->shmem->verbosity;
     sApp->shmem->verbosity = -1;
 
+    int ret = EXIT_SUCCESS;
+    bool ever_failed = false;
+    vector<int> disabled_sockets;
     for (; it != topo.packages.end(); disabled_sockets.push_back(it->id), ++it) {
         vector<Socket>::iterator eit = it;
         LogicalProcessorSet run_cpus = {};
