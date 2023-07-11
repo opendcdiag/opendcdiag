@@ -993,12 +993,17 @@ static void init_shmem()
     static_assert(sizeof(PerThreadData::Main) == 64,
             "PerThreadData::Main size grew, please check if it was intended");
     static_assert(sizeof(PerThreadData::Test) == 64,
-            "PerThreadData::Testsize grew, please check if it was intended");
+            "PerThreadData::Test size grew, please check if it was intended");
     assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test);
     assert(sApp->shmem == nullptr);
 
+    LogicalProcessorSet enabled_cpus = init_cpus();
+    assert(num_cpus());
+
+    size_t size = sizeof(PerThreadData::Test) * num_cpus() + sizeof(SandstoneApplication::SharedMemory);
+    size = ROUND_UP_TO_PAGE(size);
+
     // our child (if we have one) will inherit this file descriptor
-    int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
     int fd = open_memfd(MemfdInheritOnExec);
     if (fd < 0 || ftruncate(fd, size) < 0) {
         perror("internal error: could not create temporary file for sharing memory");
@@ -1013,6 +1018,7 @@ static void init_shmem()
 
     sApp->shmemfd = fd;
     sApp->shmem = new (base) SandstoneApplication::SharedMemory;
+    sApp->shmem->enabled_cpus = enabled_cpus;
 }
 
 static void commit_shmem()
@@ -2883,7 +2889,6 @@ int main(int argc, char **argv)
     }
 
     init_shmem();
-    sApp->shmem->enabled_cpus = init_cpus();
     init_topology(sApp->shmem->enabled_cpus);
     while (!SandstoneConfig::RestrictedCommandLine &&
            (opt = simple_getopt(argc, argv, long_options)) != -1) {
