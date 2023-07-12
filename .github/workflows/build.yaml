@@ -43,9 +43,7 @@ jobs:
             ninja-build \
             python3-yaml \
             zlib1g-dev
-    - uses: actions/checkout@v2
-    - name: setup Git
-      run: git config --system safe.directory '*'
+    - uses: actions/checkout@v4
     - name: meson setup
       run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized
     - name: ninja build
@@ -97,9 +95,7 @@ jobs:
             mingw64-zlib \
             mingw64-zstd \
             perl
-    - uses: actions/checkout@v2
-    - name: setup Git
-      run: git config --system safe.directory '*'
+    - uses: actions/checkout@v4
     - name: meson setup
       run: meson setup builddir-windows-cross -Dbuildtype=release --cross-file meson-cross-win32.ini
     - name: ninja build
