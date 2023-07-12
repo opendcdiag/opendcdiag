@@ -26,10 +26,12 @@ if [[ -z "$SANDSTONE" ]]; then
         unset current target
     fi
 fi
-if [[ "$SANDSTONE_BIN" = *.exe ]] && [[ `uname -s` = Linux ]]; then
-    SANDSTONE="wine $SANDSTONE"
+if [[ "$SANDSTONE_BIN" = *.exe ]]; then
     export is_windows=true
-    export WINEDEBUG=-all
+    if [[ `uname -s` = Linux ]]; then
+        SANDSTONE="wine $SANDSTONE"
+        export WINEDEBUG=-all
+    fi
 fi
 SANDSTONE="$SANDSTONE --on-crash=core --on-hang=kill"
 
