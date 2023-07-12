@@ -33,6 +33,11 @@ if target_machine.cpu_family() != 'x86_64'
     # warning was left behind
     tests_common_cpp_args += '-Wno-deprecated-copy'
 endif
+if target_machine.system() == 'windows' and get_option('buildtype') == 'debug'
+    # Force a little bit of optimization, otherwise we get:
+    # Fatal error: tests/libtests_base.a.p/eigen_svd_svd_cdouble_noavx512.cpp.obj: file too big
+    tests_common_cpp_args += '-Og'
+endif
 
 tests_set_base.add(
     files(
