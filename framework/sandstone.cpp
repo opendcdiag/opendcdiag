@@ -1858,7 +1858,7 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
 
     if (sApp->gdb_server_comm.size()) {
         // launch gdbserver instead
-        _spawnv(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+        _spawnvp(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
     }
 
     *hpid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
