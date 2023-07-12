@@ -1519,11 +1519,12 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
     }
 }
 
-static TestResult child_run(/*nonconst*/ struct test *test)
+static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
         protect_shmem();
-        restrict_topology({ 0, num_cpus() });
+        sApp->select_main_thread(child_number);
+        restrict_topology(sApp->main_thread_data()->cpu_range);
         pin_to_logical_processor(LogicalProcessor(-1), "control");
         signals_init_child();
         debug_init_child();
@@ -1665,10 +1666,11 @@ static StartedChild call_forkfd()
     return { .pid = pid, .fd = ffd };
 }
 
-static StartedChild spawn_child(const struct test *test)
+static StartedChild spawn_child(const struct test *test, int child_number)
 {
     assert(sApp->shmemfd != -1);
     std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
+    std::string childnumstr = stdprintf("%d", child_number);
     std::string random_seed = random_format_seed();
 
     StartedChild ret = {};
@@ -1682,6 +1684,7 @@ static StartedChild spawn_child(const struct test *test)
         // argument order must match exec_mode_run()
         argv0, "-x", test->id, random_seed.c_str(),
         shmemfdstr.c_str(),
+        childnumstr.c_str(),
         nullptr
     };
 
@@ -1733,29 +1736,43 @@ static StartedChild spawn_child(const struct test *test)
     return ret;
 }
 
+static int slices_for_test(const struct test *test)
+{
+    (void) test;    // independent of test, for now
+    sApp->main_thread_data()->cpu_range = { 0, num_cpus() };
+
+    return 1;
+}
+
 static TestResult run_one_test_once(int *tc, const struct test *test)
 {
     ChildrenList children;
+    int child_count = slices_for_test(test);
     if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
         assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test
                 && "child_exec_each_test mode can only happen in the child side!");
+        assert((sApp->current_fork_mode() != SandstoneApplication::no_fork || child_count == 1)
+               && "-fno-fork can only start 1 child!");
 
-        StartedChild ret = { .fd = FFD_CHILD_PROCESS };
-        if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
-            ret = call_forkfd();
-        if (ret.fd == FFD_CHILD_PROCESS) {
-            /* child - run test's code */
-            logging_init_child_preexec();
-            TestResult result = child_run(const_cast<struct test *>(test));
+        for (int i = 0; i < child_count; ++i) {
+            StartedChild ret = { .fd = FFD_CHILD_PROCESS };
             if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
-                _exit(test_result_to_exit_code(result));
-            else
-                children.results.emplace_back(ChildExitStatus{ result });
-        } else {
-            children.add(ret);
+                ret = call_forkfd();
+            if (ret.fd == FFD_CHILD_PROCESS) {
+                /* child - run test's code */
+                logging_init_child_preexec();
+                TestResult result = child_run(const_cast<struct test *>(test), i);
+                if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
+                    _exit(test_result_to_exit_code(result));
+                else
+                    children.results.emplace_back(ChildExitStatus{ result });
+            } else {
+                children.add(ret);
+            }
         }
     } else {
-        children.add(spawn_child(test));
+        for (int i = 0; i < child_count; ++i)
+            children.add(spawn_child(test, i));
     }
 
     /* wait for the children */
@@ -2336,7 +2353,7 @@ static int exec_mode_run(int argc, char **argv)
         }
         return nullptr;
     };
-    if (argc < 3)
+    if (argc < 4)
         return EX_DATAERR;
 
     auto parse_int = [](const char *arg) {
@@ -2346,6 +2363,7 @@ static int exec_mode_run(int argc, char **argv)
             exit(EX_DATAERR);
         return int(n);
     };
+    int child_number = parse_int(argv[3]);
 
     attach_shmem(parse_int(argv[2]));
     sApp->thread_count = sApp->shmem->total_cpu_count;
@@ -2364,7 +2382,7 @@ static int exec_mode_run(int argc, char **argv)
 
     std::vector<struct test *> test_list;
     add_test(test_list, test_to_run);
-    return test_result_to_exit_code(child_run(test_to_run));
+    return test_result_to_exit_code(child_run(test_to_run, child_number));
 }
 
 // Triage run attempts to figure out which socket(s) are causing test failures.
