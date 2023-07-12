@@ -72,59 +72,54 @@ jobs:
 
 
   Windows:
-    runs-on: ubuntu-latest
-    container: fedora:41
-    env:
-      ENABLE_WINE_WORKAROUNDS: 1
-      WINEDEBUG: -all
-      WINEPREFIX: /tmp/wine_root
-      WINEPATH: d:/bin
-      XDG_RUNTIME_DIR: /tmp/wine_root
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
     - name: Install distro packages
-      run: |
-        dnf install --setopt=install_weak_deps=False -y \
-            cmake \
-            git \
-            meson \
-            mingw64-boost \
-            mingw64-eigen3 \
-            mingw64-gcc-c++ \
-            mingw64-pkg-config \
-            mingw64-winpthreads-static \
-            mingw64-zlib \
-            mingw64-zstd \
-            perl
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ucrt64
+        cache: true
+        release: false
+        install: >-
+            git
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-eigen3
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-yaml
+            mingw-w64-ucrt-x86_64-zlib
+            mingw-w64-ucrt-x86_64-zstd
     - uses: actions/checkout@v4
+    - name: install Bats
+      uses: actions/checkout@v4
+      with:
+        repository: bats-core/bats-core
+        ref: v1.11.1
+        path: bats-core
+        fetch-depth: 1
     - name: meson setup
-      run: meson setup builddir-windows-cross -Dbuildtype=release --cross-file meson-cross-win32.ini
-    - name: ninja build
-      run: ninja -C builddir-windows-cross
-    - name: install Wine
       run: |
-        dnf install --setopt=install_weak_deps=False -y \
-            bats \
-            elfutils \
-            python3-pyyaml \
-            wine
-        mkdir -v -m 0700 $XDG_RUNTIME_DIR
-        # Create drive D: at MinGW's sysroot
-        winecfg
-        rpm -ql mingw64-zlib | sed -n '/bin\/zlib1.dll/s///p' | \
-            xargs -rtI@ ln -s @ $WINEPREFIX/dosdevices/d:
-        # Disable the GUI debugger
-        wine reg add 'HKEY_LOCAL_MACHINE\Software\Wine\winedbg' /v ShowCrashDialog /t REG_DWORD /d 00000000
-    - name: confirm Wine works
-      run: wine cmd /c ver
+        meson setup builddir-windows \
+              -Dbuildtype=release \
+              -Ddependency_link=static
+    - name: ninja build
+      run: ninja -C builddir-windows
+    - name: List DLL dependencies
+      run: objdump -p builddir-windows/opendcdiag.exe | grep DLL\ Name
     - name: confirm OpenDCDiag runs
       run: |
-        wine builddir-windows-cross/opendcdiag.exe --version
-        wine builddir-windows-cross/opendcdiag.exe --dump-cpu-info
+        builddir-windows/opendcdiag --version
+        builddir-windows/opendcdiag --dump-cpu-info
     - name: run selftests
-      run: SANDSTONE_BIN=builddir-windows-cross/opendcdiag.exe bats -t bats/sanity-check
+      run: SANDSTONE_BIN=builddir-windows/opendcdiag.exe bats-core/bin/bats -t bats/sanity-check
     - name: run tests quickly
       run: |
-        ulimit -St 120
         nproc=`nproc`
         nproc=$((nproc > 4 ? 4 : nproc))
-        wine builddir-windows-cross/opendcdiag.exe --quick --retest-on-failure=0 -n$nproc -o -
+        builddir-windows/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
