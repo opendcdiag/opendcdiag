@@ -108,9 +108,8 @@ test_yaml_regexp() {
 }
 
 @test "TAP silent output" {
-    opts="--output-format=tap --quick --selftests --quiet --disable=mce_check -e @positive -o $BATS_TEST_TMPDIR/fulloutput.tap"
-    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.tap || \
-        cat $BATS_TEST_TMPDIR/fulloutput.tap
+    opts="--output-format=tap --quick --selftests --quiet --disable=mce_check -e @positive"
+    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.tap
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.tap
     {
@@ -132,9 +131,8 @@ test_yaml_regexp() {
 }
 
 @test "YAML silent output" {
-    opts="-Y --quick --selftests --quiet --disable=mce_check -e @positive -o $BATS_TEST_TMPDIR/fulloutput.tap"
-    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.yaml || \
-        cat $BATS_TEST_TMPDIR/fulloutput.yaml
+    opts="-Y --quick --selftests --quiet --disable=mce_check -e @positive"
+    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.yaml
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.yaml
     {
