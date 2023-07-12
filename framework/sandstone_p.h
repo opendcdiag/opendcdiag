@@ -203,7 +203,7 @@ struct Common
 
 struct alignas(64) Main : Common
 {
-    // nothing yet
+    CpuRange cpu_range;
 };
 
 struct alignas(64) Test : Common
@@ -409,6 +409,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     PerThreadData::Common *thread_data(int thread);
     PerThreadData::Main *main_thread_data() noexcept;
     PerThreadData::Test *test_thread_data(int thread);
+    void select_main_thread(int group);
 
     SandstoneBackgroundScan background_scan;
 
@@ -485,6 +486,13 @@ inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
     assert(thread >= 0);
     assert(thread < sApp->thread_count);
     return &test_thread_data_ptr[thread];
+}
+
+inline void SandstoneApplication::select_main_thread(int group)
+{
+    assert(current_fork_mode() != no_fork || group == 0);
+    main_thread_data_ptr += group;
+    test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_cpu;
 }
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l)
