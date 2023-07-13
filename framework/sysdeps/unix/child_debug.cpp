@@ -993,18 +993,16 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
 
 void debug_init_child()
 {
-    if (!SandstoneConfig::ChildDebug)
+    if (!SandstoneConfig::ChildDebugCrashes || sApp->shmem->server_debug_socket == -1)
         return;
 
-    if (SandstoneConfig::ChildBacktrace && on_crash_action & (context_on_crash | attach_gdb_on_crash)) {
-        struct sigaction action = {};
-        sigemptyset(&action.sa_mask);
-        action.sa_sigaction = child_crash_handler;
-        action.sa_flags = SA_NODEFER;       // allow recursive signalling, so the child can raise()
-        action.sa_flags |= SA_SIGINFO;
-        for (int signum : { SIGILL, SIGABRT, SIGFPE, SIGBUS, SIGSEGV }) {
-            sigaction(signum, &action, nullptr);
-        }
+    struct sigaction action = {};
+    sigemptyset(&action.sa_mask);
+    action.sa_sigaction = child_crash_handler;
+    action.sa_flags = SA_NODEFER;       // allow recursive signalling, so the child can raise()
+    action.sa_flags |= SA_SIGINFO;
+    for (int signum : { SIGILL, SIGABRT, SIGFPE, SIGBUS, SIGSEGV }) {
+        sigaction(signum, &action, nullptr);
     }
 }
 
