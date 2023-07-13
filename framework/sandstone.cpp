@@ -220,8 +220,6 @@ struct test mce_test = {
 // ever gets freed and we don't care -- the application is exiting anyway)
 static TestrunSelector *test_selector;
 
-static_assert(LogicalProcessorSet::Size >= MAX_THREADS, "CPU_SETSIZE is too small on this platform");
-
 static void find_thyself(char *argv0)
 {
 #ifndef __GLIBC__

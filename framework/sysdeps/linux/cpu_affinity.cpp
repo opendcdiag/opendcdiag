@@ -7,8 +7,7 @@
 
 #include <sched.h>
 #include <stdio.h>
-
-static_assert(CPU_SETSIZE >= LogicalProcessorSet::Size);
+#include <sysexits.h>
 
 #ifdef __linux__
 #include <sys/prctl.h>
@@ -22,9 +21,22 @@ static void set_thread_name(const char *thread_name)
 
 LogicalProcessorSet ambient_logical_processor_set()
 {
-    LogicalProcessorSet result;
-    if (sched_getaffinity(0, sizeof(result.array), reinterpret_cast<cpu_set_t *>(result.array)) != 0)
-        result.clear();
+    int size = CPU_SETSIZE;
+    LogicalProcessorSet result(size);
+    int r = sched_getaffinity(0, result.size_bytes(), reinterpret_cast<cpu_set_t *>(result.array.data()));
+
+    while (r != 0 && errno == EINVAL) {
+        // increase the set size until it stops failing
+        size *= 2;
+        result.unset(LogicalProcessor(size - 1));
+        r = sched_getaffinity(0, result.size_bytes(), reinterpret_cast<cpu_set_t *>(result.array.data()));
+    }
+
+    if (r != 0) {
+        perror("could not get the ambient CPU set with sched_getaffinity()");
+        exit(EX_OSERR);
+    }
+
     return result;
 }
 

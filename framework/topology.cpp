@@ -225,7 +225,6 @@ static void apply_mock_topology(const std::vector<struct cpu_info> &mock_topolog
     for (int i = 0, curr_cpu = 0; i < count; ++i, ++curr_cpu) {
         while (!enabled_cpus.is_set(LogicalProcessor(curr_cpu))) {
             ++curr_cpu;
-            assert(curr_cpu != MAX_THREADS);
         }
 
         cpu_info[i] = mock_topology[curr_cpu];
@@ -802,7 +801,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             auto lp = LogicalProcessor(curr_cpu);
             while (!enabled_cpus.is_set(lp)) {
                 lp = LogicalProcessor(++curr_cpu);
-                assert(curr_cpu != MAX_THREADS);
             }
 
             pin_to_logical_processor(lp);
