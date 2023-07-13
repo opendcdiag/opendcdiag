@@ -372,10 +372,10 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;
     static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
-    Duration current_test_duration;
-    Duration test_time = Duration::zero();
-    Duration max_test_time = Duration::zero();
-    Duration delay_between_tests = std::chrono::milliseconds(5);
+    ShortDuration current_test_duration;
+    ShortDuration test_time = {};
+    ShortDuration max_test_time = {};
+    ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
 
@@ -557,7 +557,7 @@ void logging_printf(int level, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
 void logging_mark_thread_failed(int thread_num);
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,
                                     size_t size, ptrdiff_t offset, const char *fmt, va_list);
-void logging_print_header(int argc, char **argv, Duration test_duration, Duration test_timeout);
+void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout);
 void logging_print_iteration_start();
 void logging_print_footer();
 void logging_print_triage_results(const std::vector<int> &sockets);

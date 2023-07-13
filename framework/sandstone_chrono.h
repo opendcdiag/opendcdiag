@@ -25,6 +25,7 @@ static inline int get_monotonic_time_now(struct timespec *tv)
 #include <string>
 
 using Duration = std::chrono::steady_clock::duration;
+using ShortDuration = std::chrono::duration<int, std::milli>;   // +/- 24.85 days
 using MonotonicTimePoint = std::chrono::steady_clock::time_point;
 
 struct coarse_steady_clock : std::chrono::steady_clock
@@ -40,7 +41,7 @@ enum class FormatDurationOptions {
     WithUnit        = 0x01,
 };
 
-std::chrono::milliseconds string_to_millisecs(std::string_view in_string);
+ShortDuration string_to_millisecs(std::string_view in_string);
 std::string format_duration(std::chrono::nanoseconds ns,
                             FormatDurationOptions options = FormatDurationOptions::WithUnit);
 
