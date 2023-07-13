@@ -45,11 +45,6 @@ extern "C" {
 #define SANDSTONE_STRINGIFY(name)       SANDSTONE_STRINGIFY2(name)
 #define SANDSTONE_STRINGIFY2(name)      #name
 
-#if defined(__linux__) || defined(_WIN32)
-#   define MAX_THREADS     1023
-#else
-#   define MAX_THREADS     255
-#endif
 #define MAX_HWTHREADS_PER_CORE  4
 
 #ifdef __APPLE__
