@@ -8,23 +8,26 @@
 
 #include <initializer_list>
 
-static LogicalProcessorSet make_set(std::initializer_list<uint64_t> list)
+static LogicalProcessorSet make_set(std::initializer_list<LogicalProcessorSet::Word> list)
 {
-    LogicalProcessorSet result = {};
-    memcpy(result.array, list.begin(), list.size() * sizeof(*list.begin()));
+    LogicalProcessorSet result(list.size() * LogicalProcessorSet::ProcessorsPerWord);
+    std::copy(list.begin(), list.end(), result.array.begin());
     return result;
 }
 
 TEST(LogicalProcessorSet, BasicOperations)
 {
-    auto lastProcessor = LogicalProcessor(LogicalProcessorSet::Size - 1);
-    LogicalProcessorSet set = {};
+    auto lastProcessor = LogicalProcessor(LogicalProcessorSet::MinSize - 1);
+    LogicalProcessorSet set;
+    EXPECT_EQ(set.size_bytes(), 0);
     EXPECT_EQ(set.count(), 0);
     EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
     EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
     EXPECT_FALSE(set.is_set(lastProcessor));
+    EXPECT_EQ(set.size_bytes(), 0);
 
     set.set(LogicalProcessor(0));
+    EXPECT_NE(set.size_bytes(), 0);
     EXPECT_EQ(set.count(), 1);
     EXPECT_TRUE(set.is_set(LogicalProcessor(0)));
     EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
@@ -42,8 +45,42 @@ TEST(LogicalProcessorSet, BasicOperations)
     EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
     EXPECT_TRUE(set.is_set(lastProcessor));
 
-    memset(set.array, -1, sizeof(set.array));
-    EXPECT_EQ(set.count(), LogicalProcessorSet::Size);
+    std::fill(set.array.begin(), set.array.end(), -1);
+    EXPECT_EQ(set.count(), set.array.size() * LogicalProcessorSet::ProcessorsPerWord);
+}
+
+TEST(LogicalProcessorSet, LargeSet)
+{
+    {
+        auto largeProcessor = LogicalProcessor(LogicalProcessorSet::MinSize);
+        LogicalProcessorSet set;
+        EXPECT_EQ(set.size_bytes(), 0);
+        EXPECT_FALSE(set.is_set(largeProcessor));
+        EXPECT_EQ(set.size_bytes(), 0);
+        set.set(largeProcessor);
+        EXPECT_NE(set.size_bytes(), 0);
+        EXPECT_GT(set.size_bytes(), LogicalProcessorSet::MinSize / LogicalProcessorSet::ProcessorsPerWord);
+        EXPECT_TRUE(set.is_set(largeProcessor));
+        EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
+    }
+
+    {
+        auto largeProcessor = LogicalProcessor(LogicalProcessorSet::MinSize * 2);
+        LogicalProcessorSet set;
+        EXPECT_FALSE(set.is_set(largeProcessor));
+        set.set(largeProcessor);
+        EXPECT_TRUE(set.is_set(largeProcessor));
+        EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
+    }
+
+    {
+        auto largeProcessor = LogicalProcessor(32768);
+        LogicalProcessorSet set;
+        EXPECT_FALSE(set.is_set(largeProcessor));
+        set.set(largeProcessor);
+        EXPECT_TRUE(set.is_set(largeProcessor));
+        EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
+    }
 }
 
 TEST(LogicalProcessorSet, FromAmbient)

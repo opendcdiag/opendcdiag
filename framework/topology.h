@@ -74,18 +74,21 @@ class LogicalProcessorSet
 {
     // a possibly non-contiguous range
 public:
-#if defined(__linux__) || defined(_WIN32)
-    static constexpr int Size = 1024;
-#else
-    static constexpr int Size = 256;
-#endif
-
     using Word = unsigned long long;
     static constexpr int ProcessorsPerWord = CHAR_BIT * sizeof(Word);
-    Word array[Size / ProcessorsPerWord];
+    static constexpr int MinSize = 1024;
+    std::vector<Word> array;
+
+    LogicalProcessorSet() noexcept = default;
+    LogicalProcessorSet(int minimumSize)
+    {
+        ensureSize(minimumSize - 1);
+    }
 
     void clear()
     { *this = LogicalProcessorSet{}; }
+    size_t size_bytes() const
+    { return unsigned(array.size()) * sizeof(Word); }
 
     void set(LogicalProcessor n)
     { wordFor(n) |= bitFor(n); }
@@ -133,13 +136,28 @@ public:
     }
 
 private:
-
+    void ensureSize(int n)
+    {
+        static_assert((MinSize % ProcessorsPerWord) == 0);
+        static constexpr size_t MinSizeCount = MinSize / ProcessorsPerWord;
+        size_t idx = size_t(n) / ProcessorsPerWord;
+        if (idx >= array.size())
+            array.resize(std::max(idx + 1, MinSizeCount));
+    }
     Word &wordFor(LogicalProcessor n)
-    { return array[int(n) / ProcessorsPerWord]; }
-    const Word &wordFor(LogicalProcessor n) const
-    { return array[int(n) / ProcessorsPerWord]; }
+    {
+        ensureSize(int(n));
+        return array[int(n) / ProcessorsPerWord];
+    }
+    Word wordFor(LogicalProcessor n) const noexcept
+    {
+        int idx = int(n) / ProcessorsPerWord;
+        return idx < array.size() ? array[idx] : 0;
+    }
     static constexpr Word bitFor(LogicalProcessor n)
-    { return 1ULL << (unsigned(n) % ProcessorsPerWord); }
+    {
+        return 1ULL << (unsigned(n) % ProcessorsPerWord);
+    }
 };
 
 LogicalProcessorSet ambient_logical_processor_set();
