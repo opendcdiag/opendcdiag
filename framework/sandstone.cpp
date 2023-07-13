@@ -2983,7 +2983,7 @@ int main(int argc, char **argv)
             if (strcmp(optarg, "forever") == 0) {
                 sApp->endtime = MonotonicTimePoint::max();
             } else {
-                sApp->endtime = calculate_wallclock_deadline(string_to_millisecs(optarg), &sApp->starttime);
+                sApp->endtime = sApp->starttime + string_to_millisecs(optarg);
             }
             break;
         case 'v':
@@ -3218,25 +3218,25 @@ int main(int argc, char **argv)
             test_list_randomize = true;
             test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
-            sApp->endtime = calculate_wallclock_deadline(1s, &sApp->starttime);
+            sApp->endtime = sApp->starttime + 1s;
             break;
         case thirty_sec_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
-            sApp->endtime = calculate_wallclock_deadline(30s, &sApp->starttime);
+            sApp->endtime = sApp->starttime + 30s;
             break;
         case two_min_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
-            sApp->endtime = calculate_wallclock_deadline(2min, &sApp->starttime);
+            sApp->endtime = sApp->starttime + 2min;
             break;
         case five_min_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
-            sApp->endtime = calculate_wallclock_deadline(5min, &sApp->starttime);
+            sApp->endtime = sApp->starttime + 5min;
             break;
 
         case max_test_count_option:
@@ -3432,9 +3432,6 @@ int main(int argc, char **argv)
 #endif
 
     logging_print_header(argc, argv, test_duration(), test_timeout(test_duration()));
-
-    if (sApp->starttime.time_since_epoch() == Duration::zero())
-        sApp->starttime = MonotonicTimePoint::clock::now();
 
     // triage process is the best effort to figure out which socket is faulty on
     // a multi-socket system, it's done after the main run and only using the
