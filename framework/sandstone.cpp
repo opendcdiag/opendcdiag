@@ -1300,7 +1300,7 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
     struct forkfd_info info;
     struct pollfd pfd[] = {
         { .fd = ffd, .events = POLLIN },
-        { .fd = int(debug_child_watch()), .events = POLLIN }
+        { .fd = int(sApp->shmem->server_debug_socket), .events = POLLIN }
     };
 
     auto do_wait = [&](Duration timeout) {

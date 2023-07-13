@@ -95,7 +95,6 @@ void cpu_specific_init(void);
 /* child_debug.cpp */
 void debug_init_child(void);
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg);
-intptr_t debug_child_watch(void);
 void debug_crashed_child();
 void debug_hung_child(pid_t child);
 
@@ -446,6 +445,11 @@ struct SandstoneApplication::SharedMemory
     OutputFormat output_format = DefaultOutputFormat;
     uint8_t output_yaml_indent = 0;
     bool log_test_knobs = false;
+
+#ifndef _WIN32
+    int server_debug_socket = -1;
+    int child_debug_socket = -1;
+#endif
 
     LogicalProcessorSet enabled_cpus;
 
