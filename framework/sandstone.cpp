@@ -3310,7 +3310,7 @@ int main(int argc, char **argv)
     if (unsigned(thread_count) < unsigned(sApp->thread_count)) {
         sApp->thread_count = thread_count;
         sApp->shmem->enabled_cpus.limit_to(thread_count);
-        restrict_topology(0, thread_count);
+        restrict_topology({ 0, thread_count });
     }
     commit_shmem();
 

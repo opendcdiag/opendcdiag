@@ -58,8 +58,17 @@ public:
 };
 
 enum class LogicalProcessor : int {};
+
+struct CpuRange
+{
+    // a contiguous range
+    int starting_cpu;
+    int cpu_count;
+};
+
 class LogicalProcessorSet
 {
+    // a possibly non-contiguous range
 public:
 #if defined(__linux__) || defined(_WIN32)
     static constexpr int Size = 1024;
@@ -142,6 +151,6 @@ void apply_cpuset_param(char *param);
 void init_topology(const LogicalProcessorSet &enabled_cpus);
 void update_topology(std::span<const struct cpu_info> new_cpu_info,
                      std::span<const Topology::Package> sockets = {});
-void restrict_topology(int starting_cpu, int cpu_count);
+void restrict_topology(CpuRange range);
 
 #endif /* INC_TOPOLOGY_H */
