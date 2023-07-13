@@ -307,19 +307,6 @@ static bool duration_is_forever(std::chrono::duration<Rep, Period> duration)
 {
     return duration == duration.max();
 }
-
-static Duration calculate_runtime(MonotonicTimePoint start_time, MonotonicTimePoint *ref = nullptr)
-{
-    MonotonicTimePoint now;
-
-    if (!ref)
-        now = MonotonicTimePoint::clock::now();
-    else
-        now = *ref;
-
-    return now - start_time;
-}
-
 static inline __attribute__((always_inline, noreturn)) void ud2()
 {
     __builtin_trap();
@@ -2526,7 +2513,7 @@ static struct test *get_next_test_iteration(void)
     static int iterations = 0;
     ++iterations;
 
-    Duration elapsed_time(calculate_runtime(sApp->starttime));
+    Duration elapsed_time = MonotonicTimePoint::clock::now() - sApp->starttime;
     Duration average_time(elapsed_time.count() / iterations);
     logging_printf(LOG_LEVEL_VERBOSE(2), "# Loop iteration %d finished, average time %g ms, total %g ms\n",
                    iterations, std::chrono::nanoseconds(average_time).count() / 1000. / 1000,
