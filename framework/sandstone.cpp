@@ -609,13 +609,7 @@ static MonotonicTimePoint calculate_wallclock_deadline(Duration duration, Monoto
     if (pnow)
         *pnow = later;
 
-    if (duration_is_forever(duration)) {
-        later = MonotonicTimePoint::max();
-    } else if (duration > duration.zero()) {
-        later += duration;
-    }
-
-    return later;
+    return later + duration;
 }
 
 static bool wallclock_deadline_has_expired(MonotonicTimePoint deadline)
