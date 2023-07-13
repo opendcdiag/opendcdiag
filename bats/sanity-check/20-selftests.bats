@@ -437,11 +437,11 @@ selftest_pass() {
 
 @test "selftest_logdata" {
     declare -A yamldump
-    sandstone_selftest -vvv -e selftest_logdata
+    sandstone_selftest -e selftest_logdata
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" pass
-    for ((i = 1; i <= MAX_PROC; ++i)); do
+    for ((i = 0; i < MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/messages/0/level" info
         test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.*'
         test_yaml_regexp "/tests/0/threads/$i/messages/0/data" '[0-9a-f ]+'
