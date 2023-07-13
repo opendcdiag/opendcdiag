@@ -150,15 +150,9 @@ enum HangAction {
     attach_gdb_on_hang
 };
 
-enum CrashPipe {
-    CrashPipeParent,
-    CrashPipeChild
-};
-
 static uint8_t on_crash_action = context_on_crash;
 static uint8_t on_hang_action = print_ps_on_hang;
 static int xsave_size = 0;
-static int crashpipe[2] = { -1, -1 };
 
 static const char gdb_preamble_commands[] = R"(set prompt
 set pagination off
@@ -201,13 +195,14 @@ static void child_crash_handler(int, siginfo_t *si, void *ucontext)
     auto &thread_state = sApp->main_thread_data()->thread_state;
     thread_state.store(thread_failed, std::memory_order_release);
 
-    if (crashpipe[CrashPipeChild] == -1)
+    int socket = sApp->shmem->child_debug_socket;
+    if (socket == -1)
         return;
 
     static std::atomic_flag in_crash_handler = {};
     if (!in_crash_handler.test_and_set()) {
         // let parent process know
-        CrashContext::send(crashpipe[CrashPipeChild], si, ucontext);
+        CrashContext::send(socket, si, ucontext);
 
         if (on_crash_action & attach_gdb_on_crash) {
             // now wait for the parent process to be done with us
@@ -372,12 +367,31 @@ static bool check_gdb_available()
     return false;
 }
 
+static int get_xsave_size()
+{
+#ifdef __x86_64__
+    // get the size of the context to transfer
+    uint32_t eax, ebx, ecx, edx;
+    if (__get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx))
+        return ebx;
+    else
+        return FXSAVE_SIZE;
+#endif
+    return 0;
+}
+
 static bool create_crash_pipe(int xsave_size)
 {
+    enum CrashPipe {
+        CrashPipeParent,
+        CrashPipeChild
+    };
+
     int socktype = SOCK_DGRAM;
 #ifdef SOCK_CLOEXEC
     socktype |= SOCK_CLOEXEC;
 #endif
+    int crashpipe[2];
     if (socketpair(AF_UNIX, socktype, 0, crashpipe) == -1)
         return false;
 
@@ -408,6 +422,12 @@ static bool create_crash_pipe(int xsave_size)
     if (ret >= 0)
         fcntl(crashpipe[CrashPipeParent], F_SETFL, ret | O_NONBLOCK);
 
+    // if we're exec'ing the child, allow it to inherit the socket
+    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test)
+        fcntl(crashpipe[CrashPipeChild], F_SETFD, 0);
+
+    sApp->shmem->server_debug_socket = crashpipe[CrashPipeParent];
+    sApp->shmem->child_debug_socket = crashpipe[CrashPipeChild];
     return true;
 }
 
@@ -953,15 +973,7 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
     }
 
     if (on_crash_action & (context_on_crash | attach_gdb_on_crash)) {
-#  ifdef __x86_64__
-        // get the size of the context to transfer
-        uint32_t eax, ebx, ecx, edx;
-        if (__get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx))
-            xsave_size = ebx;
-        else
-            xsave_size = FXSAVE_SIZE;
-#  endif
-
+        xsave_size = get_xsave_size();
         if (!create_crash_pipe(xsave_size)) {
             // could not create the communications pipe, pare the action back
             on_crash_action &= ~(context_on_crash | attach_gdb_on_crash);
@@ -1004,21 +1016,21 @@ void debug_init_child()
     for (int signum : { SIGILL, SIGABRT, SIGFPE, SIGBUS, SIGSEGV }) {
         sigaction(signum, &action, nullptr);
     }
-}
 
-intptr_t debug_child_watch()
-{
-    return crashpipe[CrashPipeParent];
+    if (sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test) {
+        // we're in the child side of an execve()
+        xsave_size = get_xsave_size();
+    }
 }
 
 void debug_crashed_child()
 {
-    if (!SandstoneConfig::ChildDebugCrashes || crashpipe[CrashPipeParent] == -1)
+    if (!SandstoneConfig::ChildDebugCrashes || sApp->shmem->server_debug_socket == -1)
         return;
 
     // receive the context
     alignas(16) uint8_t xsave_area[xsave_size];     // Variable Length Array, a.k.a. alloca
-    CrashContext ctx = CrashContext::receive(crashpipe[CrashPipeParent],
+    CrashContext ctx = CrashContext::receive(sApp->shmem->server_debug_socket,
                                              { xsave_area, size_t(xsave_size) });
 
     if (ctx.contents != CrashContext::NoContents) {
