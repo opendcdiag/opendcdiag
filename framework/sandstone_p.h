@@ -362,7 +362,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     int max_test_count = INT_MAX;
     int max_test_loop_count = 0;
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
-    MonotonicTimePoint starttime;
+    MonotonicTimePoint starttime = MonotonicTimePoint::clock::now();
     MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;
     static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
