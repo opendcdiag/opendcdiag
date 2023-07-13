@@ -902,7 +902,7 @@ void logging_print_version()
     printf(PROGRAM_VERSION "\n");
 }
 
-void logging_print_header(int argc, char **argv, Duration test_duration, Duration test_timeout)
+void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;                 // short-circuit

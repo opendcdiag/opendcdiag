@@ -649,7 +649,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
 #undef maybe_log_error
 }
 
-static Duration test_duration()
+static ShortDuration test_duration()
 {
     /* global (-t) option overrides this all */
     if (sApp->test_time > 0s)
@@ -657,16 +657,16 @@ static Duration test_duration()
     return SandstoneApplication::DefaultTestDuration;
 }
 
-static Duration test_duration(const struct test *test)
+static ShortDuration test_duration(const struct test *test)
 {
     /* Start with the test prefered default time */
-    milliseconds target_duration(test->desired_duration);
-    milliseconds min_duration(test->minimum_duration);
-    milliseconds max_duration(test->maximum_duration);
+    ShortDuration target_duration(test->desired_duration);
+    ShortDuration min_duration(test->minimum_duration);
+    ShortDuration max_duration(test->maximum_duration);
 
     /* apply the global (-t) override */
     if (sApp->test_time.count())
-        target_duration = duration_cast<milliseconds>(sApp->test_time);
+        target_duration = sApp->test_time;
 
     /* fallback to the default if test preference is zero */
     if (target_duration <= 0s)
@@ -686,13 +686,13 @@ static Duration test_duration(const struct test *test)
     return target_duration;
 }
 
-static Duration test_timeout(Duration regular_duration)
+static ShortDuration test_timeout(ShortDuration regular_duration)
 {
     // use the override value if there is one
     if (sApp->max_test_time != Duration::zero())
         return sApp->max_test_time;
 
-    Duration result = regular_duration * 5 + 30s;
+    ShortDuration result = regular_duration * 5 + 30s;
     if (result < 300s)
         result = 300s;
 

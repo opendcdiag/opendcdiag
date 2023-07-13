@@ -11,12 +11,12 @@
 using namespace std;
 using namespace std::chrono;
 
-milliseconds string_to_millisecs(string_view in_string)
+ShortDuration string_to_millisecs(string_view in_string)
 {
     if (in_string.size() == 0)
         return {};
 
-    milliseconds::rep value;
+    ShortDuration::rep value;
     std::from_chars_result r = std::from_chars(in_string.begin(), in_string.end(), value, 10);
     if (r.ec == std::errc{}) {
         string_view suffix = in_string.substr(r.ptr - in_string.data());
