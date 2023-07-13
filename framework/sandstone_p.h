@@ -331,6 +331,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;
     MonotonicTimePoint current_test_endtime;
+    static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
     Duration current_test_duration;
     Duration test_time = Duration::zero();
     Duration max_test_time = Duration::zero();
