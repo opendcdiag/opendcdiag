@@ -858,7 +858,7 @@ static Topology build_topology()
     if (!valid_topology)
         packages.clear();
 
-    return Topology(packages);
+    return Topology(std::move(packages));
 }
 
 const Topology &Topology::topology()
