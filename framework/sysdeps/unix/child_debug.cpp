@@ -1005,8 +1005,6 @@ void debug_init_child()
         for (int signum : { SIGILL, SIGABRT, SIGFPE, SIGBUS, SIGSEGV }) {
             sigaction(signum, &action, nullptr);
         }
-        if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test)
-            sigaction(SIGTRAP, &action, nullptr);
     }
 }
 
