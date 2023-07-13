@@ -449,8 +449,9 @@ selftest_pass() {
 }
 
 @test "selftest_logs_options" {
-    if $is_windows; then
-       skip "BROKEN on Windows / -fexec mode"
+    run $SANDSTONE -n1 --selftests -e selftest_logs_options -O dummy=dummy
+    if [[ $status == 64 ]]; then
+       skip "Not supported"
     fi
     declare -A yamldump
     sandstone_selftest -vvv -e selftest_logs_options
