@@ -896,7 +896,7 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
         std::fill_n(end, excess, (struct cpu_info){});
 
     sApp->thread_count = new_thread_count;
-    restrict_topology(0, new_thread_count);
+    restrict_topology({ 0, new_thread_count });
 }
 
 void init_topology(const LogicalProcessorSet &enabled_cpus)
@@ -906,11 +906,12 @@ void init_topology(const LogicalProcessorSet &enabled_cpus)
     cached_topology() = build_topology();
 }
 
-void restrict_topology(int starting_cpu, int cpu_count)
+void restrict_topology(CpuRange range)
 {
-    assert(starting_cpu + cpu_count <= sApp->thread_count);
-    std::move(cpu_info + starting_cpu, cpu_info + starting_cpu + cpu_count, cpu_info);
-    sApp->thread_count = cpu_count - starting_cpu;
+    assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
+    std::move(cpu_info + range.starting_cpu, cpu_info + range.starting_cpu + range.cpu_count,
+              cpu_info);
+    sApp->thread_count = range.cpu_count;
 
     cached_topology() = build_topology();
 }
