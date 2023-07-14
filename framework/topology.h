@@ -66,12 +66,39 @@ struct CpuRange
     int cpu_count;
 };
 
-class LogicalProcessorSet
+struct LogicalProcessorSetOps
+{
+    using Word = unsigned long long;
+    static constexpr int ProcessorsPerWord = CHAR_BIT * sizeof(Word);
+
+    static constexpr Word bitFor(LogicalProcessor n)
+    {
+        return 1ULL << (unsigned(n) % ProcessorsPerWord);
+    }
+
+    static void setInArray(std::span<Word> array, LogicalProcessor n)
+    {
+        wordForInArray(array, n) |= bitFor(n);
+    }
+
+    static Word &wordForInArray(std::span<Word> array, LogicalProcessor n)
+    {
+        return array[int(n) / ProcessorsPerWord];
+    }
+
+    static Word constWordForInArray(std::span<const Word> array, LogicalProcessor n)
+    {
+        int idx = int(n) / ProcessorsPerWord;
+        return idx < array.size() ? array[idx] : 0;
+    }
+};
+
+class LogicalProcessorSet : private LogicalProcessorSetOps
 {
     // a possibly non-contiguous range
 public:
-    using Word = unsigned long long;
-    static constexpr int ProcessorsPerWord = CHAR_BIT * sizeof(Word);
+    using LogicalProcessorSetOps::Word;
+    using LogicalProcessorSetOps::ProcessorsPerWord;
     static constexpr int MinSize = 1024;
     std::vector<Word> array;
 
@@ -143,16 +170,11 @@ private:
     Word &wordFor(LogicalProcessor n)
     {
         ensureSize(int(n));
-        return array[int(n) / ProcessorsPerWord];
+        return wordForInArray(array, n);
     }
     Word wordFor(LogicalProcessor n) const noexcept
     {
-        int idx = int(n) / ProcessorsPerWord;
-        return idx < array.size() ? array[idx] : 0;
-    }
-    static constexpr Word bitFor(LogicalProcessor n)
-    {
-        return 1ULL << (unsigned(n) % ProcessorsPerWord);
+        return constWordForInArray(array, n);
     }
 };
 

@@ -46,11 +46,15 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     if (n == LogicalProcessor(-1))
         return true;            // don't change affinity
 
-    cpu_set_t cpu_set;
-    CPU_ZERO(&cpu_set);
-    CPU_SET(int(n), &cpu_set);
+    using Word = LogicalProcessorSetOps::Word;
+    constexpr size_t ProcessorsPerWord = LogicalProcessorSetOps::ProcessorsPerWord;
+    size_t size = size_t(n) / ProcessorsPerWord + 1;
 
-    if (sched_setaffinity(0, sizeof(cpu_set), &cpu_set)) {
+    Word cpu_set[size];         // -Wvla
+    memset(cpu_set, 0, sizeof(cpu_set));
+    LogicalProcessorSetOps::setInArray({ cpu_set, size }, n);
+
+    if (sched_setaffinity(0, sizeof(cpu_set), reinterpret_cast<cpu_set_t *>(cpu_set))) {
         perror("sched_setaffinity");
         return false;
     }
