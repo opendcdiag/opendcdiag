@@ -1810,7 +1810,12 @@ void KeyValuePairLogger::print(int tc)
 void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix)
 {
     if (cpu < 0) {
-        writeln(file_log_fd, timestamp_prefix, "_messages_mainthread = \\");
+        cpu = ~cpu;
+        if (cpu == 0)
+            writeln(file_log_fd, timestamp_prefix, "_messages_mainthread = \\");
+        else
+            dprintf(file_log_fd, "%s_messages_mainthread_%d = \\\n",
+                    timestamp_prefix.c_str(), cpu);
         return;
     }
 
@@ -2077,7 +2082,11 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
 {
     maybe_print_yaml_marker(fd);
     if (cpu < 0) {
-        writeln(fd, "  Main thread:");
+        cpu = ~cpu;
+        if (cpu == 0)
+            writeln(fd, "  Main thread:");
+        else
+            dprintf(fd, "  Main thread %d:", cpu);
         return;
     }
 
@@ -2175,7 +2184,11 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
 {
     maybe_print_messages_header(fd);
     if (cpu < 0) {
-        writeln(fd, indent_spaces(), "  - thread: main");
+        cpu = ~cpu;
+        if (cpu == 0)
+            writeln(fd, indent_spaces(), "  - thread: main");
+        else
+            writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(cpu));
     } else {
         dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), cpu);
         dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(cpu, verbosity).c_str());
