@@ -517,10 +517,13 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
 
     // check if the test has failed
     bool has_failed = false;
-    for (int i = -1; i < num_cpus() && !has_failed; ++i) {
-        if (sApp->thread_data(i)->has_failed())
+    auto failchecker = [&has_failed](PerThreadData::Common *data, int) {
+        if (data->has_failed())
             has_failed = true;
-    }
+    };
+    for_each_main_thread(failchecker);
+    if (!has_failed)
+        for_each_test_thread(failchecker);
 
     MonotonicTimePoint now = std::chrono::steady_clock::now();
 
@@ -1541,9 +1544,9 @@ static TestResult child_run(/*nonconst*/ struct test *test)
         int ret = 0;
         test->per_thread = sApp->user_thread_data.data();
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
-        sApp->main_thread_data()->init();
-        for (int i = 0; i < num_cpus(); ++i)
-            sApp->test_thread_data(i)->init();
+        auto initer = [](auto *data, int) { data->init(); };
+        for_each_main_thread(initer);
+        for_each_test_thread(initer);
 
         sApp->test_tests_init(test);
         if (test->test_init) {
@@ -1921,10 +1924,12 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     }
     auto mark_up_per_cpu_fail = [&per_cpu_fails, &fail_count](int i) {
         ++fail_count;
-        for (int i = 0; i < 64 && i < num_cpus(); ++i) {
-            if (sApp->thread_data(i)->has_failed())
+        if (i >= 64)
+            return;     // we only have 64 bits
+        for_each_test_thread([&](PerThreadData::Test *data, int i) {
+            if (data->has_failed())
                 per_cpu_fails[i] |= uint64_t(1) << i;
-        }
+        });
     };
 
     sApp->current_test_duration = test_duration(test);
