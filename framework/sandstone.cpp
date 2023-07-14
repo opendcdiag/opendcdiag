@@ -1849,7 +1849,6 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
 {
     TestResult state = TestResult::Skipped;
     int fail_count = 0;
-    int iterations;
     std::unique_ptr<char[]> random_allocation;
     MonotonicTimePoint first_iteration_target;
     bool auto_fracture = false;
@@ -1862,6 +1861,13 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         per_cpu_fails.clear();
         per_cpu_fails.resize(num_cpus(), 0);
     }
+    auto mark_up_per_cpu_fail = [&per_cpu_fails, &fail_count](int i) {
+        ++fail_count;
+        for (int i = 0; i < 64 && i < num_cpus(); ++i) {
+            if (sApp->thread_data(i)->has_failed())
+                per_cpu_fails[i] |= uint64_t(1) << i;
+        }
+    };
 
     sApp->current_test_duration = test_duration(test);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
@@ -1906,11 +1912,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
 
         if (state != TestResult::Passed) {
             // this counts as the first failure regardless of how many fractures we've run
-            for (int i = 0; i < num_cpus(); ++i) {
-                if (sApp->thread_data(i)->has_failed())
-                    per_cpu_fails[i] |= uint64_t(1);
-            }
-            ++fail_count;
+            mark_up_per_cpu_fail(0);
             break;
         }
 
@@ -1931,6 +1933,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
                 sApp->shmem->current_max_loop_count != sApp->max_test_loop_count)
             sApp->shmem->current_max_loop_count = -1;
 
+        int iterations;
         auto should_retry_test = [&]() {
             // allow testing double the regular count if we've only ever
             // failed once (the original run)
@@ -1952,13 +1955,8 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
             state = run_one_test_once(tc, test);
             cleanup_internal(test);
 
-            if (state > TestResult::Passed) {
-                for (int i = 0; iterations < 64 && i < num_cpus(); ++i) {
-                    if (sApp->thread_data(i)->has_failed())
-                        per_cpu_fails[i] |= uint64_t(1) << iterations;
-                }
-                ++fail_count;
-            }
+            if (state > TestResult::Passed)
+                mark_up_per_cpu_fail(iterations);
         }
 
         analyze_test_failures(*tc, test, fail_count, iterations, per_cpu_fails);
