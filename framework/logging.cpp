@@ -650,9 +650,12 @@ void logging_init_global(void)
     stderr_fd = open_memfd(MemfdCloseOnExec);
 #endif
 
-    // open log files for each thread
-    for (int i = -1; i < num_cpus(); ++i)
-        sApp->thread_data(i)->log_fd = open_new_log();
+    // open log files for each main thread
+    auto logopener = [](PerThreadData::Common *data, int) {
+        data->log_fd = open_new_log();
+    };
+    for_each_main_thread(logopener);
+    for_each_test_thread(logopener);
 
 #ifdef __GLIBC__
     setenv("LIBC_FATAL_STDERR_", "1", true);
@@ -679,8 +682,11 @@ int logging_close_global(int exitcode)
 
 #ifndef NDEBUG
     // close all log files (in release mode, the OS closes for us)
-    for (int i = -1; i < num_cpus(); ++i)
-        close(sApp->thread_data(i)->log_fd);
+    auto logcloser = [](PerThreadData::Common *data, int) {
+        close(data->log_fd);
+    };
+    for_each_main_thread(logcloser);
+    for_each_test_thread(logcloser);
 #endif
 
     /* leak all file descriptors without closing, the application
@@ -1672,11 +1678,11 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
 
     case TestResult::TimedOut:
         // find stuck threads and insert error message
-        for (int i = 0; i < num_cpus(); ++i) {
-            ThreadState thr_state = sApp->thread_data(i)->thread_state.load(std::memory_order_relaxed);
+        for_each_test_thread([](PerThreadData::Test *data, int i) {
+            ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
             if (thr_state == thread_running)
                 log_message(i, SANDSTONE_LOG_ERROR "Thread is stuck");
-        }
+        });
         return;
 
     case TestResult::CoreDumped:
@@ -1690,8 +1696,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
 
     // scan the threads for their state
     int sc = 0;
-    for (int i = 0; i < num_cpus(); ++i) {
-        PerThreadData::Common *data = sApp->thread_data(i);
+    for_each_test_thread([&](PerThreadData::Common *data, int) {
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
         if (data->has_failed()) {
             earliest_fail = std::min(earliest_fail, data->fail_time);
@@ -1701,7 +1706,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
             ++pc;
             if (thr_state == thread_skipped) ++sc;
         }
-    }
+    });
 
     if (testResult == TestResult::Passed && pc == sc)
         testResult = TestResult::Skipped;       // all threads skipped
@@ -1763,6 +1768,7 @@ void KeyValuePairLogger::print(int tc)
                        "All CPUs skipped while executing 'test_run()' function, check log for details");
     } else if (testResult == TestResult::Skipped) {
         // skipped in the test_init()
+        // FIXME: multiple main threads
         std::string init_skip_message = get_skip_message(-1);
         if (init_skip_message.size() > 0) {
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, char_to_skip_category(init_skip_message[0]));
@@ -1835,12 +1841,11 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
 
 void KeyValuePairLogger::print_thread_messages()
 {
-    for (int i = -1; i < num_cpus(); i++) {
-        PerThreadData::Common *data = sApp->thread_data(i);
+    auto doprint = [this](PerThreadData::Common *data, int i) {
         struct mmap_region r = maybe_mmap_log(data);
 
         if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
-            continue;           /* nothing to be printed, on any level */
+            return;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
         int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
@@ -1851,7 +1856,9 @@ void KeyValuePairLogger::print_thread_messages()
         }
 
         munmap_and_truncate_log(data, r);
-    }
+    };
+    for_each_main_thread(doprint);
+    for_each_test_thread(doprint);
 }
 
 void KeyValuePairLogger::print_child_stderr()
@@ -1876,6 +1883,7 @@ void TapFormatLogger::print(int tc)
     case TestResult::Skipped:
         extra += "SKIP";
         if (skipInMainThread) {
+            // FIXME: multiple main threads
             std::string init_skip_message = get_skip_message(-1);
             if (init_skip_message.size() != 0)
                 extra += "(" + std::string(char_to_skip_category(init_skip_message[0])) +
@@ -2103,12 +2111,11 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
 
 void TapFormatLogger::print_thread_messages()
 {
-    for (int i = -1; i < num_cpus(); i++) {
-        PerThreadData::Common *data = sApp->thread_data(i);
+    auto doprint = [this](PerThreadData::Common *data, int i) {
         struct mmap_region r = maybe_mmap_log(data);
 
         if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
-            continue;           /* nothing to be printed, on any level */
+            return;             /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
         int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
@@ -2119,7 +2126,9 @@ void TapFormatLogger::print_thread_messages()
         }
 
         munmap_and_truncate_log(data, r);
-    }
+    };
+    for_each_main_thread(doprint);
+    for_each_test_thread(doprint);
 }
 
 void TapFormatLogger::print_child_stderr()
@@ -2299,6 +2308,7 @@ void YamlLogger::print_result_line()
                            "All CPUs skipped while executing 'test_run()' function, check log "
                            "for details");
         } else {
+            // FIXME: multiple main threads
             std::string init_skip_message = get_skip_message(-1);
             if (init_skip_message.size() > 0) {
                 logging_printf(loglevel, "  skip-category: %s\n",
@@ -2380,10 +2390,9 @@ void YamlLogger::print()
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str());
 
     double freqs = 0.0;
-    for (int i = 0; i < num_cpus(); i++) {
-        const PerThreadData::Test *data = sApp->test_thread_data(i);
+    for_each_test_thread([&freqs](const PerThreadData::Test *data, int) {
         freqs += data->effective_freq_mhz;
-    }
+    });
 
     const double freq_avg = freqs / num_cpus();
     if (std::isfinite(freq_avg) && freq_avg != 0.0)
@@ -2403,12 +2412,11 @@ void YamlLogger::print()
     }
 
     // print the thread messages
-    for (int i = -1; i < num_cpus(); i++) {
-        PerThreadData::Common *data = sApp->thread_data(i);
+    auto doprint = [this](PerThreadData::Common *data, int i) {
         struct mmap_region r = maybe_mmap_log(data);
 
         if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
-            continue;           /* nothing to be printed, on any level */
+            return;             /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
         int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX);
@@ -2419,7 +2427,9 @@ void YamlLogger::print()
         }
 
         munmap_and_truncate_log(data, r);
-    }
+    };
+    for_each_main_thread(doprint);
+    for_each_test_thread(doprint);
 
     print_child_stderr_common([](int fd) {
         writeln(fd, indent_spaces(), "  stderr messages: |");

@@ -487,6 +487,17 @@ inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
     return &test_thread_data_ptr[thread];
 }
 
+template <typename Lambda> static void for_each_main_thread(Lambda &&l)
+{
+    l(sApp->main_thread_data(), -1);
+}
+
+template <typename Lambda> static void for_each_test_thread(Lambda &&l)
+{
+    for (int i = 0; i < num_cpus(); i++)
+        l(sApp->test_thread_data(i), i);
+}
+
 struct AutoClosingFile
 {
     FILE *f = nullptr;
