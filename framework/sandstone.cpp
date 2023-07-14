@@ -966,14 +966,23 @@ static LogicalProcessorSet init_cpus()
     return result;
 }
 
-static void attach_shmem_internal()
+static void attach_shmem_internal(int fd, size_t size)
 {
-    assert(sApp->shmem->thread_data_offset);
+    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (base == MAP_FAILED) {
+        perror("internal error: could not map the shared memory file to memory");
+        exit(EX_IOERR);
+    }
 
+    sApp->shmem = static_cast<SandstoneApplication::SharedMemory *>(base);
+
+    assert(sApp->shmem->thread_data_offset);
+    assert(sApp->shmem->main_thread_count);
     auto ptr = reinterpret_cast<unsigned char *>(sApp->shmem);
     ptr += sApp->shmem->thread_data_offset;
+
     sApp->main_thread_data_ptr = reinterpret_cast<PerThreadData::Main *>(ptr);
-    ptr += sizeof(*sApp->main_thread_data_ptr);
+    ptr += ROUND_UP_TO_PAGE(sizeof(PerThreadData::Main[sApp->shmem->main_thread_count]));
     sApp->test_thread_data_ptr = reinterpret_cast<PerThreadData::Test *>(ptr);
 }
 
@@ -997,7 +1006,7 @@ static void init_shmem()
             sizeof(Topology::Thread) * num_cpus();
     thread_data_offset = ROUND_UP_TO_PAGE(thread_data_offset);
 
-    size_t size = thread_data_offset + per_thread_size;
+    size_t size = thread_data_offset;
 
     // our child (if we have one) will inherit this file descriptor
     int fd = open_memfd(MemfdInheritOnExec);
@@ -1015,16 +1024,39 @@ static void init_shmem()
     sApp->shmemfd = fd;
     sApp->shmem = new (base) SandstoneApplication::SharedMemory;
     sApp->shmem->thread_data_offset = thread_data_offset;
-    attach_shmem_internal();
 }
 
 static void commit_shmem()
 {
+    // temporary!
+    int main_thread_count = 1;
+    sApp->shmem->main_thread_count = main_thread_count;
+    sApp->shmem->total_cpu_count = num_cpus();
+
+    // unmap the current area, because Windows doesn't allow us to have two
+    // blocks for this file
+    ptrdiff_t offset = sApp->shmem->thread_data_offset;
+    munmap(sApp->shmem, offset);
+
+    // enlarge the file and map the extra data
+    size_t size = sizeof(PerThreadData::Main) * main_thread_count;
+    size = ROUND_UP_TO_PAGE(size);
+    size += sizeof(PerThreadData::Test) * num_cpus();
+    size = ROUND_UP_TO_PAGE(size);
+
+    if (ftruncate(sApp->shmemfd, offset + size) < 0) {
+        perror("internal error: could not enlarge temporary file for sharing memory");
+        exit(EX_CANTCREAT);
+    }
+    attach_shmem_internal(sApp->shmemfd, offset + size);
+
     if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
         close(sApp->shmemfd);
         sApp->shmemfd = -1;
     }
-    sApp->shmem->total_cpu_count = num_cpus();
+
+    // sApp->shmem has probably moved
+    restrict_topology({ 0, num_cpus() });
 }
 
 static void attach_shmem(int fd)
@@ -1041,15 +1073,8 @@ static void attach_shmem(int fd)
         exit(EX_IOERR);
     }
 
-    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (base == MAP_FAILED) {
-        perror("internal error: could not map the shared memory file to memory");
-        exit(EX_IOERR);
-    }
-
+    attach_shmem_internal(fd, size);
     close(fd);
-    sApp->shmem = static_cast<SandstoneApplication::SharedMemory *>(base);
-    attach_shmem_internal();
 
     // barrier with the parent process
     sApp->main_thread_data()->thread_state.exchange(thread_not_started, std::memory_order_acquire);
@@ -1458,10 +1483,10 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             auto child = children.handles[i];
             if (child) {
 #ifdef _WIN32
-                log_message(-1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
+                log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
                 TerminateProcess(HANDLE(child), EXIT_TIMEOUT);
 #else
-                log_message(-1, SANDSTONE_LOG_ERROR "Child %d did not exit, sending signal SIGQUIT", child);
+                log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %d did not exit, sending signal SIGQUIT", child);
                 kill(child, SIGQUIT);
 #endif
             }

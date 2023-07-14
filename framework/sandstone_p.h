@@ -407,7 +407,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     }
 
     PerThreadData::Common *thread_data(int thread);
-    PerThreadData::Main *main_thread_data() noexcept;
+    PerThreadData::Main *main_thread_data(int group = 0) noexcept;
     PerThreadData::Test *test_thread_data(int thread);
     void select_main_thread(int group);
 
@@ -448,6 +448,7 @@ struct SandstoneApplication::SharedMemory
     int child_debug_socket = -1;
 #endif
 
+    int main_thread_count = 0;
     int total_cpu_count = 0;
     alignas(64) struct cpu_info cpu_info[];         // C99 Flexible Array Member
 
@@ -455,8 +456,8 @@ struct SandstoneApplication::SharedMemory
     // in/out per-thread data allocated dynamically;
     // layout is:
     alignas(PAGE_SIZE)
-    PerThreadData::Main main_thread_data;
-    PerThreadData::Test per_thread[];
+    PerThreadData::Main main_thread_data[main_thread_count];
+    PerThreadData::Test per_thread[total_cpu_count];
 #endif
 };
 
@@ -471,14 +472,14 @@ inline SandstoneApplication *_sApp() noexcept
 
 inline PerThreadData::Common *SandstoneApplication::thread_data(int thread)
 {
-    if (thread == -1)
-        return main_thread_data();
+    if (thread < 0)
+        return main_thread_data(-thread - 1);
     return test_thread_data(thread);
 }
 
-inline PerThreadData::Main *SandstoneApplication::main_thread_data() noexcept
+inline PerThreadData::Main *SandstoneApplication::main_thread_data(int group) noexcept
 {
-    return main_thread_data_ptr;
+    return &main_thread_data_ptr[group];
 }
 
 inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
@@ -497,7 +498,8 @@ inline void SandstoneApplication::select_main_thread(int group)
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l)
 {
-    l(sApp->main_thread_data(), -1);
+    for (int i = 0; i < sApp->shmem->main_thread_count; i++)
+        l(sApp->main_thread_data(i), -1 - i);
 }
 
 template <typename Lambda> static void for_each_test_thread(Lambda &&l)
