@@ -7,9 +7,18 @@
 
 #include <sched.h>
 #include <stdio.h>
-#include <sys/prctl.h>
 
 static_assert(CPU_SETSIZE >= LogicalProcessorSet::Size);
+
+#ifdef __linux__
+#include <sys/prctl.h>
+
+static void set_thread_name(const char *thread_name)
+{
+    if (thread_name)
+        prctl(PR_SET_NAME, thread_name);
+}
+#endif
 
 LogicalProcessorSet ambient_logical_processor_set()
 {
@@ -21,8 +30,7 @@ LogicalProcessorSet ambient_logical_processor_set()
 
 bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
 {
-    if (thread_name)
-        prctl(PR_SET_NAME, thread_name);
+    set_thread_name(thread_name);
     if (n == LogicalProcessor(-1))
         return true;            // don't change affinity
 
