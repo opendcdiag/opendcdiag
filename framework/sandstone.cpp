@@ -1583,8 +1583,8 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
         protect_shmem();
         sApp->select_main_thread(child_number);
+        pin_to_logical_processors(sApp->main_thread_data()->cpu_range, "control");
         restrict_topology(sApp->main_thread_data()->cpu_range);
-        pin_to_logical_processor(LogicalProcessor(-1), "control");
         signals_init_child();
         debug_init_child();
     }
@@ -2427,6 +2427,7 @@ static int exec_mode_run(int argc, char **argv)
     int child_number = parse_int(argv[3]);
 
     attach_shmem(parse_int(argv[2]));
+    cpu_info = sApp->shmem->cpu_info;
     sApp->thread_count = sApp->shmem->total_cpu_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 

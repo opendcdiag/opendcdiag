@@ -61,3 +61,30 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     return true;
 }
 
+bool pin_to_logical_processors(CpuRange range, const char *thread_name)
+{
+    set_thread_name(thread_name);
+
+    // find the maximum CPU number
+    int n = 0;
+    for (int cpu = range.starting_cpu; cpu < range.starting_cpu + range.cpu_count; ++cpu)
+        n = std::max(n, cpu_info[cpu].cpu_number);
+
+    using Word = LogicalProcessorSetOps::Word;
+    constexpr size_t ProcessorsPerWord = LogicalProcessorSetOps::ProcessorsPerWord;
+    size_t size = size_t(n) / ProcessorsPerWord + 1;
+
+    Word cpu_set[size];         // -Wvla
+    memset(cpu_set, 0, sizeof(cpu_set));
+
+    for (int cpu = range.starting_cpu; cpu < range.starting_cpu + range.cpu_count; ++cpu) {
+        auto lp = LogicalProcessor(cpu_info[cpu].cpu_number);
+        LogicalProcessorSetOps::setInArray({ cpu_set, size }, lp);
+    }
+
+    if (sched_setaffinity(0, sizeof(cpu_set), reinterpret_cast<cpu_set_t *>(cpu_set))) {
+        perror("sched_setaffinity");
+        return false;
+    }
+    return true;
+}

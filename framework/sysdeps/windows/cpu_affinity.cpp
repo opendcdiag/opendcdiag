@@ -76,3 +76,11 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
 
     return SetThreadIdealProcessorEx(hThread, &processorNumber, nullptr) == 0;
 }
+
+bool pin_to_logical_processors(CpuRange range, const char *thread_name)
+{
+    // nothing
+    (void) range;
+    (void) thread_name;
+    return true;
+}
