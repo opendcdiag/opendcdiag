@@ -301,11 +301,6 @@ static int create_runtime_file(const char *name, int mode = S_IRWXU)
     return open_runtime_file_internal(name, O_CREAT | O_RDWR, mode);
 }
 
-template <typename Rep, typename Period>
-static bool duration_is_forever(std::chrono::duration<Rep, Period> duration)
-{
-    return duration == duration.max();
-}
 static int test_result_to_exit_code(TestResult result)
 {
     switch (result) {
@@ -654,32 +649,41 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
 #undef maybe_log_error
 }
 
-static Duration test_duration(int duration, int min_duration, int max_duration)
+static Duration test_duration()
+{
+    /* global (-t) option overrides this all */
+    if (sApp->test_time > 0s)
+        return sApp->test_time;
+    return SandstoneApplication::DefaultTestDuration;
+}
+
+static Duration test_duration(const struct test *test)
 {
     /* Start with the test prefered default time */
-    int target_duration = duration;
+    milliseconds target_duration(test->desired_duration);
+    milliseconds min_duration(test->minimum_duration);
+    milliseconds max_duration(test->maximum_duration);
 
-    /* fallback to the 1 second default if test preference is zero */
-    if (target_duration == 0)
-        target_duration = 1000;
-
-    /* global (-t) option overrides this all */
+    /* apply the global (-t) override */
     if (sApp->test_time.count())
-        target_duration = sApp->test_time.count() / 1000000;
+        target_duration = duration_cast<milliseconds>(sApp->test_time);
+
+    /* fallback to the default if test preference is zero */
+    if (target_duration <= 0s)
+        target_duration = SandstoneApplication::DefaultTestDuration;
 
     /* if --force-test-time specified, ignore the test-specified time limits */
     if (sApp->force_test_time)
-        return std::chrono::milliseconds(target_duration);
+        return target_duration;
 
     /* clip to the maximum duration */
-    if (max_duration && target_duration > max_duration)
+    if (max_duration != 0s && target_duration > max_duration)
         target_duration = max_duration;
     /* and clip to the minimum duration */
     if (target_duration < min_duration)
         target_duration = min_duration;
 
-    Duration result = std::chrono::milliseconds(target_duration);
-    return result;
+    return target_duration;
 }
 
 static Duration test_timeout(Duration regular_duration)
@@ -1859,7 +1863,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         per_cpu_fails.resize(num_cpus(), 0);
     }
 
-    sApp->current_test_duration = test_duration(test->desired_duration, test->minimum_duration, test->maximum_duration);
+    sApp->current_test_duration = test_duration(test);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
 
     if (sApp->max_test_loop_count) {
@@ -3427,7 +3431,7 @@ int main(int argc, char **argv)
         sandstone_ssl_init();
 #endif
 
-    logging_print_header(argc, argv, test_duration(0, 0, 0), test_timeout(test_duration(0, 0, 0)));
+    logging_print_header(argc, argv, test_duration(), test_timeout(test_duration()));
 
     if (sApp->starttime.time_since_epoch() == Duration::zero())
         sApp->starttime = MonotonicTimePoint::clock::now();

@@ -371,6 +371,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     MonotonicTimePoint starttime;
     MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;
+    static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
     Duration current_test_duration;
     Duration test_time = Duration::zero();
     Duration max_test_time = Duration::zero();
@@ -402,13 +403,11 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     int thread_count;
     ForkMode current_fork_mode() const
     {
+#ifndef _WIN32
         if (SandstoneConfig::RestrictedCommandLine) {
-#ifdef _WIN32
-            return SandstoneApplication::exec_each_test;
-#else
             return SandstoneApplication::fork_each_test;
-#endif
         }
+#endif
         return fork_mode;
     }
 
