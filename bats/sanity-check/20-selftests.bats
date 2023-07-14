@@ -512,36 +512,42 @@ selftest_pass() {
 }
 
 @test "selftest_logs" {
+    # Run the test twice to ensure one run doesn't clobber the next
     declare -A yamldump
-    sandstone_selftest -e selftest_logs
+    sandstone_selftest -e selftest_logs -e selftest_logs
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/result" pass
-    test_yaml_regexp "/tests/0/threads/0/thread" main
-    test_yaml_regexp "/tests/0/threads/0/messages" '.*init function.*'
-    for ((i = 1; i <= MAX_PROC; ++i)); do
-        test_yaml_numeric "/tests/0/threads/$i/thread" "value == $i - 1"
-        test_yaml_regexp "/tests/0/threads/$i/id" '\{.*\}'
-        test_yaml_numeric "/tests/0/threads/$i/loop-count" 'value == 0'
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" '(debug|info|warning|error)'
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.> .+'
+    check_test() {
+        local testnr=$1
+        test_yaml_regexp "/tests/$testnr/result" pass
+        test_yaml_regexp "/tests/$testnr/threads/0/thread" main
+        test_yaml_regexp "/tests/$testnr/threads/0/messages" '.*init function.*'
+        for ((i = 1; i <= MAX_PROC; ++i)); do
+            test_yaml_numeric "/tests/$testnr/threads/$i/thread" "value == $i - 1"
+            test_yaml_regexp "/tests/$testnr/threads/$i/id" '\{.*\}'
+            test_yaml_numeric "/tests/$testnr/threads/$i/loop-count" 'value == 0'
+            test_yaml_regexp "/tests/$testnr/threads/$i/messages/0/level" '(debug|info|warning|error)'
+            test_yaml_regexp "/tests/$testnr/threads/$i/messages/0/text" '.> .+'
 
-        # Confirm some aspects of the messages
-        test_yaml_regexp "/tests/0/threads/$i/messages" '.*W> This is a .*warning.*'
-        test_yaml_regexp "/tests/0/threads/$i/messages" '.*I> This is a .*info.*'
-        if $SANDSTONE --is-debug >/dev/null 2>/dev/null; then
-            test_yaml_regexp "/tests/0/threads/$i/messages" '.*d> This is a .*debug.*'
+            # Confirm some aspects of the messages
+            test_yaml_regexp "/tests/$testnr/threads/$i/messages" '.*W> This is a .*warning.*'
+            test_yaml_regexp "/tests/$testnr/threads/$i/messages" '.*I> This is a .*info.*'
+            if $SANDSTONE --is-debug >/dev/null 2>/dev/null; then
+                test_yaml_regexp "/tests/$testnr/threads/$i/messages" '.*d> This is a .*debug.*'
+            fi
+        done
+
+        if ! $is_asan; then
+            # ASAN builds don't catch stderr
+            test_yaml_regexp "/tests/$testnr/stderr messages" '.* stderr .*'
         fi
-    done
 
-    if ! $is_asan; then
-        # ASAN builds don't catch stderr
-        test_yaml_regexp "/tests/0/stderr messages" '.* stderr .*'
-    fi
-
-    i=2
-    [[ MAX_PROC -gt 1 ]] || i=1
-    test_yaml_regexp "/tests/0/threads/$i/messages" '.*message from cpu '$((i - 1))'.*'
+        i=2
+        [[ MAX_PROC -gt 1 ]] || i=1
+        test_yaml_regexp "/tests/$testnr/threads/$i/messages" '.*message from cpu '$((i - 1))'.*'
+    }
+    check_test 0
+    check_test 1
 }
 
 @test "selftest_logdata" {

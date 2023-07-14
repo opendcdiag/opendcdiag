@@ -489,6 +489,13 @@ static inline int open_new_log()
         return open_memfd(MemfdCloseOnExec);
 }
 
+static inline void truncate_log(int fd)
+{
+    // truncate files back to empty, preparing for the next iteration
+    lseek(fd, 0, SEEK_SET);
+    ftruncate(fd, 0);
+}
+
 void logging_init_global_child()
 {
     assert(sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
@@ -621,6 +628,15 @@ void logging_init_global(void)
 
     close(devnull);
 
+    /* open some place to store stderr in the child processes */
+#if !defined(__SANITIZE_ADDRESS__)
+    stderr_fd = open_memfd(MemfdCloseOnExec);
+#endif
+
+    // open log files for each thread
+    for (int i = -1; i < num_cpus(); ++i)
+        sApp->thread_data(i)->log_fd = open_new_log();
+
 #ifdef __GLIBC__
     setenv("LIBC_FATAL_STDERR_", "1", true);
 #endif
@@ -643,6 +659,12 @@ int logging_close_global(int exitcode)
         close(file_log_fd);
         remove(sApp->file_log_path.c_str());
     }
+
+#ifndef NDEBUG
+    // close all log files (in release mode, the OS closes for us)
+    for (int i = -1; i < num_cpus(); ++i)
+        close(sApp->thread_data(i)->log_fd);
+#endif
 
     /* leak all file descriptors without closing, the application
      * is about to exit anyway */
@@ -1026,13 +1048,6 @@ void logging_flush(void)
 
 void logging_init(const struct test *test)
 {
-    /* open some place to store stderr in the child processes */
-#if defined(__SANITIZE_ADDRESS__)
-    stderr_fd = -1;
-#else
-    stderr_fd = open_memfd(MemfdCloseOnExec);
-#endif
-
     if (sApp->shmem->verbosity <= 0)
         progress_bar_update();
 
@@ -1055,9 +1070,6 @@ void logging_init(const struct test *test)
     case SandstoneApplication::OutputFormat::no_output:
         return;                 // short-circuit
     }
-
-    for (int i = -1; i < num_cpus(); ++i)
-        sApp->thread_data(i)->log_fd = open_new_log();
 }
 
 void logging_init_child_preexec()
@@ -1068,10 +1080,6 @@ void logging_init_child_preexec()
 
 void logging_finish()
 {
-    for (int i = -1; i < num_cpus(); ++i)
-        close(sApp->thread_data(i)->log_fd);
-    if (stderr_fd != -1)
-        close(stderr_fd);
 }
 
 LoggingStream logging_user_messages_stream(int thread_num, int level)
@@ -1607,7 +1615,7 @@ static void print_child_stderr_common(std::function<void(int)> header)
     munmap_file(r);
 
     /* reset it for the next iteration */
-    IGNORE_RETVAL(ftruncate(stderr_fd, 0));
+    truncate_log(stderr_fd);
 }
 
 static std::string
@@ -1816,6 +1824,7 @@ void KeyValuePairLogger::print_thread_messages()
         }
 
         munmap_file(r);
+        truncate_log(data->log_fd);
     }
 }
 
@@ -2084,6 +2093,7 @@ void TapFormatLogger::print_thread_messages()
         }
 
         munmap_file(r);
+        truncate_log(data->log_fd);
     }
 }
 
@@ -2382,6 +2392,7 @@ void YamlLogger::print()
         }
 
         munmap_file(r);
+        truncate_log(data->log_fd);
     }
 
     print_child_stderr_common([](int fd) {
