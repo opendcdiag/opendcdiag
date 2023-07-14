@@ -60,8 +60,8 @@ test_yaml_numeric() {
 test_yaml_regexp() {
     local value
     extract_from_yaml "$1"
-    if printf "%s" "$value" | grep --line-regexp -Pq -e "$2"; then
-        return 0;
+    if python3 -c "rx = r'''$2'''" -c 'import re,sys;exit(re.fullmatch(rx, sys.argv[2], re.S) is None)'; then
+        return 0
     fi
     printf "Regexp match failed:\n"
     printf "query:      %s\n" "$1"
@@ -185,9 +185,8 @@ tap_negative_check() {
 }
 
 @test "TAP silent output" {
-    opts="--output-format=tap --quick --selftests --quiet --disable=mce_check -e @positive -o $BATS_TEST_TMPDIR/fulloutput.tap"
-    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.tap || \
-        cat $BATS_TEST_TMPDIR/fulloutput.tap
+    opts="--output-format=tap --quick --selftests --quiet --disable=mce_check -e @positive"
+    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.tap
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.tap
     {
@@ -209,9 +208,8 @@ tap_negative_check() {
 }
 
 @test "YAML silent output" {
-    opts="-Y --quick --selftests --quiet --disable=mce_check -e @positive -o $BATS_TEST_TMPDIR/fulloutput.tap"
-    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.yaml || \
-        cat $BATS_TEST_TMPDIR/fulloutput.yaml
+    opts="-Y --quick --selftests --quiet --disable=mce_check -e @positive"
+    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.yaml
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.yaml
     {
@@ -503,11 +501,11 @@ selftest_pass() {
 
 @test "selftest_logdata" {
     declare -A yamldump
-    sandstone_selftest -vvv -e selftest_logdata
+    sandstone_selftest -e selftest_logdata
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" pass
-    for ((i = 1; i <= MAX_PROC; ++i)); do
+    for ((i = 0; i < MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/messages/0/level" info
         test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.*'
         test_yaml_regexp "/tests/0/threads/$i/messages/0/data" '[0-9a-f ]+'
@@ -515,8 +513,9 @@ selftest_pass() {
 }
 
 @test "selftest_logs_options" {
-    if $is_windows; then
-       skip "BROKEN on Windows / -fexec mode"
+    run $SANDSTONE -n1 --selftests -e selftest_logs_options -O dummy=dummy
+    if [[ $status == 64 ]]; then
+       skip "Not supported"
     fi
     declare -A yamldump
     sandstone_selftest -vvv -e selftest_logs_options
@@ -983,10 +982,16 @@ selftest_crash_common() {
     fi
 
     local test=$1
+    local code=$2
+    local reason=$3
     if $is_windows; then
-        shift 2
+        code=$4
+        reason=$5
+    else
+        # transform symbolic name to code
+        code=$(kill -l $code)
     fi
-    if [[ "$2" == "" ]]; then
+    if [[ "$code" == "" ]]; then
         skip "Test skipped on this platform"
     fi
 
@@ -996,44 +1001,44 @@ selftest_crash_common() {
     test_yaml_regexp "/tests/0/result" "crash"
     test_yaml_regexp "/tests/0/result-details/crashed" True
     test_yaml_regexp "/tests/0/result-details/core-dump" '(True|False)'
-    test_yaml_numeric "/tests/0/result-details/code" 'value > 0 && value == '$2
-    test_yaml_regexp "/tests/0/result-details/reason" "$3"
+    test_yaml_numeric "/tests/0/result-details/code" 'value > 0 && value == '$code
+    test_yaml_regexp "/tests/0/result-details/reason" "$reason"
 }
 
 @test "selftest_abortinit" {
-    selftest_crash_common selftest_abortinit 6 "Aborted" 0xC0000602 "Aborted"
+    selftest_crash_common selftest_abortinit SIGABRT "Aborted" 0xC0000602 "Aborted"
 }
 
 @test "selftest_abort" {
-    selftest_crash_common selftest_abort 6 "Aborted" 0xC0000602 "Aborted"
+    selftest_crash_common selftest_abort SIGABRT "Aborted" 0xC0000602 "Aborted"
 }
 
 @test "selftest_sigill" {
-    selftest_crash_common selftest_sigill 4 "Illegal instruction" 0xC000001D "Illegal instruction"
+    selftest_crash_common selftest_sigill SIGILL "Illegal instruction" 0xC000001D "Illegal instruction"
 }
 
 @test "selftest_sigfpe" {
-    selftest_crash_common selftest_sigfpe 8 "Floating point exception" 0xC0000094 'Integer division by zero'
+    selftest_crash_common selftest_sigfpe SIGFPE "Floating point exception" 0xC0000094 'Integer division by zero'
 }
 
 @test "selftest_sigbus" {
-    selftest_crash_common selftest_sigbus 7 "Bus error"
+    selftest_crash_common selftest_sigbus SIGBUS "Bus error"
 }
 
 @test "selftest_sigsegv_init" {
-    selftest_crash_common selftest_sigsegv 11 "Segmentation fault" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigsegv SIGSEGV "Segmentation fault" 0xC0000005 'Access violation'
 }
 
 @test "selftest_sigsegv" {
-    selftest_crash_common selftest_sigsegv 11 "Segmentation fault" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigsegv SIGSEGV "Segmentation fault" 0xC0000005 'Access violation'
 }
 
 @test "selftest_sigsegv_cleanup" {
-    selftest_crash_common selftest_sigsegv 11 "Segmentation fault" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigsegv SIGSEGV "Segmentation fault" 0xC0000005 'Access violation'
 }
 
 @test "selftest_sigsegv_instruction" {
-    selftest_crash_common selftest_sigsegv_instruction 11 "Segmentation fault" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigsegv_instruction SIGSEGV "Segmentation fault" 0xC0000005 'Access violation'
 }
 
 @test "selftest_fastfail" {
@@ -1073,7 +1078,7 @@ selftest_crash_common() {
 
 @test "selftest_malloc_fail" {
     declare -A yamldump
-    selftest_crash_common selftest_malloc_fail 6 "Aborted" 0xC0000017 "Out of memory condition"
+    selftest_crash_common selftest_malloc_fail SIGABRT "Aborted" 0xC0000017 "Out of memory condition"
     test_yaml_regexp "/tests/0/stderr messages" 'Out of memory condition'
 }
 

@@ -306,19 +306,6 @@ static bool duration_is_forever(std::chrono::duration<Rep, Period> duration)
 {
     return duration == duration.max();
 }
-
-static Duration calculate_runtime(MonotonicTimePoint start_time, MonotonicTimePoint *ref = nullptr)
-{
-    MonotonicTimePoint now;
-
-    if (!ref)
-        now = MonotonicTimePoint::clock::now();
-    else
-        now = *ref;
-
-    return now - start_time;
-}
-
 static int test_result_to_exit_code(TestResult result)
 {
     switch (result) {
@@ -714,13 +701,7 @@ static MonotonicTimePoint calculate_wallclock_deadline(Duration duration, Monoto
     if (pnow)
         *pnow = later;
 
-    if (duration_is_forever(duration)) {
-        later = MonotonicTimePoint::max();
-    } else if (duration > duration.zero()) {
-        later += duration;
-    }
-
-    return later;
+    return later + duration;
 }
 
 static bool wallclock_deadline_has_expired(MonotonicTimePoint deadline)
@@ -1260,7 +1241,7 @@ static void restart_init(int iterations)
 
 static void run_threads_in_parallel(const struct test *test, const pthread_attr_t *thread_attr)
 {
-    pthread_t pt[MAX_THREADS];
+    pthread_t pt[num_cpus()];       // NOLINT: -Wvla
     int i;
 
     for (i = 0; i < num_cpus(); i++) {
@@ -1649,7 +1630,7 @@ static int spawn_child(const struct test *test, intptr_t *hpid)
 
     if (sApp->gdb_server_comm.size()) {
         // launch gdbserver instead
-        _spawnv(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+        _spawnvp(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
     }
 
     *hpid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
@@ -2230,7 +2211,7 @@ static struct test *get_next_test_iteration(void)
     static int iterations = 0;
     ++iterations;
 
-    Duration elapsed_time(calculate_runtime(sApp->starttime));
+    Duration elapsed_time = MonotonicTimePoint::clock::now() - sApp->starttime;
     Duration average_time(elapsed_time.count() / iterations);
     logging_printf(LOG_LEVEL_VERBOSE(2), "# Loop iteration %d finished, average time %g ms, total %g ms\n",
                    iterations, std::chrono::nanoseconds(average_time).count() / 1000. / 1000,
@@ -3341,6 +3322,11 @@ int main(int argc, char **argv)
 
     if (optind < argc) {
         usage(argv);
+        return EX_USAGE;
+    }
+    if (sApp->log_test_knobs && sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
+        fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",
+                program_invocation_name);
         return EX_USAGE;
     }
 

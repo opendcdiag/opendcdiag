@@ -18,17 +18,20 @@ if [[ -z "$SANDSTONE" ]]; then
     SANDSTONE=$SANDSTONE_BIN
     if [[ `file $SANDSTONE_BIN` = *ELF* ]]; then
         current=`uname -m`
-        target=`eu-readelf -h $SANDSTONE_BIN | sed -n '/Machine:/{s/.* //;y/-/_/;p;q}'`
+        [[ "$current" != "amd64" ]] || current=x86_64
+        target=`eu-readelf -h $SANDSTONE_BIN | sed -n '/Machine:/{s/.* //;y/-/_/;p;q;}'`
         if [[ "${current,,}" != "${target,,}" ]]; then
             SANDSTONE="qemu-${target,,} $SANDSTONE"
         fi
         unset current target
     fi
 fi
-if [[ "$SANDSTONE_BIN" = *.exe ]] && [[ `uname -s` = Linux ]]; then
-    SANDSTONE="wine $SANDSTONE"
+if [[ "$SANDSTONE_BIN" = *.exe ]]; then
     export is_windows=true
-    export WINEDEBUG=-all
+    if [[ `uname -s` = Linux ]]; then
+        SANDSTONE="wine $SANDSTONE"
+        export WINEDEBUG=-all
+    fi
 fi
 SANDSTONE="$SANDSTONE --on-crash=core --on-hang=kill"
 
