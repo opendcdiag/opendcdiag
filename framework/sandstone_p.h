@@ -332,9 +332,15 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         child_exec_each_test,       // when parent is exec_each_test
     };
 
+    struct SlicePlans {
+        using Slices = std::vector<CpuRange>;
+        std::array<Slices, 1> plans;
+    };
+
     using PerCpuFailures = std::vector<uint64_t>;
     struct SharedMemory;
 
+    SlicePlans slice_plans;
     std::vector<test_data_per_thread> user_thread_data;
     PerThreadData::Main *main_thread_data_ptr;  // points to somewhere in the shmem
     PerThreadData::Test *test_thread_data_ptr;  // points to somewhere in the shmem

@@ -365,7 +365,7 @@ tap_negative_check() {
     # Don't use sandstone_selftest because we don't want -n$MAX_PROC
     VALIDATION=dump
     declare -A yamldump
-    run_sandstone_yaml -vvv --max-test-loop-count=1 --selftests -e selftest_timedpass
+    run_sandstone_yaml -vvv --max-test-loop-count=1 --no-slicing --selftests -e selftest_timedpass
 
     test_yaml_numeric "/tests/0/threads@len" "value == $nproc / 2 + 1"
     for ((i = 0; i < nproc/2; ++i)); do
