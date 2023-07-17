@@ -897,6 +897,17 @@ test_list_file_ignores_beta() {
     test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
 }
 
+@test "selftest_failinit_socket1 --max-cores-per-slice" {
+    declare -A yamldump
+    test_fail_socket1 sandstone_selftest -e selftest_failinit_socket1 --max-cores-per-slice=2
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" fail
+    i=$((-1 + yamldump[/tests/0/threads/0/messages@len]))
+    test_yaml_regexp "/tests/0/threads/0/messages/$i/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
+}
+
 fail_common() {
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
@@ -956,9 +967,9 @@ fail_common() {
     grep -e '# Test failed 3 out of 3' /tmp/output.yaml
 }
 
-@test "selftest_fail_socket1" {
+selftest_fail_socket1_common() {
     declare -A yamldump
-    test_fail_socket1 sandstone_selftest -e selftest_fail_socket1
+    test_fail_socket1 sandstone_selftest -e selftest_fail_socket1 "$@"
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/result" fail
@@ -967,6 +978,13 @@ fail_common() {
     test_yaml_regexp "/tests/0/threads/0/id/package" 1
     test_yaml_regexp "/tests/0/threads/0/state" "failed"
     test_yaml_regexp "/tests/0/threads/0/thread" 2
+}
+
+@test "selftest_fail_socket1" {
+    selftest_fail_socket1_common
+}
+@test "selftest_fail_socket1 --max-cores-per-slice" {
+    selftest_fail_socket1_common --max-cores-per-slice=2
 }
 
 function selftest_logerror_common() {
@@ -1060,7 +1078,7 @@ function selftest_logerror_common() {
     test_yaml_regexp "/tests/0/result" 'timed out'
 }
 
-@test "selftest_freeze_socket1" {
+selftest_freeze_socket1_common() {
     declare -A yamldump
     test_fail_socket1 sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_socket1 --timeout=1s
     [[ "$status" -eq 2 ]]
@@ -1078,6 +1096,13 @@ function selftest_logerror_common() {
             [[ "${yamldump[/tests/0/threads/$i/state]}" != failed ]]
         fi
     done
+}
+
+@test "selftest_freeze_socket1" {
+    selftest_freeze_socket1_common
+}
+@test "selftest_freeze_socket1 --max-cores-per-slice" {
+    selftest_freeze_socket1_common --max-cores-per-slice=2
 }
 
 selftest_crash_common() {
@@ -1234,13 +1259,20 @@ selftest_crash_context_common() {
     )
 }
 
-@test "crash context socket1" {
+crash_context_socket1_common() {
     declare -A yamldump
-    test_fail_socket1 selftest_crash_context_common -e selftest_sigsegv_socket1 --on-crash=context
+    test_fail_socket1 selftest_crash_context_common -e selftest_sigsegv_socket1 --on-crash=context "$@"
 
     # only one socket should have crashed
     local threadidx=$((yamldump[/tests/0/threads@len] - 1))
     test_yaml_numeric "/tests/0/threads/$threadidx/id/package" 'value == 1'
+}
+
+@test "crash context socket1" {
+    crash_context_socket1_common
+}
+@test "crash context socket1 --max-cores-per-slice" {
+    crash_context_socket1_common  --max-cores-per-slice=1
 }
 
 @test "crash backtrace" {
