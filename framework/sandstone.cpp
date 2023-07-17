@@ -131,6 +131,7 @@ enum {
     test_knob_option,
     longer_runtime_option,
     max_concurrent_threads_option,
+    max_cores_per_slice_option,
     max_test_count_option,
     max_test_loop_count_option,
     max_messages_option,
@@ -1028,8 +1029,9 @@ static void init_shmem()
 
 static void commit_shmem()
 {
-    // temporary!
-    int main_thread_count = 1;
+    // the most detailed plan is the last
+    const std::vector<CpuRange> &plan = sApp->slice_plans.plans.end()[-1];
+    size_t main_thread_count = plan.size();
     sApp->shmem->main_thread_count = main_thread_count;
     sApp->shmem->total_cpu_count = num_cpus();
 
@@ -1086,6 +1088,38 @@ static void protect_shmem()
     assert(protected_len == ROUND_UP_TO_PAGE(protected_len) &&
             "SharedMemory::main_thread_data is not page-aligned");
     mprotect(sApp->shmem, protected_len, PROT_READ);
+}
+
+static void slice_plan_init(int max_cores_per_slice)
+{
+    auto set_to_full_system = []() {
+        // only one plan and that's the full system
+        std::vector plan = { CpuRange{ 0, num_cpus() } };
+        sApp->slice_plans.plans.fill(plan);
+        return;
+    };
+    for (std::vector<CpuRange> &plan : sApp->slice_plans.plans)
+        plan.clear();
+
+    if (sApp->current_fork_mode() == SandstoneApplication::no_fork || max_cores_per_slice < 0)
+        return set_to_full_system();
+
+    int max_cpu = num_cpus();
+    if (max_cores_per_slice == 0) {
+        set_to_full_system();
+    } else {
+        // dumb plan, not *cores*
+        int group_count = (max_cpu - 1) / max_cores_per_slice + 1;
+        std::vector<CpuRange> plan;
+        plan.reserve(group_count);
+
+        int group_size = max_cpu / group_count;
+        int cpu = 0;
+        for ( ; cpu < max_cpu - group_size; cpu += group_size)
+            plan.push_back(CpuRange{ cpu, group_size });
+        plan.push_back(CpuRange{ cpu, max_cpu - cpu });
+        sApp->slice_plans.plans.fill(plan);
+    }
 }
 
 __attribute__((weak, noclone, noinline)) void print_application_banner()
@@ -1764,9 +1798,11 @@ static StartedChild spawn_child(const struct test *test, int child_number)
 static int slices_for_test(const struct test *test)
 {
     (void) test;    // independent of test, for now
-    sApp->main_thread_data()->cpu_range = { 0, num_cpus() };
+    const std::vector<CpuRange> &plan = sApp->slice_plans.plans[0];
+    for (size_t i = 0; i < plan.size(); ++i)
+        sApp->main_thread_data(i)->cpu_range = plan[i];
 
-    return 1;
+    return plan.size();
 }
 
 static TestResult run_one_test_once(int *tc, const struct test *test)
@@ -2894,11 +2930,12 @@ int main(int argc, char **argv)
         { "list-groups", no_argument, nullptr, raw_list_groups },
         { "longer-runtime", required_argument, nullptr, longer_runtime_option },
         { "max-concurrent-threads", required_argument, nullptr, max_concurrent_threads_option },
+        { "max-cores-per-slice", required_argument, nullptr, max_cores_per_slice_option },
+        { "max-logdata", required_argument, nullptr, max_logdata_option },
+        { "max-messages", required_argument, nullptr, max_messages_option },
         { "max-test-count", required_argument, nullptr, max_test_count_option },
         { "max-test-loop-count", required_argument, nullptr, max_test_loop_count_option },
         { "mce-check-every", required_argument, nullptr, mce_check_period_option },
-        { "max-logdata", required_argument, nullptr, max_logdata_option },
-        { "max-messages", required_argument, nullptr, max_messages_option },
         { "mem-sample-time", required_argument, nullptr, mem_sample_time_option },
         { "mem-samples-per-log", required_argument, nullptr, mem_samples_per_log_option},
         { "no-memory-sampling", no_argument, nullptr, no_mem_sampling_option },
@@ -2954,6 +2991,7 @@ int main(int argc, char **argv)
     };
 
     const char *seed = nullptr;
+    int max_cores_per_slice = 0;
     int opt;
     int tc = 0;
     int total_failures = 0;
@@ -3114,9 +3152,17 @@ int main(int argc, char **argv)
         case longer_runtime_option:
             weighted_testrunner_runtimes = LongerTestrunTimes;
             break;
+        case max_cores_per_slice_option:
+            max_cores_per_slice = ParseIntArgument<>{
+                    .name = "--max-cores-per-slice",
+                    .min = -1,
+                }();
+            break;
         case mce_check_period_option:
             sApp->mce_check_period = ParseIntArgument<>{"--mce-check-every"}();
             break;
+        case no_slicing_option:
+            max_cores_per_slice = -1;
             break;
         case no_triage_option:
             do_not_triage = true;
@@ -3329,7 +3375,6 @@ int main(int argc, char **argv)
             break;
 
             /* deprecated options */
-        case no_slicing_option:
         case max_concurrent_threads_option:
         case mem_sample_time_option:
         case mem_samples_per_log_option:
@@ -3418,6 +3463,7 @@ int main(int argc, char **argv)
 
     if (unsigned(thread_count) < unsigned(sApp->thread_count))
         restrict_topology({ 0, thread_count });
+    slice_plan_init(max_cores_per_slice);
     commit_shmem();
 
     signals_init_global();
