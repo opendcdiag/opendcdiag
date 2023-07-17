@@ -318,11 +318,6 @@ private:
 
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
-    enum class ScheduleBy : int8_t {
-        Thread,
-        Core
-    };
-
     enum class OutputFormat : int8_t {
         no_output   = 0,
         tap,
