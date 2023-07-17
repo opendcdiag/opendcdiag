@@ -1651,16 +1651,16 @@ format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurati
     return format_duration(tp - sApp->current_test_starttime, opts);
 }
 
-static TestResult find_most_serious_result(std::span<const ChildExitStatus> results)
+static ChildExitStatus find_most_serious_result(std::span<const ChildExitStatus> results)
 {
     auto comparator = [](ChildExitStatus s1, ChildExitStatus s2) {
         return s1.result < s2.result;
     };
-    return std::max_element(results.begin(), results.end(), comparator)->result;
+    return *std::max_element(results.begin(), results.end(), comparator);
 }
 
 inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state_)
-    : test(test), childExitStatus(state_[0]), testResult(find_most_serious_result(state_))
+    : test(test), childExitStatus(find_most_serious_result(state_)), testResult(childExitStatus.result)
 {
     // check that most serious result
     switch (testResult) {
@@ -2472,6 +2472,27 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
         logging_printf(LOG_LEVEL_VERBOSE(1), "  %-*d: %s\n", spacing, i,
                        thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str());
     }
+
+    auto make_plan_string = [](const std::vector<CpuRange> &plan) {
+        std::string result;
+        for (CpuRange r : plan) {
+            if (result.size())
+                result += ", ";
+            result += "{ starting_cpu: ";
+            result += std::to_string(r.starting_cpu);
+            result += ", count: ";
+            result += std::to_string(r.cpu_count);
+            result += " }";
+        }
+        return result;
+    };
+    const std::vector<CpuRange> &fullsocket = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::IsolateSockets];
+    const std::vector<CpuRange> &heuristic = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::Heuristic];
+    logging_printf(LOG_LEVEL_VERBOSE(1), "test-plans:\n");
+    logging_printf(LOG_LEVEL_VERBOSE(1), "  fullsocket: [ %s ]\n",
+                   make_plan_string(fullsocket).c_str());
+    logging_printf(LOG_LEVEL_VERBOSE(1), "  heuristic: [ %s ]\n",
+                   make_plan_string(heuristic).c_str());
 
     print_tests_header(AtStart);
 }

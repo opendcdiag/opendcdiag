@@ -333,8 +333,15 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     };
 
     struct SlicePlans {
+        static constexpr int MinimumCpusPerSocket = 8;
+        static constexpr int DefaultMaxCoresPerSlice = 32;
+        enum Type : int8_t {
+            FullSystem = -1,
+            IsolateSockets,
+            Heuristic,
+        };
         using Slices = std::vector<CpuRange>;
-        std::array<Slices, 1> plans;
+        std::array<Slices, 2> plans;
     };
 
     using PerCpuFailures = std::vector<uint64_t>;

@@ -1104,19 +1104,112 @@ static void slice_plan_init(int max_cores_per_slice)
     if (sApp->current_fork_mode() == SandstoneApplication::no_fork || max_cores_per_slice < 0)
         return set_to_full_system();
 
+    // The heuristic is enabled by max_cores_per_slice == 0 and a valid
+    // topology:
+    // - if the CPU Set has less than or equal toMinimumCpusPerSocket (8)
+    //   logical processors per socket (on average), we ignore the topology and
+    //   will instead run in slices of up to DefaultMaxCoresPerSlice (32)
+    //   logical processors.
+    // - otherwise, we'll have at least one slice per socket, and maybe more
+    //   for sockets with more than 32 cores per socket.
+    //   * hardware threads of a given core are always sliced together, so a
+    //     2-thread core system will have up to 64 logical processors in a
+    //     slice (a hypothetical 4-thread system would have up to 128).
+    //
+    // The heuristic slices will be balanced as follows:
+    // - the number of cores per slice is kept as a multiple of 4; that is, a
+    //   60-core socket will have a slice of 32 cores and one of 28 cores,
+    //   instead of 30+30.
+    // - other than that, the number of cores per slice is balanced; that is,
+    //   a 48-core socket is split as two 24-core slices instead of 32+16.
+    //
+    // If the user specifies a --max-cores-per-slice option in the
+    // command-line, it will bypass the heuristic but keep the slice balancing
+    // as described above, including keeping the multiple-of-4 sliceing, if the
+    // requested target is also a multiple of 4. Be aware bypasses the minimum
+    // average processor per socket check.
+    //
+    // As a result, expect the following sliceing:
+    //  Topology            slices
+    //  invalid             everything
+    //  1 x 32              [32]
+    //  1 x 36              [20 + 16]
+    //  1 x 40              [20 + 20]
+    //  1 x 60              [32 + 28]
+    //  1 x 64              [32 + 32]
+    //  1 x 96              [32 + 32 + 32]
+    //  1 x 128             [32 + 32 + 32 + 32]
+    //  2 x 8               [16]
+    //  2 x 16              [16] + [16]
+    //  2 x 32              [32] + [32]
+    //  2 x 40              [20 + 20] + [20 + 20]
+    //  4 x 8               [32]
+    //  4 x 16              [16] + [16] + [16] + [16]
+    //  8 x 8               [32] + [32]
+    //  16 x 4              [32] + [32]
+    //  16 x 8              [32] + [32] + [32] + [32]
+    // etc.
+
     int max_cpu = num_cpus();
+    const Topology &topology = Topology::topology();
+    while (topology.isValid()) {     // not a loop, just so we can use break
+        using SlicePlans = SandstoneApplication::SlicePlans;
+        static constexpr int MinimumCpusPerSocket = SlicePlans::MinimumCpusPerSocket;
+        static constexpr int DefaultMaxCoresPerSlice = SlicePlans::DefaultMaxCoresPerSlice;
+
+        if (max_cores_per_slice == 0) {
+            // apply defaults
+            int average_cpus_per_socket = max_cpu / topology.packages.size();
+            max_cores_per_slice = DefaultMaxCoresPerSlice;
+            if (average_cpus_per_socket <= MinimumCpusPerSocket)
+                break;
+        }
+
+        // set up proper plans
+        std::vector<CpuRange> &fullsocket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
+        std::vector<CpuRange> &split = sApp->slice_plans.plans[SlicePlans::Heuristic];
+        auto push_to = [](std::vector<CpuRange> &to, const Topology::Core *start, const Topology::Core *end) {
+            int start_cpu = start[0].threads.front().cpu();
+            int end_cpu = end[-1].threads.back().cpu();
+            assert(end_cpu >= start_cpu);
+            to.push_back(CpuRange{ start_cpu, end_cpu + 1 - start_cpu });
+        };
+
+        for (const Topology::Package &p : topology.packages) {
+            if (p.cores.size() == 0)
+                continue;       // untested socket
+
+            const Topology::Core *c = p.cores.data();
+            const Topology::Core *end = c + p.cores.size();
+            push_to(fullsocket, c, end);
+
+            ptrdiff_t slice_count = p.cores.size() / max_cores_per_slice;
+            if (p.cores.size() % max_cores_per_slice)
+                ++slice_count;      // round up (also makes at least 1)
+
+            ptrdiff_t slice_size = p.cores.size() / slice_count;
+            if ((max_cores_per_slice & 3) == 0 && (slice_size & 3))
+                slice_size = ((slice_size >> 2) + 1) << 2;  // make it multiple of 4
+
+            for ( ; end - c > slice_size; c += slice_size)
+                push_to(split, c, c + slice_size);
+            push_to(split, c, end);
+        }
+        return;
+    }
+
     if (max_cores_per_slice == 0) {
         set_to_full_system();
     } else {
         // dumb plan, not *cores*
-        int group_count = (max_cpu - 1) / max_cores_per_slice + 1;
+        int slice_count = (max_cpu - 1) / max_cores_per_slice + 1;
         std::vector<CpuRange> plan;
-        plan.reserve(group_count);
+        plan.reserve(slice_count);
 
-        int group_size = max_cpu / group_count;
+        int slice_size = max_cpu / slice_count;
         int cpu = 0;
-        for ( ; cpu < max_cpu - group_size; cpu += group_size)
-            plan.push_back(CpuRange{ cpu, group_size });
+        for ( ; cpu < max_cpu - slice_size; cpu += slice_size)
+            plan.push_back(CpuRange{ cpu, slice_size });
         plan.push_back(CpuRange{ cpu, max_cpu - cpu });
         sApp->slice_plans.plans.fill(plan);
     }
@@ -1797,8 +1890,26 @@ static StartedChild spawn_child(const struct test *test, int child_number)
 
 static int slices_for_test(const struct test *test)
 {
-    (void) test;    // independent of test, for now
-    const std::vector<CpuRange> &plan = sApp->slice_plans.plans[0];
+    SandstoneApplication::SlicePlans::Type type = [=]() {
+        switch (test->flags & test_schedule_mask) {
+        case test_schedule_sequential:  // sequential tests see the full system
+        case test_schedule_fullsystem:
+            return SandstoneApplication::SlicePlans::FullSystem;
+
+        case test_schedule_isolate_socket:
+            return SandstoneApplication::SlicePlans::IsolateSockets;
+
+        case test_schedule_default:
+            break;
+        }
+        return SandstoneApplication::SlicePlans::Heuristic;
+    }();
+    if (type == SandstoneApplication::SlicePlans::FullSystem) {
+        sApp->main_thread_data()->cpu_range = { 0, num_cpus() };
+        return 1;
+    }
+
+    const std::vector<CpuRange> &plan = sApp->slice_plans.plans[type];
     for (size_t i = 0; i < plan.size(); ++i)
         sApp->main_thread_data(i)->cpu_range = plan[i];
 
@@ -2474,6 +2585,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
 
         // all the shady stuff needed to set up to run a test smoothly
         update_topology(topo.all_threads, set);
+        slice_plan_init(INT_MAX);   // full sockets
 
         do {
             int test_count = 1;
