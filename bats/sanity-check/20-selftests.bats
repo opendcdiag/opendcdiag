@@ -70,6 +70,37 @@ test_yaml_regexp() {
     return 1
 }
 
+@test "time parse negative" {
+    # positive parsing with the YAML header below
+    run $SANDSTONE -t xyzzy
+    ((status == 64))
+    [[ "$output" = *": invalid time \"xyzzy\": could not parse"* ]]
+
+    run $SANDSTONE -t 1yr
+    ((status == 64))
+    [[ "$output" = *": invalid time \"1yr\": unknown time unit"* ]]
+
+    run $SANDSTONE -t 1d
+    ((status == 64))
+    [[ "$output" = *": invalid time \"1d\": unknown time unit"* ]]
+
+    run $SANDSTONE -t 1000us
+    ((status == 64))
+    [[ "$output" = *": invalid time \"1000us\": unknown time unit"* ]]
+
+    out_of_range() {
+        local t=$1
+        run $SANDSTONE -t $t
+        ((status == 64))
+        [[ "$output" = *": invalid time \"$t\": time out of range"* ]]
+    }
+    out_of_range 597h
+    out_of_range 35792min
+    out_of_range 21474837s
+    out_of_range 2147483648ms
+    out_of_range 2147483648
+}
+
 @test "TAP output @positive" {
     # make an associative array:
     #  tests=([selftest_pass]=1 [selftest_logs]=1 ...)
@@ -260,6 +291,17 @@ tap_negative_check() {
         test_yaml_regexp "/cpu-info/$i/microcode" '(None|[0-9]+)'
         test_yaml_regexp "/cpu-info/$i/ppin" '(None|[0-9a-f]{16})'
     done
+
+    # check some more timing parse
+    sandstone_selftest -e selftest_pass -t 12ms --timeout 20s
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric "/timing/duration" 'value == 12'
+    test_yaml_numeric "/timing/timeout" 'value == 20000'
+
+    sandstone_selftest -e selftest_pass -t 1min --timeout 5h
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric "/timing/duration" 'value == 60000'
+    test_yaml_numeric "/timing/timeout" 'value == 5*60*60*1000'
 }
 
 @test "obey taskset single" {
