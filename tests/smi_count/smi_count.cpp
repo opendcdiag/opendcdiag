@@ -31,11 +31,13 @@ static int smi_count_run(struct test *test, int cpu)
     if (KEY_EXISTS(sApp->smi_counts_start, real_cpu_number)) {
         auto initial_count = sApp->smi_counts_start[real_cpu_number];
         auto current_count = sApp->count_smi_events(real_cpu_number);
-        uint64_t difference = current_count - initial_count;
+        if (current_count) {
+            uint64_t difference = *current_count - initial_count;
 
-        if (difference) {
-            log_platform_message(SANDSTONE_LOG_INFO "SMI count difference detected: %" PRIu64 " new SMI detected on thread %d cpu_number %d\n",
-                                 difference, cpu, real_cpu_number);
+            if (difference) {
+                log_platform_message(SANDSTONE_LOG_INFO "SMI count difference detected: %" PRIu64 " new SMI detected on thread %d cpu_number %d\n",
+                                     difference, cpu, real_cpu_number);
+            }
         }
     }
     return EXIT_SUCCESS;
@@ -49,4 +51,3 @@ DECLARE_TEST(smi_count, "Counts SMI events")
     .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
 #endif /* __unix__ */
-
