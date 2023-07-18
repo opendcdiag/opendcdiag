@@ -46,7 +46,7 @@ tests_set_base.add(
     )
 )
 
-if framework_config.get('SANDSTONE_SSL_BUILD') == true
+if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     tests_set_base.add(
         when : crypto_dep,
         if_true: files(
