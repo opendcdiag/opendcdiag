@@ -817,20 +817,6 @@ static void initialize_smi_counts()
 static void cleanup_internal(const struct test *test)
 {
     logging_finish();
-
-    if (InterruptMonitor::InterruptMonitorWorks) {
-        uint64_t mce_now = sApp->count_mce_events();
-        if (sApp->mce_count_last != mce_now) {
-            logging_printf(LOG_LEVEL_QUIET, "# WARNING: Machine check exception detected\n");
-            sApp->mce_count_last = mce_now;
-        }
-
-        uint64_t thermal_now = sApp->count_thermal_events();
-        if (thermal_now != sApp->last_thermal_event_count) {
-            sApp->last_thermal_event_count = thermal_now;
-            logging_printf(LOG_LEVEL_QUIET, "# WARNING: Thermal events detected.\n");
-        }
-    }
 }
 
 template <uint64_t X, uint64_t Y, typename P = int>
