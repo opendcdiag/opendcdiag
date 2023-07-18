@@ -52,9 +52,6 @@ bool read_msr(int cpu, uint32_t msr, uint64_t * value)
     bool ret = false;
     char filename[sizeof "/dev/cpu/2147483647/msr" + 1];
 
-    if (cpu < 0)
-        cpu = thread_num;
-
     try_load_kmod();
 
     sprintf(filename, "/dev/cpu/%i/msr", cpu);
@@ -73,9 +70,6 @@ bool write_msr(int cpu, uint32_t msr, uint64_t value)
     int fd;
     bool ret = false;
     char filename[sizeof "/dev/cpu/2147483647/msr" + 1];
-
-    if (cpu < 0)
-        cpu = thread_num;
 
     try_load_kmod();
 
