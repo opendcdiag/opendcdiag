@@ -276,9 +276,30 @@ static int selftest_noreturn_run(struct test *test, int cpu)
     return EXIT_FAILURE;
 }
 
-static int selftest_fail_socket1_run(struct test *test, int cpu)
+static int adjust_cpu_for_isolate_socket(int cpu)
 {
-    return cpu_info[cpu].package_id == 1 ? EXIT_FAILURE : EXIT_SUCCESS;
+    // pretend we're running in test_schedule_isolate_socket
+    for (int cpu0 = cpu - 1; cpu0 >= 0; --cpu0) {
+        if (cpu_info[cpu0].package_id == cpu_info[cpu].package_id)
+            continue;
+        return cpu - cpu0 - 1;
+    }
+    // no adjustment necessary -- we are in test_schedule_isolate_socket
+    return cpu;
+}
+
+template <auto F> static int selftest_if_socket1_initcleanup(struct test *test)
+{
+    if (cpu_info[0].package_id == 1)
+        return F(test);
+    return EXIT_SUCCESS;
+}
+
+template <auto F> static int selftest_if_socket1_run(struct test *test, int cpu)
+{
+    if (cpu_info[cpu].package_id == 1)
+        return F(test, adjust_cpu_for_isolate_socket(cpu));
+    return EXIT_SUCCESS;
 }
 
 static int selftest_50pct_freeze_fail_run(struct test *test, int cpu)
@@ -1014,10 +1035,40 @@ static struct test selftests_array[] = {
 
     /* Multi-socket tests */
 {
+    .id = "selftest_failinit_socket1",
+    .description = "Fails on init for socket 1",
+    .groups = nullptr, // positive on single-socket systems, negative on multi-socket
+    .test_init = selftest_if_socket1_initcleanup<selftest_failinit_init>,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+},
+{
     .id = "selftest_fail_socket1",
     .description = "Fails on any thread of socket 1",
     .groups = nullptr, // positive on single-socket systems, negative on multi-socket
-    .test_run = selftest_fail_socket1_run,
+    .test_run = selftest_if_socket1_run<selftest_fail_run>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_freeze_socket1",
+    .description = "Freezes on any thread of socket 1",
+    .groups = nullptr, // positive on single-socket systems, negative on multi-socket
+    .test_run = selftest_if_socket1_run<selftest_noreturn_run>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_sigsegv_init_socket1",
+    .description = "Crashes with SIGSEGV (data) on init for socket 1",
+    .groups = nullptr, // positive on single-socket systems, negative on multi-socket
+    .test_init = selftest_if_socket1_initcleanup<selftest_crash_initcleanup<cause_sigsegv_null>>,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_sigsegv_socket1",
+    .description = "Crashes with SIGSEGV (data) dereferencing the null page for any thread of socket 1",
+    .groups = nullptr, // positive on single-socket systems, negative on multi-socket
+    .test_run = selftest_if_socket1_run<selftest_crash_run<cause_sigsegv_null>>,
     .desired_duration = -1,
 },
 
