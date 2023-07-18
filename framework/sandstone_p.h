@@ -536,6 +536,18 @@ private:
     }
 };
 
+template <typename F> inline auto scopeExit(F &&f)
+{
+    struct Scope {
+        F f;
+        bool dismissed = false;
+        ~Scope() { if (!dismissed) f(); }
+        void dismiss() { dismissed = true; }
+        void run_now() { f(); dismiss(); }
+    };
+    return Scope(std::forward<F>(f));
+}
+
 static_assert(std::is_trivially_copyable_v<SandstoneApplication::SharedMemory>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::SharedMemory>);
 
