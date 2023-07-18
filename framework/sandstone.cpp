@@ -3309,7 +3309,7 @@ int main(int argc, char **argv)
     if (sApp->shmem->verbosity == -1)
         sApp->shmem->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
 
-    if (InterruptMonitor::InterruptMonitorWorks) {
+    if (InterruptMonitor::InterruptMonitorWorks && mce_test.quality_level != TEST_QUALITY_SKIP) {
         sApp->last_thermal_event_count = sApp->count_thermal_events();
         sApp->mce_counts_start = sApp->get_mce_interrupt_counts();
 
