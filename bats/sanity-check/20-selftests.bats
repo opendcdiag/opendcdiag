@@ -70,6 +70,25 @@ test_yaml_regexp() {
     return 1
 }
 
+test_fail_socket1() {
+    if $is_debug; then
+        if (( MAX_PROC < 4 )); then
+            skip "Need at least 4 logical processors to run this test"
+        fi
+        SANDSTONE_MOCK_TOPOLOGY="0 1 0:1 1:1" "$@"
+    else
+        # Maybe we're running on a real multi-socket system
+        run $SANDSTONE --cpuset=p1 --dump-cpu-info
+        if (( status != 0 )); then
+            skip "Test only works with Debug builds (to mock the topology) or multi-socket systems"
+        fi
+        "$@" --cpuset=c0
+    fi
+
+    # only one socket should have had problems
+    test_yaml_regexp "/tests/0/fail/cpu-mask" 'None|\.:X(:\.)*'
+}
+
 @test "time parse negative" {
     # positive parsing with the YAML header below
     run $SANDSTONE -t xyzzy
@@ -937,6 +956,19 @@ fail_common() {
     grep -e '# Test failed 3 out of 3' /tmp/output.yaml
 }
 
+@test "selftest_fail_socket1" {
+    declare -A yamldump
+    test_fail_socket1 sandstone_selftest -e selftest_fail_socket1
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" fail
+
+    # only one socket should have failed
+    test_yaml_regexp "/tests/0/threads/0/id/package" 1
+    test_yaml_regexp "/tests/0/threads/0/state" "failed"
+    test_yaml_regexp "/tests/0/threads/0/thread" 2
+}
+
 function selftest_logerror_common() {
     declare -A yamldump
     sandstone_selftest -vvv -e $1
@@ -1026,6 +1058,26 @@ function selftest_logerror_common() {
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" 'timed out'
+}
+
+@test "selftest_freeze_socket1" {
+    declare -A yamldump
+    test_fail_socket1 sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_socket1 --timeout=1s
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result" 'timed out'
+    test_yaml_numeric "/tests/0/test-runtime" 'value >= 1000'
+
+    # only one socket should have frozen
+    for ((i = 1; i <= yamldump[/tests/0/threads@len]; ++i)); do
+        if [[ "${yamldump[/tests/0/threads/$i/id/package]}" = 1 ]]; then
+            test_yaml_regexp "/tests/0/threads/$i/state" failed
+            n=$((-1 + yamldump[/tests/0/threads/$i/messages@len]))
+            test_yaml_regexp "/tests/0/threads/$i/messages/$n/text" '.*Thread is stuck'
+        else
+            [[ "${yamldump[/tests/0/threads/$i/state]}" != failed ]]
+        fi
+    done
 }
 
 selftest_crash_common() {
@@ -1149,7 +1201,7 @@ selftest_crash_context_common() {
     fi
 
     local signum=`kill -l SEGV`
-    sandstone_selftest -n1 -e selftest_sigsegv "$@"
+    sandstone_selftest "$@"
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/result" "crash"
@@ -1171,7 +1223,7 @@ selftest_crash_context_common() {
 
 @test "crash context" {
     declare -A yamldump
-    selftest_crash_context_common --on-crash=context
+    selftest_crash_context_common -n1 -e selftest_sigsegv --on-crash=context
 
     # Ensure we can use this option even if gdb isn't found
     # (can't use run_sandstone_yaml here because we empty $PATH)
@@ -1180,6 +1232,15 @@ selftest_crash_context_common() {
         run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o - >/dev/null
         [[ $status -eq 1 ]]     # instead of 64 (EX_USAGE)
     )
+}
+
+@test "crash context socket1" {
+    declare -A yamldump
+    test_fail_socket1 selftest_crash_context_common -e selftest_sigsegv_socket1 --on-crash=context
+
+    # only one socket should have crashed
+    local threadidx=$((yamldump[/tests/0/threads@len] - 1))
+    test_yaml_numeric "/tests/0/threads/$threadidx/id/package" 'value == 1'
 }
 
 @test "crash backtrace" {
@@ -1204,7 +1265,7 @@ selftest_crash_context_common() {
     wait $pid ||:
 
     declare -A yamldump
-    selftest_crash_context_common --on-crash=backtrace
+    selftest_crash_context_common -n1 -e selftest_sigsegv --on-crash=backtrace
 
     test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
