@@ -28,7 +28,6 @@
 
 #ifdef __cplusplus
 #include <memory>
-#include <map>
 #include <span>
 
 #include <sandstone_config.h>
@@ -392,7 +391,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     uint64_t last_thermal_event_count;
     uint64_t mce_count_last;
     std::vector<uint32_t> mce_counts_start;
-    std::map<int, uint64_t> smi_counts_start;
+    std::vector<uint64_t> smi_counts_start;
 
     int thread_count;
     ForkMode current_fork_mode() const

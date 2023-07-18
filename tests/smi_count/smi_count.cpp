@@ -20,16 +20,13 @@
 #include <limits.h>
 #include <map>
 
-#define KEY_EXISTS(map, key)  (map.count(key) > 0)
-
 static int smi_count_run(struct test *test, int cpu)
 {
     (void) test;
 
-    int real_cpu_number = cpu_info[cpu].cpu_number;
-
-    if (KEY_EXISTS(sApp->smi_counts_start, real_cpu_number)) {
-        auto initial_count = sApp->smi_counts_start[real_cpu_number];
+    if (sApp->smi_counts_start.size() > cpu) {
+        int real_cpu_number = cpu_info[cpu].cpu_number;
+        auto initial_count = sApp->smi_counts_start[cpu];
         auto current_count = sApp->count_smi_events(real_cpu_number);
         if (current_count) {
             uint64_t difference = *current_count - initial_count;
