@@ -16,6 +16,8 @@
 
 #include "sandstone_p.h"
 
+static atomic_bool msr_access_denied = ATOMIC_VAR_INIT(false);
+
 static void try_load_kmod()
 {
     // this is not thread safe, the atomic is just to prevent data races
@@ -52,12 +54,17 @@ bool read_msr(int cpu, uint32_t msr, uint64_t * value)
     bool ret = false;
     char filename[sizeof "/dev/cpu/2147483647/msr" + 1];
 
+    if (atomic_load_explicit(&msr_access_denied, memory_order_relaxed))
+        return false;
     try_load_kmod();
 
     sprintf(filename, "/dev/cpu/%i/msr", cpu);
     fd = open(filename, O_RDONLY | O_CLOEXEC);
-    if (fd == -1)
+    if (fd == -1) {
+        if (errno == EACCES)
+            atomic_store_explicit(&msr_access_denied, true, memory_order_relaxed);
         return false;
+    }
     if (pread(fd, value, sizeof(*value), msr) == sizeof(*value))
         ret = true;
 
@@ -71,12 +78,17 @@ bool write_msr(int cpu, uint32_t msr, uint64_t value)
     bool ret = false;
     char filename[sizeof "/dev/cpu/2147483647/msr" + 1];
 
+    if (atomic_load_explicit(&msr_access_denied, memory_order_relaxed))
+        return false;
     try_load_kmod();
 
     sprintf(filename, "/dev/cpu/%i/msr", cpu);
     fd = open(filename, O_WRONLY | O_CLOEXEC);
-    if (fd == -1)
+    if (fd == -1) {
+        if (errno == EACCES)
+            atomic_store_explicit(&msr_access_denied, true, memory_order_relaxed);
         return false;
+    }
     if (pwrite(fd, &value, sizeof(value), msr) == sizeof(value))
         ret = true;
 
