@@ -1407,9 +1407,6 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
             }
         }
 
-        if (sApp->count_thermal_events() != sApp->last_thermal_event_count)
-            log_platform_message(SANDSTONE_LOG_WARNING "Thermal events detected, timing cannot be trusted.");
-
         return { TestResult::TimedOut };
     }
     return test_result_from_exit_code(info);
