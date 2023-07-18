@@ -105,17 +105,13 @@ tests_config_base = tests_set_base.apply(tests_config)
 tests_base_a = static_library(
     'tests_base',
     sources : tests_config_base.sources(),
-    dependencies : tests_config_base.dependencies(),
     build_by_default: false,
     include_directories : [
         tests_common_incdirs,
     ],
     dependencies: [
+        tests_config_base.dependencies(),
         boost_dep,
-        crypto_dep,
-        eigen3_dep,
-        zlib_dep,
-        zstd_dep,
     ],
     c_args : [
         tests_common_c_args,
@@ -160,14 +156,13 @@ if host_machine.cpu_family() == 'x86_64'
     tests_skx_a = static_library(
         'tests_skx',
         sources : tests_config_skx.sources(),
-        dependencies : tests_config_skx.dependencies(),
         build_by_default: false,
         include_directories : [
             tests_common_incdirs,
         ],
         dependencies: [
+            tests_config_skx.dependencies(),
             boost_dep,
-            eigen3_dep,
         ],
         c_args : [
             tests_common_c_args,
