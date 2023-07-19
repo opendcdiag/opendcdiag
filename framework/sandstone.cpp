@@ -1921,9 +1921,8 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
                 || (runtime >= sApp->current_test_duration))
             goto out;
 
-        // For improved randomization of addresses, we are going to do a random
-        // malloc between 0 and 4095 bytes. This also advances the random seed.
-        random_allocation.reset(new char[rand() & 4095]);
+        // Advance the random seed.
+        random_advance_seed();
     }
 
     /* now we process retries */
