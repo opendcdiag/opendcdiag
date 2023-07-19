@@ -61,10 +61,10 @@ static int mce_check_run(struct test *test, int cpu)
         cpu = cpu_info[i].cpu_number;
         assert(cpu < differences.size());
 
-        if (differences[i] != 0) {
+        if (differences[cpu] != 0) {
             log_message(i, SANDSTONE_LOG_ERROR "MCE detected (%u interrupts since start)",
-                        differences[i]);
-            differences[i] = 0;
+                        differences[cpu]);
+            differences[cpu] = 0;
             ++errorcount;
         }
     }
