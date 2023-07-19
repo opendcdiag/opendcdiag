@@ -66,6 +66,7 @@
 #include "sandstone_iovec.h"
 #include "sandstone_kvm.h"
 #include "sandstone_system.h"
+#include "sandstone_thread.h"
 #include "test_selectors/SelectorFactory.h"
 
 #include "sandstone_tests.h"
@@ -900,15 +901,12 @@ void test_loop_end() noexcept
 #endif
 } // extern "C"
 
-static void *thread_runner(void *arg)
+static uintptr_t thread_runner(int thread_number)
 {
-    uintptr_t thread_number = uintptr_t(arg);
-
     // convert from internal Sandstone numbering to the system one
     pin_to_logical_processor(LogicalProcessor(cpu_info[thread_number].cpu_number), current_test->id);
 
     PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
-            thread_num = thread_number;
     random_init_thread(thread_number);
     int ret = EXIT_FAILURE;
 
@@ -958,7 +956,7 @@ static void *thread_runner(void *arg)
 
     // our caller doesn't care what we return, but the returned value helps if
     // you're running strace
-    return reinterpret_cast<void *>(ret);
+    return ret;
 }
 
 int num_cpus()
@@ -1221,52 +1219,48 @@ static void restart_init(int iterations)
 {
 }
 
-static void run_threads_in_parallel(const struct test *test, const pthread_attr_t *thread_attr)
+static void run_threads_in_parallel(const struct test *test)
 {
-    pthread_t pt[num_cpus()];       // NOLINT: -Wvla
+    SandstoneTestThread thr[num_cpus()];    // NOLINT: -Wvla
     int i;
 
     for (i = 0; i < num_cpus(); i++) {
-        pthread_create(&pt[i], thread_attr, thread_runner, (void *) (uint64_t) i);
+        thr[i].start(thread_runner, i);
     }
     /* wait for threads to end */
     for (i = 0; i < num_cpus(); i++) {
-        pthread_join(pt[i], nullptr);
+        thr[i].join();
     }
 }
 
-static void run_threads_sequentially(const struct test *test, const pthread_attr_t *thread_attr)
+static void run_threads_sequentially(const struct test *test)
 {
     // we still start one thread, in case the test uses report_fail_msg()
     // (which uses pthread_cancel())
-    pthread_t thread;
-    pthread_create(&thread, thread_attr, [](void *) -> void* {
-        for (int i = 0; i < num_cpus(); ++i)
-            thread_runner(reinterpret_cast<void *>(i));
-        return nullptr;
-    }, nullptr);
-    pthread_join(thread, nullptr);
+    SandstoneTestThread thread;
+    thread.start([](int cpu) {
+        for ( ; cpu != num_cpus(); thread_num = ++cpu)
+            thread_runner(cpu);
+        return uintptr_t(cpu);
+    }, 0);
+    thread.join();
 }
 
 static void run_threads(const struct test *test)
 {
-    pthread_attr_t thread_attr;
-    pthread_attr_init(&thread_attr);
-    pthread_attr_setstacksize(&thread_attr, THREAD_STACK_SIZE);
     current_test = test;
 
     switch (test->flags & test_schedule_mask) {
     case test_schedule_default:
-        run_threads_in_parallel(test, &thread_attr);
+        run_threads_in_parallel(test);
         break;
 
     case test_schedule_sequential:
-        run_threads_sequentially(test, &thread_attr);
+        run_threads_sequentially(test);
         break;
     }
 
     current_test = nullptr;
-    pthread_attr_destroy(&thread_attr);
 }
 
 static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const struct test *test)
