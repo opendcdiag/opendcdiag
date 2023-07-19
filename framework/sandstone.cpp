@@ -1478,7 +1478,6 @@ static TestResult child_run(/*nonconst*/ struct test *test)
             break;
         }
 
-        logging_flush();
         run_threads(test);
 
         if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime)){
