@@ -12,6 +12,7 @@
 #include "sandstone_iovec.h"
 
 #include "futex.h"
+#include "gettid.h"
 
 #include <initializer_list>
 #include <limits>
@@ -43,13 +44,6 @@
 
 #ifdef __linux__
 #  include <sys/prctl.h>
-#  include <sys/syscall.h>
-
-typedef pid_t tid_t;
-static inline tid_t sys_gettid()
-{
-    return syscall(SYS_gettid);
-}
 
 // can't #include <asm/ucontext.h> because until glibc 2.26 it conflicted with
 // <sys/ucontext.h>, so:
@@ -94,7 +88,7 @@ struct CrashContext
     struct Fixed {
         pid_t pid = getpid();
 #ifdef __linux__
-        tid_t handle = sys_gettid();
+        tid_t handle = gettid();
 #else
         uintptr_t handle = reinterpret_cast<uintptr_t>(pthread_self());
 #endif
