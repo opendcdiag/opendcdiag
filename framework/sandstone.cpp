@@ -907,69 +907,58 @@ static void *thread_runner(void *arg)
     // convert from internal Sandstone numbering to the system one
     pin_to_logical_processor(LogicalProcessor(cpu_info[thread_number].cpu_number), current_test->id);
 
-    struct TestRunWrapper {
-        PerThreadData::Test *this_thread;
-        int ret = EXIT_FAILURE;
-        int thread_number;
-        CPUTimeFreqStamp before, after;
-
-        TestRunWrapper(int thread_number)
-            : this_thread(sApp->test_thread_data(thread_number)),
-              thread_number(thread_number)
-        {
+    PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
             thread_num = thread_number;
-            random_init_thread(thread_number);
+    random_init_thread(thread_number);
+    int ret = EXIT_FAILURE;
+
+    auto cleanup = scopeExit([&] {
+        // let SIGQUIT handler know we're done
+        ThreadState new_state = thread_failed;
+        if (!this_thread->has_failed()) {
+            if (ret == EXIT_SUCCESS)
+                new_state = thread_succeeded;
+            else if (ret < EXIT_SUCCESS)
+                new_state = thread_skipped;
         }
+        this_thread->thread_state.store(new_state, std::memory_order_relaxed);
 
-        ~TestRunWrapper()
-        {
-            // let SIGQUIT handler know we're done
-            ThreadState new_state = thread_failed;
-            if (!this_thread->has_failed()) {
-                if (ret == EXIT_SUCCESS)
-                    new_state = thread_succeeded;
-                else if (ret < EXIT_SUCCESS)
-                    new_state = thread_skipped;
-            }
-            this_thread->thread_state.store(new_state, std::memory_order_relaxed);
-
-            if (new_state == thread_failed) {
-                if (sApp->shmem->ud_on_failure)
-                    ud2();
-                logging_mark_thread_failed(thread_number);
-            }
-            test_end(new_state);
-
-            after.Snapshot(thread_number);
-            this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
-
-            if (sApp->shmem->verbosity >= 3)
-                log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
-                            thread_number, this_thread->inner_loop_count);
+        if (new_state == thread_failed) {
+            if (sApp->shmem->ud_on_failure)
+                ud2();
+            logging_mark_thread_failed(thread_number);
         }
+        test_end(new_state);
+    });
 
-        [[gnu::always_inline]] void run()
-        {
-            // indicate to SIGQUIT handler that we're running
-            this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
+    // indicate to SIGQUIT handler that we're running
+    this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
 
-            before.Snapshot(thread_number);
+    CPUTimeFreqStamp before;
+    before.Snapshot(thread_number);
+    test_start();
 
-            test_start();
+    try {
+        ret = test_run_wrapper_function(current_test, thread_number);
+    } catch (std::exception &e) {
+        log_error("Caught C++ exception: \"%s\" (type '%s')", e.what(), typeid(e).name());
+        // no rethrow
+    }
 
-            try {
-                ret = test_run_wrapper_function(current_test, thread_number);
-            } catch (std::exception &e) {
-                log_error("Caught C++ exception: \"%s\" (type '%s')", e.what(), typeid(e).name());
-                // no rethrow
-            }
-        }
-    } wrapper(thread_number);
-    wrapper.run();
+    cleanup.run_now();
+
+    CPUTimeFreqStamp after;
+    after.Snapshot(thread_number);
+    this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
+
+    if (sApp->shmem->verbosity >= 3)
+        log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
+                    thread_number, this_thread->inner_loop_count);
+
 
     // our caller doesn't care what we return, but the returned value helps if
     // you're running strace
-    return reinterpret_cast<void *>(wrapper.ret);
+    return reinterpret_cast<void *>(ret);
 }
 
 int num_cpus()
