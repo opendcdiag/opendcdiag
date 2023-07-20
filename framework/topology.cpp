@@ -930,8 +930,10 @@ void init_topology(const LogicalProcessorSet &enabled_cpus)
 void restrict_topology(CpuRange range)
 {
     assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
-    cpu_info = sApp->shmem->cpu_info + range.starting_cpu;
-    sApp->thread_count = range.cpu_count;
+    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_cpu);
+    int old_thread_count = std::exchange(sApp->thread_count, range.cpu_count);
+    if (old_cpu_info == cpu_info && old_thread_count == sApp->thread_count)
+        return;
 
     cached_topology() = build_topology();
 }
