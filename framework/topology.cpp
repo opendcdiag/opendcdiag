@@ -832,22 +832,38 @@ static Topology build_topology()
     else
         return Topology({});
 
-    for ( ; info != end; ++info) {
+    while (info != end) {
         if (info->package_id < 0 || info->core_id < 0 || info->thread_id < 0)
             return Topology({});
 
         Topology::Package *pkg = &packages.emplace_back();
+        assert(pkg->id == -1);
+        pkg->id = info->package_id;
 
-        if (pkg->id == -1) pkg->id = info->package_id;
-        if (pkg->cores.size() <= size_t(info->core_id))
-            pkg->cores.resize(info->core_id + 1);
+        // scan forward to the end of this package
+        Topology::Thread *first = info;
+        int core_count = 0;
+        for (int last_core_id = -1; info != end; ++info) {
+            if (info->core_id < 0 || info->thread_id < 0)
+                return Topology({});
+            if (info->package_id != first->package_id)
+                break;
+            if (info->core_id != last_core_id) {
+                ++core_count;
+                last_core_id = info->core_id;
+            }
+        }
 
-        Topology::Core *core = &pkg->cores[info->core_id];
-        if (core->id == -1) core->id = info->core_id;
-        if (core->threads.size() <= size_t(info->thread_id))
-            core->threads.resize(info->thread_id + 1);
+        pkg->cores.reserve(core_count + 1);
 
-        core->threads[info->thread_id] = static_cast<Topology::Thread *>(info);
+        // fill in the threads
+        for (Topology::Thread *last = first; last != info; ++last) {
+            if (last->core_id == first->core_id)
+                continue;
+            pkg->cores.push_back({ { first, last } });
+            first = last;
+        }
+        pkg->cores.push_back({ { first, info } });
     }
 
     return Topology(std::move(packages));
@@ -957,12 +973,10 @@ std::string Topology::build_falure_mask(const struct test *test) const
             uint32_t threadmask = 0;
             int threadcount = 0;
             int failcount = 0;
-            for (const Thread *t : core.threads) {
-                if (!t)
-                    continue;
-                int cpu_id = t->cpu();
+            for (const Thread &t : core.threads) {
+                int cpu_id = t.cpu();
                 if (sApp->thread_data(cpu_id)->has_failed()) {
-                    threadmask |= 1U << t->thread_id;
+                    threadmask |= 1U << t.thread_id;
                     ++failcount;
                 }
                 ++threadcount;
