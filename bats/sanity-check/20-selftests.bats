@@ -1272,12 +1272,12 @@ function selftest_cpuset() {
     shift 4
 
     declare -A yamldump
-    sandstone_selftest -vvv -e selftest_pass "$@"
+    sandstone_selftest -vvv -e selftest_skip "$@"
     [[ "$status" -eq 0 ]]
-    test_yaml_numeric "/tests/0/threads/1/id/logical" "value == $expected_logical"
-    test_yaml_numeric "/tests/0/threads/1/id/package" "value == $expected_package"
-    test_yaml_numeric "/tests/0/threads/1/id/core" "value == $expected_core"
-    test_yaml_numeric "/tests/0/threads/1/id/thread" "value == $expected_thread"
+    test_yaml_numeric "/cpu-info/0/logical" "value == $expected_logical"
+    test_yaml_numeric "/cpu-info/0/package" "value == $expected_package"
+    test_yaml_numeric "/cpu-info/0/core" "value == $expected_core"
+    test_yaml_numeric "/cpu-info/0/thread" "value == $expected_thread"
 }
 
 @test "cpuset=number (first)" {
