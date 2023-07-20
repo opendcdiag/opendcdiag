@@ -96,7 +96,7 @@ struct RandomEngineWrapper
 
     virtual ~RandomEngineWrapper();
     virtual size_t stateSize() = 0;
-    virtual void printGlobalState(std::ostringstream &ss) = 0;
+    virtual std::string globalState() = 0;
     virtual void reloadGlobalState(const char *argument) = 0;
     virtual void seedGlobalEngine(SeedSequence &sseq) = 0;
     virtual void seedThread(thread_rng *thread_buffer, uint32_t mixin) = 0;
@@ -149,9 +149,11 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
         return sizeof(engine_type);
     }
 
-    void printGlobalState(std::ostringstream &ss) override
+    std::string globalState() override
     {
+        std::ostringstream ss;
         ss << globalEngine();
+        return ss.str();
     }
 
     void reloadGlobalState(const char *argument) override
@@ -313,12 +315,17 @@ struct aes_engine
 };
 
 template<>
-void EngineWrapper<aes_engine>::printGlobalState(std::ostringstream &ss)
+std::string EngineWrapper<aes_engine>::globalState()
 {
     static const char hexdigits[] = "0123456789abcdef";
     const uint8_t *state = rng_for_thread(-1)->u8;
-    for (size_t i = 0; i < sizeof(aes_engine::state); ++i)
-        ss << hexdigits[state[i] >> 4] << hexdigits[state[i] & 0xf];
+    std::string result;
+    result.resize(2 * sizeof(aes_engine::state));
+    for (size_t i = 0; i < sizeof(aes_engine::state); ++i) {
+        result[2 * i + 0] = hexdigits[state[i] >> 4];
+        result[2 * i + 1] = hexdigits[state[i] & 0xf];
+    }
+    return result;
 }
 
 template<>
@@ -498,10 +505,9 @@ void random_init_global(const char *seed_from_user)
 
 std::string random_format_seed()
 {
-    std::ostringstream ss;
-    ss << engineNameFromType(sApp->random_engine->engine_type);
-    sApp->random_engine->printGlobalState(ss);
-    return ss.str();
+    std::string result = engineNameFromType(sApp->random_engine->engine_type);
+    result += sApp->random_engine->globalState();
+    return result;
 }
 
 void random_advance_seed()
