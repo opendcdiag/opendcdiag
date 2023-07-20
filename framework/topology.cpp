@@ -837,8 +837,6 @@ static Topology build_topology()
             return Topology({});
 
         Topology::Package *pkg = &packages.emplace_back();
-        assert(pkg->id == -1);
-        pkg->id = info->package_id;
 
         // scan forward to the end of this package
         Topology::Thread *first = info;
@@ -906,7 +904,7 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
         // copy only if matching the socket ID
         auto matching = [=](const struct cpu_info &ci) {
             for (const Topology::Package &p : packages) {
-                if (p.id == ci.package_id)
+                if (p.id() == ci.package_id)
                     return true;
             }
             return false;

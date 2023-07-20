@@ -1778,7 +1778,7 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
         // Analysis is not needed if there's only a single package.
         if (topology.packages.size() == 1) {
             logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failures localised to package %d\n",
-                           topology.packages[0].id);
+                           topology.packages[0].id());
             return;
         }
 
@@ -1791,9 +1791,9 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
                 Topology::Core *core = &pkg->cores[c];
                 for (const Topology::Thread &thr : core->threads) {
                     if (per_cpu_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
-                        last_bad_package = pkg->id;
+                        last_bad_package = pkg->id();
                         failed_packages++;
-                        pkg_failures[p] = pkg->id;
+                        pkg_failures[p] = pkg->id();
                     }
                 }
             }
@@ -2326,7 +2326,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
         return result;                  // shouldn't happen!
 
     if (orig_topo.packages.size() == 1) {
-        result.push_back(orig_topo.packages.front().id);
+        result.push_back(orig_topo.packages.front().id());
         return result;
     }
 
@@ -2368,7 +2368,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
             result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
             break;
         }
-        disabled_sockets.push_back(it->id);
+        disabled_sockets.push_back(it->id());
     }
 
     if (ret) { // failed on the last socket as well, so it's the main suspect
