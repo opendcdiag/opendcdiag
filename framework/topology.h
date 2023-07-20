@@ -105,12 +105,6 @@ public:
                 return false;
         return true;
     }
-    void add_package(Topology::Package pkg)
-    {
-        for (Topology::Core& core : pkg.cores)
-            for (Topology::Thread& thread : core.threads)
-                set(LogicalProcessor(thread.oscpu));
-    }
 
     void limit_to(int limit)
     {
