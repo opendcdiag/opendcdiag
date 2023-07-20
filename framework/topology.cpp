@@ -827,17 +827,14 @@ static Topology build_topology()
     const struct cpu_info *const end = cpu_info + num_cpus();
 
     std::vector<Topology::Package> packages;
-    bool valid_topology = true;
     if (int max_package_id = end[-1].package_id; max_package_id >= 0)
         packages.reserve(max_package_id + 1);
     else
-        valid_topology = false;
+        return Topology({});
 
-    for ( ; info != end && valid_topology; ++info) {
-        if (info->package_id < 0 || info->core_id < 0 || info->thread_id < 0) {
-            valid_topology = false;
-            break;
-        }
+    for ( ; info != end; ++info) {
+        if (info->package_id < 0 || info->core_id < 0 || info->thread_id < 0)
+            return Topology({});
 
         Topology::Package *pkg = &packages.emplace_back();
 
@@ -851,18 +848,13 @@ static Topology build_topology()
             core->threads.resize(info->thread_id + 1);
         Topology::Thread *thr = &core->threads[info->thread_id];
 
-        if (thr->cpu != -1) {
-            valid_topology = false;
-            break;
-        }
+        if (thr->cpu != -1)
+            return Topology({});
 
         thr->cpu = info - cpu_info;
         thr->oscpu = info->cpu_number;
         thr->id = info->thread_id;
     }
-
-    if (!valid_topology)
-        packages.clear();
 
     return Topology(std::move(packages));
 }
