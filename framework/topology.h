@@ -25,11 +25,8 @@ class Topology
 {
 public:
     using Thread = struct cpu_info;
-
     struct Core {
-        int id;
-        std::vector<const Thread *> threads;
-        Core() noexcept : id(-1) {}
+        std::span<const Thread> threads;
     };
 
     struct Package {

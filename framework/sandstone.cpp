@@ -1789,10 +1789,8 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
             Topology::Package *pkg = &topology.packages[p];
             for (size_t c = 0; c < pkg->cores.size(); ++c) {
                 Topology::Core *core = &pkg->cores[c];
-                for (const Topology::Thread *thr : core->threads) {
-                    if (!thr)
-                        continue;
-                    if (per_cpu_failures[thr->cpu()] && (pkg_failures[p] == -1)) {
+                for (const Topology::Thread &thr : core->threads) {
+                    if (per_cpu_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
                         last_bad_package = pkg->id;
                         failed_packages++;
                         pkg_failures[p] = pkg->id;
@@ -1820,10 +1818,8 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
                 bool all_threads_failed_equally = true;
                 int nthreads = 0;
                 fail_pattern = 0;
-                for (const Topology::Thread *thr : core->threads) {
-                    if (!thr)
-                        continue;
-                    uint64_t this_pattern = per_cpu_failures[thr->cpu()];
+                for (const Topology::Thread &thr : core->threads) {
+                    uint64_t this_pattern = per_cpu_failures[thr.cpu()];
                     if (this_pattern == 0)
                         all_threads_failed_once = false;
                     if (++nthreads == 1) {
