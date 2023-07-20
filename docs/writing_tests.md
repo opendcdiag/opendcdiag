@@ -733,7 +733,7 @@ group.
 Tests can be members of multiple groups. The DECLARE_TEST_GROUPS
 macro accepts a comma-separated list of group pointers. The groups
 themselves are defined in
-[sandstone_test_groups_p.h](../framework/sandstone_test_groups_p.h).
+[sandstone_test_groups.h](../framework/sandstone_test_groups.h).
 To add a new group, modify this file.
 
 ### Skipping tests

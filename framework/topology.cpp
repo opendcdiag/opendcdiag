@@ -256,31 +256,31 @@ static void init_cpu_info(struct cpu_info *info, int os_cpu) {
     std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
 }
 
-static int fill_topo_sysfs(struct cpu_info *info)
+static bool fill_topo_sysfs(struct cpu_info *info)
 {
 #ifdef __linux__
     FILE *f;
 
     auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
     if (cpufd < 0)
-        return 1;
+        return false;
 
     // Read the topology
     f = fopenat(cpufd, "topology/physical_package_id");
     if (!f)
-        return 1;
+        return false;
     IGNORE_RETVAL(fscanf(f, "%d", &info->package_id));
     fclose(f);
 
     f = fopenat(cpufd, "topology/core_id");
     if (!f)
-        return 1;
+        return false;
     IGNORE_RETVAL(fscanf(f, "%d", &info->core_id));
     fclose(f);
 
     f = fopenat(cpufd, "topology/thread_siblings_list");
     if (!f)
-        return 1;
+        return false;
     info->thread_id = 0;
     while (!feof(f)) {
         int n;
@@ -294,15 +294,15 @@ static int fill_topo_sysfs(struct cpu_info *info)
     }
     fclose(f);
 
-    return 0;
+    return true;
 #else /* __linux__ */
-    return 1;
+    return false;
 #endif /* __linux__ */
 
 }
 
 #ifdef __x86_64__
-static int fill_family_cpuid(struct cpu_info *info)
+static bool fill_family_cpuid(struct cpu_info *info)
 {
     /*
      * EAX layout from the manual:
@@ -334,11 +334,11 @@ static int fill_family_cpuid(struct cpu_info *info)
 
     // Report a warning if the information on a socket differs from socket 0.
     if (info == cpu_info)
-        return 0;           // first logical processor, nothing to compare to
+        return true;        // first logical processor, nothing to compare to
 
     assert(size_t(info - cpu_info) < size_t(num_cpus()));
     if (info->package_id == info[-1].package_id)
-        return 0;           // same socket, so if there's a discrepancy it's already reported
+        return true;        // same socket, so if there's a discrepancy it's already reported
 
     if (__builtin_expect(cpu_info[0].family != display_family || cpu_info[0].model != model ||
                          cpu_info[0].stepping != stepping, false)) {
@@ -355,10 +355,10 @@ static int fill_family_cpuid(struct cpu_info *info)
                 cpu_info[0].package_id, display_family, model, stepping);
     }
 
-    return 0;
+    return true;
 }
 
-static int fill_topo_cpuid(struct cpu_info *info)
+static bool fill_topo_cpuid(struct cpu_info *info)
 {
     int curr_cpu = info->cpu_number;
     int subleaf = 0;
@@ -369,7 +369,7 @@ static int fill_topo_cpuid(struct cpu_info *info)
              pkg_shift = 0;
 
     if (curr_cpu < 0)
-        return 1;
+        return false;
 
     do {
         int lvl_type;
@@ -393,17 +393,18 @@ static int fill_topo_cpuid(struct cpu_info *info)
         subleaf++;
     } while (1);
     info->package_id = d >> pkg_shift;
-    return 0;
+    return true;
 }
 
-static int fill_ucode_msr(struct cpu_info *info)
+static bool fill_ucode_msr(struct cpu_info *info)
 {
     uint64_t ucode = 0;
 
-    if (!read_msr(info->cpu_number, 0x8B, &ucode)) return 1;
+    if (!read_msr(info->cpu_number, 0x8B, &ucode))
+        return false;
     info->microcode = (uint32_t)(ucode >> 32);
 
-    return 0;
+    return true;
 }
 #else
 constexpr auto fill_family_cpuid = nullptr;
@@ -411,13 +412,13 @@ constexpr auto fill_ucode_msr = nullptr;
 constexpr auto fill_topo_cpuid = nullptr;
 #endif // x86-64
 
-static int fill_ucode_sysfs(struct cpu_info *info)
+static bool fill_ucode_sysfs(struct cpu_info *info)
 {
 #ifdef __linux__
     FILE *f;
     auto_fd cpufd { open_sysfs_cpu_dir(info->cpu_number) };
     if (cpufd < 0)
-        return 1;
+        return false;
 
     // Read Microcode version
     f = fopenat(cpufd, "microcode/version");
@@ -429,11 +430,11 @@ static int fill_ucode_sysfs(struct cpu_info *info)
         if (auto opt = proc_cpuinfo().number(info->cpu_number, "microcode"))
             info->microcode = *opt;
     }
-    return info->microcode == 0 ? 0 : 1;
+    return info->microcode != 0;
 #elif defined(_WIN32)
     HKEY hKey = (HKEY)-1;
     LONG lResult = ERROR_SUCCESS;
-    int rc = 1;
+    bool ok = false;
     
     // Reads from CentralProcessor\0 - this is the documented way to get the uCode version generically
     // We can read the value all the time or read once and cache it and return it - we choose the latter here
@@ -464,7 +465,7 @@ static int fill_ucode_sysfs(struct cpu_info *info)
                 
                 info->microcode = (uint32_t)update_revision;
                 
-                rc = 0; // success
+                ok = true;
             }
         }
     }
@@ -474,20 +475,21 @@ static int fill_ucode_sysfs(struct cpu_info *info)
         RegCloseKey(hKey);
     }
 
-    return rc;
+    return ok;
 #else
-    return 1;
+    return false;
 #endif /* __linux__ */
 }
 
 #ifdef __x86_64__
-static int fill_ppin_msr(struct cpu_info *info)
+static bool fill_ppin_msr(struct cpu_info *info)
 {
     info->ppin = 0;
-    return !read_msr(info->cpu_number, 0x4F, (uint64_t *)&info->ppin); /* MSR_PPIN */
+    return read_msr(info->cpu_number, 0x4F, &info->ppin); /* MSR_PPIN */
 }
 
-static int fill_cache_info_cpuid(struct cpu_info *info) {
+static bool fill_cache_info_cpuid(struct cpu_info *info)
+{
     /* since info->cache is statically allocated */
     static int max_levels = sizeof(info->cache) / sizeof(*info->cache);
 
@@ -533,31 +535,30 @@ static int fill_cache_info_cpuid(struct cpu_info *info) {
 
     } while (a);
 
-    return 0;
+    return true;
 }
 #else
 constexpr auto fill_ppin_msr = nullptr;
 constexpr auto fill_cache_info_cpuid = nullptr;
 #endif // __x86_64__
 
-static int fill_ppin_sysfs(struct cpu_info *info)
+static bool fill_ppin_sysfs(struct cpu_info *info)
 {
-    int ret = 1;
 #if defined(__linux__) && defined(__x86_64__)
     auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
     if (cpufd < 0)
-        return 1;
+        return false;
 
     if (AutoClosingFile f { fopenat(cpufd, "topology/ppin") }) {
         if (fscanf(f, "%" PRIx64, &info->ppin) > 0)
-            ret = 0;
+            return true;
     }
 #endif
 
-    return ret;
+    return false;
 }
 
-static int fill_cache_info_sysfs(struct cpu_info *info)
+static bool fill_cache_info_sysfs(struct cpu_info *info)
 {
 #ifdef __linux__
     FILE *f;
@@ -566,7 +567,7 @@ static int fill_cache_info_sysfs(struct cpu_info *info)
     sprintf(buf, "/sys/devices/system/cpu/cpu%d", info->cpu_number);
     auto_fd cpufd{open(buf, O_PATH | O_CLOEXEC)};
     if (cpufd < 0)
-        return 1;
+        return false;
 
     // Read cache information
     for (int j = 0; ; ++j) {
@@ -612,20 +613,20 @@ static int fill_cache_info_sysfs(struct cpu_info *info)
                         info->cache[level - 1].cache_data = size;
         }
     }
-    return 0;
+    return true;
 #else /* __linux__ */
-    return 1;
+    return false;
 #endif /*__linux__ */
 }
 
-template <auto &fnArray> static int try_detection(struct cpu_info *cpu)
+template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
 {
     using DetectorFunction = std::decay_t<decltype(fnArray[0])>;
     if (std::size(fnArray) > 0) {
         if (std::size(fnArray) == 1) {
             // no need to cache, there's only one implementation
             DetectorFunction fn = fnArray[0];
-            return fn ? fn(cpu) : 0;
+            return fn ? fn(cpu) : true;
         }
 
         static DetectorFunction cached_fn = nullptr;
@@ -635,21 +636,20 @@ template <auto &fnArray> static int try_detection(struct cpu_info *cpu)
         for (DetectorFunction fn : fnArray) {
             if (!fn)
                 continue;
-            int r = fn(cpu);
-            if (r == EXIT_SUCCESS) {
+            if (fn(cpu)) {
                 cached_fn = fn;
-                return r;
+                return true;
             }
         }
     }
-    return EXIT_FAILURE;
+    return false;
 }
 
-typedef int (* fill_family_func)(struct cpu_info *);
-typedef int (* fill_ppin_func)(struct cpu_info *);
-typedef int (* fill_ucode_func)(struct cpu_info *);
-typedef int (* fill_cache_info_func)(struct cpu_info *);
-typedef int (* fill_topo_func)(struct cpu_info *);
+typedef bool (* fill_family_func)(struct cpu_info *);
+typedef bool (* fill_ppin_func)(struct cpu_info *);
+typedef bool (* fill_ucode_func)(struct cpu_info *);
+typedef bool (* fill_cache_info_func)(struct cpu_info *);
+typedef bool (* fill_topo_func)(struct cpu_info *);
 
 static const fill_family_func family_impls[] = { fill_family_cpuid };
 static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
