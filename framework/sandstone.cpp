@@ -189,7 +189,6 @@ char *program_invocation_name;
 
 uint64_t cpu_features;
 static const struct test *current_test = nullptr;
-extern struct cpu_info *cpu_info;
 #ifdef __llvm__
 thread_local int thread_num __attribute__((tls_model("initial-exec")));
 #else
@@ -1003,7 +1002,7 @@ static void init_shmem()
     per_thread_size = ROUND_UP_TO_PAGE(per_thread_size);
 
     unsigned thread_data_offset = sizeof(SandstoneApplication::SharedMemory) +
-            sizeof(struct cpu_info) * num_cpus();
+            sizeof(Topology::Thread) * num_cpus();
     thread_data_offset = ROUND_UP_TO_PAGE(thread_data_offset);
 
     size_t size = thread_data_offset + per_thread_size;
@@ -1790,10 +1789,10 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
             Topology::Package *pkg = &topology.packages[p];
             for (size_t c = 0; c < pkg->cores.size(); ++c) {
                 Topology::Core *core = &pkg->cores[c];
-                for (Topology::Thread &thr : core->threads) {
-                    if (thr.cpu == -1)
+                for (const Topology::Thread *thr : core->threads) {
+                    if (!thr)
                         continue;
-                    if (per_cpu_failures[thr.cpu] && (pkg_failures[p] == -1)) {
+                    if (per_cpu_failures[thr->cpu()] && (pkg_failures[p] == -1)) {
                         last_bad_package = pkg->id;
                         failed_packages++;
                         pkg_failures[p] = pkg->id;
@@ -1821,16 +1820,15 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
                 bool all_threads_failed_equally = true;
                 int nthreads = 0;
                 fail_pattern = 0;
-                for (Topology::Thread &thr : core->threads) {
-                    if (thr.cpu == -1)
+                for (const Topology::Thread *thr : core->threads) {
+                    if (!thr)
                         continue;
-
-                    uint64_t this_pattern = per_cpu_failures[thr.cpu];
+                    uint64_t this_pattern = per_cpu_failures[thr->cpu()];
                     if (this_pattern == 0)
                         all_threads_failed_once = false;
                     if (++nthreads == 1) {
-                        if (this_pattern)
-                            fail_pattern = per_cpu_failures[thr.cpu];
+                        // first thread of this core (maybe only)
+                        fail_pattern = this_pattern;
                     } else {
                         if (this_pattern != fail_pattern)
                             all_threads_failed_equally = false;

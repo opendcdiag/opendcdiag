@@ -24,18 +24,11 @@ class LogicalProcessorSet;
 class Topology
 {
 public:
-
-    // Thread corresponds to the OS CPU.
-    struct Thread {
-        int id; // thread id within the core (e.g. 0 or 1 for SMT)
-        int cpu; // sandstone internal CPU id, e.g. tests get this identifier
-        int oscpu; // logical CPU id, as reported and recognized by the OS
-        Thread() noexcept : id(-1), cpu(-1), oscpu(-1) {}
-    };
+    using Thread = struct cpu_info;
 
     struct Core {
         int id;
-        std::vector<Thread> threads;
+        std::vector<const Thread *> threads;
         Core() noexcept : id(-1) {}
     };
 

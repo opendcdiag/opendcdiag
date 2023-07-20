@@ -846,14 +846,8 @@ static Topology build_topology()
         if (core->id == -1) core->id = info->core_id;
         if (core->threads.size() <= size_t(info->thread_id))
             core->threads.resize(info->thread_id + 1);
-        Topology::Thread *thr = &core->threads[info->thread_id];
 
-        if (thr->cpu != -1)
-            return Topology({});
-
-        thr->cpu = info - cpu_info;
-        thr->oscpu = info->cpu_number;
-        thr->id = info->thread_id;
+        core->threads[info->thread_id] = static_cast<Topology::Thread *>(info);
     }
 
     return Topology(std::move(packages));
@@ -891,7 +885,7 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
         std::fill_n(end, excess, (struct cpu_info){});
 
     sApp->thread_count = new_thread_count;
-    restrict_topology({ 0, new_thread_count });
+    cached_topology() = build_topology();
 }
 
 void init_topology(const LogicalProcessorSet &enabled_cpus)
@@ -945,13 +939,12 @@ std::string Topology::build_falure_mask(const struct test *test) const
             uint32_t threadmask = 0;
             int threadcount = 0;
             int failcount = 0;
-            for (const Thread &t : core.threads) {
-                int cpu_id = t.cpu;
-                if (cpu_id < 0)
+            for (const Thread *t : core.threads) {
+                if (!t)
                     continue;
-
+                int cpu_id = t->cpu();
                 if (sApp->thread_data(cpu_id)->has_failed()) {
-                    threadmask |= 1U << t.id;
+                    threadmask |= 1U << t->thread_id;
                     ++failcount;
                 }
                 ++threadcount;
