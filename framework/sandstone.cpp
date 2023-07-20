@@ -240,6 +240,24 @@ static const char *path_to_exe()
 #endif
 }
 
+static void perror_for_mmap(const char *msg)
+{
+#ifdef _WIN32
+    DWORD dwFlags = FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS |
+            FORMAT_MESSAGE_ARGUMENT_ARRAY | FORMAT_MESSAGE_ALLOCATE_BUFFER;
+    LPCVOID lpSource = nullptr;
+    DWORD dwMessageId = GetLastError();
+    DWORD dwLanguageId = 0;
+    LPSTR lpBuffer = nullptr;
+    DWORD nSize = 0;
+    FormatMessage(dwFlags, lpSource, dwMessageId, dwLanguageId, (LPTSTR)&lpBuffer, nSize, nullptr);
+    fprintf(stderr, "%s: %s\n", msg, lpBuffer);
+    LocalFree(lpBuffer);
+#else
+    perror(msg);
+#endif
+}
+
 static int open_runtime_file_internal(const char *name, int flags, int mode)
 {
     assert(strchr(name, '/') == nullptr);
@@ -972,7 +990,7 @@ static void attach_shmem_internal(int fd, size_t size)
 {
     void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (base == MAP_FAILED) {
-        perror("internal error: could not map the shared memory file to memory");
+        perror_for_mmap("internal error: could not map the shared memory file to memory");
         exit(EX_IOERR);
     }
 
@@ -1019,7 +1037,7 @@ static void init_shmem()
 
     void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (base == MAP_FAILED) {
-        perror("internal error: could not map the shared memory file to memory");
+        perror_for_mmap("internal error: could not map the shared memory file to memory");
         exit(EX_CANTCREAT);
     }
 
