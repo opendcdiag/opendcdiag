@@ -30,9 +30,9 @@ public:
     };
 
     struct Package {
-        int id;
         std::vector<Core> cores;
-        Package() noexcept : id(-1) {}
+        int id() const
+        { return cores.size() ? cores.front().threads.front().package_id : -1; }
     };
 
     std::vector<Package> packages;
