@@ -824,20 +824,24 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 
 static Topology build_topology()
 {
-    std::vector<Topology::Package> packages;
+    struct cpu_info *info = cpu_info;
+    const struct cpu_info *const end = cpu_info + num_cpus();
 
+    std::vector<Topology::Package> packages;
     bool valid_topology = true;
-    for (int i = 0; i < num_cpus(); ++i) {
-        struct cpu_info *info = &cpu_info[i];
+    if (int max_package_id = end[-1].package_id; max_package_id >= 0)
+        packages.reserve(max_package_id + 1);
+    else
+        valid_topology = false;
+
+    for ( ; info != end && valid_topology; ++info) {
         if (info->package_id < 0 || info->core_id < 0 || info->thread_id < 0) {
             valid_topology = false;
             break;
         }
 
-        if (packages.size() <= size_t(info->package_id))
-            packages.resize(info->package_id + 1);
+        Topology::Package *pkg = &packages.emplace_back();
 
-        Topology::Package *pkg = &packages[info->package_id];
         if (pkg->id == -1) pkg->id = info->package_id;
         if (pkg->cores.size() <= size_t(info->core_id))
             pkg->cores.resize(info->core_id + 1);
@@ -853,7 +857,7 @@ static Topology build_topology()
             break;
         }
 
-        thr->cpu = i;
+        thr->cpu = info - cpu_info;
         thr->oscpu = info->cpu_number;
         thr->id = info->thread_id;
     }
