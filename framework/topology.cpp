@@ -155,7 +155,7 @@ static linux_cpu_info &proc_cpuinfo()
 }
 #endif
 
-static void reorder_cpus()
+static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2)
 {
     static auto cpu_tuple = [](const struct cpu_info &c) {
         uint64_t h = (uint64_t(c.package_id) << 32) +
@@ -165,9 +165,11 @@ static void reorder_cpus()
         return std::make_tuple(h, l);
     };
 
-    auto cpu_compare = [](const struct cpu_info &cpu1, const struct cpu_info &cpu2) {
-        return cpu_tuple(cpu1) < cpu_tuple(cpu2);
-    };
+    return cpu_tuple(cpu1) < cpu_tuple(cpu2);
+};
+
+static void reorder_cpus()
+{
     std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
 }
 
@@ -696,7 +698,8 @@ void apply_cpuset_param(char *param)
             LogicalProcessor lp = LogicalProcessor(cpu.cpu_number);
             if (!result.is_set(lp)) {
                 result.set(lp);
-                new_cpu_info.push_back(cpu);
+                auto it = std::lower_bound(new_cpu_info.begin(), new_cpu_info.end(), cpu, cpu_compare);
+                new_cpu_info.insert(it, cpu);
                 ++total_matches;
             }
         };

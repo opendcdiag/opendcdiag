@@ -1306,6 +1306,41 @@ function selftest_cpuset() {
         --cpuset=p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]}
 }
 
+selftest_cpuset_unsorted() {
+    local MAX_PROC=`nproc`
+    local cpuset=$1
+    shift
+    declare -A yamldump
+    sandstone_selftest -e selftest_skip --cpuset="$cpuset"
+    [[ "$status" -eq 0 ]]
+
+    # Get all the processor numbers
+    i=0
+    for expected_logical in `$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1; }'`; do
+        test_yaml_numeric "/cpu-info/$i/logical" "value == $expected_logical"
+        i=$((i + 1))
+    done
+}
+
+@test "cpuset=number (inverse order)" {
+    # make a list in inverse order
+    local -a cpuset=($($SANDSTONE --dump-cpu-info | tac |
+                           awk '/^[0-9]/ { printf "%d,", $1; }'))
+    cpuset=${cpuset%,}          # remove last comma
+
+    selftest_cpuset_unsorted "$cpuset" "${cpuinfo[@]}"
+}
+
+@test "cpuset=number (inverse sorted order)" {
+    # sort the CPU list by package, then core then thread
+    # This differs from the above on Linux, on hyperthreaded machines
+    local -a cpuset=($($SANDSTONE --dump-cpu-info | sort -rnk2,3 |
+                           awk '/^[0-9]/ { printf "%d,", $1; }'))
+    cpuset=${cpuset%,}          # remove last comma
+
+    selftest_cpuset_unsorted "$cpuset" "${cpuinfo[@]}"
+}
+
 # Confirm that we are roughly using the threads we said we would
 @test "thread usage" {
     local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
