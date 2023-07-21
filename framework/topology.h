@@ -48,6 +48,20 @@ public:
     std::string build_falure_mask(const struct test *test) const;
 
     static const Topology &topology();
+    struct Data;
+    Data clone() const;
+};
+struct Topology::Data
+{
+    // this type is move-only (not copyable)
+    Data() = default;
+    Data(const Data &) = delete;
+    Data(Data &&) = default;
+    Data &operator=(const Data &) = delete;
+    Data &operator=(Data &&) = default;
+
+    std::vector<Package> packages;
+    std::vector<Topology::Thread> all_threads;
 };
 
 enum class LogicalProcessor : int {};

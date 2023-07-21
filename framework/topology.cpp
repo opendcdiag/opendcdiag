@@ -858,6 +858,24 @@ const Topology &Topology::topology()
     return cached_topology();
 }
 
+Topology::Data Topology::clone() const
+{
+    Data result;
+    result.all_threads.assign(cpu_info, cpu_info + num_cpus());
+    result.packages = packages;
+
+    // now update all spans to point to the data we carry
+    for (Package &pkg : result.packages) {
+        for (Core &core : pkg.cores) {
+            int starting_cpu = core.threads.front().cpu();
+            int ending_cpu = core.threads.back().cpu();
+            core.threads = { result.all_threads.data() + starting_cpu,
+                             result.all_threads.data() + ending_cpu + 1 };
+        }
+    }
+    return result;
+}
+
 void update_topology(std::span<const struct cpu_info> new_cpu_info,
                      std::span<const Topology::Package> packages)
 {
