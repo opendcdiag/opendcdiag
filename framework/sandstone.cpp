@@ -2323,14 +2323,26 @@ static int exec_mode_run(int argc, char **argv)
 // generic vector<int> for the future improvements.
 static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
-    std::vector<struct cpu_info> saved_cpu_info;
+    const Topology &orig_topo = Topology::topology();
+    vector<int> result; // faulty sockets
+
+    if (orig_topo.packages.empty())
+        return result;                  // shouldn't happen!
+
+    if (orig_topo.packages.size() == 1) {
+        result.push_back(orig_topo.packages.front().id);
+        return result;
+    }
+
+    // backup the original CPU info
+    Topology::Data topo = orig_topo.clone();
     auto run_tests_with_retest = [&](std::span<const Topology::Package> set) {
         SandstoneApplication::PerCpuFailures per_cpu_failures;
         int k = 0;
         int ret = EXIT_SUCCESS;
 
         // all the shady stuff needed to set up to run a test smoothly
-        update_topology(saved_cpu_info, set);
+        update_topology(topo.all_threads, set);
 
         do {
             int test_count = 1;
@@ -2343,20 +2355,6 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
 
         return (ret > EXIT_SUCCESS) ? ret : EXIT_SUCCESS; // do not return SKIP from here
     };
-
-    Topology topo = Topology::topology();
-    vector<int> result; // faulty sockets
-
-    if (topo.packages.empty())
-        return result;                  // shouldn't happen!
-
-    if (topo.packages.size() == 1) {
-        result.push_back(topo.packages.front().id);
-        return result;
-    }
-
-    // backup the original CPU info
-    saved_cpu_info.assign(cpu_info, cpu_info + num_cpus());
 
     // backup the original verbosity
     int orig_verbosity = sApp->shmem->verbosity;
@@ -2389,7 +2387,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     sApp->shmem->verbosity = orig_verbosity;
 
     // restore original topology
-    update_topology(std::move(saved_cpu_info));
+    update_topology(topo.all_threads);
 
     return result;
 }
