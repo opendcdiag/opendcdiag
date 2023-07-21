@@ -2349,12 +2349,11 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     Topology topo = Topology::topology();
     vector<int> result; // faulty sockets
 
-    auto it = topo.packages.begin();
     if (topo.packages.empty())
         return result;                  // shouldn't happen!
 
     if (topo.packages.size() == 1) {
-        result.push_back(it->id);
+        result.push_back(topo.packages.front().id);
         return result;
     }
 
@@ -2368,7 +2367,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
     int ret = EXIT_SUCCESS;
     bool ever_failed = false;
     vector<int> disabled_sockets;
-    for (; it != topo.packages.end(); disabled_sockets.push_back(it->id), ++it) {
+    for (auto it = topo.packages.begin(); it != topo.packages.end(); ++it) {
         ret = run_tests_with_retest({ it, topo.packages.end() });
         if (ret) ever_failed = true; /* we've seen a failure */
 
@@ -2377,6 +2376,7 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests)
             result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
             break;
         }
+        disabled_sockets.push_back(it->id);
     }
 
     if (ret) { // failed on the last socket as well, so it's the main suspect
