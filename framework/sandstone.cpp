@@ -811,7 +811,7 @@ static void initialize_smi_counts()
     sApp->smi_counts_start.resize(num_cpus());
     sApp->smi_counts_start[0] = *v;
     for (int i = 1; i < num_cpus(); i++)
-        sApp->smi_counts_start[cpu_info[i].cpu_number] = sApp->count_smi_events(cpu_info[i].cpu_number).value_or(0);
+        sApp->smi_counts_start[i] = sApp->count_smi_events(cpu_info[i].cpu_number).value_or(0);
 }
 
 static void cleanup_internal(const struct test *test)
