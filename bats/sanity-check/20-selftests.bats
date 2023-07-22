@@ -194,6 +194,10 @@ tap_negative_check() {
 }
 
 @test "TAP output crash" {
+    if $is_asan; then
+        skip "Crashing tests skipped with ASAN"
+    fi
+
     # not all tests
     local -a crashtests=(selftest_abortinit selftest_abort selftest_sigsegv)
     if $is_windows; then
