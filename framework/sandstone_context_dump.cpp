@@ -12,6 +12,7 @@
 #include "fp_vectors/Floats.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 
 #ifdef __unix__
@@ -24,6 +25,8 @@
 #ifndef signature_INTEL_ebx
 #  include <cpuid.h>
 #endif
+
+using ApxState = std::array<int64_t, 16>;
 
 union xmmreg
 {
@@ -296,6 +299,27 @@ void dump_gprs(FILE *f, const mcontext_t mc)
 }
 #endif
 
+static void print_egprs(FILE *f, const Fxsave *state)
+{
+    int offset = xsave_offset(XSave_ApxState);
+    if (offset + sizeof(ApxState) <= Fxsave::size)
+        return;
+
+    auto base = reinterpret_cast<const uint8_t *>(state);
+    auto egprs = reinterpret_cast<const ApxState *>(base + offset);
+    char regname[] = "r16";
+    for (int64_t value : *egprs) {
+        print_gpr(f, regname, value);
+
+        // increment the register name
+        if (regname[2]++ == '9') {
+            // NB: the AAA instruction would be useful for this!
+            ++regname[1];
+            regname[2] = '0';
+        }
+    }
+}
+
 static void print_x87mmx_registers(FILE *f, const Fxsave *state)
 {
     int fptop = (state->fsw >> 11) & 7;
@@ -466,6 +490,9 @@ void dump_xsave(FILE *f, const void *xsave_area, size_t xsave_size, int xsave_du
         if (xsave_bv & ~xgetbv0)
             return;     // bit vector contains invalid bits
     }
+
+    if (mask & XSave_ApxState)
+        print_egprs(f, state);
 
     if (mask & XSave_X87)
         print_x87mmx_registers(f, state);
