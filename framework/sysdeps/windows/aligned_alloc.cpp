@@ -84,7 +84,7 @@ void *calloc(size_t n, size_t size)
 size_t aligned_msize(void *ptr)
 {
     if (ptr) {
-	return _msize(((void**)ptr)[-1]) - DEFAULT_ALIGNMENT - sizeof(void*) + 1;
+        return _msize(((void**)ptr)[-1]) - DEFAULT_ALIGNMENT - sizeof(void*) + 1;
     }
     return 0;
 }
