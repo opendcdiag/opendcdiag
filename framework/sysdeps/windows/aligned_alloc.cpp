@@ -113,15 +113,15 @@ void free(void *ptr)
 
 char *strdup(const char *str)
 {
-    char *newstr = malloc(strlen(str) + 1);
-    return memcpy(newstr, str, strlen(str) + 1);
+    auto newstr = static_cast<char *>(malloc(strlen(str) + 1));
+    return static_cast<char *>(memcpy(newstr, str, strlen(str) + 1));
 }
 
 char *strndup(const char *str, size_t n)
 {
     size_t len = strnlen(str, n);
-    char *newstr = malloc(len + 1);
-    newstr = memcpy(newstr, str, len);
+    auto newstr = static_cast<char *>(malloc(len + 1));
+    newstr = static_cast<char *>(memcpy(newstr, str, len));
     newstr[len] = '\0';
     return newstr;
 }

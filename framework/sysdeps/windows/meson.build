@@ -3,7 +3,7 @@
 
 framework_files += \
     files(
-        'aligned_alloc.c',
+        'aligned_alloc.cpp',
         'child_debug.cpp',
         'cpu_affinity.cpp',
         'fcntl.c',
