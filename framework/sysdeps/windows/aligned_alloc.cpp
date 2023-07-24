@@ -10,6 +10,9 @@
 #include <string.h>
 
 #include <sandstone_p.h>
+
+#include <new>
+
 #include <windows.h>
 
 #define DEFAULT_ALIGNMENT       2*__alignof(void *)
@@ -127,3 +130,137 @@ char *strndup(const char *str, size_t n)
     return newstr;
 }
 } // extern "C"
+
+// Provide C++ operators new and delete. For each overload, there should be
+// three functions: the operator new, the (old) unsized operator delete and the
+// C++14 sized deallocation. We provide that even if __cpp_sized_deallocation
+// isn't defined.
+
+// regular new and delete
+void *operator new(size_t size)
+{
+    return aligned_alloc(DEFAULT_ALIGNMENT, size);
+}
+
+void operator delete(void *ptr) noexcept
+{
+    free(ptr);
+}
+
+void operator delete(void *ptr, size_t) noexcept
+{
+    free(ptr);
+}
+
+// array new and delete
+void *operator new[](size_t size)
+{
+    return operator new(size);
+}
+
+void operator delete[](void *ptr) noexcept
+{
+    free(ptr);
+}
+
+void operator delete[](void *ptr, size_t) noexcept
+{
+    free(ptr);
+}
+
+// aligning new and delete
+void *operator new(size_t size, std::align_val_t alignment)
+{
+    return aligned_alloc(size_t(alignment), size);
+}
+
+void operator delete(void *ptr, std::align_val_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete(void *ptr, size_t, std::align_val_t) noexcept
+{
+    free(ptr);
+}
+
+// array, aligning new and delete
+void *operator new[](size_t size, std::align_val_t alignment)
+{
+    return operator new(size, alignment);
+}
+
+void operator delete[](void *ptr, std::align_val_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete[](void *ptr, size_t, std::align_val_t) noexcept
+{
+    free(ptr);
+}
+
+// nothrow new and delete
+// (the compiler never generates calls to the nothrow delete)
+void *operator new(size_t size, std::nothrow_t) noexcept
+{
+    return operator new(size);
+}
+
+void operator delete(void *ptr, std::nothrow_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete(void *ptr, size_t, std::nothrow_t) noexcept
+{
+    free(ptr);
+}
+
+// nothrow array new and delete
+void *operator new[](size_t size, std::nothrow_t) noexcept
+{
+    return operator new(size);
+}
+
+void operator delete[](void *ptr, std::nothrow_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete[](void *ptr, size_t, std::nothrow_t) noexcept
+{
+    free(ptr);
+}
+
+// nothrow aligning new and delete
+void *operator new(size_t size, std::align_val_t alignment, std::nothrow_t) noexcept
+{
+    return operator new(size, alignment);
+}
+
+void operator delete(void *ptr, std::align_val_t, std::nothrow_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete(void *ptr, size_t, std::align_val_t, std::nothrow_t) noexcept
+{
+    free(ptr);
+}
+
+// nothrow array, aligning new and delete
+void *operator new[](size_t size, std::align_val_t alignment, std::nothrow_t) noexcept
+{
+    return operator new(size, alignment);
+}
+
+void operator delete[](void *ptr, std::align_val_t, std::nothrow_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete[](void *ptr, size_t, std::align_val_t, std::nothrow_t) noexcept
+{
+    free(ptr);
+}
