@@ -32,6 +32,7 @@ static inline void *check_null_pointer(void *ptr)
     return ptr;
 }
 
+extern "C" {
 void *aligned_alloc(size_t alignment, size_t size)
 {
 #ifdef _UCRT
@@ -125,3 +126,4 @@ char *strndup(const char *str, size_t n)
     newstr[len] = '\0';
     return newstr;
 }
+} // extern "C"
