@@ -2369,12 +2369,15 @@ void YamlLogger::print()
 
     logging_flush();
 
-    struct mmap_region main_mmap = mmap_file(sApp->main_thread_data()->log_fd);
-    if (main_mmap.size && sApp->shmem->log_test_knobs) {
-        int count = print_test_knobs(file_log_fd, main_mmap);
-        if (count && real_stdout_fd != file_log_fd
-                && sApp->shmem->verbosity >= UsedKnobValueLoggingLevel)
-            print_test_knobs(real_stdout_fd, main_mmap);
+    if (sApp->shmem->log_test_knobs) {
+        struct mmap_region main_mmap = mmap_file(sApp->main_thread_data()->log_fd);
+        if (main_mmap.size) {
+            int count = print_test_knobs(file_log_fd, main_mmap);
+            if (count && real_stdout_fd != file_log_fd
+                    && sApp->shmem->verbosity >= UsedKnobValueLoggingLevel)
+                print_test_knobs(real_stdout_fd, main_mmap);
+            munmap_file(main_mmap);
+        }
     }
 
     // print the thread messages
