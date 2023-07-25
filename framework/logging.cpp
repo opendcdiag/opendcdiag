@@ -473,6 +473,7 @@ log_message_for_thread(int thread_num, LogTypes logType, int level, Args &&... a
 {
     int fd = sApp->thread_data(thread_num)->log_fd;
     uint8_t code = message_code(logType, level);
+    sApp->thread_data(thread_num)->messages_logged.fetch_add(1, std::memory_order_relaxed);
     return writevec(fd, code, std::forward<Args>(args)..., '\0');
 }
 
@@ -729,7 +730,7 @@ static void log_message_preformatted(int thread_num, std::string_view msg)
         logging_mark_thread_failed(thread_num);
 
     std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
-    if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread)
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread)
         return;
 
     if (msg[msg.size() - 1] == '\n')
@@ -1251,7 +1252,7 @@ void log_data(const char *message, const void *data, size_t size)
 
     std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
     std::atomic<unsigned> &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
-    if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread ||
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread ||
             (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->shmem->max_logdata_per_thread))
         return;
 

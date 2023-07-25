@@ -573,7 +573,7 @@ selftest_pass() {
        skip "Not supported"
     fi
     declare -A yamldump
-    sandstone_selftest -vvv -e selftest_logs_options
+    sandstone_selftest -vvv --max-messages=0 -e selftest_logs_options
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" pass
@@ -582,7 +582,7 @@ selftest_pass() {
     test_yaml_absent "/tests/0/test-options"
 
     # but there should be if we set something
-    sandstone_selftest -vvv -e selftest_logs_options -O dummy=dummy
+    sandstone_selftest -vvv --max-messages=0 -e selftest_logs_options -O dummy=dummy
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" pass
@@ -593,7 +593,7 @@ selftest_pass() {
     test_yaml_numeric "/tests/0/threads/0/messages@len" "value == 1"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*StringValue = DefaultValue'
 
-    sandstone_selftest -vvv -e selftest_logs_options \
+    sandstone_selftest -vvv --max-messages=0 -e selftest_logs_options \
                        -O selftest_logs_options.NullStringValue=0x1 \
                        -O selftest_logs_options.UIntValue=0x1 \
                        -O selftest_logs_options.IntValue=0x1001
