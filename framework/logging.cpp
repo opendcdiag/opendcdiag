@@ -497,6 +497,22 @@ static inline void truncate_log(int fd)
     ftruncate(fd, 0);
 }
 
+static inline mmap_region maybe_mmap_log(const PerThreadData::Common *data)
+{
+    if (data->messages_logged.load(std::memory_order_relaxed) == 0)
+        return {};
+    return mmap_file(data->log_fd);
+}
+
+static inline void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r)
+{
+    if (r.size == 0)
+        return;
+    munmap_file(r);
+    truncate_log(data->log_fd);
+    data->messages_logged.store(0, std::memory_order_relaxed);
+}
+
 void logging_init_global_child()
 {
     assert(sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
@@ -1812,7 +1828,7 @@ void KeyValuePairLogger::print_thread_messages()
 {
     for (int i = -1; i < num_cpus(); i++) {
         PerThreadData::Common *data = sApp->thread_data(i);
-        struct mmap_region r = mmap_file(data->log_fd);
+        struct mmap_region r = maybe_mmap_log(data);
 
         if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
             continue;           /* nothing to be printed, on any level */
@@ -1825,8 +1841,7 @@ void KeyValuePairLogger::print_thread_messages()
             print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity);
         }
 
-        munmap_file(r);
-        truncate_log(data->log_fd);
+        munmap_and_truncate_log(data, r);
     }
 }
 
@@ -2081,7 +2096,7 @@ void TapFormatLogger::print_thread_messages()
 {
     for (int i = -1; i < num_cpus(); i++) {
         PerThreadData::Common *data = sApp->thread_data(i);
-        struct mmap_region r = mmap_file(data->log_fd);
+        struct mmap_region r = maybe_mmap_log(data);
 
         if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
             continue;           /* nothing to be printed, on any level */
@@ -2094,8 +2109,7 @@ void TapFormatLogger::print_thread_messages()
             print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity);
         }
 
-        munmap_file(r);
-        truncate_log(data->log_fd);
+        munmap_and_truncate_log(data, r);
     }
 }
 
@@ -2370,7 +2384,7 @@ void YamlLogger::print()
     logging_flush();
 
     if (sApp->shmem->log_test_knobs) {
-        struct mmap_region main_mmap = mmap_file(sApp->main_thread_data()->log_fd);
+        struct mmap_region main_mmap = maybe_mmap_log(sApp->main_thread_data());
         if (main_mmap.size) {
             int count = print_test_knobs(file_log_fd, main_mmap);
             if (count && real_stdout_fd != file_log_fd
@@ -2383,7 +2397,7 @@ void YamlLogger::print()
     // print the thread messages
     for (int i = -1; i < num_cpus(); i++) {
         PerThreadData::Common *data = sApp->thread_data(i);
-        struct mmap_region r = i == -1 ? main_mmap : mmap_file(data->log_fd);
+        struct mmap_region r = maybe_mmap_log(data);
 
         if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
             continue;           /* nothing to be printed, on any level */
@@ -2396,8 +2410,7 @@ void YamlLogger::print()
             print_one_thread_messages(real_stdout_fd, r, sApp->shmem->verbosity);
         }
 
-        munmap_file(r);
-        truncate_log(data->log_fd);
+        munmap_and_truncate_log(data, r);
     }
 
     print_child_stderr_common([](int fd) {
