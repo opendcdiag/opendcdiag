@@ -3399,6 +3399,7 @@ int main(int argc, char **argv)
 
         case quick_run_option:
             sApp->max_test_loop_count = 1;
+            sApp->delay_between_tests = 0ms;
             break;
         case retest_on_failure_option:
             sApp->retest_count = ParseIntArgument<>{
