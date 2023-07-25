@@ -2756,7 +2756,7 @@ template <typename Integer = int> struct ParseIntArgument
     {
         assert(name);
         assert(arg);
-        assert(min < max);
+        assert(min <= max);
         assert(Integer(min) == min);
         assert(Integer(max) == max);
 
