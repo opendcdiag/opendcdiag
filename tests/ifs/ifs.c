@@ -119,7 +119,7 @@ static int scan_common_init(struct test *test)
         /* see if driver is loaded */
         char sys_path[PATH_MAX];
         int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
-        assert(n < sizeof(sys_path));
+        assert(n < sizeof(sys_path)); (void) n;
         int ifs_fd = open_sysfs_ifs_base(sys_path);
         if (ifs_fd < 0) {
             int saved_errno = errno;
@@ -205,7 +205,7 @@ static int scan_run(struct test *test, int cpu)
 
         char sys_path[PATH_MAX];
         int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
-        assert(n < sizeof(sys_path));
+        assert(n < sizeof(sys_path)); (void) n;
         int ifsfd = open(sys_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
         if (ifsfd < 0) {
                 log_skip(ResourceIssueSkipCategory, "Could not start test for \"%s\": %m", ifs_info->sys_dir);
