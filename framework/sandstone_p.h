@@ -554,7 +554,7 @@ template <typename F> inline auto scopeExit(F &&f)
         void dismiss() { dismissed = true; }
         void run_now() { f(); dismiss(); }
     };
-    return Scope(std::forward<F>(f));
+    return Scope{ std::forward<F>(f) };
 }
 
 static_assert(std::is_trivially_copyable_v<SandstoneApplication::SharedMemory>);
