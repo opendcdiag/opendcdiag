@@ -502,16 +502,6 @@ struct test {
     ///  0      default (no limit)
     int maximum_duration;
 
-    /// maximum number of threads to assign to the given test. this
-    /// might be useful when the test does not scale well for a very
-    /// big number of cores. 0 (default) means use all available. any
-    /// other value will make the test_run() function to be called
-    /// only for a subset of the overall available threads, not all of
-    /// thread_count. the framework will try to spread out
-    /// package/core usage as much as it can, when this mode is
-    /// activated
-    int max_threads;
-
     /// fracture the test time into smaller runs
     /// Special values:
     ///  <0         never
