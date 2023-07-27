@@ -369,6 +369,7 @@ static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
         fputc('\n', f);
     }
     for (int i = 0; hizmmstate && i < 16; ++i) {
+        nameprefix = 'z';
         fprintf(f, " %cmm%-2d = ", nameprefix, i + 16);
         for (int j = std::size(hizmmstate->xmm) - 1; j >= 0; --j)
             print_xmm_register(f, hizmmstate[i].xmm[j]);
