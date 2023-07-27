@@ -2295,10 +2295,9 @@ void YamlLogger::print_result_line()
                 logging_printf(loglevel, "  skip-category: %s\n",
                                char_to_skip_category(init_skip_message[0]));
                 std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
-                if (loglevel <= sApp->shmem->verbosity)
+                if (loglevel <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd)
                     format_and_print_message(real_stdout_fd, -1, message, false);
-                if (file_log_fd != real_stdout_fd)
-                    format_and_print_message(file_log_fd, -1, message, false);
+                format_and_print_message(file_log_fd, -1, message, false);
             } else {
                 logging_printf(loglevel, "  skip-category: %s\n", "UnknownSkipCategory");
                 logging_printf(loglevel, "  skip-reason: %s\n",
