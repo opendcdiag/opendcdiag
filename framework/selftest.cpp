@@ -20,7 +20,6 @@
 #include <sys/ioctl.h>
 #endif
 
-#include "amx_common.h"
 #include "sandstone.h"
 #ifndef _WIN32
 #include "sandstone_asm.h"
@@ -30,6 +29,10 @@
 
 #include <exception>
 #include <unordered_map>
+
+#ifdef __x86_64__
+#  include "amx_common.h"
+#endif
 
 #ifdef _WIN32
 #  include <windows.h>
