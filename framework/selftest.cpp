@@ -20,6 +20,7 @@
 #include <sys/ioctl.h>
 #endif
 
+#include "amx_common.h"
 #include "sandstone.h"
 #ifndef _WIN32
 #include "sandstone_asm.h"
@@ -457,6 +458,17 @@ static void cause_sigill()
         }
     }
 #endif
+    if (cpu_has_feature(cpu_feature_amx_tile)) {
+        // init the AMX state
+        alignas(64) static struct amx_tileconfig cfg = {
+            .palette = 1,
+            .start_row = 0,
+            .colsb = { 64 },
+            .rows = { 1 },
+        };
+        asm ("ldtilecfg %0" : : "m" (cfg));
+        asm ("tileloadd (%0, %1, 1), %%tmm0" : : "r" (&cfg), "r" (ptrdiff_t(1)));
+    }
 
     // make sure there are no function calls between the instruction above and the one below
 
