@@ -349,11 +349,11 @@ static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
             zmmhstate = reinterpret_cast<const ymmreg *>(base + offset);
     }
     if (mask & XSave_Hi16_Zmm) {
-        if (int offset = xsave_offset(XSave_Zmm_Hi256); offset > Fxsave::size)
+        if (int offset = xsave_offset(XSave_Hi16_Zmm); offset > Fxsave::size)
             hizmmstate = reinterpret_cast<const zmmreg *>(base + offset);
     }
     if (mask & XSave_OpMask) {
-        if (int offset = xsave_offset(XSave_Zmm_Hi256); offset > Fxsave::size)
+        if (int offset = xsave_offset(XSave_OpMask); offset > Fxsave::size)
             opmaskstate = reinterpret_cast<const __mmask64 *>(base + offset);
     }
 
