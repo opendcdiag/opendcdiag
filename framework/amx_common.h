@@ -13,6 +13,8 @@
 
 #if __clang_major__ > 10 || defined(_tile_loadd)
 #  define ATTRIBUTE_AMX_TARGET(x)  __attribute__((target(x)))
+#elif __GNUC__ >= 12
+#  define ATTRIBUTE_AMX_TARGET(x)
 #else
 #  define ATTRIBUTE_AMX_TARGET(x)
 
