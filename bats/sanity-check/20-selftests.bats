@@ -1265,7 +1265,7 @@ selftest_crash_context_common() {
     wait $pid ||:
 
     declare -A yamldump
-    selftest_crash_context_common -n1 -e selftest_sigsegv --on-crash=backtrace
+    selftest_crash_context_common -n1 --timeout=5m -e selftest_sigsegv --on-crash=backtrace
 
     test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
