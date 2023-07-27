@@ -27,13 +27,6 @@
 #endif // _WIN32
 #include "sandstone_p.h"
 
-#include "sandstone_tests.h"
-#include "SelectorFactory.h"
-#include "WeightedRepeatingSelector.h"
-#include "WeightedNonRepeatingSelector.h"
-#include "PrioritizedSelector.h"
-#include "TestrunSelectorBase.h"
-
 #include <exception>
 #include <unordered_map>
 
@@ -1245,4 +1238,5 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
 #endif // __linux__
 };
 
+extern const std::span<struct test> selftests;
 const std::span<struct test> selftests = { std::begin(selftests_array), std::end(selftests_array) };
