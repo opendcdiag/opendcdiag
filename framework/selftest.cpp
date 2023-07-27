@@ -596,6 +596,14 @@ static void cause_sigill()
                             -std::numeric_limits<double>::infinity());
 
     __m128i one = _mm_set1_epi32(-1);
+#ifndef __APX_F__
+    if (cpu_has_feature(cpu_feature_apx_f)) {
+        // force-init the APX state
+        // encodes to:   movl  $0x12345678, %r17d
+        asm (".byte 0xd5, 0x10\n"
+             "movl  %0, %%ecx" : : "i" (0x12345678));
+    }
+#endif
 #ifndef __clang__
     if (cpu_has_feature(cpu_feature_avx)) {
         // init the AVX state (using inline assembly to avoid vzeroupper)
