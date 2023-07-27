@@ -120,6 +120,7 @@ struct CrashContext
         return result;
     }
 
+    static int xsave_size_for_bitvector(uint64_t xsave_bv);
 private:
     CrashContext(std::span<uint8_t> xsave_buffer)
         : xsave_buffer(xsave_buffer), mc{}
@@ -238,10 +239,14 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     auto ctx = static_cast<ucontext_t *>(ucontext);
 #  ifdef __linux__
     // On Linux, the XSAVE area is pointed by the mcontext::fpregs pointer
-    size_t n = xsave_size;
+    size_t n = 0;
     mcontext_t *mc = &ctx->uc_mcontext;
-    if (!mc->fpregs || (ctx->uc_flags & UC_FP_XSTATE) == 0)
-        n = 0;
+    if (mc->fpregs) {
+        if (ctx->uc_flags & UC_FP_XSTATE)
+            n = xsave_size_for_bitvector(*reinterpret_cast<uint64_t *>(mc->fpregs + 1));
+        else
+            n = FXSAVE_SIZE;
+    }
     vec[1] = { &mc->gregs, sizeof(mc->gregs) };
     vec[2] = { mc->fpregs, n };
     fixed.rip = reinterpret_cast<void *>(mc->gregs[REG_RIP]);
@@ -361,18 +366,48 @@ static bool check_gdb_available()
     return false;
 }
 
+#ifdef __x86_64__
+// get the size of the context to transfer
+inline int CrashContext::xsave_size_for_bitvector(uint64_t xsave_bv)
+{
+    uint32_t eax, ebx, ecx, edx;
+    int xsave_size = FXSAVE_SIZE;
+    if (!__get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx))
+        return xsave_size;
+
+    // did the bit vector disable any bits that are in CPUID?
+    uint64_t cpuid_bv = eax | uint64_t(edx) << 32;
+    if (cpuid_bv & ~xsave_bv) {
+        // yes, find the end of the highest state that we *are* transferring
+        int bit = 2;
+        uint64_t mask = XSave_Ymm_Hi128;
+        xsave_bv &= ~(XSave_SseState | XSave_X87);  // included in FXSAVE
+        for ( ; xsave_bv; ++bit, mask <<= 1) {
+            if ((xsave_bv & mask) == 0)
+                continue;
+            xsave_bv &= ~mask;
+            __cpuid_count(0xd, bit, eax, ebx, ecx, edx);
+            int size = eax;
+            int offset = ebx;
+            xsave_size = std::max(xsave_size, size + offset);
+        }
+    } else {
+        // no, we'll transfer the entire context
+        xsave_size = ebx;
+    }
+    return xsave_size;
+}
+
 static int get_xsave_size()
 {
-#ifdef __x86_64__
-    // get the size of the context to transfer
-    uint32_t eax, ebx, ecx, edx;
-    if (__get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx))
-        return ebx;
-    else
-        return FXSAVE_SIZE;
-#endif
+    return CrashContext::xsave_size_for_bitvector(-1);
+}
+#else
+static int get_xsave_size()
+{
     return 0;
 }
+#endif
 
 static bool create_crash_pipe(int xsave_size)
 {
