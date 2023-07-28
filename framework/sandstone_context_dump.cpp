@@ -465,6 +465,9 @@ void dump_xsave(FILE *f, const void *xsave_area, size_t xsave_size, int xsave_du
 
         if (xsave_bv & ~xgetbv0)
             return;     // bit vector contains invalid bits
+    } else {
+        // only the legacy state
+        mask = XSaveBits(mask & (XSave_X87 | XSave_SseState));
     }
 
     if (mask & XSave_X87)
