@@ -1622,6 +1622,8 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
     auto single_wait = [&](milliseconds timeout) {
         HANDLE handles[MAXIMUM_WAIT_OBJECTS];
         DWORD nCount = 0;
+        if (sApp->shmem->debug_event)
+            handles[nCount++] = HANDLE(sApp->shmem->debug_event);
         for (auto it = children.handles.begin(); it != children.handles.end() && nCount < MAXIMUM_WAIT_OBJECTS; ++it) {
             HANDLE hnd = HANDLE(*it);
             if (hnd == INVALID_HANDLE_VALUE)
@@ -1640,6 +1642,12 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             return 0;
 
         int idx = result - WAIT_OBJECT_0;
+        if (idx == 0 && sApp->shmem->debug_event) {
+            // one child (or more than one) is crashing
+            debug_crashed_child();
+            return 0;
+        }
+
         HANDLE hExited = handles[idx];
         if (GetExitCodeProcess(hExited, &result) == 0) {
             fprintf(stderr, "%s: GetExitCodeProcess(child = %p) failed: %lx\n",
