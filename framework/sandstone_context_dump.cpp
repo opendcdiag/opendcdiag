@@ -327,7 +327,7 @@ static void print_xmm_register(FILE *f, const xmmreg &ptr)
 static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
 {
     // start with the MXCSR
-    fprintf(f, " mxcsr = 0x%08u [ ", state->mxcsr);
+    fprintf(f, " mxcsr = 0x%08x [ ", state->mxcsr);
     print_flag_description(f, state->mxcsr, mxcsr);
     fprintf(f, "RC=%s ]\n", rounding_modes[(state->mxcsr & _MM_ROUND_MASK) / _MM_ROUND_DOWN]);
 
