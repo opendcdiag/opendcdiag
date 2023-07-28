@@ -13,8 +13,7 @@
 #if defined(__unix__) || defined(__APPLE__)
 #  include <sys/ucontext.h>
 #else
-// do we want to define something for Windows?
-typedef struct {} mcontext_t;
+typedef struct _CONTEXT mcontext_t;
 #endif  // __unix__
 
 #define FXSAVE_SIZE     0x200

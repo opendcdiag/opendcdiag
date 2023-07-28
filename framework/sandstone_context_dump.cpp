@@ -25,6 +25,10 @@
 #  include <cpuid.h>
 #endif
 
+#ifdef _WIN32
+#  include <windows.h>
+#endif
+
 union xmmreg
 {
     __m128  f;
@@ -293,6 +297,37 @@ void dump_gprs(FILE *f, const mcontext_t mc)
     print_eflags(f, state->__rflags);
     print_segment(f, "fs", state->__fs);
     print_segment(f, "gs", state->__gs);
+}
+#elif defined(_WIN32)
+void dump_gprs(FILE *f, const mcontext_t *mc)
+{
+    static constexpr struct {
+        char name[4];
+        DWORD64 CONTEXT:: *ptr;
+    } registers[] = {
+        { "rax", &CONTEXT::Rax },
+        { "rbx", &CONTEXT::Rbx },
+        { "rcx", &CONTEXT::Rcx },
+        { "rdx", &CONTEXT::Rdx },
+        { "rsi", &CONTEXT::Rsi },
+        { "rdi", &CONTEXT::Rdi },
+        { "rbp", &CONTEXT::Rbp },
+        { "rsp", &CONTEXT::Rsp },
+        { "r8", &CONTEXT::R8 },
+        { "r9", &CONTEXT::R9 },
+        { "r10", &CONTEXT::R10 },
+        { "r11", &CONTEXT::R11 },
+        { "r12", &CONTEXT::R12 },
+        { "r13", &CONTEXT::R13 },
+        { "r14", &CONTEXT::R14 },
+        { "r15", &CONTEXT::R15 },
+    };
+    for (auto reg : registers)
+        print_gpr(f, reg.name, mc->*(reg.ptr));
+    print_rip(f, mc->Rip);
+    print_eflags(f, mc->EFlags);
+    print_segment(f, "fs", mc->SegFs);
+    print_segment(f, "gs", mc->SegGs);
 }
 #endif
 
