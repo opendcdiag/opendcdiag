@@ -474,7 +474,10 @@ struct SandstoneApplication::SharedMemory
     bool log_test_knobs = false;
 
     // child debugging
-#ifndef _WIN32
+#ifdef _WIN32
+    intptr_t debug_event = 0;
+    intptr_t child_debug_socket = -1;
+#else
     int server_debug_socket = -1;
     int child_debug_socket = -1;
 #endif

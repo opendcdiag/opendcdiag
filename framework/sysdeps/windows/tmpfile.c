@@ -5,6 +5,7 @@
 
 #define _GNU_SOURCE
 #include "sandstone_p.h"
+#include "sandstone_config.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -78,4 +79,3 @@ int open_memfd(enum MemfdCloexecFlag flag)
 
     return -1;
 }
-
