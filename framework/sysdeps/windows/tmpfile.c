@@ -59,7 +59,8 @@ int open_memfd(enum MemfdCloexecFlag flag)
     if (getTempPathRes == 0)
         return -1;
 
-    if (wcslen(tmppath) >= MAX_PATH)
+    size_t pathlen = wcslen(tmppath);
+    if (pathlen >= MAX_PATH - sizeof(tmpname))
         return -1;
 
     for (int i = 0; hFile == INVALID_HANDLE_VALUE && i < WIN_TEMP_MAX_RETIRES; ++i) {
@@ -69,9 +70,7 @@ int open_memfd(enum MemfdCloexecFlag flag)
         DWORD creation = CREATE_NEW;
         DWORD flags = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE;
 
-        if ((wcslen(tmppath) + wcslen(tmpname)) >= MAX_PATH)
-            continue;
-
+        tmppath[pathlen] = L'\0';
         hFile = CreateFileW(wcscat(tmppath, tmpname), access, sharemode, &sa, creation, flags, NULL);
     }
     if (hFile != INVALID_HANDLE_VALUE)
