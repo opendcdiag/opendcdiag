@@ -18,6 +18,8 @@ DECLSPEC_IMPORT BOOLEAN WINAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBuff
 
 static HANDLE hSlot = INVALID_HANDLE_VALUE;
 
+static_assert(alignof(CONTEXT) <= alignof(std::max_align_t));
+
 static bool open_mailslot()
 {
     static const wchar_t prefix[] = L"\\\\.\\mailslot\\" SANDSTONE_EXECUTABLE_NAME ".";
@@ -67,9 +69,34 @@ close_hslot:
     return false;
 }
 
+static LONG WINAPI handler(EXCEPTION_POINTERS *info)
+{
+    static std::atomic_flag in_crash_handler = {};
+    if (in_crash_handler.test_and_set()) {
+        // wait forever
+        Sleep(INFINITE);
+    }
+
+    auto ctx = info->ContextRecord;
+    ptrdiff_t context_size = sizeof(*ctx);
+
+    if (!WriteFile(HANDLE(sApp->shmem->child_debug_socket), ctx, context_size, nullptr, nullptr))
+        win32_perror("WriteFile for mailslot");
+    if (!SetEvent(HANDLE(sApp->shmem->debug_event)))
+        win32_perror("SetEvent for mailslot");
+
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 
 void debug_init_child()
 {
+    if (!SandstoneConfig::ChildDebugCrashes || sApp->shmem->debug_event == 0)
+        return;
+    assert(sApp->shmem->child_debug_socket != intptr_t(INVALID_HANDLE_VALUE));
+
+    // install the vectored exception handler
+    PVOID h = AddVectoredExceptionHandler(true, handler);
+    (void) h;
 }
 
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
@@ -86,9 +113,36 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
     }
 }
 
-void debug_crashed_child(pid_t child)
+void debug_crashed_child()
 {
-    (void) child;
+    if (!SandstoneConfig::ChildDebugCrashes)
+        return;
+    if (hSlot == INVALID_HANDLE_VALUE)
+        return;
+
+    ResetEvent(HANDLE(sApp->shmem->debug_event));
+
+    std::string buf;
+    DWORD dwNextMessage = 0;
+    while (GetMailslotInfo(hSlot, nullptr, &dwNextMessage, nullptr, nullptr)) {
+        if (dwNextMessage == MAILSLOT_NO_MESSAGE) {
+            if (log)
+                fclose(log);
+            return;
+        }
+
+        if (buf.size() < dwNextMessage)
+            buf.resize(dwNextMessage);
+        if (!ReadFile(hSlot, buf.data(), dwNextMessage, &dwNextMessage, nullptr))
+            break;
+
+        // ### use received context
+    }
+
+    // got here on failure
+    CloseHandle(hSlot);
+    CloseHandle(HANDLE(sApp->shmem->debug_event));
+    sApp->shmem->debug_event = 0;
 }
 
 void debug_hung_child(pid_t child)
