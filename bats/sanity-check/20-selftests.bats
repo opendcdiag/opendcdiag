@@ -328,6 +328,15 @@ selftest_pass() {
     done
 }
 
+@test "selftest_dummy_skip_run_even_threads" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_dummy_skip_run_even_threads
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_dummy_skip_run_even_threads
+    test_yaml_regexp "/tests/0/result" pass
+}
+
 @test "selftest_log_skip_newline" {
     declare -A yamldump
     sandstone_selftest -e selftest_log_skip_newline

@@ -213,6 +213,15 @@ static int selftest_log_skip_run_even_threads(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
+static int selftest_dummy_skip_run_even_threads(struct test *test, int cpu)
+{
+    if (cpu % 2 == 0) {
+        log_skip(DummySkipCategory, "Dummy Skip");
+        return EXIT_SKIP;
+    }
+    return EXIT_SUCCESS;
+}
+
 static int selftest_log_skip_newline_init(struct test *test)
 {
     log_skip(SelftestSkipCategory, "This is a skip in init \nwith a new line.\nWill it work?");
@@ -851,6 +860,13 @@ static struct test selftests_array[] = {
     .description = "This test will test the log_skip feature in the run function where only even numbered threads skip",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_log_skip_run_even_threads,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_dummy_skip_run_even_threads",
+    .description = "This test will test the dummy_skip feature in the run function where only even numbered threads skip",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_dummy_skip_run_even_threads,
     .desired_duration = -1,
 },
 {

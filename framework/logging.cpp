@@ -462,6 +462,8 @@ static const char *char_to_skip_category(int val)
         return "OsNotSupportedSkipCategory";
     case SkipCategory(9):
         return "ThreadIssueSkipCategory";
+    case SkipCategory(10):
+        return "DummySkipCategory";
     }
 
     return "NO CATEGORY PRESENT";
@@ -1249,7 +1251,7 @@ void log_platform_message(const char *fmt, ...)
 #undef log_message_skip
 void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ...)
 {
-    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+    if (current_output_format() == SandstoneApplication::OutputFormat::no_output || category == DummySkipCategory)
         return;
 
     va_list va;

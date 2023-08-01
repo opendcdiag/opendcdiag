@@ -96,7 +96,9 @@ typedef enum SkipCategory {
     RuntimeSkipCategory,
     SelftestSkipCategory,
     OsNotSupportedSkipCategory,
-    ThreadIssueSkipCategory
+    ThreadIssueSkipCategory,
+    // Use this category if you are skipping on majority of the cores and don't want to clog your log with skip messages.
+    DummySkipCategory  
 } SkipCategory;
 
 /// logs a skip message to the logfile. log_skip accepts the category to which the skip belongs to
