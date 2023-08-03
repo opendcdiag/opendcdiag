@@ -19,6 +19,7 @@
 //#include <openssl/mdc2.h>
 //#include <openssl/ripemd.h>
 #include <openssl/pem.h>
+#include <openssl/provider.h>
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
 //#include <openssl/whrlpool.h>
@@ -1827,6 +1828,12 @@
     F(X509_VERIFY_PARAM_table_cleanup)          \
     /**/
 
+#define SANDSTONE_SSL_PROVIDER_FUNCTIONS(F)     \
+    F(OSSL_PROVIDER_add_builtin)                \
+    F(OSSL_PROVIDER_try_load)                   \
+    F(OSSL_PROVIDER_unload)                     \
+    /**/
+
 #define SANDSTONE_SSL_FUNCTIONS(F)              \
     SANDSTONE_SSL_AES_FUNCTIONS(F)              \
     SANDSTONE_SSL_BIO_FUNCTIONS(F)              \
@@ -1842,6 +1849,7 @@
     SANDSTONE_SSL_RSA_FUNCTIONS(F)              \
     SANDSTONE_SSL_SHA_FUNCTIONS(F)              \
     SANDSTONE_SSL_X509_FUNCTIONS(F)             \
+    SANDSTONE_SSL_PROVIDER_FUNCTIONS(F)         \
     /**/
 
 # define s_SSL_set_max_cert_list(ssl,m) \
