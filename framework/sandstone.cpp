@@ -75,6 +75,7 @@
 
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
+#  include "sandstone_ssl_rand.h"
 #endif
 
 #ifdef _WIN32
@@ -3681,8 +3682,10 @@ int main(int argc, char **argv)
     }
 
 #if SANDSTONE_SSL_BUILD
-    if (SANDSTONE_SSL_LINKED || sApp->current_fork_mode() != SandstoneApplication::exec_each_test)
+    if (SANDSTONE_SSL_LINKED || sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
         sandstone_ssl_init();
+        sandstone_ssl_rand_init();
+    }
 #endif
 
     logging_print_header(argc, argv, test_duration(), test_timeout(test_duration()));
