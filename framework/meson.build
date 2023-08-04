@@ -107,7 +107,7 @@ if framework_config.get('SANDSTONE_SSL_BUILD') == 1
                         required: false,
                         static: get_option('ssl_link_type') == 'static')
   if crypto_dep.found()
-      framework_files += ['sandstone_ssl.cpp']
+      framework_files += ['sandstone_ssl.cpp', 'sandstone_ssl_rand.cpp']
   else
       # If we cannot find libcrypto, disable SSL build
       framework_config.set10('SANDSTONE_SSL_BUILD', 0)
