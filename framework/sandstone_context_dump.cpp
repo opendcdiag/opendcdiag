@@ -327,7 +327,7 @@ static void print_xmm_register(FILE *f, const xmmreg &ptr)
 static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
 {
     // start with the MXCSR
-    fprintf(f, " mxcsr = 0x%08u [ ", state->mxcsr);
+    fprintf(f, " mxcsr = 0x%08x [ ", state->mxcsr);
     print_flag_description(f, state->mxcsr, mxcsr);
     fprintf(f, "RC=%s ]\n", rounding_modes[(state->mxcsr & _MM_ROUND_MASK) / _MM_ROUND_DOWN]);
 
@@ -349,11 +349,11 @@ static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
             zmmhstate = reinterpret_cast<const ymmreg *>(base + offset);
     }
     if (mask & XSave_Hi16_Zmm) {
-        if (int offset = xsave_offset(XSave_Zmm_Hi256); offset > Fxsave::size)
+        if (int offset = xsave_offset(XSave_Hi16_Zmm); offset > Fxsave::size)
             hizmmstate = reinterpret_cast<const zmmreg *>(base + offset);
     }
     if (mask & XSave_OpMask) {
-        if (int offset = xsave_offset(XSave_Zmm_Hi256); offset > Fxsave::size)
+        if (int offset = xsave_offset(XSave_OpMask); offset > Fxsave::size)
             opmaskstate = reinterpret_cast<const __mmask64 *>(base + offset);
     }
 
@@ -369,6 +369,7 @@ static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
         fputc('\n', f);
     }
     for (int i = 0; hizmmstate && i < 16; ++i) {
+        nameprefix = 'z';
         fprintf(f, " %cmm%-2d = ", nameprefix, i + 16);
         for (int j = std::size(hizmmstate->xmm) - 1; j >= 0; --j)
             print_xmm_register(f, hizmmstate[i].xmm[j]);

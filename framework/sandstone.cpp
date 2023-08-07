@@ -1283,7 +1283,7 @@ static void run_threads(const struct test *test)
     current_test = test;
 
     switch (test->flags & test_schedule_mask) {
-    case test_schedule_default:
+    default:
         run_threads_in_parallel(test);
         break;
 

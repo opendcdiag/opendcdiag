@@ -355,6 +355,14 @@ typedef enum test_flag {
     /// parallel.
     test_schedule_sequential        = 0x02,
 
+    /// Asks the framework to run all the threads for all logical processors in
+    /// one single process.
+    test_schedule_fullsystem        = 0x04,
+
+    /// Asks the framework to run one child process per each socket in the
+    /// system, with all cores.
+    test_schedule_isolate_socket    = 0x06,
+
     /// Tells the --test-tests mode to ignore memory consumption for this test
     test_flag_ignore_memory_use     = 0x0010,
 

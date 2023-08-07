@@ -87,10 +87,11 @@ which will be explained below. For now, let's build and run our test.
 
 To build the test, we need to add it to the OpenDCDiag build system. This can be
 done by modifying the [tests/meson.build](../tests/meson.build) file in the tests
-directory. Add the following lines to this file and rebuild.
+directory. Add the following lines to this file after the last `tests_set_base.add`
+block and rebuild.
 
 ```
-tests_base_set.add(
+tests_set_base.add(
         'examples/simple_add.c'
 )
 ```
@@ -107,7 +108,7 @@ You should see a list of test names and their descriptions. Somewhere in this
 list there should be a line that looks something like this.
 
 ```
-6 simple_add           "Repeatedly add two integer numbers"
+23 simple_add           "Repeatedly add two integer numbers"
 ```
 
 To run the test, type
@@ -361,10 +362,11 @@ END_DECLARE_TEST
 This new test makes more use of the OpenDCDiag framework than the first test
 and we'll discuss each of the differences below. First, however, let's build
 it. This can be done by adding the following lines to the
-[meson.build](../tests/meson.build) file in the tests directory and rebuilding.
+[meson.build](../tests/meson.build) file in the tests directory after the last
+`tests_set_base.add` block and rebuilding.
 
 ```
-tests_skx_set.add(
+tests_set_skx.add(
         'examples/vector_add.c'
 )
 ```
