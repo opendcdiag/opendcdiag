@@ -222,6 +222,27 @@ static TestrunSelector *test_selector;
 
 static_assert(LogicalProcessorSet::Size >= MAX_THREADS, "CPU_SETSIZE is too small on this platform");
 
+#ifdef _WIN32
+// Neither MSVCRT nor UCRT have strerror_r
+template <size_t N>
+const char *sandstone_strerror(char (&buf)[N], int errnum = errno)
+{
+    strerror_s(buf, N, errnum);
+    return buf;
+}
+#else
+template <size_t N, typename R = decltype(strerror_r(0, nullptr, 0))>
+const char *sandstone_strerror(char (&buf)[N], int errnum = errno)
+{
+    auto x = strerror_r(errnum, buf, N);
+    if (std::is_pointer_v<R>)
+        return x;           // GNU strerror_r may return a static pointer
+
+    // XSI-compliant strerror_r always writes to our buffer
+    return buf;
+}
+#endif
+
 static void find_thyself(char *argv0)
 {
 #ifndef __GLIBC__
@@ -841,9 +862,18 @@ void test_loop_end() noexcept
 static void *thread_runner(void *arg)
 {
     uintptr_t thread_number = uintptr_t(arg);
+    thread_num = thread_number;
 
     // convert from internal Sandstone numbering to the system one
-    pin_to_logical_processor(LogicalProcessor(cpu_info[thread_number].cpu_number), current_test->id);
+    LogicalProcessor lp{cpu_info[thread_number].cpu_number};
+    if (!__builtin_expect(pin_to_logical_processor(lp, current_test->id), true)) {
+        char buf[256] = {};
+        log_platform_message(SANDSTONE_LOG_WARNING "Failed to set affinity to CPU %d "
+                                                   "(logical CPU %d): %s",
+                             unsigned(thread_number), unsigned(lp), sandstone_strerror(buf));
+        log_warning("Setting CPU affinity failed, content is likely not running on CPU %d (logical CPU %d)",
+                    unsigned(thread_number), unsigned(lp));
+    }
 
     struct TestRunWrapper {
         struct per_thread_data *this_thread;
@@ -855,7 +885,6 @@ static void *thread_runner(void *arg)
             : this_thread(cpu_data_for_thread(thread_number)),
               thread_number(thread_number)
         {
-            thread_num = thread_number;
             this_thread->inner_loop_count = 0;
         }
 
