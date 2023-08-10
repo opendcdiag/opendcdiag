@@ -72,7 +72,7 @@ test_yaml_regexp() {
 
 @test "TAP output @positive" {
     local tests=`$SANDSTONE --selftests --list-group-members @positive | sed 's,\r$,,'`
-    run $SANDSTONE --output-format=tap --selftests --timeout=15s --disable=mce_check -e @positive
+    run $SANDSTONE --output-format=tap --selftests --timeout=15s --disable=mce_check @positive
     [[ "$status" -eq 0 ]]
     while read line; do
         printf "# %s\n" "$line"
@@ -131,7 +131,7 @@ test_yaml_regexp() {
 }
 
 @test "YAML silent output" {
-    opts="-Y --quick --selftests --quiet --disable=mce_check -e @positive"
+    opts="-Y --quick --selftests --quiet --disable=mce_check @positive"
     $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.yaml
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.yaml
@@ -291,7 +291,7 @@ selftest_pass() {
 
 @test "selftest_log_skip_init" {
     declare -A yamldump
-    sandstone_selftest -e selftest_log_skip_init
+    sandstone_selftest selftest_log_skip_init
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_log_skip_init
@@ -302,7 +302,7 @@ selftest_pass() {
 
 @test "selftest_log_skip_run_all_threads" {
     declare -A yamldump
-    sandstone_selftest -e selftest_log_skip_run_all_threads
+    sandstone_selftest selftest_log_skip_run_all_threads
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_log_skip_run_all_threads
@@ -317,7 +317,7 @@ selftest_pass() {
 
 @test "selftest_log_skip_run_even_threads" {
     declare -A yamldump
-    sandstone_selftest -e selftest_log_skip_run_even_threads
+    sandstone_selftest selftest_log_skip_run_even_threads
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_log_skip_run_even_threads
@@ -330,7 +330,7 @@ selftest_pass() {
 
 @test "selftest_log_skip_newline" {
     declare -A yamldump
-    sandstone_selftest -e selftest_log_skip_newline
+    sandstone_selftest selftest_log_skip_newline
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_log_skip_newline
@@ -693,7 +693,7 @@ fail_common() {
     # for a total of 7 runs
 
     declare -A yamldump
-    sandstone_selftest -vvv -e selftest_fail -e selftest_fail --retest-on-failure=3 --total-retest-on-failure=5
+    sandstone_selftest -vvv --retest-on-failure=3 --total-retest-on-failure=5 selftest_fail selftest_fail
     fail_common
 
     # confirm it retested - first selftest_fail

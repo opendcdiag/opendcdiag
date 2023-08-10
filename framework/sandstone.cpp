@@ -3598,6 +3598,13 @@ int main(int argc, char **argv)
         }
     }
 
+    if (optind < argc) {
+        test_selection_strategy = Ordered;
+        while (optind < argc) {
+            add_tests(test_list, argv[optind++]);
+        }
+    }
+
     if (test_list_randomize) {
         if ((test_selection_strategy == Ordered) || (test_selection_strategy == Alphabetical)) {
             test_selection_strategy = NonRepeating;
