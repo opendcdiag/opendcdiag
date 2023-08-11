@@ -166,8 +166,11 @@ static uint64_t detect_cpu()
         features |= parse_register(Leaf07_00ECX, ecx);
         features |= parse_register(Leaf07_00EDX, edx);
 
-        __cpuid_count(7, 1, eax, ebx, ecx, edx);
-        features |= parse_register(Leaf07_01EAX, eax);
+        if (eax) {
+            __cpuid_count(7, 1, eax, ebx, ecx, edx);
+            features |= parse_register(Leaf07_01EAX, eax);
+            features |= parse_register(Leaf07_01EDX, edx);
+        }
     }
     if (max_level >= 13) {
         __cpuid_count(13, 1, eax, ebx, ecx, edx);

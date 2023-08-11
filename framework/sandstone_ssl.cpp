@@ -48,16 +48,10 @@ void sandstone_ssl_init()
 #else
     void *libcrypto;
 
-    // Try open openssl 1.1
-    libcrypto = dlopen("libcrypto.so.1.1", RTLD_NOW);
+    // Try open openssl 3
+    libcrypto = dlopen("libcrypto.so.3", RTLD_NOW);
 
-    // If previous not avialble, try open openssl 3.0
-    if (!libcrypto)
-    {
-        libcrypto = dlopen("libcrypto.so.3", RTLD_NOW);
-    }
-
-    // When none available, don't continue
+    // If not available, don't continue
     if (!libcrypto) {
         return;
     }
