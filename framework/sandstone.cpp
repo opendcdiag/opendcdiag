@@ -1117,11 +1117,14 @@ static void slice_plan_init(int max_cores_per_slice)
     //     slice (a hypothetical 4-thread system would have up to 128).
     //
     // The heuristic slices will be balanced as follows:
+    // - if the number of cores in the socket is not a multiple of
+    //   DefaultMaxCoresPerSlice (32) but is of SecondaryMaxCoresPerSlice (24),
+    //   we'll use the secondary maximum
     // - the number of cores per slice is kept as a multiple of 4; that is, a
     //   60-core socket will have a slice of 32 cores and one of 28 cores,
     //   instead of 30+30.
     // - other than that, the number of cores per slice is balanced; that is,
-    //   a 48-core socket is split as two 24-core slices instead of 32+16.
+    //   a 40-core socket is split as two 20-core slices instead of 32+8.
     //
     // If the user specifies a --max-cores-per-slice option in the
     // command-line, it will bypass the heuristic but keep the slice balancing
@@ -1138,7 +1141,12 @@ static void slice_plan_init(int max_cores_per_slice)
     //  1 x 60              [32 + 28]
     //  1 x 64              [32 + 32]
     //  1 x 96              [32 + 32 + 32]
+    //  1 x 120             [24 + 24 + 24 + 24 + 24] (uses secondary max)
+    //  1 x 124             [32 + 32 + 32 + 28]
     //  1 x 128             [32 + 32 + 32 + 32]
+    //  1 x 143             [32 + 32 + 32 + 32 + 15]
+    //  1 x 144             [24 + 24 + 24 + 24 + 24 + 24] (uses secondary max)
+    //  1 x 192             [32 + 32 + 32 + 32 + 32 + 32] (does not use secondary max)
     //  2 x 8               [16]
     //  2 x 16              [16] + [16]
     //  2 x 32              [32] + [32]
@@ -1156,9 +1164,12 @@ static void slice_plan_init(int max_cores_per_slice)
         using SlicePlans = SandstoneApplication::SlicePlans;
         static constexpr int MinimumCpusPerSocket = SlicePlans::MinimumCpusPerSocket;
         static constexpr int DefaultMaxCoresPerSlice = SlicePlans::DefaultMaxCoresPerSlice;
+        static constexpr int SecondaryMaxCoresPerSlice = SlicePlans::SecondaryMaxCoresPerSlice;
 
+        bool using_defaults = false;
         if (max_cores_per_slice == 0) {
             // apply defaults
+            using_defaults = true;
             int average_cpus_per_socket = max_cpu / topology.packages.size();
             max_cores_per_slice = DefaultMaxCoresPerSlice;
             if (average_cpus_per_socket <= MinimumCpusPerSocket)
@@ -1184,8 +1195,14 @@ static void slice_plan_init(int max_cores_per_slice)
             push_to(fullsocket, c, end);
 
             ptrdiff_t slice_count = p.cores.size() / max_cores_per_slice;
-            if (p.cores.size() % max_cores_per_slice)
-                ++slice_count;      // round up (also makes at least 1)
+            if (p.cores.size() % max_cores_per_slice) {
+                if (using_defaults && (p.cores.size() % SecondaryMaxCoresPerSlice) == 0) {
+                    // use the secondary count
+                    slice_count = p.cores.size() / SecondaryMaxCoresPerSlice;
+                } else {
+                    ++slice_count;  // round up (also makes at least 1)
+                }
+            }
 
             ptrdiff_t slice_size = p.cores.size() / slice_count;
             if ((max_cores_per_slice & 3) == 0 && (slice_size & 3))
