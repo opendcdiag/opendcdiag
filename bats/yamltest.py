@@ -43,10 +43,8 @@ def validate_message(name, message):
 
 def validate_thread(name, thr):
     n = thr['thread']
-    if n != 'main' and not type(n) is int:
-        fail('found unknown thread "{}" for test {}'.format(n, name))
 
-    if n != 'main':
+    if type(n) is int:
         #thr['id']['logical'] # waiting on Windows
         thr['id']['package']
         thr['id']['core']
@@ -56,6 +54,8 @@ def validate_thread(name, thr):
         thr['id']['stepping']
         thr['id']['microcode']
         thr['id']['ppin']
+    elif not n.startswith('main'):
+        fail('found unknown thread "{}" for test {}'.format(n, name))
 
     if 'loop-count' in thr:
         loop_count = thr['loop-count']

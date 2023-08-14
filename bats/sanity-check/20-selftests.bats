@@ -70,9 +70,66 @@ test_yaml_regexp() {
     return 1
 }
 
+test_fail_socket1() {
+    if $is_debug; then
+        if (( MAX_PROC < 4 )); then
+            skip "Need at least 4 logical processors to run this test"
+        fi
+        SANDSTONE_MOCK_TOPOLOGY="0 1 0:1 1:1" "$@"
+    else
+        # Maybe we're running on a real multi-socket system
+        run $SANDSTONE --cpuset=p1 --dump-cpu-info
+        if (( status != 0 )); then
+            skip "Test only works with Debug builds (to mock the topology) or multi-socket systems"
+        fi
+        "$@" --cpuset=c0
+    fi
+
+    # only one socket should have had problems
+    test_yaml_regexp "/tests/0/fail/cpu-mask" 'None|\.:X(:\.)*'
+}
+
+@test "time parse negative" {
+    # positive parsing with the YAML header below
+    run $SANDSTONE -t xyzzy
+    ((status == 64))
+    [[ "$output" = *": invalid time \"xyzzy\": could not parse"* ]]
+
+    run $SANDSTONE -t 1yr
+    ((status == 64))
+    [[ "$output" = *": invalid time \"1yr\": unknown time unit"* ]]
+
+    run $SANDSTONE -t 1d
+    ((status == 64))
+    [[ "$output" = *": invalid time \"1d\": unknown time unit"* ]]
+
+    run $SANDSTONE -t 1000us
+    ((status == 64))
+    [[ "$output" = *": invalid time \"1000us\": unknown time unit"* ]]
+
+    out_of_range() {
+        local t=$1
+        run $SANDSTONE -t $t
+        ((status == 64))
+        [[ "$output" = *": invalid time \"$t\": time out of range"* ]]
+    }
+    out_of_range 597h
+    out_of_range 35792min
+    out_of_range 21474837s
+    out_of_range 2147483648ms
+    out_of_range 2147483648
+}
+
 @test "TAP output @positive" {
-    local tests=`$SANDSTONE --selftests --list-group-members @positive | sed 's,\r$,,'`
-    run $SANDSTONE --output-format=tap --selftests --timeout=15s --disable=mce_check -e @positive
+    # make an associative array:
+    #  tests=([selftest_pass]=1 [selftest_logs]=1 ...)
+    eval local -A tests=\( \
+         $($SANDSTONE --selftests --list-group-members @positive | \
+               sed -E 's/^/[/; s/\r?$/]=1/') \
+         \)
+
+    # Run without the timeedpass tests to run more quickly
+    run $SANDSTONE -n$MAX_PROC --output-format=tap --selftests --quick --timeout=15s --disable=mce_check --disable='*timedpass*' -e @positive
     [[ "$status" -eq 0 ]]
     while read line; do
         printf "# %s\n" "$line"
@@ -84,8 +141,16 @@ test_yaml_regexp() {
                 return 1
                 ;;
             ok*)
-                test=`echo "$line" | sed -E 's/^ok +([0-9]+ )?//;s/#.*//;s/ .*//'`
-                echo "$tests" | grep -qxF -e $test
+                if [[ "$line" =~ 'ok '[\ 0-9]+\ ([^#\ ]+)\ *#' (beta test)'? ]]; then
+                    test=${BASH_REMATCH[1]}
+                    if [[ "${tests[$test]}" != 1 ]]; then
+                        echo Unexpected test: "$test" >&2
+                        return 1
+                    fi
+                else
+                    echo "bad line: $line" >&2
+                    return 1
+                fi
                 ;;
             "exit: pass")
                 ;;
@@ -96,15 +161,81 @@ test_yaml_regexp() {
     done <<<"$output"
 }
 
-@test "TAP output @negative" {
+tap_negative_check() {
+    local line
+    local test=$1
+    local suffix=$2
+    local exit_line=${3-"exit: fail"}
+    notok=0
+    while read line; do
+        case "$line" in
+            \#* | \
+                "$exit_line" | \
+                "THIS IS AN UNOPTIMIZED BUILD"*)
+                # acceptable line
+                ;;
+            "not ok"*)
+                # inspect a little more
+                if ! [[ "$line" =~ 'not ok '[\ 0-9]+\ ([^#\ ]+)\ *#' (beta test)'?$suffix ]] ||
+                        ! [[ "${BASH_REMATCH[1]}" = "$test" ]]; then
+                    echo "bad line: $line" >&2
+                    return 1
+                fi
+                notok=$((notok + 1))
+                ;;
+            "---")
+                # beginning of YAML output, scan until its end
+                while read line; do
+                    if [[ "$line" = --- ]]; then
+                        break
+                    fi
+                done
+                ;;
+            *)
+                echo "bad line: $line" >&2
+                return 1
+                ;;
+        esac
+    done
+}
+
+@test "TAP output fails" {
     # not all tests
     for test in selftest_failinit selftest_fail; do
-        bash -c "$SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 -e $test -o -; [[ $? -eq 1 ]]" | \
-            sed 's,\r$,,' | tee /tmp/output.tap
-        grep -E -qx "\[[ 0-9.]+\] exit: fail" /tmp/output.tap
-        not_oks=`grep -E 'not ok +([0-9] )'$test /tmp/output.tap`
-        [[ `echo "$not_oks" | wc -l` -eq 5 ]]
+        local notok
+        run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 --on-crash=kill -e $test -o /dev/null -v
+        [[ $status -eq 1 ]]
+        sed 's/\r$//' <<<"$output" | {
+            tap_negative_check "$test" ''
+            [[ $notok -eq 5 ]]
+        }
     done
+}
+
+@test "TAP output crash" {
+    if $is_asan; then
+        skip "Crashing tests skipped with ASAN"
+    fi
+
+    # not all tests
+    local -a crashtests=(selftest_abortinit selftest_abort selftest_sigsegv)
+    if $is_windows; then
+        crashtests+=(selftest_fastfail)
+    fi
+    ulimit -Sc 0                # disable core dumps
+    for test in ${crashtests[@]}; do
+        run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=0 --on-crash=kill -e $test -o /dev/null -v
+        [[ $status -eq 1 ]]
+        sed 's/\r$//; /^wine: Unhandled/d' <<<"$output" | \
+            tap_negative_check "$test" ' (Killed|Core Dumped):.*'
+    done
+}
+
+@test "TAP output OS error" {
+    run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=0 --on-crash=kill -e selftest_oserror -o /dev/null -v
+    [[ $status -eq 2 ]]
+    sed 's/\r$//' <<<"$output" | \
+        tap_negative_check selftest_oserror ' Operating system error:.*' "exit: invalid"
 }
 
 @test "TAP silent output" {
@@ -183,6 +314,17 @@ test_yaml_regexp() {
         test_yaml_regexp "/cpu-info/$i/microcode" '(None|[0-9]+)'
         test_yaml_regexp "/cpu-info/$i/ppin" '(None|[0-9a-f]{16})'
     done
+
+    # check some more timing parse
+    sandstone_selftest -e selftest_pass -t 12ms --timeout 20s
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric "/timing/duration" 'value == 12'
+    test_yaml_numeric "/timing/timeout" 'value == 20000'
+
+    sandstone_selftest -e selftest_pass -t 1min --timeout 5h
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric "/timing/duration" 'value == 60000'
+    test_yaml_numeric "/timing/timeout" 'value == 5*60*60*1000'
 }
 
 @test "obey taskset single" {
@@ -223,23 +365,15 @@ test_yaml_regexp() {
     # Don't use sandstone_selftest because we don't want -n$MAX_PROC
     VALIDATION=dump
     declare -A yamldump
-    run_sandstone_yaml -vvv --max-test-loop-count=1 --selftests -e selftest_timedpass
+    run_sandstone_yaml -vvv --max-test-loop-count=1 --no-slicing --selftests -e selftest_timedpass
 
     test_yaml_numeric "/tests/0/threads@len" "value == $nproc / 2 + 1"
     for ((i = 0; i < nproc/2; ++i)); do
-        test_yaml_numeric "/cpu-info/$i/logical" "value == $i * 2"
+        test_yaml_numeric "/cpu-info/$i/logical" "(value % 2) == 0"
     done
-}
 
-@test "selftest_timedpass_maxthreads1 --timeout 100ms" {
-    if [[ "$SANDSTONE" = "wine "* ]] && [[ "$HOME" = /github/* ]]; then
-        skip "This test runs too slowly on GitHub runners"
-    fi
-    VALIDATION=dump
-    declare -A yamldump
-    sandstone_selftest -e selftest_timedpass_maxthreads1 --timeout 100ms
-    [[ "$status" -eq 0 ]]
-    test_yaml_numeric "/tests/0/test-runtime" 'value > 100'
+    # Verify there are no more CPUs:
+    [[ "${yamldump[/cpu-info/$i/logical]-unset}" = unset ]]
 }
 
 selftest_pass() {
@@ -401,36 +535,42 @@ selftest_pass() {
 }
 
 @test "selftest_logs" {
+    # Run the test twice to ensure one run doesn't clobber the next
     declare -A yamldump
-    sandstone_selftest -e selftest_logs
+    sandstone_selftest -e selftest_logs -e selftest_logs
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/result" pass
-    test_yaml_regexp "/tests/0/threads/0/thread" main
-    test_yaml_regexp "/tests/0/threads/0/messages" '.*init function.*'
-    for ((i = 1; i <= MAX_PROC; ++i)); do
-        test_yaml_numeric "/tests/0/threads/$i/thread" "value == $i - 1"
-        test_yaml_regexp "/tests/0/threads/$i/id" '\{.*\}'
-        test_yaml_numeric "/tests/0/threads/$i/loop-count" 'value == 0'
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" '(debug|info|warning|error)'
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.> .+'
+    check_test() {
+        local testnr=$1
+        test_yaml_regexp "/tests/$testnr/result" pass
+        test_yaml_regexp "/tests/$testnr/threads/0/thread" main
+        test_yaml_regexp "/tests/$testnr/threads/0/messages" '.*init function.*'
+        for ((i = 1; i <= MAX_PROC; ++i)); do
+            test_yaml_numeric "/tests/$testnr/threads/$i/thread" "value == $i - 1"
+            test_yaml_regexp "/tests/$testnr/threads/$i/id" '\{.*\}'
+            test_yaml_numeric "/tests/$testnr/threads/$i/loop-count" 'value == 0'
+            test_yaml_regexp "/tests/$testnr/threads/$i/messages/0/level" '(debug|info|warning|error)'
+            test_yaml_regexp "/tests/$testnr/threads/$i/messages/0/text" '.> .+'
 
-        # Confirm some aspects of the messages
-        test_yaml_regexp "/tests/0/threads/$i/messages" '.*W> This is a .*warning.*'
-        test_yaml_regexp "/tests/0/threads/$i/messages" '.*I> This is a .*info.*'
-        if $SANDSTONE --is-debug >/dev/null 2>/dev/null; then
-            test_yaml_regexp "/tests/0/threads/$i/messages" '.*d> This is a .*debug.*'
+            # Confirm some aspects of the messages
+            test_yaml_regexp "/tests/$testnr/threads/$i/messages" '.*W> This is a .*warning.*'
+            test_yaml_regexp "/tests/$testnr/threads/$i/messages" '.*I> This is a .*info.*'
+            if $SANDSTONE --is-debug >/dev/null 2>/dev/null; then
+                test_yaml_regexp "/tests/$testnr/threads/$i/messages" '.*d> This is a .*debug.*'
+            fi
+        done
+
+        if ! $is_asan; then
+            # ASAN builds don't catch stderr
+            test_yaml_regexp "/tests/$testnr/stderr messages" '.* stderr .*'
         fi
-    done
 
-    if ! $is_asan; then
-        # ASAN builds don't catch stderr
-        test_yaml_regexp "/tests/0/stderr messages" '.* stderr .*'
-    fi
-
-    i=2
-    [[ MAX_PROC -gt 1 ]] || i=1
-    test_yaml_regexp "/tests/0/threads/$i/messages" '.*message from cpu '$((i - 1))'.*'
+        i=2
+        [[ MAX_PROC -gt 1 ]] || i=1
+        test_yaml_regexp "/tests/$testnr/threads/$i/messages" '.*message from cpu '$((i - 1))'.*'
+    }
+    check_test 0
+    check_test 1
 }
 
 @test "selftest_logdata" {
@@ -452,7 +592,7 @@ selftest_pass() {
        skip "Not supported"
     fi
     declare -A yamldump
-    sandstone_selftest -vvv -e selftest_logs_options
+    sandstone_selftest -vvv --max-messages=0 -e selftest_logs_options
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" pass
@@ -461,7 +601,7 @@ selftest_pass() {
     test_yaml_absent "/tests/0/test-options"
 
     # but there should be if we set something
-    sandstone_selftest -vvv -e selftest_logs_options -O dummy=dummy
+    sandstone_selftest -vvv --max-messages=0 -e selftest_logs_options -O dummy=dummy
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" pass
@@ -472,7 +612,7 @@ selftest_pass() {
     test_yaml_numeric "/tests/0/threads/0/messages@len" "value == 1"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*StringValue = DefaultValue'
 
-    sandstone_selftest -vvv -e selftest_logs_options \
+    sandstone_selftest -vvv --max-messages=0 -e selftest_logs_options \
                        -O selftest_logs_options.NullStringValue=0x1 \
                        -O selftest_logs_options.UIntValue=0x1 \
                        -O selftest_logs_options.IntValue=0x1001
@@ -484,6 +624,101 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*StringValue = DefaultValue'
     test_yaml_regexp "/tests/0/threads/0/messages/1/text" '.*NullStringValue = 0x1'
     test_yaml_regexp "/tests/0/threads/0/messages/2/text" '.*Numbers: 1 4097'
+}
+
+@test "selftest_logs_random_init" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logs_random_init -s Constant:1234
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1234 1234 1234 1234"
+
+    sandstone_selftest -e selftest_logs_random_init -s LCG:1348219713
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 421843888 386376794 2046232626 184745881"
+
+    sandstone_selftest -e selftest_logs_random_init -s AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1242137224 1378217084 1525375882 474233533"
+}
+
+test_random() {
+    if ! $is_debug; then
+        skip "Test only works with Debug builds (to mock the topology)"
+    fi
+    local results=()
+    local cpus=()
+    seed=$1
+    shift
+    for cpu; do
+        r=${random_results[$cpu]}
+        [[ -n "$r" ]]
+        results+=("$r")
+        cpus+=($cpu)
+    done
+
+    declare -A yamldump
+    SANDSTONE_MOCK_TOPOLOGY="${cpus[*]}" sandstone_selftest -e selftest_logs_random -s $seed
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    #test_yaml_regexp "/tests/0/result" pass
+    #test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> [0-9]+ [0-9]+ [0-9]+ [0-9]+"
+
+    # Compare the printed numbers to what was expected
+    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+        numbers=${yamldump[/tests/0/threads/$i/messages/0/text]}
+        numbers=${numbers#I> }
+        if [[ "$numbers" != "${results[$i]}" ]]; then
+            echo "Random numbers for CPU ${cpus[$i]} ($numbers) don't match expected (${results[$i]})" >&2
+            false
+        fi
+    done
+}
+
+@test "selftest_logs_random_lcg" {
+    local -Ar random_results=(
+        [0:0:0]="2008263207 1313955870 34286625 1487267185"
+        [0:0:1]="1704585366 1204267381 955907608 1782506326"
+        [0:1:0]="1719058115 1886149085 1585783823 316322718"
+        [0:1:1]="151737293 1591634133 1396278971 1007948046"
+        [0:2:0]="1775100370 1272444970 2011359023 428234716"
+        [0:3:0]="1929298235 1379265883 107930352 110693770"
+        [1:0:0]="1694270094 1491978773 1295765691 296967739"
+        [2:0:0]="566941671 1457287120 1732228388 1973237556"
+        [3:0:0]="235862816 1523178389 1946393080 1930808430"
+    )
+
+    # Mocking 4 sockets of 1 core each
+    test_random LCG:1348219713 0:0:0 1:0:0 2:0:0 3:0:0
+
+    # Mocking 1 socket of 4 single-thread cores
+    test_random LCG:1348219713 0:0:0 0:1:0 0:2:0 0:3:0
+
+    # Mocking 1 socket of 4 hyperthreaded cores
+    test_random LCG:1348219713 0:0:0 0:0:1 0:1:0 0:1:1
+}
+
+@test "selftest_logs_random_aes" {
+    local -r SEED=AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
+    local -Ar random_results=(
+        [0:0:0]="1442152966 848034066 1178242204 1152613460"
+        [0:0:1]="801863574 1764783886 468436526 1150421294"
+        [0:1:0]="1318899296 1591921602 1551294054 1334527618"
+        [0:1:1]="517627017 379261874 2001880952 937361294"
+        [0:2:0]="1041439551 1150890517 375859362 2139318920"
+        [0:3:0]="563921477 676951712 16315069 1235380647"
+        [1:0:0]="672773493 1071973933 867607355 1164627367"
+        [2:0:0]="65707667 538845702 2142028653 158189198"
+        [3:0:0]="647518054 617961218 490776568 784171714"
+    )
+
+    # Mocking 4 sockets of 1 core each
+    test_random $SEED 0:0:0 1:0:0 2:0:0 3:0:0
+
+    # Mocking 1 socket of 4 single-thread cores
+    test_random $SEED 0:0:0 0:1:0 0:2:0 0:3:0
+
+    # Mocking 1 socket of 4 hyperthreaded cores
+    test_random $SEED 0:0:0 0:0:1 0:1:0 0:1:1
 }
 
 test_list_file() {
@@ -662,6 +897,17 @@ test_list_file_ignores_beta() {
     test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
 }
 
+@test "selftest_failinit_socket1 --max-cores-per-slice" {
+    declare -A yamldump
+    test_fail_socket1 sandstone_selftest -e selftest_failinit_socket1 --max-cores-per-slice=2
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" fail
+    i=$((-1 + yamldump[/tests/0/threads/0/messages@len]))
+    test_yaml_regexp "/tests/0/threads/0/messages/$i/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
+}
+
 fail_common() {
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
@@ -719,6 +965,26 @@ fail_common() {
         test_yaml_numeric "/tests/$i/state/iteration" "value == $i - 4"
     done
     grep -e '# Test failed 3 out of 3' /tmp/output.yaml
+}
+
+selftest_fail_socket1_common() {
+    declare -A yamldump
+    test_fail_socket1 sandstone_selftest -e selftest_fail_socket1 "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" fail
+
+    # only one socket should have failed
+    test_yaml_regexp "/tests/0/threads/0/id/package" 1
+    test_yaml_regexp "/tests/0/threads/0/state" "failed"
+    test_yaml_regexp "/tests/0/threads/0/thread" 2
+}
+
+@test "selftest_fail_socket1" {
+    selftest_fail_socket1_common
+}
+@test "selftest_fail_socket1 --max-cores-per-slice" {
+    selftest_fail_socket1_common --max-cores-per-slice=2
 }
 
 function selftest_logerror_common() {
@@ -810,6 +1076,33 @@ function selftest_logerror_common() {
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" 'timed out'
+}
+
+selftest_freeze_socket1_common() {
+    declare -A yamldump
+    test_fail_socket1 sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_socket1 --timeout=1s
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result" 'timed out'
+    test_yaml_numeric "/tests/0/test-runtime" 'value >= 1000'
+
+    # only one socket should have frozen
+    for ((i = 1; i <= yamldump[/tests/0/threads@len]; ++i)); do
+        if [[ "${yamldump[/tests/0/threads/$i/id/package]}" = 1 ]]; then
+            test_yaml_regexp "/tests/0/threads/$i/state" failed
+            n=$((-1 + yamldump[/tests/0/threads/$i/messages@len]))
+            test_yaml_regexp "/tests/0/threads/$i/messages/$n/text" '.*Thread is stuck'
+        else
+            [[ "${yamldump[/tests/0/threads/$i/state]}" != failed ]]
+        fi
+    done
+}
+
+@test "selftest_freeze_socket1" {
+    selftest_freeze_socket1_common
+}
+@test "selftest_freeze_socket1 --max-cores-per-slice" {
+    selftest_freeze_socket1_common --max-cores-per-slice=2
 }
 
 selftest_crash_common() {
@@ -933,7 +1226,7 @@ selftest_crash_context_common() {
     fi
 
     local signum=`kill -l SEGV`
-    sandstone_selftest -n1 -e selftest_sigsegv "$@"
+    sandstone_selftest "$@"
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/result" "crash"
@@ -955,7 +1248,7 @@ selftest_crash_context_common() {
 
 @test "crash context" {
     declare -A yamldump
-    selftest_crash_context_common --on-crash=context
+    selftest_crash_context_common -n1 -e selftest_sigsegv --on-crash=context
 
     # Ensure we can use this option even if gdb isn't found
     # (can't use run_sandstone_yaml here because we empty $PATH)
@@ -964,6 +1257,22 @@ selftest_crash_context_common() {
         run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o - >/dev/null
         [[ $status -eq 1 ]]     # instead of 64 (EX_USAGE)
     )
+}
+
+crash_context_socket1_common() {
+    declare -A yamldump
+    test_fail_socket1 selftest_crash_context_common -e selftest_sigsegv_socket1 --on-crash=context "$@"
+
+    # only one socket should have crashed
+    local threadidx=$((yamldump[/tests/0/threads@len] - 1))
+    test_yaml_numeric "/tests/0/threads/$threadidx/id/package" 'value == 1'
+}
+
+@test "crash context socket1" {
+    crash_context_socket1_common
+}
+@test "crash context socket1 --max-cores-per-slice" {
+    crash_context_socket1_common  --max-cores-per-slice=1
 }
 
 @test "crash backtrace" {
@@ -988,7 +1297,7 @@ selftest_crash_context_common() {
     wait $pid ||:
 
     declare -A yamldump
-    selftest_crash_context_common --on-crash=backtrace
+    selftest_crash_context_common -n1 --timeout=5m -e selftest_sigsegv --on-crash=backtrace
 
     test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
@@ -1046,6 +1355,83 @@ selftest_crash_context_common() {
     # and test it did triage properly
     test_yaml_numeric "/triage-results@len" 'value == 1'
     test_yaml_numeric "/triage-results/0" 'value == 1'
+}
+
+function selftest_cpuset() {
+    local expected_logical=$1
+    local expected_package=$2
+    local expected_core=$3
+    local expected_thread=$4
+    shift 4
+
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_skip "$@"
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric "/cpu-info/0/logical" "value == $expected_logical"
+    test_yaml_numeric "/cpu-info/0/package" "value == $expected_package"
+    test_yaml_numeric "/cpu-info/0/core" "value == $expected_core"
+    test_yaml_numeric "/cpu-info/0/thread" "value == $expected_thread"
+}
+
+@test "cpuset=number (first)" {
+    # Get the first logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
+    selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} --cpuset=${cpuinfo[0]}
+}
+
+@test "cpuset=number (last)" {
+    # Get the last logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '$p'`)
+    selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} --cpuset=${cpuinfo[0]}
+}
+
+@test "cpuset=topology (first)" {
+    # Get the first logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
+    selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} \
+        --cpuset=p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]}
+}
+
+@test "cpuset=topology (last)" {
+    # Get the last logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '$p'`)
+    selftest_cpuset ${cpuinfo[0]} ${cpuinfo[1]} ${cpuinfo[2]} ${cpuinfo[3]} \
+        --cpuset=p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]}
+}
+
+selftest_cpuset_unsorted() {
+    local MAX_PROC=`nproc`
+    local cpuset=$1
+    shift
+    declare -A yamldump
+    sandstone_selftest -e selftest_skip --cpuset="$cpuset"
+    [[ "$status" -eq 0 ]]
+
+    # Get all the processor numbers
+    i=0
+    for expected_logical in `$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1; }'`; do
+        test_yaml_numeric "/cpu-info/$i/logical" "value == $expected_logical"
+        i=$((i + 1))
+    done
+}
+
+@test "cpuset=number (inverse order)" {
+    # make a list in inverse order
+    local -a cpuset=($($SANDSTONE --dump-cpu-info | tac |
+                           awk '/^[0-9]/ { printf "%d,", $1; }'))
+    cpuset=${cpuset%,}          # remove last comma
+
+    selftest_cpuset_unsorted "$cpuset" "${cpuinfo[@]}"
+}
+
+@test "cpuset=number (inverse sorted order)" {
+    # sort the CPU list by package, then core then thread
+    # This differs from the above on Linux, on hyperthreaded machines
+    local -a cpuset=($($SANDSTONE --dump-cpu-info | sort -rnk2,3 |
+                           awk '/^[0-9]/ { printf "%d,", $1; }'))
+    cpuset=${cpuset%,}          # remove last comma
+
+    selftest_cpuset_unsorted "$cpuset" "${cpuinfo[@]}"
 }
 
 # Confirm that we are roughly using the threads we said we would

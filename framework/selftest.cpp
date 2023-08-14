@@ -27,15 +27,12 @@
 #endif // _WIN32
 #include "sandstone_p.h"
 
-#include "sandstone_tests.h"
-#include "SelectorFactory.h"
-#include "WeightedRepeatingSelector.h"
-#include "WeightedNonRepeatingSelector.h"
-#include "PrioritizedSelector.h"
-#include "TestrunSelectorBase.h"
-
 #include <exception>
 #include <unordered_map>
+
+#ifdef __x86_64__
+#  include "amx_common.h"
+#endif
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -173,6 +170,22 @@ static int selftest_logs_getcpu_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
+static int selftest_logs_random_init(struct test *test)
+{
+    // print 4 ints
+    int r1 = random();
+    int r2 = random();
+    int r3 = random();
+    int r4 = random();
+    log_info("%u %u %u %u", r1, r2, r3, r4);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_logs_random_run(struct test *test, int cpu)
+{
+    return selftest_logs_random_init(test);
+}
+
 static int selftest_skip_init(struct test *test)
 {
     log_info("Requesting skip (this message should be visible)");
@@ -266,9 +279,30 @@ static int selftest_noreturn_run(struct test *test, int cpu)
     return EXIT_FAILURE;
 }
 
-static int selftest_fail_socket1_run(struct test *test, int cpu)
+static int adjust_cpu_for_isolate_socket(int cpu)
 {
-    return cpu_info[cpu].package_id == 1 ? EXIT_FAILURE : EXIT_SUCCESS;
+    // pretend we're running in test_schedule_isolate_socket
+    for (int cpu0 = cpu - 1; cpu0 >= 0; --cpu0) {
+        if (cpu_info[cpu0].package_id == cpu_info[cpu].package_id)
+            continue;
+        return cpu - cpu0 - 1;
+    }
+    // no adjustment necessary -- we are in test_schedule_isolate_socket
+    return cpu;
+}
+
+template <auto F> static int selftest_if_socket1_initcleanup(struct test *test)
+{
+    if (cpu_info[0].package_id == 1)
+        return F(test);
+    return EXIT_SUCCESS;
+}
+
+template <auto F> static int selftest_if_socket1_run(struct test *test, int cpu)
+{
+    if (cpu_info[cpu].package_id == 1)
+        return F(test, adjust_cpu_for_isolate_socket(cpu));
+    return EXIT_SUCCESS;
 }
 
 static int selftest_50pct_freeze_fail_run(struct test *test, int cpu)
@@ -448,6 +482,17 @@ static void cause_sigill()
         }
     }
 #endif
+    if (cpu_has_feature(cpu_feature_amx_tile)) {
+        // init the AMX state
+        alignas(64) static struct amx_tileconfig cfg = {
+            .palette = 1,
+            .start_row = 0,
+            .colsb = { 64 },
+            .rows = { 1 },
+        };
+        asm ("ldtilecfg %0" : : "m" (cfg));
+        asm ("tileloadd (%0, %1, 1), %%tmm0" : : "r" (&cfg), "r" (ptrdiff_t(1)));
+    }
 
     // make sure there are no function calls between the instruction above and the one below
 
@@ -824,6 +869,21 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
+    .id = "selftest_logs_random_init",
+    .description = "Logs some random numbers in the init function",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_logs_random_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_logs_random",
+    .description = "Logs some random numbers",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_logs_random_run,
+    .desired_duration = -1,
+},
+{
     .id = "selftest_skip",
     .description = "Skipped test",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
@@ -911,12 +971,6 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
-    .id = "selftest_timedpass_maxthreads1",
-    .description = "Runs for the requested time, but on single thread",
-    .test_run = selftest_timedpass_noloop_run<(50000us).count()>,
-    .max_threads = 1,
-},
-{
     .id = "selftest_check_sequential",
     .description = "Checks that threads were run sequentially",
     .test_init = selftest_check_sequential_init,
@@ -984,10 +1038,40 @@ static struct test selftests_array[] = {
 
     /* Multi-socket tests */
 {
+    .id = "selftest_failinit_socket1",
+    .description = "Fails on init for socket 1",
+    .groups = nullptr, // positive on single-socket systems, negative on multi-socket
+    .test_init = selftest_if_socket1_initcleanup<selftest_failinit_init>,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+},
+{
     .id = "selftest_fail_socket1",
     .description = "Fails on any thread of socket 1",
     .groups = nullptr, // positive on single-socket systems, negative on multi-socket
-    .test_run = selftest_fail_socket1_run,
+    .test_run = selftest_if_socket1_run<selftest_fail_run>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_freeze_socket1",
+    .description = "Freezes on any thread of socket 1",
+    .groups = nullptr, // positive on single-socket systems, negative on multi-socket
+    .test_run = selftest_if_socket1_run<selftest_noreturn_run>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_sigsegv_init_socket1",
+    .description = "Crashes with SIGSEGV (data) on init for socket 1",
+    .groups = nullptr, // positive on single-socket systems, negative on multi-socket
+    .test_init = selftest_if_socket1_initcleanup<selftest_crash_initcleanup<cause_sigsegv_null>>,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_sigsegv_socket1",
+    .description = "Crashes with SIGSEGV (data) dereferencing the null page for any thread of socket 1",
+    .groups = nullptr, // positive on single-socket systems, negative on multi-socket
+    .test_run = selftest_if_socket1_run<selftest_crash_run<cause_sigsegv_null>>,
     .desired_duration = -1,
 },
 
@@ -1220,4 +1304,5 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
 #endif // __linux__
 };
 
+extern const std::span<struct test> selftests;
 const std::span<struct test> selftests = { std::begin(selftests_array), std::end(selftests_array) };

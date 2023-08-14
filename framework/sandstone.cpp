@@ -15,6 +15,7 @@
 #include <new>
 #include <map>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 #include <assert.h>
@@ -65,6 +66,7 @@
 #include "sandstone_iovec.h"
 #include "sandstone_kvm.h"
 #include "sandstone_system.h"
+#include "sandstone_thread.h"
 #include "test_selectors/SelectorFactory.h"
 
 #include "sandstone_tests.h"
@@ -86,15 +88,6 @@
 // so use the the 32-bit offset version (which calls _chsize)
 #    undef ftruncate
 #  endif
-
-namespace {
-struct HandleCloser
-{
-    void operator()(HANDLE h) { CloseHandle(h); }
-    void operator()(intptr_t h) { CloseHandle(HANDLE(h)); }
-};
-}
-using AutoClosingHandle = std::unique_ptr<void, HandleCloser>;
 #endif
 
 #include "sandstone_test_lists.h"
@@ -138,6 +131,7 @@ enum {
     test_knob_option,
     longer_runtime_option,
     max_concurrent_threads_option,
+    max_cores_per_slice_option,
     max_test_count_option,
     max_test_loop_count_option,
     max_messages_option,
@@ -146,7 +140,6 @@ enum {
     mem_sample_time_option,
     mem_samples_per_log_option,
     no_mem_sampling_option,
-    no_shared_memory_option,
     no_slicing_option,
     no_triage_option,
     on_crash_option,
@@ -176,7 +169,6 @@ enum {
     total_retest_on_failure,
     ud_on_failure_option,
     use_builtin_test_list_option,
-    use_predictable_file_names_option,
     version_option,
     weighted_testrun_option,
 };
@@ -189,7 +181,6 @@ char *program_invocation_name;
 
 uint64_t cpu_features;
 static const struct test *current_test = nullptr;
-extern struct cpu_info *cpu_info;
 #ifdef __llvm__
 thread_local int thread_num __attribute__((tls_model("initial-exec")));
 #else
@@ -219,8 +210,6 @@ struct test mce_test = {
 // this needs to be a global, raw pointer because we leak memory (nothing here
 // ever gets freed and we don't care -- the application is exiting anyway)
 static TestrunSelector *test_selector;
-
-static_assert(LogicalProcessorSet::Size >= MAX_THREADS, "CPU_SETSIZE is too small on this platform");
 
 static void find_thyself(char *argv0)
 {
@@ -302,6 +291,102 @@ static int create_runtime_file(const char *name, int mode = S_IRWXU)
     return open_runtime_file_internal(name, O_CREAT | O_RDWR, mode);
 }
 
+static int test_result_to_exit_code(TestResult result)
+{
+    switch (result) {
+    case TestResult::Passed:
+        break;
+    case TestResult::Skipped:
+        return -1;
+    case TestResult::Failed:
+        return EXIT_FAILURE;
+    case TestResult::OperatingSystemError:
+    case TestResult::Killed:
+    case TestResult::CoreDumped:
+    case TestResult::OutOfMemory:
+    case TestResult::TimedOut:
+    case TestResult::Interrupted:
+        assert(false && "Tests don't produce these conditions themselves");
+        __builtin_unreachable();
+    }
+    return EXIT_SUCCESS;
+}
+
+#ifndef _WIN32
+static ChildExitStatus test_result_from_exit_code(forkfd_info info)
+{
+    ChildExitStatus r = {};
+    r.extra = info.status;
+    if (info.code == CLD_EXITED) {
+        // normal exit
+        int8_t status = info.status;    // the cast to int8_t transforms 255 into -1
+        switch (status) {
+        case -1:
+            r.result = TestResult::Skipped;
+            r.extra = 0;
+            break;
+        case EXIT_SUCCESS:
+            r.result = TestResult::Passed;
+            r.extra = 0;
+            break;
+        case EXIT_FAILURE:
+            r.result = TestResult::Failed;
+            r.extra = 0;
+            break;
+        default:
+            // a FW problem getting started
+            r.result = TestResult::OperatingSystemError;
+            break;
+        }
+    } else if (info.code == CLD_KILLED || info.code == CLD_DUMPED) {
+        r.result = info.code == CLD_KILLED ? TestResult::Killed : TestResult::CoreDumped;
+        if (info.status == SIGKILL)
+            r.result = TestResult::OutOfMemory;
+        else if (info.status == SIGQUIT)
+            r.result = TestResult::TimedOut;
+    } else {
+        assert(false && "Impossible condition; did we get a CLD_STOPPED??");
+        __builtin_unreachable();
+    }
+    return r;
+}
+#else
+static constexpr DWORD EXIT_TIMEOUT = 2;
+static ChildExitStatus test_result_from_exit_code(DWORD status)
+{
+    // Exit code mapping:
+    // -1: EXIT_SKIP:       TestResult::Skipped
+    // 0: EXIT_SUCCESS:     TestResult::Passed
+    // 1: EXIT_FAILURE:     TestResult::Failed
+    // 2:                   TestResult::TimedOut
+    // 3:                   Special case for abort()
+    // 4-255:               exit() code (from sysexits.h)
+    // anything else:       an NTSTATUS
+    //
+    // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=msvc-160
+    // says: "If the Windows error reporting handler is not invoked, then abort
+    // calls _exit to terminate the process with exit code 3"
+
+    switch (status) {
+    case DWORD(-1):
+        return { TestResult::Skipped };
+    case EXIT_SUCCESS:
+        return { TestResult::Passed };
+    case EXIT_FAILURE:
+        return { TestResult::Failed };
+    case EXIT_TIMEOUT:
+        return { TestResult::TimedOut };
+    case 3:
+        return { TestResult::Killed, unsigned(STATUS_FAIL_FAST_EXCEPTION) };
+    }
+    if (status > 255)
+        return { TestResult::Killed, status };
+
+    // must be a FW problem getting started
+    return { TestResult::OperatingSystemError, status };
+}
+#endif // _WIN32
+
 static inline __attribute__((always_inline, noreturn)) void ud2()
 {
     __builtin_trap();
@@ -326,7 +411,7 @@ static void __attribute__((noreturn)) report_fail_common()
 void _report_fail(const struct test *test, const char *file, int line)
 {
     /* Keep this very early */
-    if (sApp->ud_on_failure)
+    if (sApp->shmem->ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging)
@@ -337,7 +422,7 @@ void _report_fail(const struct test *test, const char *file, int line)
 void _report_fail_msg(const char *file, int line, const char *fmt, ...)
 {
     /* Keep this very early */
-    if (sApp->ud_on_failure)
+    if (sApp->shmem->ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging)
@@ -360,7 +445,7 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
 void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, DataType type, const char *fmt, ...)
 {
     // Execute UD2 early if we've failed
-    if (sApp->ud_on_failure)
+    if (sApp->shmem->ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging) {
@@ -408,7 +493,7 @@ inline void test_the_test_data<true>::test_tests_iteration(const struct test *th
         return;
 
     int cpu = thread_num;
-    int n = cpu_data_for_thread(cpu)->inner_loop_count;
+    int n = sApp->test_thread_data(cpu)->inner_loop_count;
     if (n >= DesiredIterations)
         return;
 
@@ -433,10 +518,13 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
 
     // check if the test has failed
     bool has_failed = false;
-    for (int i = -1; i < num_cpus() && !has_failed; ++i) {
-        if (cpu_data_for_thread(i)->has_failed())
+    auto failchecker = [&has_failed](PerThreadData::Common *data, int) {
+        if (data->has_failed())
             has_failed = true;
-    }
+    };
+    for_each_main_thread(failchecker);
+    if (!has_failed)
+        for_each_test_thread(failchecker);
 
     MonotonicTimePoint now = std::chrono::steady_clock::now();
 
@@ -459,8 +547,8 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
         return;                     // no point in reporting timing of failed tests
 
     // check the overall time
-    if (sApp->current_test_endtime != MonotonicTimePoint::max() && the_test->desired_duration >= 0) {
-        Duration expected_runtime = sApp->current_test_endtime - sApp->current_test_starttime;
+    if (sApp->shmem->current_test_endtime != MonotonicTimePoint::max() && the_test->desired_duration >= 0) {
+        Duration expected_runtime = sApp->shmem->current_test_endtime - sApp->current_test_starttime;
         Duration min_expected_runtime = expected_runtime - expected_runtime / 4;
         Duration max_expected_runtime = expected_runtime + expected_runtime / 4;
         Duration actual_runtime = now - sApp->current_test_starttime;
@@ -554,7 +642,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
 #undef maybe_log_error
 }
 
-static Duration test_duration()
+static ShortDuration test_duration()
 {
     /* global (-t) option overrides this all */
     if (sApp->test_time > 0s)
@@ -562,16 +650,16 @@ static Duration test_duration()
     return SandstoneApplication::DefaultTestDuration;
 }
 
-static Duration test_duration(const struct test *test)
+static ShortDuration test_duration(const struct test *test)
 {
     /* Start with the test prefered default time */
-    milliseconds target_duration(test->desired_duration);
-    milliseconds min_duration(test->minimum_duration);
-    milliseconds max_duration(test->maximum_duration);
+    ShortDuration target_duration(test->desired_duration);
+    ShortDuration min_duration(test->minimum_duration);
+    ShortDuration max_duration(test->maximum_duration);
 
     /* apply the global (-t) override */
     if (sApp->test_time.count())
-        target_duration = duration_cast<milliseconds>(sApp->test_time);
+        target_duration = sApp->test_time;
 
     /* fallback to the default if test preference is zero */
     if (target_duration <= 0s)
@@ -591,18 +679,15 @@ static Duration test_duration(const struct test *test)
     return target_duration;
 }
 
-static Duration test_timeout(Duration regular_duration)
+static ShortDuration test_timeout(ShortDuration regular_duration)
 {
     // use the override value if there is one
     if (sApp->max_test_time != Duration::zero())
-        return sApp->max_test_time * sApp->current_slice_count;
+        return sApp->max_test_time;
 
-    Duration result = regular_duration * 5 + 30s;
+    ShortDuration result = regular_duration * 5 + 30s;
     if (result < 300s)
         result = 300s;
-
-    // Multiply by the number of slices needed to run on all cpus.
-    result = result * sApp->current_slice_count;
 
     return result;
 }
@@ -622,17 +707,17 @@ static bool wallclock_deadline_has_expired(MonotonicTimePoint deadline)
 
     if (now > deadline)
         return true;
-    if (sApp->use_strict_runtime && now > sApp->endtime)
+    if (sApp->shmem->use_strict_runtime && now > sApp->endtime)
         return true;
     return false;
 }
 
 static bool max_loop_count_exceeded(const struct test *the_test)
 {
-    per_thread_data *data = cpu_data();
+    PerThreadData::Test *data = sApp->test_thread_data(thread_num);
 
     // unsigned comparisons so sApp->current_max_loop_count == -1 causes an always false
-    if (unsigned(data->inner_loop_count) >= unsigned(sApp->current_max_loop_count))
+    if (unsigned(data->inner_loop_count) >= unsigned(sApp->shmem->current_max_loop_count))
         return true;
 
     /* Desired duration -1 means "runs once" */
@@ -648,12 +733,12 @@ int test_time_condition(const struct test *the_test) noexcept
 {
     test_loop_iterate();
     sApp->test_tests_iteration(the_test);
-    cpu_data()->inner_loop_count++;
+    sApp->test_thread_data(thread_num)->inner_loop_count++;
 
     if (max_loop_count_exceeded(the_test))
         return 0;  // end the test if max loop count exceeded
 
-    return !wallclock_deadline_has_expired(sApp->current_test_endtime);
+    return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
 }
 
 // Creates a string containing all socket temperatures like: "P0:30oC P2:45oC"
@@ -706,55 +791,25 @@ static void print_temperature_and_throttle()
 
 static void init_internal(const struct test *test)
 {
-    sApp->thread_offset = 0;
-    memset(reinterpret_cast<void *>(sApp->shmem), 0, sizeof(*sApp->shmem));
     print_temperature_and_throttle();
 
-    random_init();
-
     logging_init(test);
-
-    int slice_count = 1;
-    int max_threads = num_cpus();
-    if (sApp->slicing) {
-        // if either sApp->max_concurrent_thread_count or test->max_threads is
-        // set, use the smaller of the two as the thread count.
-        int max_concurrent_threads = sApp->max_concurrent_thread_count;
-        int test_max_threads = test->max_threads;
-        if (test_max_threads)
-            max_threads = test_max_threads;
-        if (max_concurrent_threads && max_concurrent_threads < max_threads)
-            max_threads = max_concurrent_threads;
-        if (max_threads < num_cpus())
-            slice_count = (num_cpus() + max_threads - 1) / max_threads;
-    }
-    sApp->current_slice_count = slice_count;
-    sApp->current_max_threads = max_threads;
 }
 
 static void initialize_smi_counts()
 {
-    for (int i = 0; i < num_cpus(); i++)
-        sApp->smi_counts_start[cpu_info[i].cpu_number] = sApp->count_smi_events(cpu_info[i].cpu_number);
+    std::optional<uint64_t> v = sApp->count_smi_events(cpu_info[0].cpu_number);
+    if (!v)
+        return;
+    sApp->smi_counts_start.resize(num_cpus());
+    sApp->smi_counts_start[0] = *v;
+    for (int i = 1; i < num_cpus(); i++)
+        sApp->smi_counts_start[i] = sApp->count_smi_events(cpu_info[i].cpu_number).value_or(0);
 }
 
 static void cleanup_internal(const struct test *test)
 {
     logging_finish();
-
-    if (InterruptMonitor::InterruptMonitorWorks) {
-        uint64_t mce_now = sApp->count_mce_events();
-        if (sApp->mce_count_last != mce_now) {
-            logging_printf(LOG_LEVEL_QUIET, "# WARNING: Machine check exception detected\n");
-            sApp->mce_count_last = mce_now;
-        }
-
-        uint64_t thermal_now = sApp->count_thermal_events();
-        if (thermal_now != sApp->last_thermal_event_count) {
-            sApp->last_thermal_event_count = thermal_now;
-            logging_printf(LOG_LEVEL_QUIET, "# WARNING: Thermal events detected.\n");
-        }
-    }
 }
 
 template <uint64_t X, uint64_t Y, typename P = int>
@@ -830,7 +885,7 @@ void test_loop_iterate() noexcept
 void test_loop_end() noexcept
 {
     using namespace AssemblyMarker;
-    assembly_marker<TestLoop, End>(cpu_data()->inner_loop_count);
+    assembly_marker<TestLoop, End>(sApp->test_thread_data(thread_num)->inner_loop_count);
 }
 
 #ifndef _WIN32
@@ -838,79 +893,66 @@ void test_loop_end() noexcept
 #endif
 } // extern "C"
 
-static void *thread_runner(void *arg)
+static uintptr_t thread_runner(int thread_number)
 {
-    uintptr_t thread_number = uintptr_t(arg);
-
     // convert from internal Sandstone numbering to the system one
     pin_to_logical_processor(LogicalProcessor(cpu_info[thread_number].cpu_number), current_test->id);
 
-    struct TestRunWrapper {
-        struct per_thread_data *this_thread;
-        int ret = EXIT_FAILURE;
-        int thread_number;
-        CPUTimeFreqStamp before, after;
+    PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
+    random_init_thread(thread_number);
+    int ret = EXIT_FAILURE;
 
-        TestRunWrapper(int thread_number)
-            : this_thread(cpu_data_for_thread(thread_number)),
-              thread_number(thread_number)
-        {
-            thread_num = thread_number;
-            this_thread->inner_loop_count = 0;
+    auto cleanup = scopeExit([&] {
+        // let SIGQUIT handler know we're done
+        ThreadState new_state = thread_failed;
+        if (!this_thread->has_failed()) {
+            if (ret == EXIT_SUCCESS)
+                new_state = thread_succeeded;
+            else if (ret < EXIT_SUCCESS)
+                new_state = thread_skipped;
         }
+        this_thread->thread_state.store(new_state, std::memory_order_relaxed);
 
-        ~TestRunWrapper()
-        {
-            // let SIGQUIT handler know we're done
-            ThreadState new_state = thread_failed;
-            if (!this_thread->has_failed()) {
-                if (ret == EXIT_SUCCESS)
-                    new_state = thread_succeeded;
-                else if (ret < EXIT_SUCCESS)
-                    new_state = thread_skipped;
-            }
-            this_thread->thread_state.store(new_state, std::memory_order_relaxed);
-
-            if (new_state == thread_failed) {
-                if (sApp->ud_on_failure)
-                    ud2();
-                logging_mark_thread_failed(thread_number);
-            }
-            test_end(new_state);
-
-            after.Snapshot(thread_number);
-            this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
-
-            if (sApp->verbosity >= 3)
-                log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
-                            thread_number, this_thread->inner_loop_count);
+        if (new_state == thread_failed) {
+            if (sApp->shmem->ud_on_failure)
+                ud2();
+            logging_mark_thread_failed(thread_number);
         }
+        test_end(new_state);
+    });
 
-        [[gnu::always_inline]] void run()
-        {
-            // indicate to SIGQUIT handler that we're running
-            this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
+    // indicate to SIGQUIT handler that we're running
+    this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
 
-            before.Snapshot(thread_number);
+    CPUTimeFreqStamp before;
+    before.Snapshot(thread_number);
+    test_start();
 
-            test_start();
+    try {
+        ret = test_run_wrapper_function(current_test, thread_number);
+    } catch (std::exception &e) {
+        log_error("Caught C++ exception: \"%s\" (type '%s')", e.what(), typeid(e).name());
+        // no rethrow
+    }
 
-            try {
-                ret = test_run_wrapper_function(current_test, thread_number);
-            } catch (std::exception &e) {
-                log_error("Caught C++ exception: \"%s\" (type '%s')", e.what(), typeid(e).name());
-                // no rethrow
-            }
-        }
-    } wrapper(thread_number);
-    wrapper.run();
+    cleanup.run_now();
+
+    CPUTimeFreqStamp after;
+    after.Snapshot(thread_number);
+    this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
+
+    if (sApp->shmem->verbosity >= 3)
+        log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
+                    thread_number, this_thread->inner_loop_count);
+
 
     // our caller doesn't care what we return, but the returned value helps if
     // you're running strace
-    return reinterpret_cast<void *>(wrapper.ret);
+    return ret;
 }
 
-int num_cpus() {
+int num_cpus()
+{
     return sApp->thread_count;
 }
 
@@ -925,80 +967,252 @@ static LogicalProcessorSet init_cpus()
     return result;
 }
 
-enum ShmemMode { DoNotUseSharedMemory, UseSharedMemory };
-static void init_shmem(ShmemMode mode, int fd = -1)
+static void attach_shmem_internal(int fd, size_t size)
 {
-    if (sApp->shmem)
-        return;                 // already initialized
-
-    // a file descriptor is only allowed in the child side of -fexec
-    assert(fd == -1 || sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
-    assert(fd == -1 || mode == UseSharedMemory);
-
-    int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
-    switch (sApp->current_fork_mode()) {
-    case SandstoneApplication::exec_each_test:
-        // our child will inherit this file descriptor
-        // (error ignored: we'll fall back to the pipe if we can't pass it)
-        if (mode == UseSharedMemory) {
-            fd = open_memfd(MemfdInheritOnExec);
-            if (fd < 0 || ftruncate(fd, size) < 0) {
-                perror("internal error creating temporary file");
-                exit(EX_CANTCREAT);
-            }
-        }
-        break;
-
-    case SandstoneApplication::child_exec_each_test:
-        // we may have inherited a file descriptor
-        break;
-
-    case SandstoneApplication::no_fork:
-        // in no-fork mode, there's no one to share with in the first place
-        sApp->shared_memory_is_shared = true;
-        mode = DoNotUseSharedMemory;
-        break;
-
-    case SandstoneApplication::fork_each_test:
-#ifdef _WIN32
-        assert(false && "impossible condition");
-        __builtin_unreachable();
-#endif
-        break;
-    }
-
-
-    void *base = MAP_FAILED;
-    if (mode != DoNotUseSharedMemory) {
-        int flags = MAP_SHARED | (fd == -1 ? MAP_ANONYMOUS : 0);
-        base = mmap(NULL, size, PROT_READ | PROT_WRITE, flags, fd, 0);
-        if (base == MAP_FAILED && fd != -1) {
-            fprintf(stderr, "internal error: could not map the shared memory file to memory: %s\n",
-                    strerror(errno));
-            abort();
-        }
-    }
+    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (base == MAP_FAILED) {
-        // mmap failed (!!) or not using shared memory
-        if (fd != -1) {
-            close(fd);
-            fd = -1;
-        }
-        base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        assert(base != MAP_FAILED);
-    } else {
-        sApp->shared_memory_is_shared = true;
+        perror("internal error: could not map the shared memory file to memory");
+        exit(EX_IOERR);
     }
 
+    sApp->shmem = static_cast<SandstoneApplication::SharedMemory *>(base);
 
-    if (fd != -1 && sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test)
-        close(fd);
-    else
-        sApp->shmemfd = fd;
+    assert(sApp->shmem->thread_data_offset);
+    assert(sApp->shmem->main_thread_count);
+    auto ptr = reinterpret_cast<unsigned char *>(sApp->shmem);
+    ptr += sApp->shmem->thread_data_offset;
+
+    sApp->main_thread_data_ptr = reinterpret_cast<PerThreadData::Main *>(ptr);
+    ptr += ROUND_UP_TO_PAGE(sizeof(PerThreadData::Main[sApp->shmem->main_thread_count]));
+    sApp->test_thread_data_ptr = reinterpret_cast<PerThreadData::Test *>(ptr);
+}
+
+static void init_shmem()
+{
+    using namespace PerThreadData;
+    static_assert(sizeof(PerThreadData::Main) == 64,
+            "PerThreadData::Main size grew, please check if it was intended");
+    static_assert(sizeof(PerThreadData::Test) == 64,
+            "PerThreadData::Test size grew, please check if it was intended");
+    assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test);
+    assert(sApp->shmem == nullptr);
+    assert(num_cpus());
+
+    unsigned per_thread_size = sizeof(PerThreadData::Main);
+    per_thread_size = ROUND_UP_TO(per_thread_size, alignof(PerThreadData::Test));
+    per_thread_size += sizeof(PerThreadData::Test) * num_cpus();
+    per_thread_size = ROUND_UP_TO_PAGE(per_thread_size);
+
+    unsigned thread_data_offset = sizeof(SandstoneApplication::SharedMemory) +
+            sizeof(Topology::Thread) * num_cpus();
+    thread_data_offset = ROUND_UP_TO_PAGE(thread_data_offset);
+
+    size_t size = thread_data_offset;
+
+    // our child (if we have one) will inherit this file descriptor
+    int fd = open_memfd(MemfdInheritOnExec);
+    if (fd < 0 || ftruncate(fd, size) < 0) {
+        perror("internal error: could not create temporary file for sharing memory");
+        exit(EX_CANTCREAT);
+    }
+
+    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (base == MAP_FAILED) {
+        perror("internal error: could not map the shared memory file to memory");
+        exit(EX_CANTCREAT);
+    }
+
+    sApp->shmemfd = fd;
     sApp->shmem = new (base) SandstoneApplication::SharedMemory;
+    sApp->shmem->thread_data_offset = thread_data_offset;
+}
 
-    // this is just to cause a crash if the mmap failed and we're in release mode
-    (void) sApp->shmem->per_thread[0].thread_state.load(std::memory_order_relaxed);
+static void commit_shmem()
+{
+    // the most detailed plan is the last
+    const std::vector<CpuRange> &plan = sApp->slice_plans.plans.end()[-1];
+    size_t main_thread_count = plan.size();
+    sApp->shmem->main_thread_count = main_thread_count;
+    sApp->shmem->total_cpu_count = num_cpus();
+
+    // unmap the current area, because Windows doesn't allow us to have two
+    // blocks for this file
+    ptrdiff_t offset = sApp->shmem->thread_data_offset;
+    munmap(sApp->shmem, offset);
+
+    // enlarge the file and map the extra data
+    size_t size = sizeof(PerThreadData::Main) * main_thread_count;
+    size = ROUND_UP_TO_PAGE(size);
+    size += sizeof(PerThreadData::Test) * num_cpus();
+    size = ROUND_UP_TO_PAGE(size);
+
+    if (ftruncate(sApp->shmemfd, offset + size) < 0) {
+        perror("internal error: could not enlarge temporary file for sharing memory");
+        exit(EX_CANTCREAT);
+    }
+    attach_shmem_internal(sApp->shmemfd, offset + size);
+
+    if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
+        close(sApp->shmemfd);
+        sApp->shmemfd = -1;
+    }
+
+    // sApp->shmem has probably moved
+    restrict_topology({ 0, num_cpus() });
+}
+
+static void attach_shmem(int fd)
+{
+    assert(sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
+
+    size_t size;
+    if (struct stat st; fstat(fd, &st) >= 0) {
+        size = st.st_size;
+        assert(size == ROUND_UP_TO_PAGE(size));
+    } else {
+        fprintf(stderr, "internal error: could not get the size of shared memory (fd = %d): %m\n",
+                fd);
+        exit(EX_IOERR);
+    }
+
+    attach_shmem_internal(fd, size);
+    close(fd);
+
+    // barrier with the parent process
+    sApp->main_thread_data()->thread_state.exchange(thread_not_started, std::memory_order_acquire);
+}
+
+static void protect_shmem()
+{
+    size_t protected_len = sApp->shmem->thread_data_offset;
+    assert(protected_len == ROUND_UP_TO_PAGE(protected_len) &&
+            "SharedMemory::main_thread_data is not page-aligned");
+    mprotect(sApp->shmem, protected_len, PROT_READ);
+}
+
+static void slice_plan_init(int max_cores_per_slice)
+{
+    auto set_to_full_system = []() {
+        // only one plan and that's the full system
+        std::vector plan = { CpuRange{ 0, num_cpus() } };
+        sApp->slice_plans.plans.fill(plan);
+        return;
+    };
+    for (std::vector<CpuRange> &plan : sApp->slice_plans.plans)
+        plan.clear();
+
+    if (sApp->current_fork_mode() == SandstoneApplication::no_fork || max_cores_per_slice < 0)
+        return set_to_full_system();
+
+    // The heuristic is enabled by max_cores_per_slice == 0 and a valid
+    // topology:
+    // - if the CPU Set has less than or equal toMinimumCpusPerSocket (8)
+    //   logical processors per socket (on average), we ignore the topology and
+    //   will instead run in slices of up to DefaultMaxCoresPerSlice (32)
+    //   logical processors.
+    // - otherwise, we'll have at least one slice per socket, and maybe more
+    //   for sockets with more than 32 cores per socket.
+    //   * hardware threads of a given core are always sliced together, so a
+    //     2-thread core system will have up to 64 logical processors in a
+    //     slice (a hypothetical 4-thread system would have up to 128).
+    //
+    // The heuristic slices will be balanced as follows:
+    // - the number of cores per slice is kept as a multiple of 4; that is, a
+    //   60-core socket will have a slice of 32 cores and one of 28 cores,
+    //   instead of 30+30.
+    // - other than that, the number of cores per slice is balanced; that is,
+    //   a 48-core socket is split as two 24-core slices instead of 32+16.
+    //
+    // If the user specifies a --max-cores-per-slice option in the
+    // command-line, it will bypass the heuristic but keep the slice balancing
+    // as described above, including keeping the multiple-of-4 sliceing, if the
+    // requested target is also a multiple of 4. Be aware bypasses the minimum
+    // average processor per socket check.
+    //
+    // As a result, expect the following sliceing:
+    //  Topology            slices
+    //  invalid             everything
+    //  1 x 32              [32]
+    //  1 x 36              [20 + 16]
+    //  1 x 40              [20 + 20]
+    //  1 x 60              [32 + 28]
+    //  1 x 64              [32 + 32]
+    //  1 x 96              [32 + 32 + 32]
+    //  1 x 128             [32 + 32 + 32 + 32]
+    //  2 x 8               [16]
+    //  2 x 16              [16] + [16]
+    //  2 x 32              [32] + [32]
+    //  2 x 40              [20 + 20] + [20 + 20]
+    //  4 x 8               [32]
+    //  4 x 16              [16] + [16] + [16] + [16]
+    //  8 x 8               [32] + [32]
+    //  16 x 4              [32] + [32]
+    //  16 x 8              [32] + [32] + [32] + [32]
+    // etc.
+
+    int max_cpu = num_cpus();
+    const Topology &topology = Topology::topology();
+    while (topology.isValid()) {     // not a loop, just so we can use break
+        using SlicePlans = SandstoneApplication::SlicePlans;
+        static constexpr int MinimumCpusPerSocket = SlicePlans::MinimumCpusPerSocket;
+        static constexpr int DefaultMaxCoresPerSlice = SlicePlans::DefaultMaxCoresPerSlice;
+
+        if (max_cores_per_slice == 0) {
+            // apply defaults
+            int average_cpus_per_socket = max_cpu / topology.packages.size();
+            max_cores_per_slice = DefaultMaxCoresPerSlice;
+            if (average_cpus_per_socket <= MinimumCpusPerSocket)
+                break;
+        }
+
+        // set up proper plans
+        std::vector<CpuRange> &fullsocket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
+        std::vector<CpuRange> &split = sApp->slice_plans.plans[SlicePlans::Heuristic];
+        auto push_to = [](std::vector<CpuRange> &to, const Topology::Core *start, const Topology::Core *end) {
+            int start_cpu = start[0].threads.front().cpu();
+            int end_cpu = end[-1].threads.back().cpu();
+            assert(end_cpu >= start_cpu);
+            to.push_back(CpuRange{ start_cpu, end_cpu + 1 - start_cpu });
+        };
+
+        for (const Topology::Package &p : topology.packages) {
+            if (p.cores.size() == 0)
+                continue;       // untested socket
+
+            const Topology::Core *c = p.cores.data();
+            const Topology::Core *end = c + p.cores.size();
+            push_to(fullsocket, c, end);
+
+            ptrdiff_t slice_count = p.cores.size() / max_cores_per_slice;
+            if (p.cores.size() % max_cores_per_slice)
+                ++slice_count;      // round up (also makes at least 1)
+
+            ptrdiff_t slice_size = p.cores.size() / slice_count;
+            if ((max_cores_per_slice & 3) == 0 && (slice_size & 3))
+                slice_size = ((slice_size >> 2) + 1) << 2;  // make it multiple of 4
+
+            for ( ; end - c > slice_size; c += slice_size)
+                push_to(split, c, c + slice_size);
+            push_to(split, c, end);
+        }
+        return;
+    }
+
+    if (max_cores_per_slice == 0) {
+        set_to_full_system();
+    } else {
+        // dumb plan, not *cores*
+        int slice_count = (max_cpu - 1) / max_cores_per_slice + 1;
+        std::vector<CpuRange> plan;
+        plan.reserve(slice_count);
+
+        int slice_size = max_cpu / slice_count;
+        int cpu = 0;
+        for ( ; cpu < max_cpu - slice_size; cpu += slice_size)
+            plan.push_back(CpuRange{ cpu, slice_size });
+        plan.push_back(CpuRange{ cpu, max_cpu - cpu });
+        sApp->slice_plans.plans.fill(plan);
+    }
 }
 
 __attribute__((weak, noclone, noinline)) void print_application_banner()
@@ -1028,11 +1242,9 @@ static std::string cpu_features_to_string(uint64_t f)
     return result;
 }
 
-static void dump_cpu_info(const LogicalProcessorSet &enabled_cpus)
+static void dump_cpu_info()
 {
     int i;
-
-    load_cpu_info(enabled_cpus);
 
     // find the best matching CPU
     const char *detected = "<unknown>";
@@ -1069,7 +1281,7 @@ Common command-line options are:
      is milliseconds, with s, m, and h available for seconds, minutes or hours.
      Example: sandstone -T 60s     # run for at least 60 seconds.
      Example: sandstone -T 5000    # run for at least 5,000 milliseconds
---strict-runtime
+ --strict-runtime
      Use in conjunction with -T to force the program to stop execution after the
      specific time has elapsed.
  -t <test-time>
@@ -1091,6 +1303,11 @@ Common command-line options are:
      limit to the number of loop iterations.  This special value can be
      used to disable test fracturing.  When specified tests will not be
      fractured and their execution will be time limited.
+ --cpuset=<set>
+     Selects the CPUs to run tests on. The <set> option may be a comma-separated
+     list of either plain numbers that select based on the system's logical
+     processor number, or a letter  followed by a number to select based on
+     topology: p for package, c for core and t for thread.
  --dump-cpu-info
      Prints the CPU information that the tool detects (package ID, core ID,
      thread ID, microcode, and PPIN) then exit.
@@ -1189,247 +1406,124 @@ static void restart_init(int iterations)
 {
 }
 
-static void run_threads_in_parallel(const struct test *test, const pthread_attr_t *thread_attr)
+static void run_threads_in_parallel(const struct test *test)
 {
-    pthread_t pt[num_cpus()];       // NOLINT: -Wvla
+    SandstoneTestThread thr[num_cpus()];    // NOLINT: -Wvla
     int i;
 
     for (i = 0; i < num_cpus(); i++) {
-        pthread_create(&pt[i], thread_attr, thread_runner, (void *) (uint64_t) i);
+        thr[i].start(thread_runner, i);
     }
     /* wait for threads to end */
     for (i = 0; i < num_cpus(); i++) {
-        pthread_join(pt[i], nullptr);
+        thr[i].join();
     }
 }
 
-static void run_threads_sequentially(const struct test *test, const pthread_attr_t *thread_attr)
+static void run_threads_sequentially(const struct test *test)
 {
     // we still start one thread, in case the test uses report_fail_msg()
     // (which uses pthread_cancel())
-    pthread_t thread;
-    pthread_create(&thread, thread_attr, [](void *) -> void* {
-        for (int i = 0; i < num_cpus(); ++i)
-            thread_runner(reinterpret_cast<void *>(i));
-        return nullptr;
-    }, nullptr);
-    pthread_join(thread, nullptr);
+    SandstoneTestThread thread;
+    thread.start([](int cpu) {
+        for ( ; cpu != num_cpus(); thread_num = ++cpu)
+            thread_runner(cpu);
+        return uintptr_t(cpu);
+    }, 0);
+    thread.join();
 }
 
 static void run_threads(const struct test *test)
 {
-    pthread_attr_t thread_attr;
-    pthread_attr_init(&thread_attr);
-    pthread_attr_setstacksize(&thread_attr, THREAD_STACK_SIZE);
     current_test = test;
 
     switch (test->flags & test_schedule_mask) {
     default:
-        run_threads_in_parallel(test, &thread_attr);
+        run_threads_in_parallel(test);
         break;
 
     case test_schedule_sequential:
-        run_threads_sequentially(test, &thread_attr);
+        run_threads_sequentially(test);
         break;
     }
 
     current_test = nullptr;
-    pthread_attr_destroy(&thread_attr);
 }
 
 namespace {
-struct SharedMemorySynchronization
+struct StartedChild
 {
-    Pipe pipe;
-    static bool needsWork()
-    {
-        return !__builtin_expect(sApp->shared_memory_is_shared, true);
-    }
-
-    SharedMemorySynchronization() : pipe(Pipe::DontCreate)
-    {
-        if (needsWork())
-            prepare();
-    }
-
-    SharedMemorySynchronization(int outpipe) : pipe(Pipe::DontCreate)
-    {
-        if (outpipe >= 0)
-            assert(needsWork());
-        pipe.out() = outpipe;
-    }
-
-    void prepare_child()
-    {
-        if (needsWork()) {
-            // install a SIGQUIT handler to initiate the memory transfer
-            static SharedMemorySynchronization *self;
-            self = this;
-            signal(SIGQUIT, [](int /*signum*/) {
-                self->send_to_parent();
-
-                /* terminate */
-                signal(SIGQUIT, SIG_DFL);
-                raise(SIGQUIT);
-            });
-        }
-    }
-    void send_to_parent()
-    {
-        if (needsWork()) {
-            pipe.close_input();
-            transfer(write, pipe.out());
-        }
-    }
-    void receive_from_child()
-    {
-        if (needsWork()) {
-            pipe.close_output();
-            transfer(read, pipe.in());
-        }
-    }
-
-private:
-    void prepare();
-    template <typename Prototype> void transfer(Prototype rwfunction, int fd) noexcept;
+    intptr_t pid;
+    int fd;
 };
 
-inline void SharedMemorySynchronization::prepare()
+struct ChildrenList
 {
-    // create a pipe for sending the data from parent to child
-    int size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
-    if (pipe.open(size) < 0) {
-        perror("Could not create shared memory segment");
-        exit(EX_OSERR);
-    }
-}
-
-// This function must be async-signal safe on the child side. It uses:
-//  - abort
-//  - _exit
-//  - write
-//  - writev (not officially async-signal-safe, but it is)
-template <typename Prototype> void SharedMemorySynchronization::transfer(Prototype rwfunction, int fd) noexcept
-{
-    const ssize_t size = ROUND_UP_TO_PAGE(sizeof(SandstoneApplication::SharedMemory));
-    ssize_t offset = 0;
-    char *ptr = reinterpret_cast<char *>(sApp->shmem);
-    while (offset < size) {
-        ssize_t n = rwfunction(fd, ptr + offset, size - offset);
-        if (n < 0) {
-            if (errno == EPIPE)
-                _exit(255);     // this is the child side and the parent has disappeared
-
-            const char *errname = nullptr;
-#if (__GLIBC__ * 1000 + __GLIBC_MINOR__) >= 2032
-            // new API added in glibc 2.32 to replace the old, BSD one below
-            errname = strerrordesc_np(errno);
-#elif !defined(_UCRT)
-            if (errno < sys_nerr)
-                errname = sys_errlist[errno];
-#endif
-            static const char msg[] = "internal error synchronizing shared memory";
-            IGNORE_RETVAL(write(STDERR_FILENO, msg, strlen(msg)));
-
-            if (errname)
-                writeln(STDERR_FILENO, ": ", errname);
-
+    ChildrenList() = default;
+    ChildrenList(const ChildrenList &) = delete;
+    ChildrenList &operator=(const ChildrenList &) = delete;
 #ifdef _WIN32
-            // can't be a signal handler, so add a bit more information
-            fprintf(stderr, "fd=%d, bytes written=%td, bytes to write=%td\n",
-                    fd, offset, size - offset);
-#endif
-
-            // this error is not expected to ever happen, so we won't bother
-            // closing log files properly
-            abort();
-        } else if (n == 0) {
-            // this is probably the parent side
-            logging_printf(LOG_LEVEL_ERROR, "# internal error: too few bytes received on shared memory pipe (%zd). "
-                                    "Attempting to continue execution.\n", offset);
-            break;
+    ~ChildrenList()
+    {
+        for (auto &p : handles) {
+            HANDLE h = reinterpret_cast<HANDLE>(p);
+            if (h != INVALID_HANDLE_VALUE)
+                CloseHandle(h);
         }
-
-        offset += n;
     }
-}
+
+    std::vector<intptr_t> handles;
+#else
+    ~ChildrenList()
+    {
+        for (auto &p : pollfds) {
+            if (p.fd != -1)
+                close(p.fd);
+        }
+    }
+
+    std::vector<pollfd> pollfds;
+    std::vector<pid_t> handles;
+#endif
+    std::vector<ChildExitStatus> results;
+
+    void add(StartedChild child)
+    {
+        handles.push_back(child.pid);
+#ifndef _WIN32
+        pollfds.emplace_back(pollfd{ .fd = child.fd, .events = POLLIN });
+#endif
+    }
+};
 } // unnamed namespace
 
-static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const struct test *test)
+static void wait_for_children(ChildrenList &children, int *tc, const struct test *test)
 {
     Duration remaining = test_timeout(sApp->current_test_duration);
+    int children_left = children.handles.size();
+    children.results.resize(children_left);
 
 #if !defined(_WIN32)
-    enum ExitStatus {
-        Interrupted = -1,
-        TimedOut = 0,
-        Exited = 1
-    } exit_status;
-    struct forkfd_info info;
-    struct pollfd pfd[] = {
-        { .fd = ffd, .events = POLLIN },
-        { .fd = int(debug_child_watch()), .events = POLLIN }
-    };
+    // add even if -1
+    children.pollfds.emplace_back(pollfd{ .fd = sApp->shmem->server_debug_socket, .events = POLLIN });
+    auto remove_debug_socket = scopeExit([&] { children.pollfds.pop_back(); });
 
-    auto do_wait = [&](Duration timeout) {
-        int ret = poll(pfd, std::size(pfd), std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count());
-        if (__builtin_expect(ret < 0, false)) {
-            if (errno == EINTR)
-                return Interrupted;
+    auto single_wait = [&](milliseconds timeout) {
+        int ret = poll(children.pollfds.data(), children.pollfds.size(), timeout.count());
+        if (__builtin_expect(ret < 0 && errno != EINTR, false)) {
             perror("poll");
             exit(EX_OSERR);
         }
-        if (ret == 0)
-            return TimedOut;    /* timed out */
-
-        if (pfd[1].revents & POLLIN) {
-            /* child is crashing */
-            debug_crashed_child(child);
-
-            // debug_crashed_child kill()s the child process, so we can block
-            // on forkfd_wait() until it finally does exit
-        } else {
-            /* child has exited */
-#ifndef __FreeBSD__
-            assert(pfd[0].revents & POLLIN);
-#endif
-        }
-
-        EINTR_LOOP(ret, forkfd_wait(pfd[0].fd, &info, nullptr));
-        if (ret == -1) {
-            perror("forkfd_wait");
-            exit(EX_OSERR);
-        }
-        forkfd_close(pfd[0].fd);
-        return Exited;
-    };
-    auto terminate_child = [=] {
-        log_message(-1, SANDSTONE_LOG_ERROR "Child %td did not exit, sending signal SIGQUIT", child);
-        kill(child, SIGQUIT);
-    };
-    auto kill_child = [=] { kill(child, SIGKILL); };
-
-    /* first wait: normal exit */
-    MonotonicTimePoint deadline  = steady_clock::now() + remaining;
-    for (;;) {
-        exit_status = do_wait(remaining);
-        if (exit_status != Interrupted)
-            break;
-
-        // we've received a signal, which one?
-        auto [signal, count] = last_signal();
-        if (signal == 0) {
-            // it was SIGCHLD, so restart the loop
-            remaining = deadline - steady_clock::now() + remaining;
-            if (remaining.count() < 0) {
-                exit_status = TimedOut;
-                break;
+        if (ret < 0) {
+            // we've received a signal, which one?
+            auto [signal, count] = last_signal();
+            if (signal != 0) {
+                // forward the signal to all children
+                for (pid_t child : children.handles) {
+                    if (child > 0)
+                        kill(child, signal);
+                }
             }
-        } else {
-            // caught a termination signal...
-
-            // forward the signal to the child
-            kill(child, signal);
 
             // if it was SIGINT, we print a message and wait for the test
             if (count == 1 && signal == SIGINT) {
@@ -1439,163 +1533,173 @@ static ChildExitStatus wait_for_child(int ffd, intptr_t child, int *tc, const st
                 enable_interrupt_catch();       // re-arm SIGINT handler
             } else {
                 // for any other signal (e.g., SIGTERM), we don't
-                break;
+                return int(signal);
             }
         }
-    }
+        if (ret <= 0)
+            return 0;
 
-    if (auto [sig, count] = last_signal(); __builtin_expect(sig, 0)) {
-        // we caught a SIGINT
-        // child has likely not been able to write results
-        logging_print_results({ TestInterrupted }, tc, test);
-        logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
-        logging_flush();
-
-        // now exit with the same signal
-        disable_interrupt_catch();
-        raise(sig);
-        _exit(128 | sig);           // just in case
-    } else if (__builtin_expect(exit_status == TimedOut, false)) {
-        /* timed out, force the child to exit */
-        debug_hung_child(child);
-        terminate_child();
-        if (!do_wait(20s)) {
-            /* timed out again, kill the process */
-            kill_child();
-            if (!do_wait(20s)) {
-                log_platform_message(SANDSTONE_LOG_ERROR "# Child %td is hung and won't exit even after SIGKILL",
-                                     child);
-            }
+        if (pollfd &pfd = children.pollfds.back(); pfd.revents & POLLIN) {
+            // one child (or more than one) is crashing
+            debug_crashed_child();
         }
 
-        if (sApp->count_thermal_events() != sApp->last_thermal_event_count)
-            log_platform_message(SANDSTONE_LOG_WARNING "Thermal events detected, timing cannot be trusted.");
+        // check if any of the children have exited
+        for (int i = 0; i < children.pollfds.size() - 1; ++i) {
+            pollfd &pfd = children.pollfds[i];
+            if (pfd.revents == 0)
+                continue;
 
-        return { TestTimedOut };
-    }
-
-    // child exited just fine
-    if (info.code == CLD_EXITED) {
-        if (int8_t(info.status) <= 3)       // cast to int8_t transforms 255 into -1
-            return { TestResult(info.status) };
-        return { TestOperatingSystemError, unsigned(info.status) };
-    }
-
-    // child crashed - prepare some extra information text
-    ChildExitStatus r = { TestKilled, unsigned(info.status) };
-    if (info.code == CLD_DUMPED)
-        r.result = TestCoreDumped;
-    else if (info.status == SIGKILL)
-        r.result = TestOutOfMemory;
-
-    return r;
+            // wait for this child
+            struct forkfd_info info;
+            EINTR_LOOP(ret, forkfd_wait4(pfd.fd, &info, WNOHANG, nullptr));
+            if (ret == -1) {
+                if (errno == EAGAIN)
+                    continue;           // shouldn't happen...
+                perror("forkfd_wait");
+                exit(EX_OSERR);
+            }
+            forkfd_close(pfd.fd);
+            pfd.fd = -1;
+            pfd.events = 0;
+            children.handles[i] = 0;
+            children.results[i] = test_result_from_exit_code(info);
+            --children_left;
+        }
+        return 0;
+    };
+    auto kill_children = [&] {
+        for (pid_t child : children.handles) {
+            if (child)
+                kill(child, SIGKILL);
+        }
+    };
 #elif defined(_WIN32)
-    (void) ffd;
+    auto kill_children = [] { };
+    auto single_wait = [&](milliseconds timeout) {
+        bool bWaitAll = false;
+        auto handles = reinterpret_cast<const HANDLE *>(children.handles.data());
+        DWORD result = WaitForMultipleObjects(children.handles.size(), handles,
+                                              bWaitAll, timeout.count());
+        if (__builtin_expect(result == WAIT_FAILED, false)) {
+            fprintf(stderr, "%s: WaitForMultipleObjects() failed: %lx; children left = %d\n",
+                    program_invocation_name, GetLastError(), children_left);
+            abort();
+        }
+        if (result == WAIT_TIMEOUT)
+            return 0;
+
+        int idx = result - WAIT_OBJECT_0;
+        if (GetExitCodeProcess(handles[idx], &result) == 0) {
+            fprintf(stderr, "%s: GetExitCodeProcess(child = %p) failed: %lx\n",
+                    program_invocation_name, handles[idx], GetLastError());
+            abort();
+        }
+
+        children.results[idx] = test_result_from_exit_code(result);
+        --children_left;
+        return 0;
+    };
     (void) tc;
     (void) test;
-
-    AutoClosingHandle hChild{ HANDLE(child) };
-    DWORD result = WaitForSingleObject(hChild.get(), duration_cast<milliseconds>(remaining).count());
-    switch (result) {
-    case WAIT_OBJECT_0:
-        // child exited
-        break;
-
-    case WAIT_TIMEOUT:
-        log_message(-1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
-        TerminateProcess(HANDLE(child), TestTimedOut);
-
-        // wait for termination
-        result = WaitForSingleObject(HANDLE(child), (20000ms).count());
-        if (result == WAIT_TIMEOUT) {
-            log_platform_message(SANDSTONE_LOG_ERROR "# Child %td is hung and won't exit even after TerminateProcess()",
-                                 child);
-
-        }
-        break;
-
-    case WAIT_FAILED:
-        fprintf(stderr, "%s: WaitForSingleObject(child = %td) failed: %lx\n",
-                program_invocation_name, child, GetLastError());
-        abort();
-    }
-
-    // Exit code mapping:
-    // -1: EXIT_SKIP:       TestSkipped
-    // 0: EXIT_SUCCESS:     TestPassed
-    // 1: EXIT_FAILURE:     TestFailed
-    // 2:                   TestTimedOut
-    // 3:                   Special case for abort()
-    // 4-255:               exit() code (from sysexits.h)
-    // anything else:       an NTSTATUS
-    //
-    // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=msvc-160
-    // says: "If the Windows error reporting handler is not invoked, then abort
-    // calls _exit to terminate the process with exit code 3"
-
-    DWORD status;
-    if (GetExitCodeProcess(hChild.get(), &status) == 0) {
-        fprintf(stderr, "%s: GetExitCodeProcess(child = %td) failed: %lx\n",
-                program_invocation_name, child, GetLastError());
-        abort();
-    }
-
-    switch (status) {
-    case DWORD(TestSkipped):
-    case TestPassed:
-    case TestFailed:
-    case TestTimedOut:
-        return { TestResult(status) };
-    case 3:
-        return { TestKilled, unsigned(STATUS_FAIL_FAST_EXCEPTION) };
-    }
-    if (status < 255)
-        return { TestOperatingSystemError, status };
-    return { TestKilled, status };
 #else
 #  error "What platform is this?"
 #endif
+    auto terminate_children = [&] {
+        for (size_t i = 0; i < children.handles.size(); ++i) {
+            auto child = children.handles[i];
+            if (child) {
+#ifdef _WIN32
+                log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
+                TerminateProcess(HANDLE(child), EXIT_TIMEOUT);
+#else
+                log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %d did not exit, sending signal SIGQUIT", child);
+                kill(child, SIGQUIT);
+#endif
+            }
+        }
+    };
+
+    auto wait_for_all_children = [&](Duration remaining) {
+        MonotonicTimePoint deadline = steady_clock::now() + remaining;
+        for ( ; children_left && remaining > 0s; remaining = deadline - steady_clock::now()) {
+            int ret = single_wait(ceil<milliseconds>(remaining));
+            if (ret >= 0)
+                continue;
+
+            for (ChildExitStatus &result : children.results)
+                result = { TestResult::Interrupted };
+
+            // Problem waiting: we must have caught a signal
+            // (child has likely not been able to write results)
+            int sig = ret;
+
+            logging_print_results(children.results, tc, test);
+            logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
+            logging_flush();
+
+            // now exit with the same signal
+            disable_interrupt_catch();
+            raise(sig);
+            _exit(128 | sig);           // just in case
+        }
+    };
+
+    /* first wait set : normal exit */
+    wait_for_all_children(remaining);
+    if (children_left == 0)
+        return;
+
+    /* at least one child timed out; force them to exit */
+    terminate_children();
+
+    /* wait for the termination to take effect */
+    wait_for_all_children(20s);
+    if (children_left) {
+        /* timed out again, take drastic measures */
+        kill_children();
+        wait_for_all_children(20s);
+    }
+    if (children_left) {
+        for (size_t i = 0; i < children.handles.size(); ++i) {
+            if (children.handles[i] == 0)
+                continue;
+            log_platform_message(SANDSTONE_LOG_ERROR "# Child %td is hung and won't exit",
+                                 intptr_t(children.handles[i]));
+            children.results[i] = { TestResult::TimedOut };
+        }
+    }
 }
 
-static TestResult run_thread_slices(/*nonconst*/ struct test *test)
+static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 {
+    if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
+        protect_shmem();
+        sApp->select_main_thread(child_number);
+        pin_to_logical_processors(sApp->main_thread_data()->cpu_range, "control");
+        restrict_topology(sApp->main_thread_data()->cpu_range);
+        signals_init_child();
+        debug_init_child();
+    }
+
     uint64_t required_cpu_features = test->minimum_cpu | test->compiler_minimum_cpu;
     if (uint64_t missing = required_cpu_features & ~cpu_features) {
         // for brevity, don't report the bits that the framework itself needs
         missing &= ~_compilerCpuFeatures;
         log_skip(CpuNotSupportedSkipCategory, "SKIP reason: test requires %s\n", cpu_features_to_string(missing).c_str());
         (void) missing;
-        return TestSkipped;
+        return TestResult::Skipped;
     }
 
-    int saved_thread_count = sApp->thread_count;
-    struct cpu_info *saved_cpu_info = cpu_info;
-
-    /* do we need to partition the test in multiple slices, so we respect the
-     * max_threads? */
-    int max_threads = sApp->thread_count;
-    TestResult state = TestPassed;
-    bool slicing = sApp->current_slice_count > 1;
-
-    if (slicing) {
-        max_threads = sApp->current_max_threads;
-        sApp->thread_count = max_threads;
-    }
+    TestResult state = TestResult::Passed;
 
     do {
         int ret = 0;
-        if (slicing) {
-            int limit = sApp->thread_offset + max_threads;
-            if (limit >= saved_thread_count) {
-                limit = saved_thread_count;
-                sApp->thread_offset = limit - max_threads;
-                slicing = false;
-            }
-        }
-
-        cpu_info = saved_cpu_info + sApp->thread_offset;
-        test->per_thread = &sApp->user_thread_data[sApp->thread_offset];
+        test->per_thread = sApp->user_thread_data.data();
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
+        auto initer = [](auto *data, int) { data->init(); };
+        for_each_main_thread(initer);
+        for_each_test_thread(initer);
 
         sApp->test_tests_init(test);
         if (test->test_init) {
@@ -1615,21 +1719,20 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
             ret = intptr_t(retptr);
         }
 
-        if (ret > 0 || sApp->shmem->main_thread_data.has_failed()) {
+        if (ret > 0 || sApp->main_thread_data()->has_failed()) {
             logging_mark_thread_failed(-1);
             if (ret > 0)
                 log_error("Init function failed with code %i", ret);
-            state = TestFailed;
+            state = TestResult::Failed;
             break;
         } else if (ret < 0) {
-            state = TestSkipped;
+            state = TestResult::Skipped;
             break;
         }
 
-        logging_flush();
         run_threads(test);
 
-        if (sApp->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime)){
+        if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime)){
             // skip cleanup on the last test when using strict runtime
         } else {
             if (test->test_cleanup)
@@ -1637,83 +1740,12 @@ static TestResult run_thread_slices(/*nonconst*/ struct test *test)
         }
 
         sApp->test_tests_finish(test);
-
-        sApp->thread_offset += max_threads;
-        sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration);
-    } while (slicing && state == EXIT_SUCCESS);
-
-    cpu_info = saved_cpu_info;
-    sApp->thread_count = saved_thread_count;
-    sApp->thread_offset = 0;
+    } while (false);
 
     return state;
 }
 
-/* make_app_state(), write_app_state(), read_app_state() are used in
- * exec_each_test mode to pass the state of application to the newly spawned
- * child process (as opposed to just fork'ed child). */
-static SandstoneApplication::ExecState make_app_state()
-{
-    SandstoneApplication::ExecState app_state;
-    logging_init_child_prefork(&app_state);
-
-#define COPY_STATE_FROM_SAPP(id)    \
-    app_state.id = sApp->id;
-    APP_STATE_VARIABLES(COPY_STATE_FROM_SAPP)
-#undef COPY_STATE_FROM_SAPP
-
-#ifndef NO_SELF_TESTS
-    app_state.selftest = (test_set.data() == selftests.data());
-#endif
-    memcpy(app_state.cpu_mask, sApp->enabled_cpus.array, sizeof(LogicalProcessorSet::array));
-    app_state.thread_count = sApp->thread_count;
-    return app_state;
-}
-
-static bool write_app_state(int fd, const SandstoneApplication::ExecState &app_state)
-{
-    size_t total = 0;
-    auto ptr = reinterpret_cast<const uint8_t *>(&app_state);
-    while (total < sizeof(app_state)) {
-        ssize_t bytes = write(fd, ptr + total, sizeof(app_state) - total);
-        if (bytes < 0 && errno != EINTR) {
-            logging_printf(LOG_LEVEL_ERROR,
-                           "# ERROR: writing state to child process: %s. Test will likely fail.\n",
-                           strerror(errno));
-            break;
-        }
-        if (bytes >= 0)
-            total += bytes;
-    }
-    return total == sizeof(app_state);
-}
-
-static SandstoneApplication::ExecState read_app_state(int fd)
-{
-    SandstoneApplication::ExecState app_state;
-    auto ptr = reinterpret_cast<uint8_t *>(&app_state);
-    size_t total = 0;
-
-    while (total < sizeof(app_state)) {
-        ssize_t bytes = read(fd, ptr + total, sizeof(app_state) - total);
-        if (bytes < 0 && errno != EINTR) {
-            fprintf(stderr, "internal error while loading application state: %s\n", strerror(errno));
-            break;
-        }
-        if (bytes == 0)
-            break;
-        if (bytes >= 0)
-            total += bytes;
-    }
-    if (total != sizeof(app_state)) {
-        fprintf(stderr, "internal error: incomplete application state (%zu bytes read, needed %zu)\n",
-                total, sizeof(app_state));
-        exit(EX_IOERR);
-    }
-    return app_state;
-}
-
-static int call_forkfd(intptr_t *child)
+static StartedChild call_forkfd()
 {
     pid_t pid;
 
@@ -1741,7 +1773,6 @@ static int call_forkfd(intptr_t *child)
         assert(efd != -1);
 
         int ffd = forkfd(FFD_CLOEXEC, &pid);
-        *child = pid;
 
         if (ffd == -1) {
             // forkfd failed (probably CLONE_PIDFD rejected)
@@ -1755,7 +1786,7 @@ static int call_forkfd(intptr_t *child)
                 _exit(127);
 
             // no problems seen, return to caller as child process
-            return FFD_CHILD_PROCESS;
+            return { .pid = pid, .fd = FFD_CHILD_PROCESS };
         } else {
             // parent side
             int ret;
@@ -1766,7 +1797,7 @@ static int call_forkfd(intptr_t *child)
             if (result == PidProperlyUpdated) {
                 // no problems seen, return to caller as parent process
                 ffd_extra_flags = 0;
-                return ffd;
+                return { .pid = pid, .fd = ffd };
             }
 
             // found a problem, wait for the child and try again
@@ -1784,37 +1815,17 @@ static int call_forkfd(intptr_t *child)
         perror("fork");
         exit(EX_OSERR);
     }
-    *child = pid;
-    return ffd;
+    return { .pid = pid, .fd = ffd };
 }
 
-static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
+static StartedChild spawn_child(const struct test *test, int child_number)
 {
-    std::array<char, std::numeric_limits<int>::digits10 + 2> shmempipefdstr, statefdstr;
-    if (shmempipefd >= 0) {
-        // Create an inheritable copy of the shmemsyncfd
-        assert(!sApp->shared_memory_is_shared);
-        shmempipefd = dup(shmempipefd);
-        if (shmempipefd == -1) {
-            perror("dup");
-            exit(EX_OSERR);
-        }
-        // non-negative
-        snprintf(shmempipefdstr.begin(), shmempipefdstr.size(), "%u", unsigned(shmempipefd));
-    }
-
-
-    int statefd = open_memfd(MemfdInheritOnExec);
-    if (statefd < 0) {
-        perror("internal error: can't create state-transfer file");
-        exit(EX_CANTCREAT);
-    }
-    write_app_state(statefd, make_app_state());
-    lseek(statefd, 0, SEEK_SET);
-    snprintf(statefdstr.begin(), statefdstr.size(), "%u", unsigned(statefd));
-
+    assert(sApp->shmemfd != -1);
+    std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
+    std::string childnumstr = stdprintf("%d", child_number);
     std::string random_seed = random_format_seed();
 
+    StartedChild ret = {};
 #ifdef _WIN32
     // _spawn on Windows requires argv elements to be quoted if they contain space.
     const char * const argv0 = SANDSTONE_EXECUTABLE_NAME ".exe";
@@ -1824,7 +1835,8 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
     const char *argv[] = {
         // argument order must match exec_mode_run()
         argv0, "-x", test->id, random_seed.c_str(),
-        statefdstr.begin(), shmempipefd >= 0 ? shmempipefdstr.begin() : nullptr,
+        shmemfdstr.c_str(),
+        childnumstr.c_str(),
         nullptr
     };
 
@@ -1834,36 +1846,31 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
     };
     std::copy(argv + 1, std::end(argv), gdbserverargs + 4);
 
-    intptr_t ret = -1;
 #ifdef _WIN32
-
     // save stderr
     static int saved_stderr = _dup(STDERR_FILENO);
     logging_init_child_preexec();
 
     if (sApp->gdb_server_comm.size()) {
         // launch gdbserver instead
-        _spawnvp(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+        ret.pid = _spawnvp(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+    } else {
+        ret.pid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
     }
 
-    *hpid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
     int saved_errno = errno;
 
     // restore stderr
     _dup2(saved_stderr, STDERR_FILENO);
 
-    if (*hpid == -1) {
+    if (ret.pid == -1) {
         errno = saved_errno;
         perror("_spawnv");
         exit(EX_OSERR);
     }
-
-
-    // no forkfd on Windows, any value is good aside from -1 and FFD_CHILD_PROCESS
-    ret = 0;
 #else
-    ret = call_forkfd(hpid);
-    if (ret == FFD_CHILD_PROCESS) {
+    ret = call_forkfd();
+    if (ret.fd == FFD_CHILD_PROCESS) {
         logging_init_child_preexec();
 
         if (sApp->gdb_server_comm.size()) {
@@ -1878,86 +1885,101 @@ static int spawn_child(const struct test *test, intptr_t *hpid, int shmempipefd)
     }
 #endif /* __linux__ */
 
-    close(statefd);
-    if (shmempipefd >= 0)
-        close(shmempipefd);
     return ret;
 }
 
-static TestResult run_child(/*nonconst*/ struct test *test, SharedMemorySynchronization &shmemsync,
-                            const SandstoneApplication::ExecState *app_state = nullptr)
+static int slices_for_test(const struct test *test)
 {
-    if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
-        pin_to_logical_processor(LogicalProcessor(-1), "control");
-        signals_init_child();
-        debug_init_child();
-        shmemsync.prepare_child();
+    SandstoneApplication::SlicePlans::Type type = [=]() {
+        switch (test->flags & test_schedule_mask) {
+        case test_schedule_sequential:  // sequential tests see the full system
+        case test_schedule_fullsystem:
+            return SandstoneApplication::SlicePlans::FullSystem;
+
+        case test_schedule_isolate_socket:
+            return SandstoneApplication::SlicePlans::IsolateSockets;
+
+        case test_schedule_default:
+            break;
+        }
+        return SandstoneApplication::SlicePlans::Heuristic;
+    }();
+    if (type == SandstoneApplication::SlicePlans::FullSystem) {
+        sApp->main_thread_data()->cpu_range = { 0, num_cpus() };
+        return 1;
     }
 
-    logging_init_child_postexec(app_state);
-    TestResult result = run_thread_slices(test);
-    shmemsync.send_to_parent();
+    const std::vector<CpuRange> &plan = sApp->slice_plans.plans[type];
+    for (size_t i = 0; i < plan.size(); ++i)
+        sApp->main_thread_data(i)->cpu_range = plan[i];
 
-    return result;
+    return plan.size();
 }
 
 static TestResult run_one_test_once(int *tc, const struct test *test)
 {
-    ChildExitStatus state = {};
-    intptr_t child;
-    int ret = FFD_CHILD_PROCESS;
+    ChildrenList children;
+    int child_count = slices_for_test(test);
+    if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
+        assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test
+                && "child_exec_each_test mode can only happen in the child side!");
+        assert((sApp->current_fork_mode() != SandstoneApplication::no_fork || child_count == 1)
+               && "-fno-fork can only start 1 child!");
 
-    SharedMemorySynchronization shmemsync;
-
-    if (__builtin_expect(sApp->current_fork_mode() == SandstoneApplication::fork_each_test, true)) {
-        ret = call_forkfd(&child);
-    } else if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        ret = spawn_child(test, &child, shmemsync.pipe.out());
-    }
-
-    if (ret == FFD_CHILD_PROCESS) {
-        /* child - run test's code */
-        logging_init_child_preexec();
-        state.result = run_child(const_cast<struct test *>(test), shmemsync);
-        if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
-            _exit(state.result);
+        for (int i = 0; i < child_count; ++i) {
+            StartedChild ret = { .fd = FFD_CHILD_PROCESS };
+            if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
+                ret = call_forkfd();
+            if (ret.fd == FFD_CHILD_PROCESS) {
+                /* child - run test's code */
+                logging_init_child_preexec();
+                TestResult result = child_run(const_cast<struct test *>(test), i);
+                if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
+                    _exit(test_result_to_exit_code(result));
+                else
+                    children.results.emplace_back(ChildExitStatus{ result });
+            } else {
+                children.add(ret);
+            }
+        }
     } else {
-        /* parent - wait */
-        state = wait_for_child(ret, child, tc, test);
-        shmemsync.receive_from_child();
+        for (int i = 0; i < child_count; ++i)
+            children.add(spawn_child(test, i));
     }
+
+    /* wait for the children */
+    wait_for_children(children, tc, test);
 
     // print results and find out if the test failed
-    TestResult real_state = logging_print_results(state, tc, test);
-
-    switch (state.result) {
-    case TestPassed:
-    case TestSkipped:
-    case TestFailed:
-    case TestCoreDumped:
-    case TestKilled:
+    TestResult testResult = logging_print_results(children.results, tc, test);
+    switch (testResult) {
+    case TestResult::Passed:
+    case TestResult::Skipped:
+    case TestResult::Failed:
+    case TestResult::CoreDumped:
+    case TestResult::Killed:
         break;          // continue running tests
 
-    case TestOperatingSystemError:
-    case TestTimedOut:
-    case TestOutOfMemory:
+    case TestResult::OperatingSystemError:
+    case TestResult::TimedOut:
+    case TestResult::OutOfMemory:
         if (!sApp->ignore_os_errors) {
             logging_flush();
             int exit_code = print_application_footer(2, {});
             _exit(logging_close_global(exit_code));
         } else {
             // not a pass either, but won't affect the result
-            real_state = TestSkipped;
+            testResult = TestResult::Skipped;
         }
         break;
 
-    case TestInterrupted:
+    case TestResult::Interrupted:
         assert(false && "internal error: shouldn't have got here!");
         __builtin_unreachable();
         break;
     }
 
-    return real_state;
+    return testResult;
 }
 
 static void analyze_test_failures(int tc, const struct test *test, int fail_count, int attempt_count,
@@ -1998,7 +2020,7 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
         // Analysis is not needed if there's only a single package.
         if (topology.packages.size() == 1) {
             logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failures localised to package %d\n",
-                           topology.packages[0].id);
+                           topology.packages[0].id());
             return;
         }
 
@@ -2009,13 +2031,11 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
             Topology::Package *pkg = &topology.packages[p];
             for (size_t c = 0; c < pkg->cores.size(); ++c) {
                 Topology::Core *core = &pkg->cores[c];
-                for (Topology::Thread &thr : core->threads) {
-                    if (thr.cpu == -1)
-                        continue;
-                    if (per_cpu_failures[thr.cpu] && (pkg_failures[p] == -1)) {
-                        last_bad_package = pkg->id;
+                for (const Topology::Thread &thr : core->threads) {
+                    if (per_cpu_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
+                        last_bad_package = pkg->id();
                         failed_packages++;
-                        pkg_failures[p] = pkg->id;
+                        pkg_failures[p] = pkg->id();
                     }
                 }
             }
@@ -2040,16 +2060,13 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
                 bool all_threads_failed_equally = true;
                 int nthreads = 0;
                 fail_pattern = 0;
-                for (Topology::Thread &thr : core->threads) {
-                    if (thr.cpu == -1)
-                        continue;
-
-                    uint64_t this_pattern = per_cpu_failures[thr.cpu];
+                for (const Topology::Thread &thr : core->threads) {
+                    uint64_t this_pattern = per_cpu_failures[thr.cpu()];
                     if (this_pattern == 0)
                         all_threads_failed_once = false;
                     if (++nthreads == 1) {
-                        if (this_pattern)
-                            fail_pattern = per_cpu_failures[thr.cpu];
+                        // first thread of this core (maybe only)
+                        fail_pattern = this_pattern;
                     } else {
                         if (this_pattern != fail_pattern)
                             all_threads_failed_equally = false;
@@ -2080,9 +2097,8 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
 
 TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails)
 {
-    TestResult state = TestSkipped;
+    TestResult state = TestResult::Skipped;
     int fail_count = 0;
-    int iterations;
     std::unique_ptr<char[]> random_allocation;
     MonotonicTimePoint first_iteration_target;
     bool auto_fracture = false;
@@ -2095,23 +2111,32 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         per_cpu_fails.clear();
         per_cpu_fails.resize(num_cpus(), 0);
     }
+    auto mark_up_per_cpu_fail = [&per_cpu_fails, &fail_count](int i) {
+        ++fail_count;
+        if (i >= 64)
+            return;     // we only have 64 bits
+        for_each_test_thread([&](PerThreadData::Test *data, int i) {
+            if (data->has_failed())
+                per_cpu_fails[i] |= uint64_t(1) << i;
+        });
+    };
 
     sApp->current_test_duration = test_duration(test);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
 
     if (sApp->max_test_loop_count) {
-        sApp->current_max_loop_count = sApp->max_test_loop_count;
+        sApp->shmem->current_max_loop_count = sApp->max_test_loop_count;
     } else if (test->desired_duration == -1) {
-        sApp->current_max_loop_count = -1;
+        sApp->shmem->current_max_loop_count = -1;
     } else if (sApp->test_tests_enabled()) {
         // don't fracture in the test-the-test mode
-        sApp->current_max_loop_count = -1;
+        sApp->shmem->current_max_loop_count = -1;
     } else if (test->fracture_loop_count == 0) {
         /* for automatic fracture mode, do a 40 loop count */
-        sApp->current_max_loop_count = 40;
+        sApp->shmem->current_max_loop_count = 40;
         auto_fracture = true;
     } else {
-        sApp->current_max_loop_count = test->fracture_loop_count;
+        sApp->shmem->current_max_loop_count = test->fracture_loop_count;
     }
 
     assert(sApp->retest_count >= 0);
@@ -2121,45 +2146,45 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         init_internal(test);
 
         // calculate starttime->endtime, reduce the overhead to have better test runtime calculations
-        sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration - runtime, &sApp->current_test_starttime);
+        sApp->shmem->current_test_endtime =
+                calculate_wallclock_deadline(sApp->current_test_duration - runtime,
+                                             &sApp->current_test_starttime);
         state = run_one_test_once(tc, test);
         runtime += MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
         cleanup_internal(test);
 
-        if ((sApp->current_max_loop_count > 0 && MonotonicTimePoint::clock::now() < first_iteration_target && auto_fracture))
-            sApp->current_max_loop_count *= 2;
+        if ((sApp->shmem->current_max_loop_count > 0
+             && MonotonicTimePoint::clock::now() < first_iteration_target && auto_fracture))
+            sApp->shmem->current_max_loop_count *= 2;
 
-        if (state > EXIT_SUCCESS) {
+        /* don't repeat skipped tests */
+        if (state == TestResult::Skipped)
+            goto out;
+
+        if (state != TestResult::Passed) {
             // this counts as the first failure regardless of how many fractures we've run
-            for (int i = 0; i < num_cpus(); ++i) {
-                if (cpu_data_for_thread(i)->has_failed())
-                    per_cpu_fails[i] |= uint64_t(1);
-            }
-            ++fail_count;
+            mark_up_per_cpu_fail(0);
             break;
         }
 
-        /* don't repeat skipped tests */
-        if (state == TestSkipped)
-            goto out;
-
         // do we fracture?
-        if (sApp->current_max_loop_count <= 0 || sApp->max_test_loop_count
+        if (sApp->shmem->current_max_loop_count <= 0 || sApp->max_test_loop_count
                 || (runtime >= sApp->current_test_duration))
             goto out;
 
-        // For improved randomization of addresses, we are going to do a random
-        // malloc between 0 and 4095 bytes. This also advances the random seed.
-        random_allocation.reset(new char[rand() & 4095]);
+        // Advance the random seed.
+        random_advance_seed();
     }
 
     /* now we process retries */
     if (fail_count > 0) {
         // disable fracture
-        if (sApp->current_max_loop_count > 0 && sApp->current_max_loop_count != sApp->max_test_loop_count)
-            sApp->current_max_loop_count = -1;
+        if (sApp->shmem->current_max_loop_count > 0 &&
+                sApp->shmem->current_max_loop_count != sApp->max_test_loop_count)
+            sApp->shmem->current_max_loop_count = -1;
 
+        int iterations;
         auto should_retry_test = [&]() {
             // allow testing double the regular count if we've only ever
             // failed once (the original run)
@@ -2175,97 +2200,24 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
                 --sApp->total_retest_count;
             sApp->current_iteration_count = -iterations;
             init_internal(test);
-            sApp->current_test_endtime = calculate_wallclock_deadline(sApp->current_test_duration, &sApp->current_test_starttime);
+            sApp->shmem->current_test_endtime =
+                    calculate_wallclock_deadline(sApp->current_test_duration,
+                                                 &sApp->current_test_starttime);
             state = run_one_test_once(tc, test);
             cleanup_internal(test);
 
-            if (state > TestPassed) {
-                for (int i = 0; iterations < 64 && i < num_cpus(); ++i) {
-                    if (cpu_data_for_thread(i)->has_failed())
-                        per_cpu_fails[i] |= uint64_t(1) << iterations;
-                }
-                ++fail_count;
-            }
+            if (state > TestResult::Passed)
+                mark_up_per_cpu_fail(iterations);
         }
 
         analyze_test_failures(*tc, test, fail_count, iterations, per_cpu_fails);
-        state = TestFailed;
+        state = TestResult::Failed;
     }
 
 out:
     random_advance_seed();      // advance seed for the next test
     logging_flush();
     return state;
-}
-
-static LogicalProcessorSet parse_cpuset_param(char *arg)
-{
-    LogicalProcessorSet sys_cpuset = ambient_logical_processor_set();
-    LogicalProcessorSet result = {};
-    int max_cpu_count = sys_cpuset.count();
-    if (cpu_info == nullptr)
-        load_cpu_info(sys_cpuset);
-
-    char *endptr = arg;
-    for ( ; *arg && *endptr; arg = endptr + 1) {
-        errno = 0;
-        char c = *arg;
-        if (c >= 'a' && c <= 'z')
-            ++arg;
-        else
-            c = '\0';
-
-        unsigned long n = strtoul(arg, &endptr, 0);
-        if (n == 0 && errno) {
-            fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (%m)\n", program_invocation_name, arg);
-            exit(EX_USAGE);
-        }
-        if (*endptr && *endptr != ',') {
-            fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (unable to parse)\n", program_invocation_name, endptr);
-            exit(EX_USAGE);
-        }
-
-        if (c == '\0') {
-            if (n >= max_cpu_count) {
-                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (your system doesn't have that many CPUs)\n",
-                        program_invocation_name, arg);
-                exit(EX_USAGE);
-            }
-            result.set(LogicalProcessor(n));
-        } else {
-            int i;
-            int match_count = 0;
-            for (i = 0; i < max_cpu_count; ++i) {
-                if (!sys_cpuset.is_set(LogicalProcessor(i)))
-                    continue;
-                switch (c) {
-                case 'p':
-                    if (cpu_info[i].package_id != n)
-                        continue;
-                    break;
-                case 'c':
-                    if (cpu_info[i].core_id != n)
-                        continue;
-                    break;
-                case 't':
-                    if (cpu_info[i].thread_id != n)
-                        continue;
-                    break;
-                default:
-                    fprintf(stderr, "%s: error: Invalid CPU selection type \"%c\"; valid types are "
-                                    "'p' (package/socket ID), 'c' (core), 't' (thread)\n", program_invocation_name, c);
-                    exit(EX_USAGE);
-                }
-                ++match_count;
-                result.set(LogicalProcessor(i));
-            }
-
-            if (match_count == 0)
-                fprintf(stderr, "%s: warning: CPU selection '%c%lu' matched nothing\n", program_invocation_name, c, n);
-        }
-    }
-
-    return result;
 }
 
 static auto collate_test_groups()
@@ -2300,7 +2252,7 @@ static void list_tests(int opt)
             if (include_tests) {
                 if (include_descriptions) {
                     printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
-                } else if (sApp->verbosity > 0) {
+                } else if (sApp->shmem->verbosity > 0) {
                     // don't report the FW minimum CPU features
                     uint64_t cpuf = test->compiler_minimum_cpu & ~_compilerCpuFeatures;
                     cpuf |= test->minimum_cpu;
@@ -2518,7 +2470,7 @@ static struct test *get_next_test_iteration(void)
                    std::chrono::nanoseconds(elapsed_time).count() / 1000. / 1000);
 
 
-    if (!sApp->use_strict_runtime) {
+    if (!sApp->shmem->use_strict_runtime) {
         /* do we have time for one more run? */
         MonotonicTimePoint end = sApp->endtime;
         if (end != MonotonicTimePoint::max())
@@ -2533,7 +2485,7 @@ static struct test *get_next_test_iteration(void)
 
 static struct test *get_next_test(int tc)
 {
-    if (sApp->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
+    if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
         return nullptr;
 
     if constexpr (InterruptMonitor::InterruptMonitorWorks) {
@@ -2564,25 +2516,6 @@ static void wait_delay_between_tests()
     usleep(useconds);
 }
 
-static int run_tests_on_cpu_set(vector<const struct test *> &tests, const LogicalProcessorSet &set)
-{
-    SandstoneApplication::PerCpuFailures per_cpu_failures;
-    int ret = EXIT_SUCCESS;
-    int test_count = 1;
-
-    // all the shady stuff needed to set up to run a test smoothly
-    sApp->thread_count = 0;
-    load_cpu_info(set);
-
-    for (auto &t: tests) {
-        ret = run_one_test(&test_count, t, per_cpu_failures);
-        if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
-        test_count++;
-    }
-
-    return (ret > EXIT_SUCCESS) ? ret : EXIT_SUCCESS; // do not return SKIP from here
-}
-
 static int exec_mode_run(int argc, char **argv)
 {
     auto find_test_by_name = [](string_view id) -> struct test * {
@@ -2592,36 +2525,25 @@ static int exec_mode_run(int argc, char **argv)
         }
         return nullptr;
     };
-    int shmempipefd = -1;
-    if (argc < 3)
+    if (argc < 4)
         return EX_DATAERR;
-    if (argc > 3)
-        shmempipefd = atoi(argv[3]);
 
-    SandstoneApplication::ExecState app_state = read_app_state(atoi(argv[2]));
-    if (shmempipefd >= 0) {
-        init_shmem(DoNotUseSharedMemory);
-    } else {
-        assert(app_state.shmemfd != -1);
-        init_shmem(UseSharedMemory, app_state.shmemfd);
-    }
+    auto parse_int = [](const char *arg) {
+        char *end;
+        long n = strtol(arg, &end, 10);
+        if (__builtin_expect(int(n) != n || n < 0 || *end, false))
+            exit(EX_DATAERR);
+        return int(n);
+    };
+    int child_number = parse_int(argv[3]);
 
-    SharedMemorySynchronization shmemsync(shmempipefd);
-
-    // reload the app state
-#define COPY_STATE_TO_SAPP(id)  \
-    sApp->id = app_state.id;
-    APP_STATE_VARIABLES(COPY_STATE_TO_SAPP)
-#undef COPY_STATE_TO_SAPP
-
-    LogicalProcessorSet enabled_cpus = {};
-    memcpy(enabled_cpus.array, app_state.cpu_mask, sizeof(LogicalProcessorSet::array));
-    sApp->thread_count = app_state.thread_count;
+    attach_shmem(parse_int(argv[2]));
+    cpu_info = sApp->shmem->cpu_info;
+    sApp->thread_count = sApp->shmem->total_cpu_count;
     sApp->user_thread_data.resize(sApp->thread_count);
-    load_cpu_info(enabled_cpus);
 
 #ifndef NO_SELF_TESTS
-    if (app_state.selftest && !SandstoneConfig::RestrictedCommandLine)
+    if (sApp->shmem->selftest && !SandstoneConfig::RestrictedCommandLine)
         test_set = selftests;
 #endif
 
@@ -2633,8 +2555,7 @@ static int exec_mode_run(int argc, char **argv)
 
     std::vector<struct test *> test_list;
     add_test(test_list, test_to_run);
-    random_init();
-    return run_child(test_to_run, shmemsync, &app_state);
+    return test_result_to_exit_code(child_run(test_to_run, child_number));
 }
 
 // Triage run attempts to figure out which socket(s) are causing test failures.
@@ -2643,44 +2564,51 @@ static int exec_mode_run(int argc, char **argv)
 // Returns the list of faulty sockets. Memory is allocated, caller must free.
 // TODO: Current implementation only returns 1 socket. However, the signature is
 // generic vector<int> for the future improvements.
-static vector<int> run_triage(vector<const struct test *> &triage_tests, const LogicalProcessorSet &enabled_cpus)
+static vector<int> run_triage(vector<const struct test *> &triage_tests)
 {
-    using Socket = Topology::Package;
-
-    int orig_verbosity;
-    Topology topo = Topology::topology();
-    vector<Socket>::iterator it;
-    vector<int> disabled_sockets;
+    const Topology &orig_topo = Topology::topology();
     vector<int> result; // faulty sockets
-    int ret = EXIT_SUCCESS;
-    bool ever_failed = false;
 
-    it = topo.packages.begin();
-    if (topo.packages.empty())
+    if (orig_topo.packages.empty())
         return result;                  // shouldn't happen!
 
-    if (topo.packages.size() == 1) {
-        result.push_back(it->id);
+    if (orig_topo.packages.size() == 1) {
+        result.push_back(orig_topo.packages.front().id());
         return result;
     }
 
-    // backup the original verbosity
-    orig_verbosity = sApp->verbosity;
-    sApp->verbosity = -1;
-
-    for (; it != topo.packages.end(); disabled_sockets.push_back(it->id), ++it) {
-        vector<Socket>::iterator eit = it;
-        LogicalProcessorSet run_cpus = {};
+    // backup the original CPU info
+    Topology::Data topo = orig_topo.clone();
+    auto run_tests_with_retest = [&](std::span<const Topology::Package> set) {
+        SandstoneApplication::PerCpuFailures per_cpu_failures;
         int k = 0;
+        int ret = EXIT_SUCCESS;
 
-        for (; eit != topo.packages.end(); ++eit)
-            run_cpus.add_package(*eit);
+        // all the shady stuff needed to set up to run a test smoothly
+        update_topology(topo.all_threads, set);
+        slice_plan_init(INT_MAX);   // full sockets
 
-        sApp->enabled_cpus = run_cpus;
         do {
-            ret = run_tests_on_cpu_set(triage_tests, run_cpus);
+            int test_count = 1;
+            for (auto &t: triage_tests) {
+                ret = test_result_to_exit_code(run_one_test(&test_count, t, per_cpu_failures));
+                if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
+                test_count++;
+            }
         } while (!ret && ++k < sApp->retest_count);
 
+        return (ret > EXIT_SUCCESS) ? ret : EXIT_SUCCESS; // do not return SKIP from here
+    };
+
+    // backup the original verbosity
+    int orig_verbosity = sApp->shmem->verbosity;
+    sApp->shmem->verbosity = -1;
+
+    int ret = EXIT_SUCCESS;
+    bool ever_failed = false;
+    vector<int> disabled_sockets;
+    for (auto it = topo.packages.begin(); it != topo.packages.end(); ++it) {
+        ret = run_tests_with_retest({ it, topo.packages.end() });
         if (ret) ever_failed = true; /* we've seen a failure */
 
         if (!ret && ever_failed) {
@@ -2688,27 +2616,22 @@ static vector<int> run_triage(vector<const struct test *> &triage_tests, const L
             result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
             break;
         }
+        disabled_sockets.push_back(it->id());
     }
 
     if (ret) { // failed on the last socket as well, so it's the main suspect
         // re-run on the first to make sure the last one is faulty
-        LogicalProcessorSet run_cpus = {};
-        int k = 0;
-
-        run_cpus.add_package(topo.packages.at(0));
-        sApp->enabled_cpus = run_cpus;
-
-        do {
-            ret = run_tests_on_cpu_set(triage_tests, run_cpus);
-        } while (!ret && ++k < sApp->retest_count);
-
+        ret = run_tests_with_retest({ topo.packages.begin(), 1 });
         if (!ret && ever_failed) {
             result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
         }
     }
 
     // restore the original verbosity
-    sApp->verbosity = orig_verbosity;
+    sApp->shmem->verbosity = orig_verbosity;
+
+    // restore original topology
+    update_topology(topo.all_threads);
 
     return result;
 }
@@ -3120,16 +3043,16 @@ int main(int argc, char **argv)
         { "list-groups", no_argument, nullptr, raw_list_groups },
         { "longer-runtime", required_argument, nullptr, longer_runtime_option },
         { "max-concurrent-threads", required_argument, nullptr, max_concurrent_threads_option },
+        { "max-cores-per-slice", required_argument, nullptr, max_cores_per_slice_option },
+        { "max-logdata", required_argument, nullptr, max_logdata_option },
+        { "max-messages", required_argument, nullptr, max_messages_option },
         { "max-test-count", required_argument, nullptr, max_test_count_option },
         { "max-test-loop-count", required_argument, nullptr, max_test_loop_count_option },
         { "mce-check-every", required_argument, nullptr, mce_check_period_option },
-        { "max-logdata", required_argument, nullptr, max_logdata_option },
-        { "max-messages", required_argument, nullptr, max_messages_option },
         { "mem-sample-time", required_argument, nullptr, mem_sample_time_option },
         { "mem-samples-per-log", required_argument, nullptr, mem_samples_per_log_option},
         { "no-memory-sampling", no_argument, nullptr, no_mem_sampling_option },
         { "no-slicing", no_argument, nullptr, no_slicing_option },
-        { "no-shared-memory", no_argument, nullptr, no_shared_memory_option },
         { "no-triage", no_argument, nullptr, no_triage_option },
         { "on-crash", required_argument, nullptr, on_crash_option },
         { "on-hang", required_argument, nullptr, on_hang_option },
@@ -3176,17 +3099,18 @@ int main(int argc, char **argv)
         { "gdb-server", required_argument, nullptr, gdb_server_option },
         { "is-debug-build", no_argument, nullptr, is_debug_option },
         { "test-tests", no_argument, nullptr, test_tests_option },
-        { "use-predictable-file-names", no_argument, nullptr, use_predictable_file_names_option },
 #endif
         { nullptr, 0, nullptr, 0 }
     };
 
     const char *seed = nullptr;
+    int max_cores_per_slice = 0;
     int opt;
     int tc = 0;
     int total_failures = 0;
     int total_successes = 0;
     int total_skips = 0;
+    int thread_count = -1;
     bool fatal_errors = false;
     bool do_not_triage = false;
     const char *on_hang_arg = nullptr;
@@ -3206,7 +3130,6 @@ int main(int argc, char **argv)
     thread_num = -1;            /* indicate main thread */
     find_thyself(argv[0]);
     setup_stack_size(argc, argv);
-    sApp->enabled_cpus = init_cpus();
 #ifdef __linux__
     prctl(PR_SET_TIMERSLACK, 1, 0, 0, 0);
 #endif
@@ -3218,6 +3141,12 @@ int main(int argc, char **argv)
         sApp->fork_mode = SandstoneApplication::child_exec_each_test;
 
         return exec_mode_run(argc - 2, argv + 2);
+    }
+
+    {
+        LogicalProcessorSet enabled_cpus = init_cpus();
+        init_shmem();
+        init_topology(std::move(enabled_cpus));
     }
 
     while (!SandstoneConfig::RestrictedCommandLine &&
@@ -3260,7 +3189,7 @@ int main(int argc, char **argv)
             list_group_members(optarg);
             return EXIT_SUCCESS;
         case 'n':
-            sApp->thread_count = ParseIntArgument<>{
+            thread_count = ParseIntArgument<>{
                     .name = "-n / --threads",
                     .min = 1,
                     .max = sApp->thread_count,
@@ -3271,7 +3200,7 @@ int main(int argc, char **argv)
             sApp->file_log_path = optarg;
             break;
         case 'O':
-            sApp->log_test_knobs = true;
+            sApp->shmem->log_test_knobs = true;
             if ( ! set_knob_from_key_value_string(optarg)){
                 fprintf(stderr, "Malformed test knob: %s (should be in the form KNOB=VALUE)\n", optarg);
                 return EX_USAGE;
@@ -3279,7 +3208,7 @@ int main(int argc, char **argv)
             break;
 
         case 'q':
-            sApp->verbosity = 0;
+            sApp->shmem->verbosity = 0;
             break;
         case 's':
             seed = optarg;
@@ -3294,33 +3223,28 @@ int main(int argc, char **argv)
             if (strcmp(optarg, "forever") == 0) {
                 sApp->endtime = MonotonicTimePoint::max();
             } else {
-                sApp->endtime = calculate_wallclock_deadline(string_to_millisecs(optarg), &sApp->starttime);
+                sApp->endtime = sApp->starttime + string_to_millisecs(optarg);
             }
             break;
         case 'v':
-            if (sApp->verbosity < 0)
-                sApp->verbosity = 1;
+            if (sApp->shmem->verbosity < 0)
+                sApp->shmem->verbosity = 1;
             else
-                ++sApp->verbosity;
+                ++sApp->shmem->verbosity;
             break;
         case 'Y':
-            sApp->output_format = SandstoneApplication::OutputFormat::yaml;
+            sApp->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
             if (optarg)
-                sApp->output_yaml_indent = ParseIntArgument<>{
+                sApp->shmem->output_yaml_indent = ParseIntArgument<>{
                         .name = "-Y / --yaml",
                         .max = 160,     // arbitrary
                 }();
             break;
         case cpuset_option:
-            sApp->enabled_cpus = parse_cpuset_param(optarg);
-            sApp->thread_count = sApp->enabled_cpus.count();
-            if (sApp->thread_count == 0) {
-                fprintf(stderr, "%s: error: --cpuset matched nothing, this is probably not what you wanted.\n", argv[0]);
-                return EX_USAGE;
-            }
+            apply_cpuset_param(optarg);
             break;
         case dump_cpu_info_option:
-            dump_cpu_info(sApp->enabled_cpus);
+            dump_cpu_info();
             return EXIT_SUCCESS;
         case fatal_skips_option:
             sApp->fatal_skips = true;
@@ -3341,14 +3265,17 @@ int main(int argc, char **argv)
         case longer_runtime_option:
             weighted_testrunner_runtimes = LongerTestrunTimes;
             break;
+        case max_cores_per_slice_option:
+            max_cores_per_slice = ParseIntArgument<>{
+                    .name = "--max-cores-per-slice",
+                    .min = -1,
+                }();
+            break;
         case mce_check_period_option:
             sApp->mce_check_period = ParseIntArgument<>{"--mce-check-every"}();
             break;
         case no_slicing_option:
-            sApp->slicing = false;
-            break;
-        case no_shared_memory_option:
-            init_shmem(DoNotUseSharedMemory);
+            max_cores_per_slice = -1;
             break;
         case no_triage_option:
             do_not_triage = true;
@@ -3361,15 +3288,15 @@ int main(int argc, char **argv)
             break;
         case output_format_option:
             if (strcmp(optarg, "key-value") == 0) {
-                sApp->output_format = SandstoneApplication::OutputFormat::key_value;
+                sApp->shmem->output_format = SandstoneApplication::OutputFormat::key_value;
             } else if (strcmp(optarg, "tap") == 0) {
-                sApp->output_format = SandstoneApplication::OutputFormat::tap;
+                sApp->shmem->output_format = SandstoneApplication::OutputFormat::tap;
             } else if (strcmp(optarg, "yaml") == 0) {
-                sApp->output_format = SandstoneApplication::OutputFormat::yaml;
+                sApp->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
             } else if (SandstoneConfig::Debug && strcmp(optarg, "none") == 0) {
                 // for testing only
-                sApp->output_format = SandstoneApplication::OutputFormat::no_output;
-                sApp->verbosity = -1;
+                sApp->shmem->output_format = SandstoneApplication::OutputFormat::no_output;
+                sApp->shmem->verbosity = -1;
             } else {
                 fprintf(stderr, "%s: unknown output format: %s\n", argv[0], optarg);
                 return EX_USAGE;
@@ -3399,7 +3326,7 @@ int main(int argc, char **argv)
             weighted_testrunner_runtimes = ShortenedTestrunTimes;
             break;
         case strict_runtime_option:
-            sApp->use_strict_runtime = true;
+            sApp->shmem->use_strict_runtime = true;
             break;
         case syslog_runtime_option:
             sApp->syslog_ident = program_invocation_name;
@@ -3411,6 +3338,7 @@ int main(int argc, char **argv)
                 return EX_USAGE;
             }
             sApp->requested_quality = 0;
+            sApp->shmem->selftest = true;
             test_set = selftests;
             break;
 #endif
@@ -3421,7 +3349,7 @@ int main(int argc, char **argv)
             sApp->service_background_scan = true;
             break;
         case ud_on_failure_option:
-            sApp->ud_on_failure = true;
+            sApp->shmem->ud_on_failure = true;
             break;
         case use_builtin_test_list_option:
             if (!SandstoneConfig::HasBuiltinTestList) {
@@ -3433,11 +3361,6 @@ int main(int argc, char **argv)
             test_selection_strategy = Ordered;
             if (optarg)
                 builtin_test_list_name = optarg;
-            break;
-        case use_predictable_file_names_option:
-#ifndef NDEBUG
-            sApp->use_predictable_file_names = true;
-#endif
             break;
         case temperature_threshold_option:
             if (strcmp(optarg, "disable") == 0)
@@ -3504,44 +3427,26 @@ int main(int argc, char **argv)
             test_list_randomize = true;
             break;
 
-        case max_concurrent_threads_option:
-            sApp->max_concurrent_thread_count = ParseIntArgument<>{
-                    .name = "--max-concurrent-threads",
-                    .min = 2,
-                    .max = sApp->thread_count,
-                    .range_mode = OutOfRangeMode::Saturate
-            }();
-            break;
         case max_logdata_option: {
-            sApp->max_logdata_per_thread = ParseIntArgument<unsigned>{
+            sApp->shmem->max_logdata_per_thread = ParseIntArgument<unsigned>{
                     .name = "--max-log-data",
                     .explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))",
                     .base = 0,      // accept hex
                     .range_mode = OutOfRangeMode::Saturate
             }();
-            if (sApp->max_logdata_per_thread == 0)
-                sApp->max_logdata_per_thread = UINT_MAX;
+            if (sApp->shmem->max_logdata_per_thread == 0)
+                sApp->shmem->max_logdata_per_thread = UINT_MAX;
             break;
         }
         case max_messages_option:
-            sApp->max_messages_per_thread = ParseIntArgument<>{
+            sApp->shmem->max_messages_per_thread = ParseIntArgument<>{
                     .name = "--max-messages",
                     .explanation = "maximum number of messages (per thread) to log in each test (0 is unlimited)",
                     .min = -1,
                     .range_mode = OutOfRangeMode::Saturate
             }();
-            if (sApp->max_messages_per_thread <= 0)
-                sApp->max_messages_per_thread = INT_MAX;
-            break;
-        case schedule_by_option:
-            if (strcmp(optarg, "thread") == 0) {
-                sApp->schedule_by = SandstoneApplication::ScheduleBy::Thread;
-            } else if (strcmp(optarg, "core") == 0) {
-                sApp->schedule_by = SandstoneApplication::ScheduleBy::Core;
-            } else {
-                fprintf(stderr, "%s: unknown option for schedule-by: %s\n", argv[0], optarg);
-                return EX_USAGE;
-            }
+            if (sApp->shmem->max_messages_per_thread <= 0)
+                sApp->shmem->max_messages_per_thread = INT_MAX;
             break;
 
         case version_option:
@@ -3550,26 +3455,26 @@ int main(int argc, char **argv)
         case one_sec_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
-            sApp->use_strict_runtime = true;
-            sApp->endtime = calculate_wallclock_deadline(1s, &sApp->starttime);
+            sApp->shmem->use_strict_runtime = true;
+            sApp->endtime = sApp->starttime + 1s;
             break;
         case thirty_sec_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
-            sApp->use_strict_runtime = true;
-            sApp->endtime = calculate_wallclock_deadline(30s, &sApp->starttime);
+            sApp->shmem->use_strict_runtime = true;
+            sApp->endtime = sApp->starttime + 30s;
             break;
         case two_min_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
-            sApp->use_strict_runtime = true;
-            sApp->endtime = calculate_wallclock_deadline(2min, &sApp->starttime);
+            sApp->shmem->use_strict_runtime = true;
+            sApp->endtime = sApp->starttime + 2min;
             break;
         case five_min_option:
             test_list_randomize = true;
             test_selection_strategy = Repeating;
-            sApp->use_strict_runtime = true;
-            sApp->endtime = calculate_wallclock_deadline(5min, &sApp->starttime);
+            sApp->shmem->use_strict_runtime = true;
+            sApp->endtime = sApp->starttime + 5min;
             break;
 
         case max_test_count_option:
@@ -3583,9 +3488,11 @@ int main(int argc, char **argv)
             break;
 
             /* deprecated options */
+        case max_concurrent_threads_option:
         case mem_sample_time_option:
         case mem_samples_per_log_option:
         case no_mem_sampling_option:
+        case schedule_by_option:
             warn_deprecated_opt(argv[optind]);
             break;
 
@@ -3638,14 +3545,14 @@ int main(int argc, char **argv)
         }
 
         if (SandstoneConfig::NoLogging) {
-            sApp->output_format = SandstoneApplication::OutputFormat::no_output;
+            sApp->shmem->output_format = SandstoneApplication::OutputFormat::no_output;
         } else  {
-            sApp->verbosity = 1;
+            sApp->shmem->verbosity = 1;
         }
 
         sApp->delay_between_tests = 50ms;
         sApp->thermal_throttle_temp = INT_MIN;
-        do_not_triage = true;
+        do_not_triage = SandstoneConfig::NoTriage;
         fatal_errors = true;
         test_selection_strategy = Ordered;
         use_builtin_test_list = true;
@@ -3658,7 +3565,7 @@ int main(int argc, char **argv)
         usage(argv);
         return EX_USAGE;
     }
-    if (sApp->log_test_knobs && sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
+    if (sApp->shmem->log_test_knobs && sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
         fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",
                 program_invocation_name);
         return EX_USAGE;
@@ -3667,11 +3574,13 @@ int main(int argc, char **argv)
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
-    load_cpu_info(sApp->enabled_cpus);
+    if (unsigned(thread_count) < unsigned(sApp->thread_count))
+        restrict_topology({ 0, thread_count });
+    slice_plan_init(max_cores_per_slice);
+    commit_shmem();
+
     signals_init_global();
     resource_init_global();
-
-    init_shmem(UseSharedMemory);
     debug_init_global(on_hang_arg, on_crash_arg);
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
 
@@ -3681,10 +3590,10 @@ int main(int argc, char **argv)
     random_init_global(seed);
     background_scan_init();
 
-    if (sApp->verbosity == -1)
-        sApp->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
+    if (sApp->shmem->verbosity == -1)
+        sApp->shmem->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
 
-    if (InterruptMonitor::InterruptMonitorWorks) {
+    if (InterruptMonitor::InterruptMonitorWorks && mce_test.quality_level != TEST_QUALITY_SKIP) {
         sApp->last_thermal_event_count = sApp->count_thermal_events();
         sApp->mce_counts_start = sApp->get_mce_interrupt_counts();
 
@@ -3760,9 +3669,6 @@ int main(int argc, char **argv)
 
     logging_print_header(argc, argv, test_duration(), test_timeout(test_duration()));
 
-    if (sApp->starttime.time_since_epoch() == Duration::zero())
-        sApp->starttime = MonotonicTimePoint::clock::now();
-
     // triage process is the best effort to figure out which socket is faulty on
     // a multi-socket system, it's done after the main run and only using the
     // failing tests.
@@ -3771,14 +3677,14 @@ int main(int argc, char **argv)
 
     bool restarting = true;
     int total_tests_run = 0;
-    TestResult lastTestResult = TestSkipped;
+    TestResult lastTestResult = TestResult::Skipped;
 
     for (struct test *test = get_next_test(tc); test; test = get_next_test(tc)) {
         if (restarting){
             tc = 0;
             logging_print_iteration_start();
             initialize_smi_counts();  // used by smi_count test
-        } else if (lastTestResult != TestSkipped) {
+        } else if (lastTestResult != TestResult::Skipped) {
             if (sApp->service_background_scan)
                 background_scan_wait();
             else
@@ -3800,15 +3706,15 @@ int main(int argc, char **argv)
         lastTestResult = run_one_test(&tc, test, per_cpu_failures);
 
         total_tests_run++;
-        if (lastTestResult == TestFailed) {
+        if (lastTestResult == TestResult::Failed) {
             ++total_failures;
             // keep the record of failures to triage later
             triage_tests.push_back(test);
             if (fatal_errors)
                 break;
-        } else if (lastTestResult == TestPassed) {
+        } else if (lastTestResult == TestResult::Passed) {
             ++total_successes;
-        } else if (lastTestResult == TestSkipped) {
+        } else if (lastTestResult == TestResult::Skipped) {
             ++total_skips;
             if (sApp->fatal_skips)
                 break;
@@ -3820,7 +3726,7 @@ int main(int argc, char **argv)
     // Run the mce_test at the end of all tests to make sure no MCE errors fired
     if constexpr (InterruptMonitor::InterruptMonitorWorks) {
         if (total_failures == 0 && mce_test.quality_level != TEST_QUALITY_SKIP) {
-            if (run_one_test(&tc, &mce_test, per_cpu_failures) == TestFailed)
+            if (run_one_test(&tc, &mce_test, per_cpu_failures) == TestResult::Failed)
                 ++total_failures;
             else
                 ++total_successes;
@@ -3830,16 +3736,14 @@ int main(int argc, char **argv)
 
     if (total_failures) {
         if (!do_not_triage) {
-            vector<int> sockets = run_triage(triage_tests, sApp->enabled_cpus);
+            vector<int> sockets = run_triage(triage_tests);
             logging_print_triage_results(sockets);
         }
         logging_print_footer();
-    } else if (sApp->verbosity == 0 && sApp->output_format == SandstoneApplication::OutputFormat::tap) {
+    } else if (sApp->shmem->verbosity == 0 && sApp->shmem->output_format == SandstoneApplication::OutputFormat::tap) {
         logging_printf(LOG_LEVEL_QUIET, "Ran %d tests without error (%d skipped)\n",
                        total_successes, total_tests_run - total_successes);
     }
-
-    delete[] cpu_info;
 
     int exit_code = EXIT_SUCCESS;
 

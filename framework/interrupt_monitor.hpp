@@ -8,6 +8,7 @@
 #include <sandstone.h>
 #include <stdint.h>
 #include <numeric>      // for std::accummulate
+#include <optional>
 #include <vector>
 
 class InterruptMonitor
@@ -36,11 +37,12 @@ public:
     uint64_t count_thermal_events() const
     { return get_total_interrupt_counts(Thermal); }
 
-    uint64_t count_smi_events(int cpu) {
+    std::optional<uint64_t> count_smi_events(int cpu)
+    {
         uint64_t msi_count = 0;
         if (read_msr(cpu, MSR_SMI_COUNT, &msi_count))
             return msi_count;
-        return 0;
+        return std::nullopt;
     }
 
     static constexpr bool InterruptMonitorWorks =

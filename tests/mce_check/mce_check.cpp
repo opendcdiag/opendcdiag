@@ -61,9 +61,10 @@ static int mce_check_run(struct test *test, int cpu)
         cpu = cpu_info[i].cpu_number;
         assert(cpu < differences.size());
 
-        if (differences[i] != 0) {
-            log_message(i, SANDSTONE_LOG_ERROR "MCE detected");
-            differences[i] = 0;
+        if (differences[cpu] != 0) {
+            log_message(i, SANDSTONE_LOG_ERROR "MCE detected (%u interrupts since start)",
+                        differences[cpu]);
+            differences[cpu] = 0;
             ++errorcount;
         }
     }
@@ -78,6 +79,14 @@ static int mce_check_run(struct test *test, int cpu)
 
     if (errorcount)
         log_platform_message(SANDSTONE_LOG_ERROR "MCE interrupts detected on %d CPUs", errorcount);
+
+    uint64_t thermal_now = sApp->count_thermal_events();
+    if (thermal_now != sApp->last_thermal_event_count) {
+        sApp->last_thermal_event_count = thermal_now;
+        log_platform_message(SANDSTONE_LOG_WARNING "Thermal events detected (%zu since start).",
+                             size_t(thermal_now - sApp->last_thermal_event_count));
+    }
+
     return errorcount;
 }
 

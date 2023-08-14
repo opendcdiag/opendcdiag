@@ -28,11 +28,11 @@
 
 #ifdef __cplusplus
 #include <memory>
-#include <map>
+#include <span>
 
 #include <sandstone_config.h>
 #include <sandstone_chrono.h>
-#include <span>
+#include <sandstone_iovec.h>
 #include <sandstone_utils.h>
 
 #include "effective_cpu_freq.hpp"
@@ -68,7 +68,6 @@ extern "C" {
 
 extern char *program_invocation_name;       // also in glibc's <errno.h>
 
-struct per_thread_data;
 struct test;
 
 struct mmap_region
@@ -95,8 +94,7 @@ void cpu_specific_init(void);
 /* child_debug.cpp */
 void debug_init_child(void);
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg);
-intptr_t debug_child_watch(void);
-void debug_crashed_child(pid_t child);
+void debug_crashed_child();
 void debug_hung_child(pid_t child);
 
 /* splitlock_detect.c */
@@ -118,22 +116,23 @@ int open_memfd(enum MemfdCloexecFlag);
 struct RandomEngineWrapper;
 struct RandomEngineDeleter { void operator()(RandomEngineWrapper *) const; };
 
-enum TestResult : int8_t {
-    TestPassed = EXIT_SUCCESS,
-    TestFailed = EXIT_FAILURE,
-    TestTimedOut,
-    TestCoreDumped,
-    TestKilled,
-    TestOutOfMemory,
-    TestInterrupted,
-    TestOperatingSystemError,
-    TestSkipped = -1,
+enum class TestResult : int8_t {
+    Skipped = -1,
+    Passed,
+    Failed,
+    Killed,
+    CoreDumped,
+    OperatingSystemError,
+    OutOfMemory,
+    TimedOut,
+    Interrupted,
 };
 
-enum ThreadState : int_least8_t {
+enum ThreadState : int {
     thread_not_started = 0,
     thread_running = 1,
     thread_failed = 2,
+    thread_debugged = 3,
     thread_succeeded = -1,
     thread_skipped = -2,
 };
@@ -173,29 +172,57 @@ inline int simple_getopt(int argc, char **argv, struct option *options, int *opt
     return getopt_long(argc, argv, cached_short_opts.c_str(), options, optind);
 }
 
-struct alignas(64) per_thread_data
+namespace PerThreadData {
+struct Common
 {
     std::atomic<ThreadState> thread_state;
+
+    /* file descriptor for logging */
+    int log_fd;
 
     /* Records number of messages logged per thread of each test */
     std::atomic<int> messages_logged;
 
     /* Records the number of bytes log_data'ed per thread */
-    std::atomic<size_t> data_bytes_logged;
+    std::atomic<unsigned> data_bytes_logged;
 
+    MonotonicTimePoint fail_time;
+    bool has_failed() const
+    {
+        return fail_time < MonotonicTimePoint::max();
+    }
+
+    void init()
+    {
+        thread_state.store(thread_not_started, std::memory_order_relaxed);
+        fail_time = MonotonicTimePoint::max();
+        messages_logged.store(0, std::memory_order_relaxed);
+        data_bytes_logged.store(0, std::memory_order_relaxed);
+    }
+};
+
+struct alignas(64) Main : Common
+{
+    CpuRange cpu_range;
+};
+
+struct alignas(64) Test : Common
+{
     /* Number of iterations of the inner loop (aka #times test_time_condition called) */
     uint64_t inner_loop_count;
     uint64_t inner_loop_count_at_fail;
-    uint64_t fail_time;
 
     /* Thread's effective CPU frequency during execution */
     double effective_freq_mhz;
 
-    bool has_failed() const
+    void init()
     {
-        return fail_time > 0;
+        Common::init();
+        inner_loop_count = inner_loop_count_at_fail = 0;
+        effective_freq_mhz = 0.0;
     }
 };
+} // namespace PerThreadData
 
 template <bool IsDebug> struct test_the_test_data
 {
@@ -252,19 +279,51 @@ struct SandstoneBackgroundScan
 #endif
 };
 
+class LoggingStream
+{
+public:
+    LoggingStream(int fd = -1) : fd(fd) {}
+    LoggingStream(const LoggingStream &) = delete;
+    LoggingStream &operator=(const LoggingStream &) = delete;
+    constexpr LoggingStream(LoggingStream &&other) : fd(other.fd)
+    {
+        other.fd = -1;
+    }
+    constexpr LoggingStream &operator=(LoggingStream &&other)
+    {
+        std::swap(fd, other.fd);
+        return *this;
+    }
+
+    ~LoggingStream()
+    {
+        if (fd != -1)
+            write('\0');
+    }
+    operator int() const
+    {
+        return fd;
+    }
+
+    template <typename... Args> ssize_t write(Args &&... args)
+    {
+        return writevec(fd, std::forward<Args>(args)...);
+    }
+
+private:
+    int fd;
+    friend LoggingStream logging_user_messages_stream(int thread_num, int level);
+};
+
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
-    enum class ScheduleBy : int8_t {
-        Thread,
-        Core
-    };
-
     enum class OutputFormat : int8_t {
         no_output   = 0,
         tap,
         key_value,
         yaml,
     };
+    static constexpr auto DefaultOutputFormat = SANDSTONE_DEFAULT_LOGGING;
 
     enum ForkMode : int8_t {
         no_fork,
@@ -273,74 +332,60 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         child_exec_each_test,       // when parent is exec_each_test
     };
 
-    using PerCpuFailures = std::vector<uint64_t>;
-
-    struct ExecState;
-
-    struct SharedMemory {
-        per_thread_data main_thread_data;
-        per_thread_data per_thread[MAX_THREADS];
+    struct SlicePlans {
+        static constexpr int MinimumCpusPerSocket = 8;
+        static constexpr int DefaultMaxCoresPerSlice = 32;
+        enum Type : int8_t {
+            FullSystem = -1,
+            IsolateSockets,
+            Heuristic,
+        };
+        using Slices = std::vector<CpuRange>;
+        std::array<Slices, 2> plans;
     };
+
+    using PerCpuFailures = std::vector<uint64_t>;
+    struct SharedMemory;
+
+    SlicePlans slice_plans;
     std::vector<test_data_per_thread> user_thread_data;
+    PerThreadData::Main *main_thread_data_ptr;  // points to somewhere in the shmem
+    PerThreadData::Test *test_thread_data_ptr;  // points to somewhere in the shmem
     SharedMemory *shmem = nullptr;
     int shmemfd = -1;
 
+    int requested_quality = DefaultQualityLevel;
     std::string file_log_path;
     static constexpr int DefaultQualityLevel = 50;
-    int requested_quality = DefaultQualityLevel;
-    int verbosity = -1;
-    int max_messages_per_thread = 5;
-    unsigned max_logdata_per_thread = 128;
     const char *syslog_ident = nullptr;
-    static constexpr auto DefaultOutputFormat = SANDSTONE_DEFAULT_LOGGING;
-    OutputFormat output_format = DefaultOutputFormat;
-    uint8_t output_yaml_indent = 0;
 
     bool fatal_skips = false;
-    bool use_strict_runtime = false;
 
-    ScheduleBy schedule_by = ScheduleBy::Thread;
     ForkMode fork_mode =
 #ifdef _WIN32
             exec_each_test;
 #else
             fork_each_test;
 #endif
-    bool shared_memory_is_shared = false;
-#ifdef NDEBUG
-    static constexpr
-#endif
-    bool use_predictable_file_names = false;
-    bool log_test_knobs = false;
-    bool slicing = true;
     bool ignore_os_errors = false;
     bool force_test_time = false;
-    bool ud_on_failure = false;
     bool service_background_scan = false;
     static constexpr int MaxRetestCount = 64;
     int retest_count = 10;
     int total_retest_count = -2;
     int max_test_count = INT_MAX;
     int max_test_loop_count = 0;
-    int max_concurrent_thread_count = 0;
-    int current_max_loop_count;
-    int current_max_threads;
-    int current_slice_count = 1;
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
-    MonotonicTimePoint starttime;
+    MonotonicTimePoint starttime = MonotonicTimePoint::clock::now();
     MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;
-    MonotonicTimePoint current_test_endtime;
     static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
-    Duration current_test_duration;
-    Duration test_time = Duration::zero();
-    Duration max_test_time = Duration::zero();
-    Duration delay_between_tests = std::chrono::milliseconds(5);
+    ShortDuration current_test_duration;
+    ShortDuration test_time = {};
+    ShortDuration max_test_time = {};
+    ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
-
-    LogicalProcessorSet enabled_cpus;
-    int thread_count;
 
 #ifndef __linux__
     std::string path_to_self;
@@ -361,10 +406,9 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     uint64_t last_thermal_event_count;
     uint64_t mce_count_last;
     std::vector<uint32_t> mce_counts_start;
-    std::map<int, uint64_t> smi_counts_start;
+    std::vector<uint64_t> smi_counts_start;
 
-    int thread_offset;
-
+    int thread_count;
     ForkMode current_fork_mode() const
     {
 #ifndef _WIN32
@@ -375,6 +419,11 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         return fork_mode;
     }
 
+    PerThreadData::Common *thread_data(int thread);
+    PerThreadData::Main *main_thread_data(int group = 0) noexcept;
+    PerThreadData::Test *test_thread_data(int thread);
+    void select_main_thread(int group);
+
     SandstoneBackgroundScan background_scan;
 
 private:
@@ -384,51 +433,48 @@ private:
     SandstoneApplication &operator=(const SandstoneApplication &) = delete;
     friend int internal_main(int argc, char **argv);
     friend int main(int argc, char **argv);
-    friend SandstoneApplication *_sApp();
+    friend SandstoneApplication *_sApp() noexcept;
 };
 
-// state from SandstoneApplication:
-#ifdef NDEBUG
-#define APP_STATE_VARIABLES_DEBUGONLY(F)
-#else
-#define APP_STATE_VARIABLES_DEBUGONLY(F)    \
-    F(use_predictable_file_names)
-#endif
-#define APP_STATE_VARIABLES(F)              \
-    APP_STATE_VARIABLES_DEBUGONLY(F)        \
-    F(shmemfd)                              \
-    F(verbosity)                            \
-    F(max_messages_per_thread)              \
-    F(max_logdata_per_thread)               \
-    F(output_format)                        \
-    F(output_yaml_indent)                   \
-    F(use_strict_runtime)                   \
-    F(log_test_knobs)                       \
-    F(slicing)                              \
-    F(force_test_time)                      \
-    F(ud_on_failure)                        \
-    F(current_max_loop_count)               \
-    F(current_max_threads)                  \
-    F(current_slice_count)                  \
-    F(current_test_endtime)                 \
-    F(current_test_duration)                \
-    F(test_time)                            \
-    F(max_test_time)
-
-struct SandstoneApplication::ExecState
+struct SandstoneApplication::SharedMemory
 {
-    int thread_log_fds[MAX_THREADS + 1];        // +1 for the main thread's log
+    // state shared with child processes (input only)
+    ptrdiff_t thread_data_offset = 0;
 
-#define DECLARE_APP_STATE_VARIABLES(id)     decltype(SandstoneApplication::id) id;
-    APP_STATE_VARIABLES(DECLARE_APP_STATE_VARIABLES)
-#undef DECLARE_APP_STATE_VARIABLES
+    // test execution
+    MonotonicTimePoint current_test_endtime = {};
+    int current_max_loop_count = 0;
+    bool selftest = false;
+    bool ud_on_failure = false;
+    bool use_strict_runtime = false;
 
-    uint8_t cpu_mask[sizeof(LogicalProcessorSet::array)];
-    int thread_count;
-    bool selftest;
+    // logging parameters
+    int verbosity = -1;
+    int max_messages_per_thread = 5;
+    unsigned max_logdata_per_thread = 128;
+    OutputFormat output_format = DefaultOutputFormat;
+    uint8_t output_yaml_indent = 0;
+    bool log_test_knobs = false;
+
+#ifndef _WIN32
+    int server_debug_socket = -1;
+    int child_debug_socket = -1;
+#endif
+
+    int main_thread_count = 0;
+    int total_cpu_count = 0;
+    alignas(64) struct cpu_info cpu_info[];         // C99 Flexible Array Member
+
+#if 0
+    // in/out per-thread data allocated dynamically;
+    // layout is:
+    alignas(PAGE_SIZE)
+    PerThreadData::Main main_thread_data[main_thread_count];
+    PerThreadData::Test per_thread[total_cpu_count];
+#endif
 };
 
-inline SandstoneApplication *_sApp()
+inline SandstoneApplication *_sApp() noexcept
 {
     using App = std::aligned_storage_t<sizeof(SandstoneApplication), alignof(SandstoneApplication)>;
     static App app;
@@ -437,16 +483,42 @@ inline SandstoneApplication *_sApp()
 
 #define sApp    _sApp()
 
-static inline per_thread_data *cpu_data_for_thread(int thread)
+inline PerThreadData::Common *SandstoneApplication::thread_data(int thread)
 {
-    if (thread == -1)
-        return &sApp->shmem->main_thread_data;
-    return &sApp->shmem->per_thread[thread + sApp->thread_offset];
+    if (thread < 0)
+        return main_thread_data(-thread - 1);
+    return test_thread_data(thread);
 }
 
-static inline per_thread_data *cpu_data()
+inline PerThreadData::Main *SandstoneApplication::main_thread_data(int group) noexcept
 {
-    return cpu_data_for_thread(thread_num);
+    return &main_thread_data_ptr[group];
+}
+
+inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
+{
+    assert(thread >= 0);
+    assert(thread < sApp->thread_count);
+    return &test_thread_data_ptr[thread];
+}
+
+inline void SandstoneApplication::select_main_thread(int group)
+{
+    assert(current_fork_mode() != no_fork || group == 0);
+    main_thread_data_ptr += group;
+    test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_cpu;
+}
+
+template <typename Lambda> static void for_each_main_thread(Lambda &&l)
+{
+    for (int i = 0; i < sApp->shmem->main_thread_count; i++)
+        l(sApp->main_thread_data(i), -1 - i);
+}
+
+template <typename Lambda> static void for_each_test_thread(Lambda &&l)
+{
+    for (int i = 0; i < num_cpus(); i++)
+        l(sApp->test_thread_data(i), i);
 }
 
 struct AutoClosingFile
@@ -507,10 +579,20 @@ private:
     }
 };
 
+template <typename F> inline auto scopeExit(F &&f)
+{
+    struct Scope {
+        F f;
+        bool dismissed = false;
+        ~Scope() { if (!dismissed) f(); }
+        void dismiss() { dismissed = true; }
+        void run_now() { f(); dismiss(); }
+    };
+    return Scope{ std::forward<F>(f) };
+}
+
 static_assert(std::is_trivially_copyable_v<SandstoneApplication::SharedMemory>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::SharedMemory>);
-static_assert(std::is_trivially_copyable_v<SandstoneApplication::ExecState>);
-static_assert(std::is_trivially_destructible_v<SandstoneApplication::ExecState>);
 
 /* logging.cpp */
 int logging_stdout_fd(void);
@@ -523,29 +605,23 @@ void logging_printf(int level, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
 void logging_mark_thread_failed(int thread_num);
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,
                                     size_t size, ptrdiff_t offset, const char *fmt, va_list);
-void logging_print_header(int argc, char **argv, Duration test_duration, Duration test_timeout);
+void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout);
 void logging_print_iteration_start();
 void logging_print_footer();
 void logging_print_triage_results(const std::vector<int> &sockets);
 void logging_print_version(void);
 void logging_flush(void);
 void logging_init(const struct test *test);
-void logging_init_child_prefork(SandstoneApplication::ExecState *state);
 void logging_init_child_preexec();
-void logging_init_child_postexec(const SandstoneApplication::ExecState *state);
 void logging_finish();
-FILE *logging_stream_open(int thread_num, int level);
-static inline void logging_stream_close(FILE *log)
-{
-    fputc(0, log);
-}
-TestResult logging_print_results(ChildExitStatus status, int *tc, const struct test *test);
+LoggingStream logging_user_messages_stream(int thread_num, int level);
+TestResult logging_print_results(std::span<const ChildExitStatus> status, int *tc, const struct test *test);
 
 /* random.cpp */
 void random_init_global(const char *argument);
 void random_advance_seed();
 std::string random_format_seed();
-void random_init();
+void random_init_thread(int thread_num);
 
 /* sandstone.cpp */
 TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails);

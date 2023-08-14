@@ -6,6 +6,7 @@
 #include "topology.h"
 #include "sandstone_p.h"
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
@@ -79,7 +80,11 @@ struct linux_cpu_info
 
 struct cpu_info *cpu_info = nullptr;
 
-static int topo_gen = 0; // topology version, incremented each time load_cpu_info is executed
+static Topology &cached_topology()
+{
+    static Topology cached_topology = Topology({});
+    return cached_topology;
+}
 
 #ifdef __linux__
 static auto_fd open_sysfs_cpu_dir(int cpu)
@@ -150,51 +155,22 @@ static linux_cpu_info &proc_cpuinfo()
 }
 #endif
 
+static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2)
+{
+    static auto cpu_tuple = [](const struct cpu_info &c) {
+        uint64_t h = (uint64_t(c.package_id) << 32) +
+                unsigned(c.core_id);
+        uint64_t l = ((uint64_t(c.thread_id)) << 32) +
+                unsigned(c.cpu_number);
+        return std::make_tuple(h, l);
+    };
+
+    return cpu_tuple(cpu1) < cpu_tuple(cpu2);
+};
+
 static void reorder_cpus()
 {
-    auto find_cpu_idx_on_same_core_and_packet = [](int cpu_idx) {
-        for (int idx=0; idx < num_cpus(); ++idx)
-            if (cpu_info[idx].cpu_number != cpu_info[cpu_idx].cpu_number &&
-                cpu_info[idx].core_id    == cpu_info[cpu_idx].core_id    &&
-                cpu_info[idx].package_id == cpu_info[cpu_idx].package_id)
-                return idx;
-        return -1;
-    };
-
-    auto find_next_unassigned_cpu_idx = [](std::vector<int> const &cpu_idx_added_to_reorder_list) {
-        for (int idx=0; idx < num_cpus(); ++idx)
-            if (cpu_idx_added_to_reorder_list[idx] == 0)
-                return idx;
-        return -1;
-    };
-
-    struct cpu_info *cpu_info_reorder = new struct cpu_info[num_cpus()];
-    std::vector<int> cpu_idx_added_to_reorder_list(num_cpus(), 0);
-    int i = 0;
-    while (i<num_cpus()) {
-        int next_cpu_idx = find_next_unassigned_cpu_idx(cpu_idx_added_to_reorder_list);
-        if (next_cpu_idx == -1) {
-            fprintf(stderr, "unable to find unassigned cpu while generating cpu order");
-            exit(EX_USAGE);
-        }
-        cpu_idx_added_to_reorder_list[next_cpu_idx] = 1;
-        cpu_info_reorder[i] = cpu_info[next_cpu_idx];
-        ++i;
-        if (i==num_cpus())
-            break;
-        next_cpu_idx = find_cpu_idx_on_same_core_and_packet(next_cpu_idx);
-        if (next_cpu_idx == -1)
-            next_cpu_idx = find_next_unassigned_cpu_idx(cpu_idx_added_to_reorder_list);
-        if (next_cpu_idx == -1) {
-            fprintf(stderr, "unable to find unassigned cpu while generating cpu order");
-            exit(EX_USAGE);
-        }
-        cpu_idx_added_to_reorder_list[next_cpu_idx] = 1;
-        cpu_info_reorder[i] = cpu_info[next_cpu_idx];
-        ++i;
-    }
-    delete[] cpu_info;
-    cpu_info = cpu_info_reorder;
+    std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
 }
 
 static std::vector<struct cpu_info> create_mock_topology(const char *topo)
@@ -244,12 +220,11 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
 
 static void apply_mock_topology(const std::vector<struct cpu_info> &mock_topology, const LogicalProcessorSet &enabled_cpus)
 {
-    // similar to load_cpu_info's loop below
+    // similar to init_topology_internal()'s loop below
     int count = sApp->thread_count = std::min<int>(mock_topology.size(), enabled_cpus.count());
     for (int i = 0, curr_cpu = 0; i < count; ++i, ++curr_cpu) {
         while (!enabled_cpus.is_set(LogicalProcessor(curr_cpu))) {
             ++curr_cpu;
-            assert(curr_cpu != MAX_THREADS);
         }
 
         cpu_info[i] = mock_topology[curr_cpu];
@@ -687,15 +662,131 @@ static const fill_cache_info_func cache_info_impls[] = { fill_cache_info_cpuid, 
 /* prefer CPUID, fallback to sysfs. */
 static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
 
-void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
+void apply_cpuset_param(char *param)
 {
-    if (!sApp->thread_count)
-        sApp->thread_count = enabled_cpus.count();
-    assert(sApp->thread_count);
+    if (SandstoneConfig::RestrictedCommandLine)
+        return;
 
-    delete[] cpu_info;
-    cpu_info = new struct cpu_info[sApp->thread_count];
-    topo_gen++;
+    std::span<struct cpu_info> old_cpu_info(cpu_info, sApp->thread_count);
+    std::vector<struct cpu_info> new_cpu_info;
+    int total_matches = 0;
+
+    LogicalProcessorSet result = {};
+    new_cpu_info.reserve(old_cpu_info.size());
+
+    for (char *arg = strtok(param, ","); arg; arg = strtok(nullptr, ",")) {
+        const char *orig_arg = arg;
+        auto parse_int = [&arg, orig_arg]() {
+            errno = 0;
+            char *endptr = arg;
+            long n = strtol(arg, &endptr, 0);
+            if (n == 0 && errno) {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (%m)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+            if (n != int(n)) {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (out of range)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+            arg = endptr;       // advance
+            return int(n);
+        };
+        auto add_to_set = [&](const struct cpu_info &cpu) {
+            LogicalProcessor lp = LogicalProcessor(cpu.cpu_number);
+            if (!result.is_set(lp)) {
+                result.set(lp);
+                auto it = std::lower_bound(new_cpu_info.begin(), new_cpu_info.end(), cpu, cpu_compare);
+                new_cpu_info.insert(it, cpu);
+                ++total_matches;
+            }
+        };
+
+        char c = *arg;
+        if (c >= '0' && c <= '9') {
+            // logical processor number
+            int cpu_number = parse_int();
+            if (*arg != '\0') {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (could not parse)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            auto cpu = std::find_if(old_cpu_info.begin(), old_cpu_info.end(),
+                                    [=](const struct cpu_info &cpu) { return cpu.cpu_number == cpu_number; });
+            if (cpu == old_cpu_info.end()) {
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (no such logical processor)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+            add_to_set(*cpu);
+        } else if (c >= 'a' && c <= 'z') {
+            // topology search
+            auto set_if_unset = [orig_arg](int n, int &where, const char *what) {
+                if (where != -1) {
+                    fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (%s already defined)\n",
+                            program_invocation_name, orig_arg, what);
+                    exit(EX_USAGE);
+                }
+                where = n;
+            };
+
+            int package = -1, core = -1, thread = -1;
+            do {
+                ++arg;
+                int n = parse_int();
+                switch (c) {
+                case 'p':
+                    set_if_unset(n, package, "package");
+                    break;
+                case 'c':
+                    set_if_unset(n, core, "core");
+                    break;
+                case 't':
+                    set_if_unset(n, thread, "thread");
+                    break;
+                default:
+                    fprintf(stderr, "%s: error: Invalid CPU selection type \"%c\"; valid types are "
+                                    "'p' (package/socket ID), 'c' (core), 't' (thread)\n", program_invocation_name, c);
+                    exit(EX_USAGE);
+                }
+                c = *arg;
+            } while (c != '\0');
+
+            int match_count = 0;
+            for (struct cpu_info &cpu : old_cpu_info) {
+                if (package != -1 && cpu.package_id != package)
+                    continue;
+                if (core != -1 && cpu.core_id != core)
+                    continue;
+                if (thread != -1 && cpu.thread_id != thread)
+                    continue;
+                add_to_set(cpu);
+                ++match_count;
+            }
+
+            if (match_count == 0)
+                fprintf(stderr, "%s: warning: CPU selection '%s' matched nothing\n",
+                        program_invocation_name, orig_arg);
+        }
+    }
+
+    if (total_matches == 0) {
+        fprintf(stderr, "%s: error: --cpuset matched nothing, this is probably not what you wanted.\n",
+                program_invocation_name);
+        exit(EX_USAGE);
+    }
+
+    assert(total_matches == result.count());
+    assert(total_matches == new_cpu_info.size());
+    update_topology(new_cpu_info);
+}
+
+static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
+{
+    assert(sApp->thread_count == enabled_cpus.count());
+    cpu_info = sApp->shmem->cpu_info;
 
     if (SandstoneConfig::Debug) {
         static auto mock_topology = create_mock_topology(getenv("SANDSTONE_MOCK_TOPOLOGY"));
@@ -710,7 +801,6 @@ void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
             auto lp = LogicalProcessor(curr_cpu);
             while (!enabled_cpus.is_set(lp)) {
                 lp = LogicalProcessor(++curr_cpu);
-                assert(curr_cpu != MAX_THREADS);
             }
 
             pin_to_logical_processor(lp);
@@ -727,65 +817,123 @@ void load_cpu_info(const LogicalProcessorSet &enabled_cpus)
     pthread_t detection_thread;
     pthread_create(&detection_thread, nullptr, detect, const_cast<LogicalProcessorSet *>(&enabled_cpus));
     pthread_join(detection_thread, nullptr);
-
-    if (sApp->schedule_by == SandstoneApplication::ScheduleBy::Core)
-        reorder_cpus();
 }
-
 
 static Topology build_topology()
 {
+    struct cpu_info *info = cpu_info;
+    const struct cpu_info *const end = cpu_info + num_cpus();
+
     std::vector<Topology::Package> packages;
+    if (int max_package_id = end[-1].package_id; max_package_id >= 0)
+        packages.reserve(max_package_id + 1);
+    else
+        return Topology({});
 
-    bool valid_topology = true;
-    for (int i = 0; i < num_cpus(); ++i) {
-        struct cpu_info *info = &cpu_info[i];
-        if (info->package_id < 0 || info->core_id < 0 || info->thread_id < 0) {
-            valid_topology = false;
-            break;
+    while (info != end) {
+        if (info->package_id < 0 || info->core_id < 0 || info->thread_id < 0)
+            return Topology({});
+
+        Topology::Package *pkg = &packages.emplace_back();
+
+        // scan forward to the end of this package
+        Topology::Thread *first = info;
+        int core_count = 0;
+        for (int last_core_id = -1; info != end; ++info) {
+            if (info->core_id < 0 || info->thread_id < 0)
+                return Topology({});
+            if (info->package_id != first->package_id)
+                break;
+            if (info->core_id != last_core_id) {
+                ++core_count;
+                last_core_id = info->core_id;
+            }
         }
 
-        if (packages.size() <= size_t(info->package_id))
-            packages.resize(info->package_id + 1);
+        pkg->cores.reserve(core_count + 1);
 
-        Topology::Package *pkg = &packages[info->package_id];
-        if (pkg->id == -1) pkg->id = info->package_id;
-        if (pkg->cores.size() <= size_t(info->core_id))
-            pkg->cores.resize(info->core_id + 1);
-
-        Topology::Core *core = &pkg->cores[info->core_id];
-        if (core->id == -1) core->id = info->core_id;
-        if (core->threads.size() <= size_t(info->thread_id))
-            core->threads.resize(info->thread_id + 1);
-        Topology::Thread *thr = &core->threads[info->thread_id];
-
-        if (thr->cpu != -1) {
-            valid_topology = false;
-            break;
+        // fill in the threads
+        for (Topology::Thread *last = first; last != info; ++last) {
+            if (last->core_id == first->core_id)
+                continue;
+            pkg->cores.push_back({ { first, last } });
+            first = last;
         }
-
-        thr->cpu = i;
-        thr->oscpu = info->cpu_number;
-        thr->id = info->thread_id;
+        pkg->cores.push_back({ { first, info } });
     }
 
-    if (!valid_topology)
-        packages.clear();
-
-    return Topology(packages);
+    return Topology(std::move(packages));
 }
 
-Topology Topology::topology()
+const Topology &Topology::topology()
 {
-    static int cached_topo_gen = -1;
-    static Topology cached_topology = Topology({});
+    return cached_topology();
+}
 
-    if (cached_topo_gen != topo_gen) {
-        cached_topology = build_topology();
-        cached_topo_gen = topo_gen;
+Topology::Data Topology::clone() const
+{
+    Data result;
+    result.all_threads.assign(cpu_info, cpu_info + num_cpus());
+    result.packages = packages;
+
+    // now update all spans to point to the data we carry
+    for (Package &pkg : result.packages) {
+        for (Core &core : pkg.cores) {
+            int starting_cpu = core.threads.front().cpu();
+            int ending_cpu = core.threads.back().cpu();
+            core.threads = { result.all_threads.data() + starting_cpu,
+                             result.all_threads.data() + ending_cpu + 1 };
+        }
+    }
+    return result;
+}
+
+void update_topology(std::span<const struct cpu_info> new_cpu_info,
+                     std::span<const Topology::Package> packages)
+{
+    if (SandstoneConfig::RestrictedCommandLine && SandstoneConfig::NoTriage)
+        __builtin_unreachable();
+
+    struct cpu_info *end;
+    if (packages.empty()) {
+        // copy all
+        end = std::copy(new_cpu_info.begin(), new_cpu_info.end(), cpu_info);
+    } else {
+        // copy only if matching the socket ID
+        auto matching = [=](const struct cpu_info &ci) {
+            for (const Topology::Package &p : packages) {
+                if (p.id() == ci.package_id)
+                    return true;
+            }
+            return false;
+        };
+        end = std::copy_if(new_cpu_info.begin(), new_cpu_info.end(), cpu_info, matching);
     }
 
-    return cached_topology;
+    int new_thread_count = end - cpu_info;
+    if (int excess = sApp->thread_count - new_thread_count; excess > 0)
+        std::fill_n(end, excess, (struct cpu_info){});
+
+    sApp->thread_count = new_thread_count;
+    cached_topology() = build_topology();
+}
+
+void init_topology(const LogicalProcessorSet &enabled_cpus)
+{
+    init_topology_internal(enabled_cpus);
+    reorder_cpus();
+    cached_topology() = build_topology();
+}
+
+void restrict_topology(CpuRange range)
+{
+    assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
+    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_cpu);
+    int old_thread_count = std::exchange(sApp->thread_count, range.cpu_count);
+    if (old_cpu_info == cpu_info && old_thread_count == sApp->thread_count)
+        return;
+
+    cached_topology() = build_topology();
 }
 
 static char character_for_mask(uint32_t mask)
@@ -794,7 +942,7 @@ static char character_for_mask(uint32_t mask)
     return mask < 0xa ? '0' + mask : 'a' + mask - 0xa;
 }
 
-std::string Topology::build_falure_mask(const struct test *test)
+std::string Topology::build_falure_mask(const struct test *test) const
 {
     std::string result;
     if (!isValid())
@@ -823,13 +971,10 @@ std::string Topology::build_falure_mask(const struct test *test)
             uint32_t threadmask = 0;
             int threadcount = 0;
             int failcount = 0;
-            for (Thread &t : core.threads) {
-                int cpu_id = t.cpu;
-                if (cpu_id < 0)
-                    continue;
-
-                if (cpu_data_for_thread(cpu_id)->has_failed()) {
-                    threadmask |= 1U << t.id;
+            for (const Thread &t : core.threads) {
+                int cpu_id = t.cpu();
+                if (sApp->thread_data(cpu_id)->has_failed()) {
+                    threadmask |= 1U << t.thread_id;
                     ++failcount;
                 }
                 ++threadcount;

@@ -324,13 +324,17 @@ struct cpu_info {
     uint64_t ppin;          ///! Processor ID read from MSR
     uint64_t microcode;     ///! Microcode version read from /sys
     int cpu_number;         ///! Logical processor number as seen by OS
-    int package_id;         ///! Topology info from APIC
-    int core_id;            ///! Topology info from APIC
     int thread_id;          ///! Topology info from APIC
+    int core_id;            ///! Topology info from APIC
+    int package_id;         ///! Topology info from APIC
     struct cache_info cache[3]; ///! Cache info from OS
     uint8_t family;         ///! CPU family (usually 6)
     uint8_t stepping;       ///! CPU stepping
     uint16_t model;         ///! CPU model
+
+#ifdef __cplusplus
+    int cpu() const;        ///! Internal CPU number
+#endif
 };
 
 struct test;
@@ -615,6 +619,10 @@ extern struct cpu_info *cpu_info;
 int num_cpus() __attribute__((pure));
 
 #ifdef __cplusplus
+}
+inline int cpu_info::cpu() const
+{
+    return this - ::cpu_info;
 }
 
 constexpr inline test_flags operator|(test_flag f1, test_flag f2)

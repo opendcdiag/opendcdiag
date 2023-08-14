@@ -113,33 +113,34 @@ enum LogTypes {
     SkipMessages = 3,
 };
 
-struct ThreadLog
-{
-    // simple holder (we ought to do RAII...)
-    FILE *log = nullptr;
-    int log_fd = -1;
-};
-
 class AbstractLogger
 {
 public:
-    AbstractLogger(const struct test *test, TestResult state);
+    AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state);
 
     const struct test *test;
-    uint64_t earliest_fail = UINT64_MAX;
-    TestResult state = TestPassed;
+    MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
+    ChildExitStatus childExitStatus;
+    TestResult testResult = TestResult::Passed;
     int pc = 0;
-    int sc = 0;
+    bool skipInMainThread = false;
+
+protected:
+    int loglevel() const;
+    bool should_print_fail_info() const;
+
+    // shared between the TAP and key-value loggers; YAML overrides
+    int print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level);
 };
 
 class TapFormatLogger : public AbstractLogger
 {
 public:
-    TapFormatLogger(const struct test *test, TestResult state)
+    TapFormatLogger(const struct test *test, std::span<const ChildExitStatus> state)
         : AbstractLogger(test, state)
     {}
 
-    void print(int tc, ChildExitStatus status);
+    void print(int tc);
 
 protected:
     // shared with the pure YAML logger
@@ -150,23 +151,23 @@ private:
     const char *stdout_terminator = nullptr;
 
     void maybe_print_yaml_marker(int fd);
-    void print_thread_messages(ChildExitStatus status);
+    void print_thread_messages();
     void print_thread_header(int fd, int cpu, int verbosity);
     void print_child_stderr();
-    static std::string format_status_code(ChildExitStatus status);
+    std::string format_status_code();
 };
 
 class YamlLogger : public TapFormatLogger
 {
 public:
-    YamlLogger(const struct test *test, TestResult state)
+    YamlLogger(const struct test *test, std::span<const ChildExitStatus> state)
         : TapFormatLogger(test, state)
     { }
 
     static std::string get_current_time();
 
     // non-virtual override
-    void print(int tc, ChildExitStatus status);
+    void print();
     static void print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout);
 
 private:
@@ -177,8 +178,8 @@ private:
     void maybe_print_messages_header(int fd);
     void print_thread_header(int fd, int cpu, int verbosity);
     static int print_test_knobs(int fd, mmap_region r);
-    static int print_one_thread_messages(int fd, mmap_region r, int level, ChildExitStatus status);
-    void print_result_line(ChildExitStatus status);
+    int print_one_thread_messages(int fd, mmap_region r, int level);
+    void print_result_line();
 
     enum TestHeaderTime { AtStart, OnFirstFail };
     static void print_tests_header(TestHeaderTime mode);
@@ -187,20 +188,20 @@ private:
 class KeyValuePairLogger : public AbstractLogger
 {
 public:
-    KeyValuePairLogger(const struct test *test, TestResult state)
+    KeyValuePairLogger(const struct test *test, std::span<const ChildExitStatus> state)
         : AbstractLogger(test, state)
     {
         prepare_line_prefix();
     }
 
-    void print(int tc, ChildExitStatus status);
+    void print(int tc);
 
 private:
     std::string timestamp_prefix;
 
     void prepare_line_prefix();
     void print_thread_header(int fd, int cpu, const char *prefix);
-    void print_thread_messages(ChildExitStatus status);
+    void print_thread_messages();
     void print_child_stderr();
 };
 
@@ -210,7 +211,7 @@ static SandstoneApplication::OutputFormat current_output_format()
 {
     if (SandstoneConfig::NoLogging)
         return SandstoneApplication::OutputFormat::no_output;
-    return sApp->output_format;
+    return sApp->shmem->output_format;
 }
 
 static std::string_view indent_spaces()
@@ -218,7 +219,7 @@ static std::string_view indent_spaces()
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return {};
 
-    static const std::string spaces(sApp->output_yaml_indent, ' ');
+    static const std::string spaces(sApp->shmem->output_yaml_indent, ' ');
     return spaces;
 }
 
@@ -467,31 +468,13 @@ static const char *char_to_skip_category(int val)
     return "NO CATEGORY PRESENT";
 }
 
-static std::vector<ThreadLog> &all_thread_logs() noexcept
+template <typename... Args> static ssize_t
+log_message_for_thread(int thread_num, LogTypes logType, int level, Args &&... args)
 {
-    size_t count = num_cpus();
-    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
-        count = 0;
-    else
-        ++count;        // account for the main thread
-    static std::vector<ThreadLog> all(count);
-    assert(all.size() >= count);
-    return all;
-}
-
-static ThreadLog &log_for_thread(int cpu) noexcept
-{
-    // same adjustment as random.cpp's rng_for_thread
-    assert(cpu < num_cpus());
-    assert(cpu >= -1);
-
-    if (cpu >= 0)
-        cpu += sApp->thread_offset;
-    ++cpu;
-
-    auto &all = all_thread_logs();
-    assert(all.size() > size_t(cpu));
-    return all[cpu];
+    int fd = sApp->thread_data(thread_num)->log_fd;
+    uint8_t code = message_code(logType, level);
+    sApp->thread_data(thread_num)->messages_logged.fetch_add(1, std::memory_order_relaxed);
+    return writevec(fd, code, std::forward<Args>(args)..., '\0');
 }
 
 int logging_stdout_fd(void)
@@ -499,59 +482,35 @@ int logging_stdout_fd(void)
     return real_stdout_fd;
 }
 
-static ThreadLog open_predictable_file(int cpu, const char *mode)
+static inline int open_new_log()
 {
-    char buf[sizeof(SANDSTONE_STRINGIFY(INT_MIN) ".log")];
-    const char *name = "main.log";
-    if (cpu >= 0) {
-        snprintf(buf, sizeof(buf), "%d.log", cpu);
-        name = buf;
-    }
-
-    ThreadLog result;
-    if (mode) {
-        // open the file
-        result.log = fopen(name, mode);
-        if (result.log)
-            result.log_fd = fileno(result.log);
-    } else {
-        // unlink the file
-        remove(name);
-    }
-    return result;
+    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test)
+        return open_memfd(MemfdInheritOnExec);
+    else
+        return open_memfd(MemfdCloseOnExec);
 }
 
-static inline ThreadLog open_new_log(int cpu)
+static inline void truncate_log(int fd)
 {
-    ThreadLog result;
-    if (sApp->use_predictable_file_names) {
-        result = open_predictable_file(cpu, "w+b" FOPEN_SHORTLIVED FOPEN_EXTRA);
-    } else if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        result.log_fd = open_memfd(MemfdInheritOnExec);
-        result.log = fdopen(result.log_fd, "w+b" FOPEN_SHORTLIVED FOPEN_EXTRA);
-    } else {
-        result.log_fd = open_memfd(MemfdCloseOnExec);
-        result.log = fdopen(result.log_fd, "w+b" FOPEN_CLOEXEC FOPEN_SHORTLIVED FOPEN_EXTRA);
-    }
-    if (result.log == nullptr) {
-        perror("fopen on temporary file for logging:");
-        exit(EX_OSERR);
-    }
-
-    setvbuf(result.log, NULL, _IONBF, 0);           // disable buffering
-    return result;
+    // truncate files back to empty, preparing for the next iteration
+    lseek(fd, 0, SEEK_SET);
+    ftruncate(fd, 0);
 }
 
-static inline ThreadLog reopen_log(int cpu)
+static inline mmap_region maybe_mmap_log(const PerThreadData::Common *data)
 {
-    assert(sApp->use_predictable_file_names);
-    return open_predictable_file(cpu, "rb" FOPEN_CLOEXEC FOPEN_SHORTLIVED FOPEN_EXTRA);
+    if (data->messages_logged.load(std::memory_order_relaxed) == 0)
+        return {};
+    return mmap_file(data->log_fd);
 }
 
-static inline void unlink_log(int cpu)
+static inline void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r)
 {
-    assert(sApp->use_predictable_file_names);
-    open_predictable_file(cpu, nullptr);
+    if (r.size == 0)
+        return;
+    munmap_file(r);
+    truncate_log(data->log_fd);
+    data->messages_logged.store(0, std::memory_order_relaxed);
 }
 
 void logging_init_global_child()
@@ -686,6 +645,18 @@ void logging_init_global(void)
 
     close(devnull);
 
+    /* open some place to store stderr in the child processes */
+#if !defined(__SANITIZE_ADDRESS__)
+    stderr_fd = open_memfd(MemfdCloseOnExec);
+#endif
+
+    // open log files for each main thread
+    auto logopener = [](PerThreadData::Common *data, int) {
+        data->log_fd = open_new_log();
+    };
+    for_each_main_thread(logopener);
+    for_each_test_thread(logopener);
+
 #ifdef __GLIBC__
     setenv("LIBC_FATAL_STDERR_", "1", true);
 #endif
@@ -699,7 +670,7 @@ int logging_close_global(int exitcode)
             logging_print_log_file_name();
             logging_printf(LOG_LEVEL_QUIET,
                            exitcode == EXIT_FAILURE ? "exit: fail\n" : "exit: invalid\n");
-        } else if (sApp->verbosity >= 0) {
+        } else if (sApp->shmem->verbosity >= 0) {
             logging_printf(LOG_LEVEL_QUIET, "exit: pass\n");
         }
     }
@@ -708,6 +679,15 @@ int logging_close_global(int exitcode)
         close(file_log_fd);
         remove(sApp->file_log_path.c_str());
     }
+
+#ifndef NDEBUG
+    // close all log files (in release mode, the OS closes for us)
+    auto logcloser = [](PerThreadData::Common *data, int) {
+        close(data->log_fd);
+    };
+    for_each_main_thread(logcloser);
+    for_each_test_thread(logcloser);
+#endif
 
     /* leak all file descriptors without closing, the application
      * is about to exit anyway */
@@ -751,17 +731,18 @@ static std::string create_filtered_message_string(const char *fmt, va_list va)
 // function must be async-signal-safe
 void logging_mark_thread_failed(int thread_num)
 {
-    per_thread_data *thr = cpu_data_for_thread(thread_num);
+    PerThreadData::Common *thr = sApp->thread_data(thread_num);
     if (thr->has_failed())
         return;
 
     // note: must use std::chrono::steady_clock here instead of
     // get_monotonic_time_now() because we'll compare to
     // sApp->current_test_starttime.
-    auto now = std::chrono::steady_clock::now().time_since_epoch();
-    static_assert(sizeof(thr->fail_time) == sizeof(now.count()));
-    thr->fail_time = now.count();
-    thr->inner_loop_count_at_fail = thr->inner_loop_count;
+    thr->fail_time = std::chrono::steady_clock::now();
+    if (thread_num >= 0) {
+        auto tthr = static_cast<PerThreadData::Test *>(thr);
+        tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
+    }
 }
 
 static void log_message_preformatted(int thread_num, std::string_view msg)
@@ -770,16 +751,14 @@ static void log_message_preformatted(int thread_num, std::string_view msg)
     if (msg[0] == 'E')
         logging_mark_thread_failed(thread_num);
 
-    std::atomic<int> &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
-    if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread)
+    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread)
         return;
 
     if (msg[msg.size() - 1] == '\n')
         msg.remove_suffix(1);           // remove trailing newline
 
-    FILE *log = logging_stream_open(thread_num, level);
-    fwrite(msg.data(), 1, msg.size(), log);
-    logging_stream_close(log);
+    log_message_for_thread(thread_num, UserMessages, level, msg);
 }
 
 static __attribute__((cold)) void log_message_to_syslog(const char *msg)
@@ -835,31 +814,25 @@ void logging_printf(int level, const char *fmt, ...)
     if (msg.empty())
         return;     // can happen if fmt was "%s" and the string ended up empty
 
-    iovec vec[] = {
-        IoVec(indent_spaces()),
-        IoVec(std::string_view(msg))
-    };
-
-    if (level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
+    if (level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
         progress_bar_flush();
         int fd = real_stdout_fd;
         if (level < 0)
             fd = STDERR_FILENO;
-        IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
-    }
-
-    // include the timestamp in each line, unless we're using YAML format
-    // (timestamps are elsewhere there)
-    std::string timestamp;
-    if (current_output_format() != SandstoneApplication::OutputFormat::yaml) {
-        timestamp = log_timestamp();
-        vec[0] = IoVec(std::string_view(timestamp));
+        writevec(fd, indent_spaces(), msg);
     }
 
     int fd = file_log_fd;
     if (level < 0 && file_log_fd == real_stdout_fd)
         fd = STDERR_FILENO;         // no stderr logging above, so do it here
-    IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+
+    // include the timestamp in each line, unless we're using YAML format
+    // (timestamps are elsewhere there)
+    if (current_output_format() != SandstoneApplication::OutputFormat::yaml) {
+        writevec(fd, log_timestamp(), msg);
+    } else {
+        writevec(fd, indent_spaces(), msg);
+    }
 
     if (level < 0)
         log_message_to_syslog(msg.c_str());
@@ -974,7 +947,7 @@ void logging_print_version()
     printf(PROGRAM_VERSION "\n");
 }
 
-void logging_print_header(int argc, char **argv, Duration test_duration, Duration test_timeout)
+void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;                 // short-circuit
@@ -1022,7 +995,7 @@ void logging_print_iteration_start()
         return;                 // short-circuit
 
     std::string random_seed = random_format_seed();
-    switch (sApp->output_format) {
+    switch (sApp->shmem->output_format) {
     case SandstoneApplication::OutputFormat::key_value:
         return logging_printf(LOG_LEVEL_QUIET, "random_generator_state = %s\n", random_seed.c_str());
     case SandstoneApplication::OutputFormat::tap:
@@ -1093,19 +1066,12 @@ void logging_flush(void)
     // we don't need to fflush() because all our log files are opened without
     // buffering
     do_flush(file_log_fd);
-    do_flush(log_for_thread(-1).log_fd);
+    do_flush(sApp->main_thread_data()->log_fd);
 }
 
 void logging_init(const struct test *test)
 {
-    /* open some place to store stderr in the child processes */
-#if defined(__SANITIZE_ADDRESS__)
-    stderr_fd = -1;
-#else
-    stderr_fd = open_memfd(MemfdCloseOnExec);
-#endif
-
-    if (sApp->verbosity <= 0)
+    if (sApp->shmem->verbosity <= 0)
         progress_bar_update();
 
     switch (current_output_format()) {
@@ -1127,28 +1093,6 @@ void logging_init(const struct test *test)
     case SandstoneApplication::OutputFormat::no_output:
         return;                 // short-circuit
     }
-
-    if (!sApp->use_predictable_file_names) {
-        // must match logging_init_child_postexec() below
-        auto &all_logs = all_thread_logs();
-        for (size_t i = 0; i < all_logs.size(); ++i)
-            all_logs[i] = open_new_log(i - 1);
-    }
-}
-
-void logging_init_child_prefork(SandstoneApplication::ExecState *state)
-{
-    size_t i = 0;
-    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test && !sApp->use_predictable_file_names) {
-        assert(state && "internal error: mismatch in fork mode and when this function was called");
-        auto &all_logs = all_thread_logs();
-        for ( ; i < all_logs.size(); ++i)
-            state->thread_log_fds[i] = all_logs[i].log_fd;
-    }
-
-    // "zero" the rest
-    if (state)
-        std::fill(std::begin(state->thread_log_fds) + i, std::end(state->thread_log_fds), -1);
 }
 
 void logging_init_child_preexec()
@@ -1157,65 +1101,17 @@ void logging_init_child_preexec()
         dup2(stderr_fd, STDERR_FILENO);
 }
 
-void logging_init_child_postexec(const SandstoneApplication::ExecState *state)
-{
-    // see logging_init() above
-    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
-        return;
-    if (sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test
-            && !sApp->use_predictable_file_names)
-        return;
-
-    auto &all_logs = all_thread_logs();
-    for (size_t i = 0; i < all_logs.size(); ++i) {
-        ThreadLog l;
-        if (sApp->use_predictable_file_names) {
-            // child process needs to open an actual log file
-            l = open_new_log(i - 1);
-        } else {
-            // reopen an inherited file descriptor
-            l.log_fd = state->thread_log_fds[i];
-
-#ifndef NDEBUG
-            if (__builtin_expect(l.log_fd == -1, false)) {
-                fprintf(stderr, "%s: file descriptor for thread %d is -1\n",
-                        program_invocation_name, int(i) - 1);
-                abort();
-            }
-            struct stat st;
-            if (fstat(l.log_fd, &st) == -1) {
-                fprintf(stderr, "%s: invalid file descriptor for thread %d: %s\n",
-                        program_invocation_name, int(i) - 1, strerror(errno));
-                abort();
-            }
-#endif
-
-            l.log = fdopen(l.log_fd, "w+b" FOPEN_CLOEXEC FOPEN_SHORTLIVED FOPEN_EXTRA);
-        }
-
-        all_logs[i] = l;
-    }
-}
-
 void logging_finish()
 {
-    auto &all = all_thread_logs();
-    for (size_t i = 0; i < all.size(); ++i) {
-        fclose(all[i].log);
-        all[i] = {};
-        if (sApp->use_predictable_file_names)
-            unlink_log(i - 1);
-    }
-    if (stderr_fd != -1)
-        close(stderr_fd);
 }
 
-FILE *logging_stream_open(int thread_num, int level)
+LoggingStream logging_user_messages_stream(int thread_num, int level)
 {
-    FILE *log = log_for_thread(thread_num).log;
-    fflush(log);
-    fputc(message_code(UserMessages, level), log);
-    return log;
+    LoggingStream stream(sApp->thread_data(thread_num)->log_fd);
+    sApp->thread_data(thread_num)->messages_logged.fetch_add(1, std::memory_order_relaxed);
+    uint8_t code = message_code(UserMessages, level);
+    stream.write(code);
+    return stream;
 }
 
 static inline void assert_log_message(const char *fmt)
@@ -1262,12 +1158,7 @@ void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ..
     if (msg[msg.size() - 1] == '\n')
         msg.pop_back(); // remove trailing newline
              
-    int level = LOG_LEVEL_VERBOSE(1);
-    FILE *log = log_for_thread(thread_num).log;
-    fflush(log);
-    fputc(message_code(SkipMessages, level), log);
-    fwrite(msg.c_str(), 1, msg.size(), log);
-    logging_stream_close(log);
+    log_message_for_thread(thread_num, SkipMessages, LOG_LEVEL_VERBOSE(1), msg);
 }
 
 #undef log_message
@@ -1316,16 +1207,12 @@ static std::string_view escape_for_single_line(std::string_view message, std::st
 
 static void log_data_common(const char *message, const uint8_t *ptr, size_t size, bool from_memcmp)
 {
-    // data logging is informational (verbose level 2)
-    FILE *log = log_for_thread(thread_num).log;
-    fputc(message_code(Preformatted, LOG_LEVEL_VERBOSE(2)), log);
-
     std::string spaces;
     std::string buffer;
 
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::yaml:
-        spaces.resize(sApp->output_yaml_indent + 4 + (from_memcmp ? 3 : 0), ' ');
+        spaces.resize(sApp->shmem->output_yaml_indent + 4 + (from_memcmp ? 3 : 0), ' ');
         if (from_memcmp) {
             // no escaping, the message is proper YAML
             buffer = message;
@@ -1374,9 +1261,10 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
         }
         buffer += stdprintf(" %02x", (unsigned)ptr[i]);
     }
-
     buffer += '\n';
-    fwrite(buffer.c_str(), 1, buffer.size() + 1, log);  // include the null
+
+    // data logging is informational (verbose level 2)
+    log_message_for_thread(thread_num, Preformatted, LOG_LEVEL_VERBOSE(2), buffer);
 }
 
 #undef log_data
@@ -1385,10 +1273,10 @@ void log_data(const char *message, const void *data, size_t size)
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;                 // short-circuit
 
-    std::atomic<int> &messages_logged = cpu_data_for_thread(thread_num)->messages_logged;
-    std::atomic<size_t> &data_bytes_logged = cpu_data_for_thread(thread_num)->data_bytes_logged;
-    if (messages_logged.fetch_add(1, std::memory_order_relaxed) >= sApp->max_messages_per_thread ||
-            (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->max_logdata_per_thread))
+    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
+    std::atomic<unsigned> &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread ||
+            (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->shmem->max_logdata_per_thread))
         return;
 
 
@@ -1398,8 +1286,8 @@ void log_data(const char *message, const void *data, size_t size)
 static void logging_format_data(DataType type, std::string_view description, const uint8_t *data1,
                                 const uint8_t *data2, ptrdiff_t offset)
 {
-    std::string spaces(sApp->output_yaml_indent + 7, ' ');
-    std::string buffer = { char(message_code(Preformatted, LOG_LEVEL_QUIET)) };
+    std::string spaces(sApp->shmem->output_yaml_indent + 7, ' ');
+    std::string buffer;
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::tap:
     case SandstoneApplication::OutputFormat::key_value:
@@ -1473,9 +1361,7 @@ static void logging_format_data(DataType type, std::string_view description, con
                             spaces.c_str(), spaces.c_str(), spaces.c_str(), spaces.c_str());
     }
 
-    // +1 so will include the terminating NUL
-    IGNORE_RETVAL(write(log_for_thread(thread_num).log_fd,
-                        buffer.c_str(), buffer.size() + 1));
+    log_message_for_thread(thread_num, Preformatted, LOG_LEVEL_QUIET, buffer);
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
@@ -1547,44 +1433,39 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
     }
 #endif
 
-    if (!sApp->log_test_knobs)
+    if (!sApp->shmem->log_test_knobs)
         return;
 
     struct Visitor {
-        FILE *f;
-
-        void operator()(uint64_t v)
+        std::string operator()(uint64_t v)
         {
             if (v < 4096)
-                fprintf(f, "%u", unsigned(v));
+                return stdprintf("%u", unsigned(v));
             else
-                fprintf(f, "0x%" PRIx64, v);
+                return stdprintf("0x%" PRIx64, v);
         }
-        void operator()(int64_t v)
+        std::string operator()(int64_t v)
         {
             if (v >= 0)
-                operator()(uint64_t(v));
+                return operator()(uint64_t(v));
             else if (v >= -4096)
-                fprintf(f, "%d", int(v));
+                return stdprintf("%d", int(v));
             else
-                fprintf(f, "-0x%" PRIx64, -v);
+                return stdprintf("-0x%" PRIx64, -v);
         }
-        void operator()(std::string_view v)
+        std::string operator()(std::string_view v)
         {
             if (v.data() == nullptr) {
-                fprintf(f, "null");
+                return "null";
             } else {
                 std::string storage;
-                fprintf(f, "'%s'", escape_for_single_line(v, storage).data());
+                return stdprintf("'%s'", escape_for_single_line(v, storage).data());
             }
         }
     };
-    Visitor nana = { log_for_thread(-1).log };
-    fputc(message_code(UsedKnobValue, UsedKnobValueLoggingLevel), nana.f);
-    fwrite(key.data(), 1, key.size(), nana.f);
-    fputs(": ", nana.f);
-    std::visit(nana, value);
-    fputc('\0', nana.f);
+    std::string formatted = std::visit(Visitor{}, value);
+    log_message_for_thread(-1, UsedKnobValue, UsedKnobValueLoggingLevel,
+                           key, ": ", formatted);
 }
 
 static void print_content_indented(int fd, std::string_view indent, std::string_view content)
@@ -1596,13 +1477,7 @@ static void print_content_indented(int fd, std::string_view indent, std::string_
         if (!newline)
             newline = end;
 
-        iovec vec[] = {
-            IoVec(indent_spaces()),
-            IoVec(indent),
-            IoVec(std::string_view(line, newline - line)),
-            IoVec("\n")
-        };
-        IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+        writevec(fd, indent_spaces(), indent, std::string_view(line, newline - line), '\n');
         line = newline + 1;
     }
 }
@@ -1650,12 +1525,10 @@ static void format_and_print_message(int fd, int message_level, std::string_view
         /* single line */
         if (current_output_format() == SandstoneApplication::OutputFormat::yaml) {
             if (from_thread_message) {
-                iovec vec[] = { IoVec(indent_spaces()), IoVec("    - { level: "), IoVec(levels[message_level]) };
-                IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+                writevec(fd, indent_spaces(), "    - { level: ", levels[message_level]);
                 print_content_single_line(fd, ", text: '", message, "' }");
             } else {
-                iovec vec[] = { IoVec(indent_spaces()) };
-                IGNORE_RETVAL(writev(fd, vec, std::size(vec)));
+                writevec(fd, indent_spaces());
                 print_content_single_line(fd, "  skip-reason: '", message, "'");
             }
         } else {
@@ -1672,8 +1545,7 @@ static void format_and_print_message(int fd, int message_level, std::string_view
 static std::string get_skip_message(int thread_num)
 {
     std::string skip_message;
-    auto log = log_for_thread(thread_num);
-    struct mmap_region r = mmap_file(log.log_fd);
+    struct mmap_region r = mmap_file(sApp->thread_data(thread_num)->log_fd);
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
     const char *delim;
@@ -1696,7 +1568,7 @@ static inline void format_skip_message(std::string &skip_message, std::string_vi
 
 /// Returns the lowest priority found
 /// (this function is shared between the TAP and key-value pair loggers)
-static int print_one_thread_messages(int fd, struct per_thread_data *data, struct mmap_region r, int level, ChildExitStatus status)
+int AbstractLogger::print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level)
 {
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
@@ -1721,7 +1593,8 @@ static int print_one_thread_messages(int fd, struct per_thread_data *data, struc
             break;
         
         case SkipMessages: 
-            if (status.result != TestSkipped) { // If test skipped in init, no need to display as it's already displayed in print_result_line
+            if (!skipInMainThread) {
+                // Only print if the result line didn't already include this
                 std::string skip_message;
                 format_skip_message(skip_message, message);
                 format_and_print_message(fd, -1, std::string_view{&skip_message[0], skip_message.size()}, true);
@@ -1759,67 +1632,122 @@ static void print_child_stderr_common(std::function<void(int)> header)
 
     header(file_log_fd);
     print_content_indented(file_log_fd, indent, contents);
-    if (file_log_fd != real_stdout_fd && sApp->verbosity > 0) {
+    if (file_log_fd != real_stdout_fd && sApp->shmem->verbosity > 0) {
         header(real_stdout_fd);
         print_content_indented(real_stdout_fd, indent, contents);
     }
     munmap_file(r);
 
     /* reset it for the next iteration */
-    IGNORE_RETVAL(ftruncate(stderr_fd, 0));
+    truncate_log(stderr_fd);
 }
 
 static std::string
-format_duration(uint64_t tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
+format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
 {
-    if (tp == 0 || tp == UINT64_MAX)
+    if (tp == MonotonicTimePoint() || tp == MonotonicTimePoint::max())
         return {};
 
-    MonotonicTimePoint earliest_tp{Duration(tp)};
-    return format_duration(earliest_tp - sApp->current_test_starttime, opts);
+    return format_duration(tp - sApp->current_test_starttime, opts);
 }
 
-inline AbstractLogger::AbstractLogger(const struct test *test, TestResult state_)
-    : test(test), state(state_)
+static ChildExitStatus find_most_serious_result(std::span<const ChildExitStatus> results)
 {
-    auto &all_logs = all_thread_logs();
-    const bool need_to_reopen_logs = sApp->use_predictable_file_names &&
-            sApp->current_fork_mode() != SandstoneApplication::no_fork &&
-            current_output_format() != SandstoneApplication::OutputFormat::no_output;
-    if (need_to_reopen_logs)
-        all_logs[0] = reopen_log(-1);   // main thread
+    auto comparator = [](ChildExitStatus s1, ChildExitStatus s2) {
+        return s1.result < s2.result;
+    };
+    return *std::max_element(results.begin(), results.end(), comparator);
+}
 
-    if (state == TestSkipped)
-        return;         // no threads were started    
-    for (int i = 0; i < num_cpus(); ++i) {
-        struct per_thread_data *data = cpu_data_for_thread(i);
+inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state_)
+    : test(test), childExitStatus(find_most_serious_result(state_)), testResult(childExitStatus.result)
+{
+    // check that most serious result
+    switch (testResult) {
+    case TestResult::Skipped:
+        skipInMainThread = true;
+        return;         // no threads were started
+
+    case TestResult::Passed:
+        // normal condition
+        break;
+
+    case TestResult::Failed:
+        // test's test_init() failed. That's usually not supposed to happen...
+        return;
+
+    case TestResult::TimedOut:
+        // find stuck threads and insert error message
+        for_each_test_thread([](PerThreadData::Test *data, int i) {
+            ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
+            if (thr_state == thread_running)
+                log_message(i, SANDSTONE_LOG_ERROR "Thread is stuck");
+        });
+        return;
+
+    case TestResult::CoreDumped:
+    case TestResult::Killed:
+    case TestResult::OperatingSystemError:
+    case TestResult::OutOfMemory:
+    case TestResult::Interrupted:
+        // child process had serious problems
+        return;
+    }
+
+    // scan the threads for their state
+    int sc = 0;
+    for_each_test_thread([&](PerThreadData::Common *data, int) {
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
         if (data->has_failed()) {
-            if (data->fail_time != 0 && data->fail_time < earliest_fail)
-                earliest_fail = data->fail_time;
-        } else if (thr_state == thread_running) {
-            if (state == TestTimedOut)
-                log_message(i, SANDSTONE_LOG_ERROR "Thread is stuck");
+            earliest_fail = std::min(earliest_fail, data->fail_time);
+            testResult = TestResult::Failed;
         } else {
             // thread passed test
             ++pc;
             if (thr_state == thread_skipped) ++sc;
         }
+    });
 
-        if (need_to_reopen_logs) {
-            // reopen this thread's log file
-            all_logs[i + 1] = reopen_log(i);
-        }
-    }
+    if (testResult == TestResult::Passed && pc == sc)
+        testResult = TestResult::Skipped;       // all threads skipped
+}
 
-    // condense the internal state variable to the three main possibilities
-    state = TestFailed;
-    if (state_ == TestPassed && pc == num_cpus() && !sApp->shmem->main_thread_data.has_failed()) {
-        if (sc == num_cpus())
-            state = TestSkipped;
-        else
-            state = TestPassed;
+inline int AbstractLogger::loglevel() const
+{
+    switch (testResult) {
+    case TestResult::Skipped:
+        return sApp->fatal_skips ? LOG_LEVEL_QUIET : LOG_LEVEL_VERBOSE(1);
+    case TestResult::Passed:
+        return LOG_LEVEL_VERBOSE(1);
+    case TestResult::Failed:
+    case TestResult::CoreDumped:
+    case TestResult::Killed:
+    case TestResult::OperatingSystemError:
+    case TestResult::TimedOut:
+    case TestResult::OutOfMemory:
+    case TestResult::Interrupted:
+        return LOG_LEVEL_QUIET;
     }
+    __builtin_unreachable();
+}
+
+inline bool AbstractLogger::should_print_fail_info() const
+{
+    switch (testResult) {
+    case TestResult::Skipped:
+    case TestResult::Passed:
+        return false;
+    case TestResult::Failed:
+    case TestResult::CoreDumped:
+    case TestResult::Killed:
+    case TestResult::OperatingSystemError:
+    case TestResult::TimedOut:
+    case TestResult::OutOfMemory:
+        return true;
+    case TestResult::Interrupted:
+        return false;
+    }
+    __builtin_unreachable();
 }
 
 void KeyValuePairLogger::prepare_line_prefix()
@@ -1828,16 +1756,19 @@ void KeyValuePairLogger::prepare_line_prefix()
     timestamp_prefix += test->id;
 }
 
-void KeyValuePairLogger::print(int tc, ChildExitStatus status)
+void KeyValuePairLogger::print(int tc)
 {
     logging_printf(LOG_LEVEL_QUIET, "%s_result = %s\n", test->id,
-                   state == TestSkipped ? "skip" :
-                   state == TestFailed ? "fail" : "pass");
+                   testResult == TestResult::Skipped ? "skip" :
+                   testResult == TestResult::Passed ? "pass" : "fail");
     
-    if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
+    if (testResult == TestResult::Skipped && !skipInMainThread) {
         logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "RuntimeSkipCategory");
-        logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id, "All CPUs skipped while executing 'test_run()' function, check log for details");
-    } else if (status.result == TestSkipped) {  //if skipped in init
+        logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
+                       "All CPUs skipped while executing 'test_run()' function, check log for details");
+    } else if (testResult == TestResult::Skipped) {
+        // skipped in the test_init()
+        // FIXME: multiple main threads
         std::string init_skip_message = get_skip_message(-1);
         if (init_skip_message.size() > 0) {
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, char_to_skip_category(init_skip_message[0]));
@@ -1848,7 +1779,8 @@ void KeyValuePairLogger::print(int tc, ChildExitStatus status)
                 format_and_print_message(file_log_fd, -1, message, false);
         } else {
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "UnknownSkipCategory");
-            logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id, "Unknown, check main thread message for details or use -vv option for more info");
+            logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
+                           "Unknown, check main thread message for details or use -vv option for more info");
         }
     }
 
@@ -1858,7 +1790,7 @@ void KeyValuePairLogger::print(int tc, ChildExitStatus status)
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_pass_count = %d\n", test->id, pc);
     logging_printf(LOG_LEVEL_VERBOSE(2), "%s_virtualized = %s\n", test->id,
                    cpu_has_feature(cpu_feature_hypervisor) ? "yes" : "no");
-    if (state == TestFailed) {
+    if (should_print_fail_info()) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_percent = %.1f\n", test->id,
                        100. * (num_cpus() - pc) / num_cpus());
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_random_generator_state = %s\n", test->id,
@@ -1870,7 +1802,7 @@ void KeyValuePairLogger::print(int tc, ChildExitStatus status)
     }
 
     logging_flush();
-    print_thread_messages(status);
+    print_thread_messages();
     print_child_stderr();
     logging_flush();
 }
@@ -1878,18 +1810,24 @@ void KeyValuePairLogger::print(int tc, ChildExitStatus status)
 void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix)
 {
     if (cpu < 0) {
-        writeln(file_log_fd, timestamp_prefix, "_messages_mainthread = \\");
+        cpu = ~cpu;
+        if (cpu == 0)
+            writeln(file_log_fd, timestamp_prefix, "_messages_mainthread = \\");
+        else
+            dprintf(file_log_fd, "%s_messages_mainthread_%d = \\\n",
+                    timestamp_prefix.c_str(), cpu);
         return;
     }
 
     struct cpu_info *info = cpu_info + cpu;
-    if (std::string time = format_duration(sApp->shmem->per_thread[cpu].fail_time); time.size()) {
+    PerThreadData::Test *thr = sApp->test_thread_data(cpu);
+    if (std::string time = format_duration(thr->fail_time); time.size()) {
         dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, cpu, time.c_str());
         dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
-                sApp->shmem->per_thread[cpu].inner_loop_count_at_fail);
+                thr->inner_loop_count_at_fail);
     } else {
         dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
-                sApp->shmem->per_thread[cpu].inner_loop_count);
+                thr->inner_loop_count);
     }
     dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, cpu, info->cpu_number);
     dprintf(fd, "%s_messages_thread_%d_family_model_stepping = %02x-%02x-%02x\n", prefix, cpu,
@@ -1906,26 +1844,26 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
     dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
 }
 
-void KeyValuePairLogger::print_thread_messages(ChildExitStatus status)
+void KeyValuePairLogger::print_thread_messages()
 {
-    for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = cpu_data_for_thread(i);
-        auto log = log_for_thread(i);
-        struct mmap_region r = mmap_file(log.log_fd);
+    auto doprint = [this](PerThreadData::Common *data, int i) {
+        struct mmap_region r = maybe_mmap_log(data);
 
-        if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
-            continue;           /* nothing to be printed, on any level */
+        if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
+            return;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, status);
+        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
 
-        if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
+        if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, test->id);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity, status);
+            print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity);
         }
 
-        munmap_file(r);
-    }
+        munmap_and_truncate_log(data, r);
+    };
+    for_each_main_thread(doprint);
+    for_each_test_thread(doprint);
 }
 
 void KeyValuePairLogger::print_child_stderr()
@@ -1938,73 +1876,74 @@ void KeyValuePairLogger::print_child_stderr()
     });
 }
 
-void TapFormatLogger::print(int tc, ChildExitStatus status)
+void TapFormatLogger::print(int tc)
 {
     // build the ok / not ok line
-    const char *qual = quality_string(test);
-    const char *extra = nullptr;
-    switch (status.result) {
-    case TestSkipped:
-    case TestPassed:
-        // recheck, as status.result does not take failing threads into account
-        if (state == TestSkipped) {
-            extra = "SKIP";
-            break;
-        } else if (state== TestPassed) {
-            break;      // no suffix necessary
-        }
+    std::string extra;
+    if (const char *qual = quality_string(test))
+        extra = qual;
 
-        [[fallthrough]];
-    case TestFailed:
-        break;          // no suffix necessary
-    case TestTimedOut:
-        extra = "timed out";
-        break;
-    case TestCoreDumped:
-        extra = "Core Dumped: ";
-        break;
-    case TestOutOfMemory:
-    case TestKilled:
-        extra = "Killed: ";
-        break;
-    case TestInterrupted:
-        extra = "Interrupted";
-        break;
-    case TestOperatingSystemError:
-        extra = "Operating system error: ";
-        break;
-    }
-
-    std::string tap_line = stdprintf("%s %3i %s", state == TestFailed ? "not ok" : "ok", tc, test->id);
-    if (qual || extra || status.extra) {
-        tap_line.reserve(128);
-        if (tap_line.size() < 32)
-            tap_line.resize(32, ' ');
-        tap_line += "# ";
-        if (qual)
-            tap_line += qual;
-        if (extra)
-            tap_line += extra;
-        if (status.extra)
-            tap_line += format_status_code(status);
-        if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
-            tap_line += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' function, check log for details)";
-        } else if (status.result == TestSkipped) {  //if skipped in init
+    const char *okstring = "not ok";
+    switch (testResult) {
+    case TestResult::Skipped:
+        extra += "SKIP";
+        if (skipInMainThread) {
+            // FIXME: multiple main threads
             std::string init_skip_message = get_skip_message(-1);
             if (init_skip_message.size() != 0)
-                tap_line += " (" + std::string(char_to_skip_category(init_skip_message[0])) + " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
+                extra += "(" + std::string(char_to_skip_category(init_skip_message[0])) +
+                        " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
             else
-                tap_line += "(UnknownSkipCategory: check main thread message for details or use -vv option for more info)";
-        }       
+                extra += "(UnknownSkipCategory: check main thread message for details or "
+                            "use -vv option for more info)";
+        } else {
+            extra += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' "
+                     "function, check log for details)";
+        }
+        [[fallthrough]];
+    case TestResult::Passed:
+        okstring = "ok";
+        break;
+    case TestResult::Failed:
+        break;          // no suffix necessary
+    case TestResult::TimedOut:
+        extra += "timed out";
+        break;
+    case TestResult::CoreDumped:
+        extra += "Core Dumped: ";
+        extra += format_status_code();
+        break;
+    case TestResult::OutOfMemory:
+    case TestResult::Killed:
+        extra += "Killed: ";
+        extra += format_status_code();
+        break;
+    case TestResult::Interrupted:
+        extra += "Interrupted";
+        break;
+    case TestResult::OperatingSystemError:
+        extra += "Operating system error: ";
+        extra += format_status_code();
+        break;
     }
-    int loglevel = LOG_LEVEL_VERBOSE(1);
-    if (state == TestFailed || (sApp->fatal_skips && state == TestSkipped))
-        loglevel = LOG_LEVEL_QUIET;
-    logging_printf(loglevel, "%s\n", tap_line.c_str());
+
+    std::string tap_line = stdprintf("%s %3i %s", okstring, tc, test->id);
+    if (extra.size()) {
+        static constexpr std::string_view separator = "# ";
+        size_t newsize = std::max(tap_line.size(), size_t(32)) + separator.size() + extra.size();
+        tap_line.reserve(newsize);
+        if (tap_line.size() < 32)
+            tap_line.resize(32, ' ');
+        tap_line += separator;
+        tap_line += extra;
+        extra.clear();
+    }
+
+    logging_printf(loglevel(), "%s\n", tap_line.c_str());
 
     logging_flush();
-    print_thread_messages(status);
-    if (sApp->verbosity >= 1)
+    print_thread_messages();
+    if (sApp->shmem->verbosity >= 1)
         print_child_stderr();
 
     if (file_terminator)
@@ -2020,7 +1959,7 @@ void TapFormatLogger::print(int tc, ChildExitStatus status)
 std::string TapFormatLogger::fail_info_details()
 {
     std::string result;
-    if (state == TestPassed || state == TestSkipped)
+    if (!should_print_fail_info())
         return result;
 
     auto add_value = [&result](std::string s, char separator) {
@@ -2053,11 +1992,11 @@ std::string TapFormatLogger::fail_info_details()
 
 [[gnu::pure]] static const char *crash_reason(ChildExitStatus status)
 {
-    assert(status.result != TestPassed);
-    assert(status.result != TestSkipped);
-    assert(status.result != TestFailed);
-    assert(status.result != TestTimedOut);
-    assert(status.result != TestInterrupted);
+    assert(status.result != TestResult::Passed);
+    assert(status.result != TestResult::Skipped);
+    assert(status.result != TestResult::Failed);
+    assert(status.result != TestResult::TimedOut);
+    assert(status.result != TestResult::Interrupted);
 #ifdef _WIN32
     switch (status.extra) {
     case static_cast<unsigned>(STATUS_FAIL_FAST_EXCEPTION):
@@ -2081,7 +2020,7 @@ std::string TapFormatLogger::fail_info_details()
 
 [[gnu::pure]] static const char *sysexit_reason(ChildExitStatus status)
 {
-    assert(status.result == TestOperatingSystemError);
+    assert(status.result == TestResult::OperatingSystemError);
     switch (status.extra) {
     case EXIT_NOTINSTALLED: return "the program is not installed.";
     case EX_USAGE:      return "command line usage error";
@@ -2104,18 +2043,18 @@ std::string TapFormatLogger::fail_info_details()
     return "unknown error";
 }
 
-std::string TapFormatLogger::format_status_code(ChildExitStatus status)
+std::string TapFormatLogger::format_status_code()
 {
-    if (status.result == TestOperatingSystemError)
-        return sysexit_reason(status);
-    std::string msg = crash_reason(status);
+    if (childExitStatus.result == TestResult::OperatingSystemError)
+        return sysexit_reason(childExitStatus);
+    std::string msg = crash_reason(childExitStatus);
     if (msg.empty()) {
         // format the number
 #ifdef _WIN32
-        msg = stdprintf("Child process caused error %#08x", status.extra);
+        msg = stdprintf("Child process caused error %#08x", childExitStatus.extra);
 #else
         // probably a real-time signal
-        msg = stdprintf("Child process died with signal %d", status.extra);
+        msg = stdprintf("Child process died with signal %d", childExitStatus.extra);
 #endif
     }
     return msg;
@@ -2143,7 +2082,11 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
 {
     maybe_print_yaml_marker(fd);
     if (cpu < 0) {
-        writeln(fd, "  Main thread:");
+        cpu = ~cpu;
+        if (cpu == 0)
+            writeln(fd, "  Main thread:");
+        else
+            dprintf(fd, "  Main thread %d:", cpu);
         return;
     }
 
@@ -2165,35 +2108,36 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
     writeln(fd, line);
 
     if (verbosity > 1) {
-        if (std::string time = format_duration(sApp->shmem->per_thread[cpu].fail_time); time.size())
+        PerThreadData::Test *thr = sApp->test_thread_data(cpu);
+        if (std::string time = format_duration(thr->fail_time); time.size())
             writeln(fd, "  - failed: { time: ", time,
-                    ", loop-count: ", std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count_at_fail),
+                    ", loop-count: ", std::to_string(thr->inner_loop_count_at_fail),
                     " }");
         else if (verbosity > 2)
-            writeln(fd, "  - loop-count: ", std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count));
+            writeln(fd, "  - loop-count: ", std::to_string(thr->inner_loop_count));
     }
 }
 
-void TapFormatLogger::print_thread_messages(ChildExitStatus status)
+void TapFormatLogger::print_thread_messages()
 {
-    for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = cpu_data_for_thread(i);
-        auto log = log_for_thread(i);
-        struct mmap_region r = mmap_file(log.log_fd);
+    auto doprint = [this](PerThreadData::Common *data, int i) {
+        struct mmap_region r = maybe_mmap_log(data);
 
-        if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
-            continue;           /* nothing to be printed, on any level */
+        if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
+            return;             /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX, status);
+        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
 
-        if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, i, sApp->verbosity);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->verbosity, status);
+        if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
+            print_thread_header(real_stdout_fd, i, sApp->shmem->verbosity);
+            print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity);
         }
 
-        munmap_file(r);
-    }
+        munmap_and_truncate_log(data, r);
+    };
+    for_each_main_thread(doprint);
+    for_each_test_thread(doprint);
 }
 
 void TapFormatLogger::print_child_stderr()
@@ -2240,23 +2184,28 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
 {
     maybe_print_messages_header(fd);
     if (cpu < 0) {
-        writeln(fd, indent_spaces(), "  - thread: main");
+        cpu = ~cpu;
+        if (cpu == 0)
+            writeln(fd, indent_spaces(), "  - thread: main");
+        else
+            writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(cpu));
     } else {
         dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), cpu);
         dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(cpu, verbosity).c_str());
 
         if (verbosity > 1) {
+            PerThreadData::Test *thr = sApp->test_thread_data(cpu);
             auto opts = FormatDurationOptions::WithoutUnit;
-            if (std::string time = format_duration(sApp->shmem->per_thread[cpu].fail_time, opts); time.size()) {
+            if (std::string time = format_duration(thr->fail_time, opts); time.size()) {
                 writeln(fd, indent_spaces(), "    state: failed");
                 writeln(fd, indent_spaces(), "    time-to-fail: ", time);
                 writeln(fd, indent_spaces(), "    loop-count: ",
-                        std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count_at_fail));
+                        std::to_string(thr->inner_loop_count_at_fail));
             } else if (verbosity > 2) {
                 writeln(fd, indent_spaces(), "    loop-count: ",
-                        std::to_string(sApp->shmem->per_thread[cpu].inner_loop_count));
+                        std::to_string(thr->inner_loop_count));
             }
-            const double effective_freq_mhz = sApp->shmem->per_thread[cpu].effective_freq_mhz;
+            const double effective_freq_mhz = thr->effective_freq_mhz;
             if (std::isfinite(effective_freq_mhz))
                 dprintf(fd, "%s    freq_mhz: %.1f\n", indent_spaces().data(), effective_freq_mhz);
         }
@@ -2297,7 +2246,7 @@ int YamlLogger::print_test_knobs(int fd, mmap_region r)
     return print_count;
 }
 
-inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level, ChildExitStatus status)
+inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level)
 {
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
@@ -2329,7 +2278,8 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
             break;
         
         case SkipMessages:
-            if (status.result != TestSkipped) { // If test skipped in init, no need to display as it's already displayed in print_result_line
+            if (!skipInMainThread) {
+                // Only print if the result line didn't already include this
                 std::string skip_message;
                 format_skip_message(skip_message, message);
                 format_and_print_message(fd, 4, std::string_view{&skip_message[0], skip_message.size()}, true);
@@ -2337,7 +2287,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
             break;
         
         case UsedKnobValue:
-            assert(sApp->log_test_knobs);
+            assert(sApp->shmem->log_test_knobs);
             continue;       // not break
         }
 
@@ -2348,12 +2298,10 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
     return lowest_level;
 }
 
-void YamlLogger::print_result_line(ChildExitStatus status)
+void YamlLogger::print_result_line()
 {
-    int loglevel = LOG_LEVEL_QUIET;
-    if (state == TestPassed || (state == TestSkipped && !sApp->fatal_skips))
-        loglevel = LOG_LEVEL_VERBOSE(1);
-    if (loglevel == LOG_LEVEL_QUIET && file_log_fd != real_stdout_fd && sApp->verbosity < 1) {
+    int loglevel = this->loglevel();
+    if (loglevel == LOG_LEVEL_QUIET && file_log_fd != real_stdout_fd && sApp->shmem->verbosity < 1) {
         // logging_init won't have printed "- test:" to stdout, so do it now
         progress_bar_flush();
         print_tests_header(OnFirstFail);
@@ -2364,63 +2312,60 @@ void YamlLogger::print_result_line(ChildExitStatus status)
     bool coredumped = false;
     std::string reason;
 
-    switch (status.result) {
-    case TestSkipped:   // can only be "result: skip"...
-    case TestPassed:
-        // recheck, as status.result does not take failing threads into account
-        switch (state) {
-        case TestSkipped:
-            logging_printf(loglevel, "  result: skip\n");
-            if (status.result == TestPassed && state == TestSkipped) { // if test passed in init and skipped on all threads in run
-                logging_printf(loglevel, "  skip-category: %s\n", "RuntimeSkipCategory");
-                return logging_printf(loglevel, "  skip-reason: %s\n", "All CPUs skipped while executing 'test_run()' function, check log for details");
-            } else if (status.result == TestSkipped) {  //if skipped in init
-                std::string init_skip_message = get_skip_message(-1);
-                if (init_skip_message.size() > 0) {
-                    logging_printf(loglevel, "  skip-category: %s\n", char_to_skip_category(init_skip_message[0]));
-                    std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
-                    if (loglevel <= sApp->verbosity)
-                        format_and_print_message(real_stdout_fd, -1, message, false);
-                    if (file_log_fd != real_stdout_fd)
-                        format_and_print_message(file_log_fd, -1, message, false);
-                } else {
-                    logging_printf(loglevel, "  skip-category: %s\n", "UnknownSkipCategory");  
-                    return logging_printf(loglevel, "  skip-reason: %s\n", "Unknown, check main thread message for details or use -vv option for more info");
-                }
+    switch (testResult) {
+    case TestResult::Skipped:
+        logging_printf(loglevel, "  result: skip\n");
+        if (!skipInMainThread) {
+            logging_printf(loglevel, "  skip-category: %s\n", "RuntimeSkipCategory");
+            logging_printf(loglevel, "  skip-reason: %s\n",
+                           "All CPUs skipped while executing 'test_run()' function, check log "
+                           "for details");
+        } else {
+            // FIXME: multiple main threads
+            std::string init_skip_message = get_skip_message(-1);
+            if (init_skip_message.size() > 0) {
+                logging_printf(loglevel, "  skip-category: %s\n",
+                               char_to_skip_category(init_skip_message[0]));
+                std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
+                if (loglevel <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd)
+                    format_and_print_message(real_stdout_fd, -1, message, false);
+                format_and_print_message(file_log_fd, -1, message, false);
+            } else {
+                logging_printf(loglevel, "  skip-category: %s\n", "UnknownSkipCategory");
+                logging_printf(loglevel, "  skip-reason: %s\n",
+                               "Unknown, check main thread message for details or use -vv "
+                               "option for more info");
             }
-            return;
-        case TestPassed:
-            return logging_printf(loglevel, "  result: pass\n");
-        default:
-            break;
         }
-
-        [[fallthrough]];
-    case TestFailed:
+        return;
+    case TestResult::Passed:
+        return logging_printf(loglevel, "  result: pass\n");
+    case TestResult::Failed:
         return logging_printf(loglevel, "  result: fail\n");
-    case TestTimedOut:
+    case TestResult::TimedOut:
         return logging_printf(loglevel, "  result: timed out\n");
-    case TestInterrupted:
+    case TestResult::Interrupted:
         return logging_printf(loglevel, "  result: interrupted\n");
-    case TestOperatingSystemError:
+    case TestResult::OperatingSystemError:
         logging_printf(loglevel, "  result: operating system error\n");
         reason = "Operating system error: ";
-        reason += sysexit_reason(status);
+        reason += sysexit_reason(childExitStatus);
         break;
-    case TestCoreDumped:
+    case TestResult::CoreDumped:
         coredumped = true;
         [[fallthrough]];
-    case TestOutOfMemory:
-    case TestKilled:
+    case TestResult::OutOfMemory:
+    case TestResult::Killed:
         logging_printf(loglevel, "  result: crash\n");
-        reason = crash_reason(status);
+        reason = crash_reason(childExitStatus);
         crashed = true;
         break;
     }
+    assert(should_print_fail_info());
 
     // format the code for us first
     char code[std::numeric_limits<unsigned>::digits10 + 2]; // sufficient for 0x + hex too
-    snprintf(code, sizeof(code), status.extra > 4096 ? "%#08x" : "%u", status.extra);
+    snprintf(code, sizeof(code), childExitStatus.extra > 4096 ? "%#08x" : "%u", childExitStatus.extra);
 
     // print result details now
     auto booleanstr = [](bool cond) { return cond ? "true" : "false"; };
@@ -2446,23 +2391,21 @@ std::string YamlLogger::get_current_time()
              iso8601_time_now(Iso8601Format::WithoutMs));
 }
 
-void YamlLogger::print(int, ChildExitStatus status)
+void YamlLogger::print()
 {
     Duration test_duration = MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
-
-    print_result_line(status);
-    if (state == TestFailed)
+    print_result_line();
+    if (should_print_fail_info())
         logging_printf(LOG_LEVEL_QUIET, "%s", fail_info_details().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  time-at-end:   %s\n", get_current_time().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  test-runtime: %s\n",
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str());
 
     double freqs = 0.0;
-    for (int i = 0; i < num_cpus(); i++) {
-        const struct per_thread_data *data = cpu_data_for_thread(i);
+    for_each_test_thread([&freqs](const PerThreadData::Test *data, int) {
         freqs += data->effective_freq_mhz;
-    }
+    });
 
     const double freq_avg = freqs / num_cpus();
     if (std::isfinite(freq_avg) && freq_avg != 0.0)
@@ -2470,33 +2413,36 @@ void YamlLogger::print(int, ChildExitStatus status)
 
     logging_flush();
 
-    struct mmap_region main_mmap = mmap_file(log_for_thread(-1).log_fd);
-    if (main_mmap.size && sApp->log_test_knobs) {
-        int count = print_test_knobs(file_log_fd, main_mmap);
-        if (count && real_stdout_fd != file_log_fd
-                && sApp->verbosity >= UsedKnobValueLoggingLevel)
-            print_test_knobs(real_stdout_fd, main_mmap);
+    if (sApp->shmem->log_test_knobs) {
+        struct mmap_region main_mmap = maybe_mmap_log(sApp->main_thread_data());
+        if (main_mmap.size) {
+            int count = print_test_knobs(file_log_fd, main_mmap);
+            if (count && real_stdout_fd != file_log_fd
+                    && sApp->shmem->verbosity >= UsedKnobValueLoggingLevel)
+                print_test_knobs(real_stdout_fd, main_mmap);
+            munmap_file(main_mmap);
+        }
     }
 
     // print the thread messages
-    for (int i = -1; i < num_cpus(); i++) {
-        struct per_thread_data *data = cpu_data_for_thread(i);
-        auto log = log_for_thread(i);
-        struct mmap_region r = i == -1 ? main_mmap : mmap_file(log.log_fd);
+    auto doprint = [this](PerThreadData::Common *data, int i) {
+        struct mmap_region r = maybe_mmap_log(data);
 
-        if (r.size == 0 && !data->has_failed() && sApp->verbosity < 3)
-            continue;           /* nothing to be printed, on any level */
+        if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
+            return;             /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX, status);
+        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX);
 
-        if (lowest_level <= sApp->verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, i, sApp->verbosity);
-            print_one_thread_messages(real_stdout_fd, r, sApp->verbosity, status);
+        if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
+            print_thread_header(real_stdout_fd, i, sApp->shmem->verbosity);
+            print_one_thread_messages(real_stdout_fd, r, sApp->shmem->verbosity);
         }
 
-        munmap_file(r);
-    }
+        munmap_and_truncate_log(data, r);
+    };
+    for_each_main_thread(doprint);
+    for_each_test_thread(doprint);
 
     print_child_stderr_common([](int fd) {
         writeln(fd, indent_spaces(), "  stderr messages: |");
@@ -2527,6 +2473,27 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                        thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str());
     }
 
+    auto make_plan_string = [](const std::vector<CpuRange> &plan) {
+        std::string result;
+        for (CpuRange r : plan) {
+            if (result.size())
+                result += ", ";
+            result += "{ starting_cpu: ";
+            result += std::to_string(r.starting_cpu);
+            result += ", count: ";
+            result += std::to_string(r.cpu_count);
+            result += " }";
+        }
+        return result;
+    };
+    const std::vector<CpuRange> &fullsocket = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::IsolateSockets];
+    const std::vector<CpuRange> &heuristic = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::Heuristic];
+    logging_printf(LOG_LEVEL_VERBOSE(1), "test-plans:\n");
+    logging_printf(LOG_LEVEL_VERBOSE(1), "  fullsocket: [ %s ]\n",
+                   make_plan_string(fullsocket).c_str());
+    logging_printf(LOG_LEVEL_VERBOSE(1), "  heuristic: [ %s ]\n",
+                   make_plan_string(heuristic).c_str());
+
     print_tests_header(AtStart);
 }
 
@@ -2543,7 +2510,7 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
     }
 
     // if we're in quiet mode, we print the header only on first fail
-    if (mode == AtStart && sApp->verbosity == 0 && file_log_fd != real_stdout_fd)
+    if (mode == AtStart && sApp->shmem->verbosity == 0 && file_log_fd != real_stdout_fd)
         return;
 
     if (file_log_fd != real_stdout_fd)
@@ -2553,31 +2520,31 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
 
 /// prints the results from running the test \c{test} (test number \c{tc})
 /// and returns the effective test result
-TestResult logging_print_results(ChildExitStatus status, int *tc, const struct test *test)
+TestResult logging_print_results(std::span<const ChildExitStatus> status, int *tc, const struct test *test)
 {
     int n = ++*tc;
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value: {
-        KeyValuePairLogger l(test, status.result);
-        l.print(n, status);
-        return l.state;
+        KeyValuePairLogger l(test, status);
+        l.print(n);
+        return l.testResult;
     }
 
     case SandstoneApplication::OutputFormat::tap: {
-        TapFormatLogger l(test, status.result);
-        l.print(n, status);
-        return l.state;
+        TapFormatLogger l(test, status);
+        l.print(n);
+        return l.testResult;
     }
 
     case SandstoneApplication::OutputFormat::yaml: {
-        YamlLogger l(test, status.result);
-        l.print(n, status);
-        return l.state;
+        YamlLogger l(test, status);
+        l.print();
+        return l.testResult;
     }
 
     case SandstoneApplication::OutputFormat::no_output:
         break;
     }
 
-    return AbstractLogger(test, status.result).state;
+    return AbstractLogger(test, status).testResult;
 }

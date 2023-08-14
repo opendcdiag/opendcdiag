@@ -65,7 +65,16 @@ framework_config.set10('SANDSTONE_NO_LOGGING', get_option('logging_format') == '
 framework_config.set('SANDSTONE_DEFAULT_LOGGING', 'SandstoneApplication::OutputFormat::' + get_option('logging_format'))
 
 framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('framework_options').contains('restricted-cmdline'))
-framework_config.set10('SANDSTONE_CHILD_BACKTRACE', not get_option('framework_options').contains('no-child-backtrace'))
+framework_config.set10('SANDSTONE_NO_TRIAGE', get_option('framework_options').contains('no-triage'))
+if get_option('framework_options').contains('no-child-debug')
+    framework_config.set10('SANDSTONE_CHILD_DEBUG_CRASHES', 0)
+    framework_config.set10('SANDSTONE_CHILD_DEBUG_HANGS', 0)
+    framework_config.set10('SANDSTONE_CHILD_BACKTRACE', 0)
+else
+    framework_config.set10('SANDSTONE_CHILD_DEBUG_CRASHES', not get_option('framework_options').contains('no-child-debug-crashes'))
+    framework_config.set10('SANDSTONE_CHILD_DEBUG_HANGS', not get_option('framework_options').contains('no-child-debug-hangs'))
+    framework_config.set10('SANDSTONE_CHILD_BACKTRACE', not get_option('framework_options').contains('no-child-backtrace'))
+endif
 
 framework_config.set10('SANDSTONE_SSL_BUILD', get_option('ssl_link_type') != 'none')
 framework_config.set10('SANDSTONE_SSL_LINKED',
@@ -81,6 +90,7 @@ framework_files = files(
     'sandstone_chrono.cpp',
     'sandstone_data.cpp',
     'sandstone_test_groups.cpp',
+    'sandstone_thread.cpp',
     'sandstone_utils.cpp',
     'static_vectors.c',
     'test_knobs.cpp',
@@ -193,4 +203,5 @@ unittests_sources += files(
     'unit-tests/tests_dummy.cpp',
     'unit-tests/test_knob_tests.cpp',
     'unit-tests/thermal_monitor_tests.cpp',
+    'unit-tests/topology_tests.cpp',
 )
