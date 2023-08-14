@@ -23,6 +23,18 @@
 #include <openssl/sha.h>
 //#include <openssl/whrlpool.h>
 
+/* Define macros based on OpenSSL defined macros
+ * - openssl/params.h
+ * TODO: Find a better way to fix this */
+# define s_OSSL_PARAM_DEFN(key, type, addr, sz)    \
+    { (key), (type), (addr), (sz), OSSL_PARAM_UNMODIFIED }
+# define s_OSSL_PARAM_int(key, addr) \
+    s_OSSL_PARAM_DEFN((key), OSSL_PARAM_INTEGER, (addr), sizeof(int))
+# define s_OSSL_PARAM_size_t(key, addr) \
+    s_OSSL_PARAM_DEFN((key), OSSL_PARAM_UNSIGNED_INTEGER, (addr), sizeof(size_t))
+# define s_OSSL_PARAM_uint(key, addr) \
+    s_OSSL_PARAM_DEFN((key), OSSL_PARAM_UNSIGNED_INTEGER, (addr), sizeof(unsigned int))
+
 #define SANDSTONE_SSL_AES_FUNCTIONS(F)          \
     F(AES_bi_ige_encrypt)                       \
     F(AES_cbc_encrypt)                          \
@@ -889,6 +901,12 @@
     F(OPENSSL_INIT_set_config_filename)         \
     F(OpenSSL_version)                          \
     F(OpenSSL_version_num)                      \
+    /**/
+
+#define SANDSTONE_SSL_PARAM_FUNCTIONS(F)        \
+    F(OSSL_PARAM_locate)                        \
+    F(OSSL_PARAM_set_int)                       \
+    F(OSSL_PARAM_set_size_t)                    \
     /**/
 
 #define SANDSTONE_SSL_RIPEMD160_FUNCTIONS(F)    \
@@ -1819,6 +1837,7 @@
     SANDSTONE_SSL_HMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_GENERIC_FUNCTIONS(F)          \
     SANDSTONE_SSL_MD5_FUNCTIONS(F)              \
+    SANDSTONE_SSL_PARAM_FUNCTIONS(F)            \
     SANDSTONE_SSL_PEM_FUNCTIONS(F)              \
     SANDSTONE_SSL_RSA_FUNCTIONS(F)              \
     SANDSTONE_SSL_SHA_FUNCTIONS(F)              \
