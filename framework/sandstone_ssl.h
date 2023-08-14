@@ -15,6 +15,7 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
+#include <openssl/modes.h>
 //#include <openssl/mdc2.h>
 //#include <openssl/ripemd.h>
 #include <openssl/pem.h>
@@ -322,7 +323,6 @@
     F(CRYPTO_get_mem_functions)                 \
     F(CRYPTO_malloc)                            \
     F(CRYPTO_memcmp)                            \
-    F(CRYPTO_mem_ctrl)                          \
     F(CRYPTO_memdup)                            \
     F(CRYPTO_new_ex_data)                       \
     F(CRYPTO_nistcts128_decrypt)                \
@@ -352,7 +352,6 @@
     F(CRYPTO_secure_used)                       \
     F(CRYPTO_secure_zalloc)                     \
     F(CRYPTO_set_ex_data)                       \
-    F(CRYPTO_set_mem_debug)                     \
     F(CRYPTO_set_mem_functions)                 \
     F(CRYPTO_strdup)                            \
     F(CRYPTO_strndup)                           \
@@ -368,7 +367,6 @@
     F(CRYPTO_THREAD_set_local)                  \
     F(CRYPTO_THREAD_unlock)                     \
     F(CRYPTO_THREAD_write_lock)                 \
-    F(CRYPTO_xts128_encrypt)                    \
     F(CRYPTO_zalloc)                            \
     /**/
 
@@ -1816,6 +1814,7 @@
     SANDSTONE_SSL_BIO_FUNCTIONS(F)              \
     SANDSTONE_SSL_BF_FUNCTIONS(F)               \
     SANDSTONE_SSL_CMAC_FUNCTIONS(F)             \
+    SANDSTONE_SSL_CRYPTO_FUNCTIONS(F)           \
     SANDSTONE_SSL_EVP_FUNCTIONS(F)              \
     SANDSTONE_SSL_HMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_GENERIC_FUNCTIONS(F)          \
