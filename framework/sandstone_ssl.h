@@ -11,6 +11,7 @@
 #include <openssl/bio.h>
 #include <openssl/blowfish.h>
 #include <openssl/cmac.h>
+#include <openssl/core_names.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
@@ -20,6 +21,7 @@
 //#include <openssl/ripemd.h>
 #include <openssl/pem.h>
 #include <openssl/provider.h>
+#include <openssl/rand.h>
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
 //#include <openssl/whrlpool.h>
@@ -1050,6 +1052,11 @@
     F(PEM_X509_INFO_read)                       \
     /**/
 
+#define SANDSTONE_SSL_RAND_FUNCTIONS(F)         \
+    F(RAND_bytes)                               \
+    F(RAND_set_DRBG_type)                       \
+    /**/
+
 #define SANDSTONE_SSL_RSA_FUNCTIONS(F)          \
     F(RSA_bits)                                 \
     F(RSA_blinding_off)                         \
@@ -1846,6 +1853,7 @@
     SANDSTONE_SSL_MD5_FUNCTIONS(F)              \
     SANDSTONE_SSL_PARAM_FUNCTIONS(F)            \
     SANDSTONE_SSL_PEM_FUNCTIONS(F)              \
+    SANDSTONE_SSL_RAND_FUNCTIONS(F)             \
     SANDSTONE_SSL_RSA_FUNCTIONS(F)              \
     SANDSTONE_SSL_SHA_FUNCTIONS(F)              \
     SANDSTONE_SSL_X509_FUNCTIONS(F)             \
