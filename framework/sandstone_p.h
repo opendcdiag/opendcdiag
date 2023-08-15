@@ -419,6 +419,9 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         return fork_mode;
     }
 
+    bool is_main_process();
+    [[maybe_unused]] bool is_child_process() { return !is_main_process(); }
+
     PerThreadData::Common *thread_data(int thread);
     PerThreadData::Main *main_thread_data(int group = 0) noexcept;
     PerThreadData::Test *test_thread_data(int thread);
@@ -456,11 +459,16 @@ struct SandstoneApplication::SharedMemory
     uint8_t output_yaml_indent = 0;
     bool log_test_knobs = false;
 
+    // child debugging
 #ifndef _WIN32
     int server_debug_socket = -1;
     int child_debug_socket = -1;
 #endif
 
+    // general parameters
+    pid_t main_process_pid = 0;
+
+    // per-thread & variable length
     int main_thread_count = 0;
     int total_cpu_count = 0;
     alignas(64) struct cpu_info cpu_info[];         // C99 Flexible Array Member
@@ -482,6 +490,11 @@ inline SandstoneApplication *_sApp() noexcept
 }
 
 #define sApp    _sApp()
+
+inline bool SandstoneApplication::is_main_process()
+{
+    return getpid() == shmem->main_process_pid;
+}
 
 inline PerThreadData::Common *SandstoneApplication::thread_data(int thread)
 {
