@@ -423,9 +423,9 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     [[maybe_unused]] bool is_child_process() { return !is_main_process(); }
 
     PerThreadData::Common *thread_data(int thread);
-    PerThreadData::Main *main_thread_data(int group = 0) noexcept;
+    PerThreadData::Main *main_thread_data(int slice = 0) noexcept;
     PerThreadData::Test *test_thread_data(int thread);
-    void select_main_thread(int group);
+    void select_main_thread(int slice);
 
     SandstoneBackgroundScan background_scan;
 
@@ -503,9 +503,10 @@ inline PerThreadData::Common *SandstoneApplication::thread_data(int thread)
     return test_thread_data(thread);
 }
 
-inline PerThreadData::Main *SandstoneApplication::main_thread_data(int group) noexcept
+inline PerThreadData::Main *SandstoneApplication::main_thread_data(int slice) noexcept
 {
-    return &main_thread_data_ptr[group];
+    assert(slice == 0 || is_main_process());
+    return &main_thread_data_ptr[slice];
 }
 
 inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
@@ -515,16 +516,17 @@ inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
     return &test_thread_data_ptr[thread];
 }
 
-inline void SandstoneApplication::select_main_thread(int group)
+inline void SandstoneApplication::select_main_thread(int slice)
 {
-    assert(current_fork_mode() != no_fork || group == 0);
-    main_thread_data_ptr += group;
+    assert(current_fork_mode() != no_fork || slice == 0);
+    main_thread_data_ptr += slice;
     test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_cpu;
 }
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l)
 {
-    for (int i = 0; i < sApp->shmem->main_thread_count; i++)
+    int count = sApp->is_main_process() ? sApp->shmem->main_thread_count : 1;
+    for (int i = 0; i < count; i++)
         l(sApp->main_thread_data(i), -1 - i);
 }
 
