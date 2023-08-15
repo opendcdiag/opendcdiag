@@ -1025,6 +1025,7 @@ static void init_shmem()
     sApp->shmemfd = fd;
     sApp->shmem = new (base) SandstoneApplication::SharedMemory;
     sApp->shmem->thread_data_offset = thread_data_offset;
+    sApp->shmem->main_process_pid = getpid();
 }
 
 static void commit_shmem()
