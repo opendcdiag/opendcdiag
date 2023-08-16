@@ -1779,10 +1779,8 @@ static StartedChild call_forkfd()
      * https://sourceware.org/bugzilla/show_bug.cgi?id=15368
      * https://yarchive.net/comp/linux/getpid_caching.html
      */
-    enum {
-        PidProperlyUpdated = 2,
-        PidIncorrectlyCached = 1
-    };
+    static constexpr eventfd_t PidProperlyUpdated = 0x646950646f6f47,
+        PidIncorrectlyCached = 0x646950646142;
     static int ffd_extra_flags = -1;
     if (__builtin_expect(ffd_extra_flags < 0, false)) {
         // determine if we need to pass FFD_USE_FORK
