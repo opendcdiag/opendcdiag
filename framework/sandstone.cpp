@@ -1781,12 +1781,26 @@ static StartedChild call_forkfd()
      */
     static constexpr eventfd_t PidProperlyUpdated = 0x646950646f6f47,
         PidIncorrectlyCached = 0x646950646142;
+
+    /*
+     * Additionally, Red Hat botched the backport of the pidfd feature from 5.4
+     * to their 4.18 tree for Red Hat Enterprise Linux 8.5/8.6. Kernel releases
+     * 358 to 391 support pidfd, but poll(2) fails to wait on it and always
+     * returns immediately
+     *
+     * https://bugreports.qt.io/browse/QTBUG-100174
+     * https://bugzilla.redhat.com/show_bug.cgi?id=2107643
+     * https://access.redhat.com/errata/RHSA-2022:6460
+     */
+    static constexpr eventfd_t PollWorks = 0x6c6c6f50646f6f47,
+            PollFails = 0x6c6c6f50646142;
     static int ffd_extra_flags = -1;
     if (__builtin_expect(ffd_extra_flags < 0, false)) {
         // determine if we need to pass FFD_USE_FORK
         pid_t parentpid = getpid();
-        int efd = eventfd(0, EFD_CLOEXEC);
-        assert(efd != -1);
+        int efdpid = eventfd(0, EFD_CLOEXEC);
+        int efdpoll = eventfd(0, EFD_CLOEXEC);
+        assert(efdpid != -1);
 
         int ffd = forkfd(FFD_CLOEXEC, &pid);
 
@@ -1794,10 +1808,17 @@ static StartedChild call_forkfd()
             // forkfd failed (probably CLONE_PIDFD rejected)
             ffd_extra_flags = FFD_USE_FORK;
         } else if (ffd == FFD_CHILD_PROCESS) {
-            // child side - confirm that the PID updated
+            // child side - wait for parent to try to poll() us
+            eventfd_t pollstatus;
+            eventfd_read(efdpoll, &pollstatus);
+            close(efdpoll);
+            if (pollstatus == PollFails)
+                _exit(127);
+
+            // confirm that the PID updated
             bool pid_updated = (getpid() != parentpid);
-            eventfd_write(efd, pid_updated ? PidProperlyUpdated : PidIncorrectlyCached);
-            close(efd);
+            eventfd_write(efdpid, pid_updated ? PidProperlyUpdated : PidIncorrectlyCached);
+            close(efdpid);
             if (!pid_updated)
                 _exit(127);
 
@@ -1807,13 +1828,26 @@ static StartedChild call_forkfd()
             // parent side
             int ret;
             eventfd_t result;
-            EINTR_LOOP(ret, eventfd_read(efd, &result));
-            close(efd);
 
-            if (result == PidProperlyUpdated) {
-                // no problems seen, return to caller as parent process
-                ffd_extra_flags = 0;
-                return { .pid = pid, .fd = ffd };
+            // check if poll() works
+            struct pollfd pfd = { .fd = ffd, .events = POLLIN };
+            EINTR_LOOP(ret, poll(&pfd, 1, 1));  // 1ms is enough
+            if (ret == 1) {
+                eventfd_write(efdpoll, PollFails);
+                close(efdpoll);
+            } else {
+                // it does, proceed with the getpid() check
+                eventfd_write(efdpoll, PollWorks);
+                close(efdpoll);
+
+                EINTR_LOOP(ret, eventfd_read(efdpid, &result));
+                close(efdpid);
+
+                if (result == PidProperlyUpdated) {
+                    // no problems seen, return to caller as parent process
+                    ffd_extra_flags = 0;
+                    return { .pid = pid, .fd = ffd };
+                }
             }
 
             // found a problem, wait for the child and try again
