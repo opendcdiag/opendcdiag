@@ -524,9 +524,9 @@ inline void SandstoneApplication::select_main_thread(int slice)
     test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_cpu;
 }
 
-template <typename Lambda> static void for_each_main_thread(Lambda &&l)
+template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_slices = INT_MAX)
 {
-    int count = sApp->is_main_process() ? sApp->shmem->main_thread_count : 1;
+    int count = sApp->is_main_process() ? std::min(sApp->shmem->main_thread_count, max_slices) : 1;
     for (int i = 0; i < count; i++)
         l(sApp->main_thread_data(i), -1 - i);
 }
