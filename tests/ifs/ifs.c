@@ -307,7 +307,7 @@ DECLARE_TEST(ifs_array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware sel
     .test_run = scan_run,
     .desired_duration = -1,
     .fracture_loop_count = -1,
-    .quality_level = TEST_QUALITY_BETA,
+    .quality_level = TEST_QUALITY_PROD,
     .flags = test_schedule_sequential,
 END_DECLARE_TEST
 
