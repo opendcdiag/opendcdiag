@@ -383,6 +383,8 @@
     F(CRYPTO_THREAD_unlock)                     \
     F(CRYPTO_THREAD_write_lock)                 \
     F(CRYPTO_zalloc)                            \
+    F(OSSL_LIB_CTX_new)                         \
+    F(OSSL_LIB_CTX_free)                        \
     /**/
 
 #define SANDSTONE_SSL_HMAC_FUNCTIONS(F)         \
