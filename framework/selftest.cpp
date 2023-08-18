@@ -141,6 +141,7 @@ static int selftest_logs_options_init(struct test *test)
     const char *nullstrvalue = get_testspecific_knob_value_string(test, "NullStringValue", nullptr);
     uint64_t u64 = get_testspecific_knob_value_uint(test, "UIntValue", 0);
     int64_t i64 = get_testspecific_knob_value_int(test, "IntValue", -1);
+    double f64 = get_testspecific_knob_value_double(test, "DoubleValue", 2.5);
 
     // log them
     log_info("StringValue = %s", strvalue);
@@ -148,6 +149,8 @@ static int selftest_logs_options_init(struct test *test)
         log_info("NullStringValue = %s", nullstrvalue);
     if (u64 || i64 != -1)
         log_info("Numbers: %" PRIu64 " %" PRId64, u64, i64);
+    if (f64 != 2.5)
+      log_info("Double: %.17g", f64);
 
     return EXIT_SUCCESS;
 }

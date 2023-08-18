@@ -609,21 +609,25 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/test-options/selftest_logs_options.NullStringValue" None
     test_yaml_numeric "/tests/0/test-options/selftest_logs_options.UIntValue" 'value == 0'
     test_yaml_numeric "/tests/0/test-options/selftest_logs_options.IntValue" 'value == -1'
+    test_yaml_numeric "/tests/0/test-options/selftest_logs_options.DoubleValue" 'value == 2.5'
     test_yaml_numeric "/tests/0/threads/0/messages@len" "value == 1"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*StringValue = DefaultValue'
 
     sandstone_selftest -vvv --max-messages=0 -e selftest_logs_options \
                        -O selftest_logs_options.NullStringValue=0x1 \
                        -O selftest_logs_options.UIntValue=0x1 \
-                       -O selftest_logs_options.IntValue=0x1001
+                       -O selftest_logs_options.IntValue=0x1001 \
+		       -O selftest_logs_options.DoubleValue=-8.125
     test_yaml_regexp "/tests/0/test-options/selftest_logs_options.StringValue" 'DefaultValue'
     test_yaml_regexp "/tests/0/test-options/selftest_logs_options.NullStringValue" "0x1"
     test_yaml_numeric "/tests/0/test-options/selftest_logs_options.UIntValue" 'value == 1'
     test_yaml_numeric "/tests/0/test-options/selftest_logs_options.IntValue" 'value == 4097'
-    test_yaml_numeric "/tests/0/threads/0/messages@len" "value == 3"
+    test_yaml_numeric "/tests/0/test-options/selftest_logs_options.DoubleValue" 'value == -8.125'
+    test_yaml_numeric "/tests/0/threads/0/messages@len" "value == 4"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*StringValue = DefaultValue'
     test_yaml_regexp "/tests/0/threads/0/messages/1/text" '.*NullStringValue = 0x1'
     test_yaml_regexp "/tests/0/threads/0/messages/2/text" '.*Numbers: 1 4097'
+    test_yaml_regexp "/tests/0/threads/0/messages/3/text" '.*Double: -8.125'
 }
 
 @test "selftest_logs_random_init" {

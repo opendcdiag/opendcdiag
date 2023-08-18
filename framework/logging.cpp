@@ -1453,6 +1453,10 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
             else
                 return stdprintf("-0x%" PRIx64, -v);
         }
+        std::string operator()(double v)
+        {
+            return stdprintf("%.17g", double(v));
+        }
         std::string operator()(std::string_view v)
         {
             if (v.data() == nullptr) {
