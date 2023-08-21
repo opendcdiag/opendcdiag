@@ -82,9 +82,9 @@ static int mce_check_run(struct test *test, int cpu)
 
     uint64_t thermal_now = sApp->count_thermal_events();
     if (thermal_now != sApp->last_thermal_event_count) {
-        sApp->last_thermal_event_count = thermal_now;
         log_platform_message(SANDSTONE_LOG_WARNING "Thermal events detected (%zu since start).",
                              size_t(thermal_now - sApp->last_thermal_event_count));
+        sApp->last_thermal_event_count = thermal_now;
     }
 
     return errorcount;
