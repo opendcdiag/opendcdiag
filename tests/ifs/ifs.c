@@ -275,6 +275,17 @@ static int scan_run(struct test *test, int cpu)
         return EXIT_SUCCESS;
 }
 
+static int scan_preinit(struct test *test)
+{
+    /*
+     * Intel documentation says that each core can take up to 200 ms to run.
+     * Note num_cpus() counts logical processors, so this may overestimate the
+     * number of cores.
+     */
+    test->minimum_duration = num_cpus() * 200;
+    return EXIT_SUCCESS;
+}
+
 static int scan_saf_init(struct test *test)
 {
     ifs_test_t *data = (ifs_test_t *) malloc(sizeof(ifs_test_t));
@@ -294,6 +305,7 @@ static int scan_array_init(struct test *test)
 }
 
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
+    .test_preinit = scan_preinit,
     .test_init = scan_saf_init,
     .test_run = scan_run,
     .desired_duration = -1,
@@ -303,6 +315,7 @@ DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
 END_DECLARE_TEST
 
 DECLARE_TEST(ifs_array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware selftest for cache and registers")
+    .test_preinit = scan_preinit,
     .test_init = scan_array_init,
     .test_run = scan_run,
     .desired_duration = -1,
