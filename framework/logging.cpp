@@ -268,6 +268,8 @@ static auto thread_core_spacing()
             ++result.logical;
         if (max_logical_id > 99)
             ++result.logical;
+        if (max_logical_id > 999)
+            ++result.logical;
         if (max_core_id > 9)
             ++result.core;
         if (max_core_id > 99)
