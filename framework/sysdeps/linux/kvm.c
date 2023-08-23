@@ -499,7 +499,7 @@ int kvm_generic_run(struct test *test, int cpu)
             ctx.vm_fd = kvm_generic_create_vm(kvm_fd);
             if (ctx.vm_fd < 0) {
                 if (errno == EBUSY) {
-                    log_info("SKIP reason: cannot create VM: device busy");
+                    log_skip(ResourceIssueSkipcategory, "Cannot create VM: device busy");
                     result = EXIT_SKIP;
                     goto epilogue;
                 }
@@ -630,7 +630,7 @@ int kvm_generic_init(struct test *t)
         goto skip;
     }
     if (!ret) {
-        log_info("KVM_CAP_USER_MEMORY is not available, but required.\n");
+        log_skip(ResourceIssueSkipCategory, "KVM_CAP_USER_MEMORY is not available, but required.\n");
         ret = EXIT_SKIP;
         goto skip;
     }
