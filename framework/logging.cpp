@@ -464,6 +464,8 @@ static const char *char_to_skip_category(int val)
         return "OsNotSupportedSkipCategory";
     case SkipCategory(9):
         return "ThreadIssueSkipCategory";
+    case SkipCategory(10):
+        return "TestConfigurationSkipCategory";
     }
 
     return "NO CATEGORY PRESENT";
