@@ -1704,7 +1704,7 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
     if (uint64_t missing = required_cpu_features & ~cpu_features) {
         // for brevity, don't report the bits that the framework itself needs
         missing &= ~_compilerCpuFeatures;
-        log_skip(CpuNotSupportedSkipCategory, "SKIP reason: test requires %s\n", cpu_features_to_string(missing).c_str());
+        log_skip(CpuNotSupportedSkipCategory, "test requires %s\n", cpu_features_to_string(missing).c_str());
         (void) missing;
         return TestResult::Skipped;
     }
@@ -1847,6 +1847,14 @@ static StartedChild spawn_child(const struct test *test, int child_number)
 #ifdef _WIN32
     // _spawn on Windows requires argv elements to be quoted if they contain space.
     const char * const argv0 = SANDSTONE_EXECUTABLE_NAME ".exe";
+    if (sApp->gdb_server_comm.size()) {
+        // we need the name of the temporary file holding the shmem, because
+        // the handles don't inherit properly via gdbserver
+        HANDLE hShmem = HANDLE(_get_osfhandle(sApp->shmemfd));
+        shmemfdstr.resize(MAX_PATH);
+        DWORD len = GetFinalPathNameByHandleA(hShmem, shmemfdstr.data(), MAX_PATH, FILE_NAME_OPENED);
+        shmemfdstr.resize(len);
+    }
 #else
     const char * const argv0 = SANDSTONE_EXECUTABLE_NAME;
 #endif
@@ -2549,8 +2557,12 @@ static int exec_mode_run(int argc, char **argv)
     auto parse_int = [](const char *arg) {
         char *end;
         long n = strtol(arg, &end, 10);
-        if (__builtin_expect(int(n) != n || n < 0 || *end, false))
+        if (__builtin_expect(int(n) != n || n < 0 || *end, false)) {
+#ifndef NDEBUG
+            return open(arg, O_RDWR);
+#endif
             exit(EX_DATAERR);
+        }
         return int(n);
     };
     int child_number = parse_int(argv[3]);

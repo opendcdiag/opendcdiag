@@ -191,6 +191,35 @@ TEST_F(KnobTestSuite, test_all_zero_except_msb_aka_zero_indefinite) {
     assertSignedValues("NotAllOnes", 0x8000000000000000);
 }
 
+TEST_F(KnobTestSuite, test_simple_float64_one_value) {
+    set_knob_from_key_value_string("OneValue=1");
+    auto value = get_test_knob_value_double("OneValue", 0xdead);
+    EXPECT_EQ(value, 1.0);
+}
+
+TEST_F(KnobTestSuite, test_simple_float64_one_point_zero_value) {
+    set_knob_from_key_value_string("OnePtZeroValue=1.0");
+    auto value = get_test_knob_value_double("OnePtZeroValue", 0xdead);
+    EXPECT_EQ(value, 1.0);
+}
+
+TEST_F(KnobTestSuite, test_simple_float64_one_point_five_value) {
+    set_knob_from_key_value_string("OnePt5Value=1.5");
+    auto value = get_test_knob_value_double("OnePt5Value", 0xdead);
+    EXPECT_EQ(value, 1.5f);
+}
+
+TEST_F(KnobTestSuite, test_simple_float64_default_value) {
+    auto value = get_test_knob_value_double("UnusedKnob", 2.5);
+    EXPECT_EQ(value, 2.5f);
+}
+
+TEST_F(KnobTestSuite, test_simple_float64_malformed_value_string_returns_default) {
+    set_knob_from_key_value_string("MalformedKnob=blah.0.0");
+    auto value = get_test_knob_value_double("MalformedKnob", 3.5);
+    EXPECT_EQ(value, 3.5f);
+}
+
 
 // If these tests fail delete it!
 TEST_F(KnobTestSuite, extreme_test_value_out_of_64_bit_range_saturates) {

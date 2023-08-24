@@ -11,16 +11,32 @@
 #include <openssl/bio.h>
 #include <openssl/blowfish.h>
 #include <openssl/cmac.h>
+#include <openssl/core_names.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
+#include <openssl/modes.h>
 //#include <openssl/mdc2.h>
 //#include <openssl/ripemd.h>
 #include <openssl/pem.h>
+#include <openssl/provider.h>
+#include <openssl/rand.h>
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
 //#include <openssl/whrlpool.h>
+
+/* Define macros based on OpenSSL defined macros
+ * - openssl/params.h
+ * TODO: Find a better way to fix this */
+# define s_OSSL_PARAM_DEFN(key, type, addr, sz)    \
+    { (key), (type), (addr), (sz), OSSL_PARAM_UNMODIFIED }
+# define s_OSSL_PARAM_int(key, addr) \
+    s_OSSL_PARAM_DEFN((key), OSSL_PARAM_INTEGER, (addr), sizeof(int))
+# define s_OSSL_PARAM_size_t(key, addr) \
+    s_OSSL_PARAM_DEFN((key), OSSL_PARAM_UNSIGNED_INTEGER, (addr), sizeof(size_t))
+# define s_OSSL_PARAM_uint(key, addr) \
+    s_OSSL_PARAM_DEFN((key), OSSL_PARAM_UNSIGNED_INTEGER, (addr), sizeof(unsigned int))
 
 #define SANDSTONE_SSL_AES_FUNCTIONS(F)          \
     F(AES_bi_ige_encrypt)                       \
@@ -322,7 +338,6 @@
     F(CRYPTO_get_mem_functions)                 \
     F(CRYPTO_malloc)                            \
     F(CRYPTO_memcmp)                            \
-    F(CRYPTO_mem_ctrl)                          \
     F(CRYPTO_memdup)                            \
     F(CRYPTO_new_ex_data)                       \
     F(CRYPTO_nistcts128_decrypt)                \
@@ -352,7 +367,6 @@
     F(CRYPTO_secure_used)                       \
     F(CRYPTO_secure_zalloc)                     \
     F(CRYPTO_set_ex_data)                       \
-    F(CRYPTO_set_mem_debug)                     \
     F(CRYPTO_set_mem_functions)                 \
     F(CRYPTO_strdup)                            \
     F(CRYPTO_strndup)                           \
@@ -368,7 +382,6 @@
     F(CRYPTO_THREAD_set_local)                  \
     F(CRYPTO_THREAD_unlock)                     \
     F(CRYPTO_THREAD_write_lock)                 \
-    F(CRYPTO_xts128_encrypt)                    \
     F(CRYPTO_zalloc)                            \
     /**/
 
@@ -893,6 +906,12 @@
     F(OpenSSL_version_num)                      \
     /**/
 
+#define SANDSTONE_SSL_PARAM_FUNCTIONS(F)        \
+    F(OSSL_PARAM_locate)                        \
+    F(OSSL_PARAM_set_int)                       \
+    F(OSSL_PARAM_set_size_t)                    \
+    /**/
+
 #define SANDSTONE_SSL_RIPEMD160_FUNCTIONS(F)    \
     F(RIPEMD160)                                \
     F(RIPEMD160_Final)                          \
@@ -1031,6 +1050,11 @@
     F(PEM_X509_INFO_read_bio)                   \
     /*F(PEM_X509_INFO_read_ex)*/                \
     F(PEM_X509_INFO_read)                       \
+    /**/
+
+#define SANDSTONE_SSL_RAND_FUNCTIONS(F)         \
+    F(RAND_bytes)                               \
+    F(RAND_set_DRBG_type)                       \
     /**/
 
 #define SANDSTONE_SSL_RSA_FUNCTIONS(F)          \
@@ -1811,19 +1835,29 @@
     F(X509_VERIFY_PARAM_table_cleanup)          \
     /**/
 
+#define SANDSTONE_SSL_PROVIDER_FUNCTIONS(F)     \
+    F(OSSL_PROVIDER_add_builtin)                \
+    F(OSSL_PROVIDER_try_load)                   \
+    F(OSSL_PROVIDER_unload)                     \
+    /**/
+
 #define SANDSTONE_SSL_FUNCTIONS(F)              \
     SANDSTONE_SSL_AES_FUNCTIONS(F)              \
     SANDSTONE_SSL_BIO_FUNCTIONS(F)              \
     SANDSTONE_SSL_BF_FUNCTIONS(F)               \
     SANDSTONE_SSL_CMAC_FUNCTIONS(F)             \
+    SANDSTONE_SSL_CRYPTO_FUNCTIONS(F)           \
     SANDSTONE_SSL_EVP_FUNCTIONS(F)              \
     SANDSTONE_SSL_HMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_GENERIC_FUNCTIONS(F)          \
     SANDSTONE_SSL_MD5_FUNCTIONS(F)              \
+    SANDSTONE_SSL_PARAM_FUNCTIONS(F)            \
     SANDSTONE_SSL_PEM_FUNCTIONS(F)              \
+    SANDSTONE_SSL_RAND_FUNCTIONS(F)             \
     SANDSTONE_SSL_RSA_FUNCTIONS(F)              \
     SANDSTONE_SSL_SHA_FUNCTIONS(F)              \
     SANDSTONE_SSL_X509_FUNCTIONS(F)             \
+    SANDSTONE_SSL_PROVIDER_FUNCTIONS(F)         \
     /**/
 
 # define s_SSL_set_max_cert_list(ssl,m) \

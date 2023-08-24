@@ -122,6 +122,7 @@ public:
     MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
     ChildExitStatus childExitStatus;
     TestResult testResult = TestResult::Passed;
+    int slices = 0;
     int pc = 0;
     bool skipInMainThread = false;
 
@@ -1453,6 +1454,10 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
             else
                 return stdprintf("-0x%" PRIx64, -v);
         }
+        std::string operator()(double v)
+        {
+            return stdprintf("%.17g", double(v));
+        }
         std::string operator()(std::string_view v)
         {
             if (v.data() == nullptr) {
@@ -1660,7 +1665,10 @@ static ChildExitStatus find_most_serious_result(std::span<const ChildExitStatus>
 }
 
 inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state_)
-    : test(test), childExitStatus(find_most_serious_result(state_)), testResult(childExitStatus.result)
+    : test(test),
+      childExitStatus(find_most_serious_result(state_)),
+      testResult(childExitStatus.result),
+      slices(int(state_.size()))
 {
     // check that most serious result
     switch (testResult) {
@@ -1862,7 +1870,7 @@ void KeyValuePairLogger::print_thread_messages()
 
         munmap_and_truncate_log(data, r);
     };
-    for_each_main_thread(doprint);
+    for_each_main_thread(doprint, slices);
     for_each_test_thread(doprint);
 }
 
@@ -2136,7 +2144,7 @@ void TapFormatLogger::print_thread_messages()
 
         munmap_and_truncate_log(data, r);
     };
-    for_each_main_thread(doprint);
+    for_each_main_thread(doprint, slices);
     for_each_test_thread(doprint);
 }
 
@@ -2441,7 +2449,7 @@ void YamlLogger::print()
 
         munmap_and_truncate_log(data, r);
     };
-    for_each_main_thread(doprint);
+    for_each_main_thread(doprint, slices);
     for_each_test_thread(doprint);
 
     print_child_stderr_common([](int fd) {

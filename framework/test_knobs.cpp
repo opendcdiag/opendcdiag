@@ -105,6 +105,26 @@ Int knob_value_integer(const struct test *test, const char *k, Int value_if_not_
     return value_if_not_present;
 }
 
+static
+double knob_value_double(const struct test *test, const char *k, double value_if_not_present)
+{
+    TestKeyWrapper key(test, k);
+    std::string_view s = TestKnobSingleton::get_knob(key);
+    if (s.data()) {
+        // convert to integer
+        char * endptr;
+        errno = 0;
+        auto value = strtod(s.data(), &endptr);
+
+        if (endptr == s.end()) {
+            logging_mark_knob_used(key, value, KnobOrigin::Options);
+            return value;
+        };
+    }
+    logging_mark_knob_used(key, value_if_not_present, KnobOrigin::Defaulted);
+    return value_if_not_present;
+}
+
 #if !SANDSTONE_RESTRICTED_CMDLINE
 const char *get_testspecific_knob_value_string(const struct test *test, const char *key,
                                                const char *value_if_not_present)
@@ -130,6 +150,11 @@ uint64_t get_testspecific_knob_value_uint(const struct test *test, const char *k
 int64_t get_testspecific_knob_value_int(const struct test *test, const char *key, int64_t value_if_not_present)
 {
     return knob_value_integer(test, key, value_if_not_present);
+}
+
+double get_testspecific_knob_value_double(const struct test *test, const char *key, double value_if_not_present)
+{
+    return knob_value_double(test, key, value_if_not_present);
 }
 
 bool set_knob_from_key_value_string(const char *key_value_pair) {
