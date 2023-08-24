@@ -16,7 +16,7 @@ int kvm_generic_run(struct test *test, int cpu)
 
 int kvm_generic_init(struct test *t)
 {
-    log_info("Virtualization support not implemented on this platform");
+    log_skip(DeviceNotConfiguredSkipCategory, "Virtualization support not implemented on this platform");
     return EXIT_SKIP;
 }
 
