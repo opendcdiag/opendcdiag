@@ -501,7 +501,8 @@ static inline const char *convert_kvm_exit_code_to_string(int kvm_exit_code)
         "KVM_EXIT_NOTIFY"
     };
 
-    if (kvm_exit_code >=0 && kvm_exit_code <= 37)
+
+    if (kvm_exit_code >= 0 && kvm_exit_code < (sizeof(code_to_string) / sizeof(*code_to_string)))
         return  code_to_string[kvm_exit_code];
     return "UNKNOWN_KVM_EXIT";
 }
@@ -600,13 +601,16 @@ int kvm_generic_run(struct test *test, int cpu)
                 }
             }
 
+            stop = 1;
+            result = EXIT_FAILURE;
+
             switch (ctx.runs->exit_reason) {
                 case KVM_EXIT_HLT:
                     {
                         struct kvm_regs cregs;
 
                         stop = 1;
-
+                        result = EXIT_SUCCESS;
                         IOCTL_OR_RET(ctx.cpu_fd, KVM_GET_REGS, &cregs);
                         switch (cregs.rax) {
                             case 0:
@@ -619,189 +623,193 @@ int kvm_generic_run(struct test *test, int cpu)
                         }
                     }
                     break;
+                case KVM_EXIT_UNKNOWN:
+                    log_error("KVM exit reason: %s, Hardware exit reason: 0x%llx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->hw.hardware_exit_reason);
+                    break;
+                case KVM_EXIT_FAIL_ENTRY:
+                    log_error("KVM exit reason: %s, Hardware entry exit reason: 0x%llx, cpu:%u",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->fail_entry.hardware_entry_failure_reason,
+                            ctx.runs->fail_entry.cpu);
+                    break;
+                case KVM_EXIT_EXCEPTION:
+                    log_error("KVM exit reason: %s, Exception code: 0x%x, error_code: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->ex.exception,
+                            ctx.runs->ex.error_code);
+                    break;
+                case KVM_EXIT_IO:
+                    log_error("KVM exit reason: %s, io.direction: 0x%x, io.size: 0x%x, io.port: io.0x%x, io.count: 0x%x, io.data_offset: 0x%llx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->io.direction,
+                            ctx.runs->io.size,
+                            ctx.runs->io.port,
+                            ctx.runs->io.count,
+                            ctx.runs->io.data_offset);
+                    break;
+#ifdef __x86_64__
+                case KVM_EXIT_DEBUG:
+                    log_error("KVM exit reason: %s, debug.arch.exception: 0x%x, debug.arch.pad: 0x%x, debug.arch.pc: 0x%llx, debug.arch.dr6: 0x%llx, debug.arch.dr7: 0x%llx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->debug.arch.exception,
+                            ctx.runs->debug.arch.pad,
+                            ctx.runs->debug.arch.pc,
+                            ctx.runs->debug.arch.dr6,
+                            ctx.runs->debug.arch.dr7);
+                    break;
+                case KVM_EXIT_X86_RDMSR:
+                    log_error("KVM exit reason: %s, msr.error: 0x%x, msr.reason: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->msr.error,
+                            ctx.runs->msr.reason);
+                    break;
+                case KVM_EXIT_X86_WRMSR:
+                    log_error("KVM exit reason: %s, msr.error: 0x%x, msr.reason: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->msr.error,
+                            ctx.runs->msr.reason);
+                    break;
+#endif
+                case KVM_EXIT_MMIO:
+                    log_error("KVM exit reason: %s, mmio.phys_addr: 0x%llx, mmio.len: 0x%x, mmio.is_write: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->mmio.phys_addr,
+                            ctx.runs->mmio.len,
+                            ctx.runs->mmio.is_write);
+                    break;
+                case KVM_EXIT_HYPERCALL:
+                    log_error("KVM exit reason: %s, hypercall.nr: 0x%llx, hypercall.ret: 0x%llx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->hypercall.nr,
+                            ctx.runs->hypercall.ret);
+                    break;
+                case KVM_EXIT_TPR_ACCESS:
+                    log_error("KVM exit reason: %s, tpr_access.rip: 0x%llx, tpr_access.is_write: 0x%x tpr_access.pad: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->tpr_access.rip,
+                            ctx.runs->tpr_access.is_write,
+                            ctx.runs->tpr_access.pad);
+                    break;
+#ifdef __s390__
+                case KVM_EXIT_S390_SIEIC:
+                    log_error("KVM exit reason: %s, s390_sieic.icptcode: 0x%x, s390_sieic.ipa: 0x%x, s390_sieic.ipb: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->s390_sieic.icptcode,
+                            ctx.runs->s390_sieic.ipa,
+                            ctx.runs->s390_sieic.ipb);
+                    break;
+                case KVM_EXIT_S390_RESET:
+                    log_error("KVM exit reason: %s, s390_reset_flags: 0x%llx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->s390_reset_flags);
+                    break;
+                case KVM_EXIT_S390_UCONTROL:
+                    log_error("KVM exit reason: %s, s390_ucontrol.trans_exc_code: 0x%llx, s390_ucontrol.pgm_code: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->s390_ucontrol.trans_exc_code,
+                            ctx.runs->s390_ucontrol.pgm_code);
+                    break;
+                case KVM_EXIT_S390_TSCH:
+                    log_error("KVM exit reason: %s, s390_tsch.subchannel_id: 0x%x, subchannel_nr: 0x%x, io_int_parm: 0x%x, io_int_word: 0x%x, ipb: 0x%x, dequeued: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->s390_tsch.subchannel_id,
+                            ctx.runs->s390_tsch.subchannel_nr,
+                            ctx.runs->s390_tsch.io_int_parm,
+                            ctx.runs->s390_tsch.io_int_word,
+                            ctx.runs->s390_tsch.ipb,
+                            ctx.runs->s390_tsch.dequeued);
+                    break;
+                case KVM_EXIT_S390_STSI:
+                    log_error("KVM exit reason: %s, s390_stsi.addr: 0x%llx, s390_stsi.ar: 0x%x, s390_stsi.reserved: 0x%x, s390_stsi.fc: 0x%x, s390_stsi.sel1: 0x%x, s390_stsi.sel2: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->s390_stsi.addr,
+                            ctx.runs->s390_stsi.ar,
+                            ctx.runs->s390_stsi.reserved,
+                            ctx.runs->s390_stsi.fc,
+                            ctx.runs->s390_stsi.sel1,
+                            ctx.runs->s390_stsi.sel2);
+                    break;
+#endif
+                case KVM_EXIT_DCR:
+                    log_error("KVM exit reason: %s, dcr.dcrn: 0x%x, dcr.data: 0x%x, dcr.is_write: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->dcr.dcrn,
+                            ctx.runs->dcr.data,
+                            ctx.runs->dcr.is_write);
+                    break;
+                case KVM_EXIT_INTERNAL_ERROR:
+                    log_error("KVM exit reason: %s, internal.suberror: 0x%x, internal.ndata: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->internal.suberror,
+                            ctx.runs->internal.ndata);
+                    break;
+                case KVM_EXIT_OSI:
+                    log_error("KVM exit reason: %s, Please have a look at GPRs",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason));
+                    break;
+#ifdef __powerpc__
+                case KVM_EXIT_PAPR_HCALL:
+                    log_error("KVM exit reason: %s, papr_hcall.nr: 0x%llx, papr_hcall.ret: 0x%llx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->papr_hcall.nr,
+                            ctx.runs->papr_hcall.ret);
+                    break;
+                case KVM_EXIT_EPR:
+                    log_error("KVM exit reason: %s, epr.epr: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->epr.epr);
+                    break;
+#endif
+                case KVM_EXIT_SYSTEM_EVENT:
+                    log_error("KVM exit reason: %s, system_event.type: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->system_event.type);
+                    break;
+                case KVM_EXIT_HYPERV:
+                    log_error("KVM exit reason: %s, hyperv.type: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->hyperv.type);
+                    break;
+#ifdef __aarch64__
+                case KVM_EXIT_ARM_NISV:
+                    log_error("KVM exit reason: %s, arm_nisv.esr_iss: 0x%llx, arm_nisv.fault_ipa: 0x%llx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->arm_nisv.esr_iss,
+                            ctx.runs->arm_nisv.fault_ipa);
+                    break;
+#endif
+                case KVM_EXIT_XEN:
+                    log_error("KVM exit reason: %s, xen.type: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->xen.type);
+                    break;
+#ifdef __riscv__
+                case KVM_EXIT_RISCV_SBI:
+                    log_error("KVM exit reason: %s, riscv_sbi.extension_id: 0x%lx, riscv_sbi.function_id: 0x%lx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->riscv_sbi.extension_id,
+                            ctx.runs->riscv_sbi.function_id);
+                    break;
+                case KVM_EXIT_RISCV_CSR:
+                    log_error("KVM exit reason: %s, riscv_sbi.csr_num: 0x%lx, riscv_sbi.new_value: 0x%lx, riscv_csr.write_mask: 0x%lx, riscv_csr.ret_value: 0x%lx",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->riscv_csr.csr_num,
+                            ctx.runs->riscv_csr.new_value,
+                            ctx.runs->riscv_csr.write_mask,
+                            ctx.runs->riscv_csr.ret_value);
+                    break;
+#endif
+                case KVM_EXIT_NOTIFY:
+                    log_error("KVM exit reason: %s, notify.flags: 0x%x",
+                            convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
+                            ctx.runs->notify.flags);
+                    break;
                 default:
-                    stop = 1;
-                    result = EXIT_FAILURE;
-                    switch (ctx.runs->exit_reason) {
-                        case KVM_EXIT_UNKNOWN:
-                            log_error("KVM exit reason: %s, Hardware exit reason: 0x%llx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->hw.hardware_exit_reason);
-                            break;
-                        case KVM_EXIT_FAIL_ENTRY:
-                            log_error("KVM exit reason: %s, Hardware entry exit reason: 0x%llx, cpu:%u",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->fail_entry.hardware_entry_failure_reason,
-                                    ctx.runs->fail_entry.cpu);
-                            break;
-                         case KVM_EXIT_EXCEPTION:
-                            log_error("KVM exit reason: %s, Exception code: 0x%x, error_code: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->ex.exception,
-                                    ctx.runs->ex.error_code);
-                            break;
-                        case KVM_EXIT_IO:
-                            log_error("KVM exit reason: %s, io.direction: 0x%x, io.size: 0x%x, io.port: io.0x%x, io.count: 0x%x, io.data_offset: 0x%llx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->io.direction,
-                                    ctx.runs->io.size,
-                                    ctx.runs->io.port,
-                                    ctx.runs->io.count,
-                                    ctx.runs->io.data_offset);
-                            break;
-                        case KVM_EXIT_DEBUG:
-                            log_error("KVM exit reason: %s, debug.arch.exception: 0x%x, debug.arch.pad: 0x%x, debug.arch.pc: 0x%llx, debug.arch.dr6: 0x%llx, debug.arch.dr7: 0x%llx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->debug.arch.exception,
-                                    ctx.runs->debug.arch.pad,
-                                    ctx.runs->debug.arch.pc,
-                                    ctx.runs->debug.arch.dr6,
-                                    ctx.runs->debug.arch.dr7);
-                            break;
-                        case KVM_EXIT_MMIO:
-                            log_error("KVM exit reason: %s, mmio.phys_addr: 0x%llx, mmio.len: 0x%x, mmio.is_write: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->mmio.phys_addr,
-                                    ctx.runs->mmio.len,
-                                    ctx.runs->mmio.is_write);
-                            break;
-                        case KVM_EXIT_HYPERCALL:
-                            log_error("KVM exit reason: %s, hypercall.nr: 0x%llx, hypercall.ret: 0x%llx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->hypercall.nr,
-                                    ctx.runs->hypercall.ret);
-                            break;
-                        case KVM_EXIT_TPR_ACCESS:
-                            log_error("KVM exit reason: %s, tpr_access.rip: 0x%llx, tpr_access.is_write: 0x%x tpr_access.pad: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->tpr_access.rip,
-                                    ctx.runs->tpr_access.is_write,
-                                    ctx.runs->tpr_access.pad);
-                            break;
-                        case KVM_EXIT_S390_SIEIC:
-                            log_error("KVM exit reason: %s, s390_sieic.icptcode: 0x%x, s390_sieic.ipa: 0x%x, s390_sieic.ipb: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->s390_sieic.icptcode,
-                                    ctx.runs->s390_sieic.ipa,
-                                    ctx.runs->s390_sieic.ipb);
-                            break;
-                        case KVM_EXIT_S390_RESET:
-                            log_error("KVM exit reason: %s, s390_reset_flags: 0x%llx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->s390_reset_flags);
-                            break;
-                        case KVM_EXIT_S390_UCONTROL:
-                            log_error("KVM exit reason: %s, s390_ucontrol.trans_exc_code: 0x%llx, s390_ucontrol.pgm_code: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->s390_ucontrol.trans_exc_code,
-                                    ctx.runs->s390_ucontrol.pgm_code);
-                            break;
-                        case KVM_EXIT_DCR:
-                            log_error("KVM exit reason: %s, dcr.dcrn: 0x%x, dcr.data: 0x%x, dcr.is_write: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->dcr.dcrn,
-                                    ctx.runs->dcr.data,
-                                    ctx.runs->dcr.is_write);
-                            break;
-                        case KVM_EXIT_INTERNAL_ERROR:
-                            log_error("KVM exit reason: %s, internal.suberror: 0x%x, internal.ndata: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->internal.suberror,
-                                    ctx.runs->internal.ndata);
-                            break;
-                        case KVM_EXIT_OSI:
-                            log_error("KVM exit reason: %s, Please have a look at GPRs",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason));
-                            break;
-                        case KVM_EXIT_PAPR_HCALL:
-                            log_error("KVM exit reason: %s, papr_hcall.nr: 0x%llx, papr_hcall.ret: 0x%llx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->papr_hcall.nr,
-                                    ctx.runs->papr_hcall.ret);
-                            break;
-                        case KVM_EXIT_S390_TSCH:
-                            log_error("KVM exit reason: %s, s390_tsch.subchannel_id: 0x%x, subchannel_nr: 0x%x, io_int_parm: 0x%x, io_int_word: 0x%x, ipb: 0x%x, dequeued: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->s390_tsch.subchannel_id,
-                                    ctx.runs->s390_tsch.subchannel_nr,
-                                    ctx.runs->s390_tsch.io_int_parm,
-                                    ctx.runs->s390_tsch.io_int_word,
-                                    ctx.runs->s390_tsch.ipb,
-                                    ctx.runs->s390_tsch.dequeued);
-                            break;
-                        case KVM_EXIT_EPR:
-                            log_error("KVM exit reason: %s, epr.epr: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->epr.epr);
-                            break;
-                        case KVM_EXIT_SYSTEM_EVENT:
-                            log_error("KVM exit reason: %s, system_event.type: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->system_event.type);
-                            break;
-                        case KVM_EXIT_S390_STSI:
-                            log_error("KVM exit reason: %s, s390_stsi.addr: 0x%llx, s390_stsi.ar: 0x%x, s390_stsi.reserved: 0x%x, s390_stsi.fc: 0x%x, s390_stsi.sel1: 0x%x, s390_stsi.sel2: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->s390_stsi.addr,
-                                    ctx.runs->s390_stsi.ar,
-                                    ctx.runs->s390_stsi.reserved,
-                                    ctx.runs->s390_stsi.fc,
-                                    ctx.runs->s390_stsi.sel1,
-                                    ctx.runs->s390_stsi.sel2);
-                            break;
-                        case KVM_EXIT_HYPERV:
-                            log_error("KVM exit reason: %s, hyperv.type: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->hyperv.type);
-                            break;
-                        case KVM_EXIT_ARM_NISV:
-                            log_error("KVM exit reason: %s, arm_nisv.esr_iss: 0x%llx, arm_nisv.fault_ipa: 0x%llx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->arm_nisv.esr_iss,
-                                    ctx.runs->arm_nisv.fault_ipa);
-                            break;
-                        case KVM_EXIT_X86_RDMSR:
-                            log_error("KVM exit reason: %s, msr.error: 0x%x, msr.reason: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->msr.error,
-                                    ctx.runs->msr.reason);
-                            break;
-                        case KVM_EXIT_X86_WRMSR:
-                            log_error("KVM exit reason: %s, msr.error: 0x%x, msr.reason: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->msr.error,
-                                    ctx.runs->msr.reason);
-                            break;
-                        case KVM_EXIT_XEN:
-                            log_error("KVM exit reason: %s, xen.type: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->xen.type);
-                            break;
-                        case KVM_EXIT_RISCV_SBI:
-                            log_error("KVM exit reason: %s, riscv_sbi.extension_id: 0x%lx, riscv_sbi.function_id: 0x%lx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->riscv_sbi.extension_id,
-                                    ctx.runs->riscv_sbi.function_id);
-                            break;
-                        case KVM_EXIT_RISCV_CSR:
-                            log_error("KVM exit reason: %s, riscv_sbi.csr_num: 0x%lx, riscv_sbi.new_value: 0x%lx, riscv_csr.write_mask: 0x%lx, riscv_csr.ret_value: 0x%lx",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->riscv_csr.csr_num,
-                                    ctx.runs->riscv_csr.new_value,
-                                    ctx.runs->riscv_csr.write_mask,
-                                    ctx.runs->riscv_csr.ret_value);
-                            break;
-                        case KVM_EXIT_NOTIFY:
-                            log_error("KVM exit reason: %s, notify.flags: 0x%x",
-                                    convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                                    ctx.runs->notify.flags);
-                            break;
-                        default:
-                            log_error("Unexpected exit reason: %d.\n", ctx.runs->exit_reason);
-                            break;
-                    }
+                    log_error("Unexpected exit reason: %d.\n", ctx.runs->exit_reason);
+                    break;
             }
-
         } while (!stop);
 
         if ((result == EXIT_SUCCESS) && (ctx.config->check_handler != NULL))
