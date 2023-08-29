@@ -22,6 +22,33 @@
 
 #include "sandstone_kvm.h"
 
+#define KVM_EXIT_X86_RDMSR        29
+#define KVM_EXIT_X86_WRMSR        30
+#define KVM_EXIT_XEN              34
+#define KVM_EXIT_NOTIFY           37
+
+/* KVM_EXIT_FAIL_ENTRY */
+struct sandstone_kvm_fail_entry {
+    __u64 hardware_entry_failure_reason;
+    __u32 cpu;
+};
+
+/*KVM_EXIT_X86_RDMSR && KVM_EXIT_X86_WRMSR*/
+struct sandstone_kvm_exit_x86_read_write_msr {
+    __u8 error;
+    __u32 reason;
+} msr;
+
+/*KVM_EXIT_XEN*/
+struct sandstone_kvm_xen_exit {
+       __u32 type;
+};
+
+/*KVM_EXIT_NOTIFY*/
+struct kvm_notify {
+    __u32 flags;
+};
+
 int kvm_fd = -1;
 
 #define PAYLOAD_GUEST_ENTRY 0x1000
@@ -525,6 +552,11 @@ int kvm_generic_run(struct test *test, int cpu)
         return EXIT_FAILURE;
     }
 
+    __auto_type fail_entry = (struct sandstone_kvm_fail_entry *) ctx.runs->padding;
+    __auto_type msr = (struct sandstone_kvm_exit_x86_read_write_msr *) ctx.runs->padding;
+    __auto_type xen = (struct sandstone_kvm_xen_exit *) ctx.runs->padding;
+    __auto_type notify = (struct kvm_notify *) ctx.runs->padding;
+
     int count = 0;
     do {
         /* Every 16 loops reset the A bit for the memory */
@@ -631,8 +663,8 @@ int kvm_generic_run(struct test *test, int cpu)
                 case KVM_EXIT_FAIL_ENTRY:
                     log_error("KVM exit reason: %s, Hardware entry exit reason: 0x%llx, cpu:%u",
                             convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                            ctx.runs->fail_entry.hardware_entry_failure_reason,
-                            ctx.runs->fail_entry.cpu);
+                            fail_entry->hardware_entry_failure_reason,
+                            fail_entry->cpu);
                     break;
                 case KVM_EXIT_EXCEPTION:
                     log_error("KVM exit reason: %s, Exception code: 0x%x, error_code: 0x%x",
@@ -662,14 +694,14 @@ int kvm_generic_run(struct test *test, int cpu)
                 case KVM_EXIT_X86_RDMSR:
                     log_error("KVM exit reason: %s, msr.error: 0x%x, msr.reason: 0x%x",
                             convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                            ctx.runs->msr.error,
-                            ctx.runs->msr.reason);
+                            msr->error,
+                            msr->reason);
                     break;
                 case KVM_EXIT_X86_WRMSR:
                     log_error("KVM exit reason: %s, msr.error: 0x%x, msr.reason: 0x%x",
                             convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                            ctx.runs->msr.error,
-                            ctx.runs->msr.reason);
+                            msr->error,
+                            msr->reason);
                     break;
 #endif
                 case KVM_EXIT_MMIO:
@@ -783,7 +815,7 @@ int kvm_generic_run(struct test *test, int cpu)
                 case KVM_EXIT_XEN:
                     log_error("KVM exit reason: %s, xen.type: 0x%x",
                             convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                            ctx.runs->xen.type);
+                            xen->type);
                     break;
 #ifdef __riscv__
                 case KVM_EXIT_RISCV_SBI:
@@ -804,7 +836,7 @@ int kvm_generic_run(struct test *test, int cpu)
                 case KVM_EXIT_NOTIFY:
                     log_error("KVM exit reason: %s, notify.flags: 0x%x",
                             convert_kvm_exit_code_to_string(ctx.runs->exit_reason),
-                            ctx.runs->notify.flags);
+                            notify->flags);
                     break;
                 default:
                     log_error("Unexpected exit reason: %d.\n", ctx.runs->exit_reason);
