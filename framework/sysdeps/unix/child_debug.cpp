@@ -1083,7 +1083,7 @@ void debug_crashed_child()
 
 void debug_hung_child(pid_t child)
 {
-    if (!SandstoneConfig::ChildDebugHangs)
+    if (!SandstoneConfig::ChildDebugHangs || on_hang_action == kill_on_hang)
         return;
 
     char buf[std::numeric_limits<pid_t>::digits10 + 2];
