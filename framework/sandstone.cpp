@@ -1645,6 +1645,7 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
         for (size_t i = 0; i < children.handles.size(); ++i) {
             auto child = children.handles[i];
             if (child) {
+                debug_hung_child(child);
 #ifdef _WIN32
                 log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
                 TerminateProcess(HANDLE(child), EXIT_TIMEOUT);
