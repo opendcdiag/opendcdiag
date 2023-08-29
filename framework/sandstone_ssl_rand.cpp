@@ -143,6 +143,10 @@ static int sandstone_ssl_rand_provider_init(const OSSL_CORE_HANDLE *handle,
 
 void sandstone_ssl_rand_init()
 {
+    // Check OpenSSL is working before loading the random provider.
+    if (!OpenSSLWorking)
+        return;
+
     if (s_OSSL_PROVIDER_add_builtin(NULL, "sandstone-rand", sandstone_ssl_rand_provider_init) != 1
             || s_RAND_set_DRBG_type(NULL, "sand-rand", NULL, NULL, NULL) != 1
             || (s_prov = s_OSSL_PROVIDER_try_load(NULL, "sandstone-rand", 1)) == NULL )
