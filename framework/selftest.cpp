@@ -895,8 +895,17 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
+    .id = "selftest_skip_minimum_cpu",
+    .description = "Skips by having unsatisfiable .minimum_cpu requirements",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_failinit_init,            // shouldn't get run
+    .test_run = selftest_fail_run,                  // shouldn't get run
+    .minimum_cpu = ~decltype(test::minimum_cpu)(0), // hopefully we won't get run where this passes!
+    .desired_duration = -1,
+},
+{
     .id = "selftest_skip",
-    .description = "Skipped test",
+    .description = "Skips by returning EXIT_SKIP from the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_skip_init,
     .test_run = selftest_skip_run,
@@ -904,7 +913,7 @@ static struct test selftests_array[] = {
 },
 {
     .id = "selftest_log_skip_init",
-    .description = "This test will test the log_skip feature in the init function",
+    .description = "Skips using log_skip() in the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_log_skip_init,
     .test_run = selftest_skip_run,
@@ -928,21 +937,21 @@ static struct test selftests_array[] = {
 },
 {
     .id = "selftest_log_skip_run_all_threads",
-    .description = "This test will test the log_skip feature in the run function where all threads skip",
+    .description = "Skips using log_skip() in the run function where all threads skip",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_log_skip_run_all_threads,
     .desired_duration = -1,
 },
 {
     .id = "selftest_log_skip_run_even_threads",
-    .description = "This test will test the log_skip feature in the run function where only even numbered threads skip",
+    .description = "Skips using log_skip() in the run function where only even numbered threads skip",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_log_skip_run_even_threads,
     .desired_duration = -1,
 },
 {
     .id = "selftest_log_skip_newline",
-    .description = "This test will test the log_skip feature in the init function where there are newlines in the message",
+    .description = "Skips using log_skip() in the init function where there are newlines in the message",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_log_skip_newline_init,
     .test_run = selftest_log_skip_newline_run,

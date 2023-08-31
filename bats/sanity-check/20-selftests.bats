@@ -427,6 +427,17 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/threads/0/messages/$i/text" '.*skip.*'
 }
 
+@test "selftest_skip_minimum_cpu" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_skip_minimum_cpu
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_skip_minimum_cpu
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" CpuNotSupportedSkipCategory
+    test_yaml_regexp "/tests/0/skip-reason" '.*test requires.*'
+}
+
 @test "selftest_log_skip_init" {
     declare -A yamldump
     sandstone_selftest -e selftest_log_skip_init
