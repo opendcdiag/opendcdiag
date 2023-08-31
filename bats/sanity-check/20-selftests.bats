@@ -298,7 +298,7 @@ tap_negative_check() {
     if [[ "$SANDSTONE" = "wine "* ]]; then
         os=`wine cmd /c ver | sed -n "s/\r$//;s/.*Windows /Windows v/p"`
     fi
-    test_yaml_regexp "/os" "\\Q$os\\E\\b.*"
+    [[ "${yamldump[/os]}" = "$os"* ]]
     test_yaml_numeric "/timing/duration" 'value == 1234'
     test_yaml_numeric "/timing/timeout" 'value == 12345'
 
@@ -509,9 +509,9 @@ selftest_pass() {
         test_yaml_regexp "/tests/$i/result" pass
 
         # verify that the random generator seed is changing
-        # (using pcre syntax to invert the match)
-        test_yaml_regexp "/tests/$i/state/seed" "^((?!\\Q$last_seed\\E).)*\$"
-        last_seed=${yamldump[/tests/$i/state/seed]}
+        extract_from_yaml "/tests/$i/state/seed"
+        [[ "$value" != "$last_seed" ]]
+        last_seed=$value
 
         if ((i == yamldump[/tests@len] - 1)); then
             test_yaml_numeric "/tests/1/test-runtime" 'value >= 10'
@@ -918,7 +918,7 @@ fail_common() {
     test_yaml_regexp "/tests/0/result" fail
     test_yaml_regexp "/tests/0/fail/cpu-mask" '[X_.:]+'
     test_yaml_regexp "/tests/0/state/seed" '\w+:\w+'
-    test_yaml_regexp "/tests/0/fail/seed" "\\Q${yamldump[/tests/0/state/seed]}\\E"
+    [[ "${yamldump[/tests/0/fail/seed]}" = "${yamldump[/tests/0/state/seed]}" ]]
     test_yaml_numeric "/tests/0/fail/time-to-fail" 'value > 0'
 
     ttf=${yamldump[/tests/0/fail/time-to-fail]}
@@ -951,7 +951,8 @@ fail_common() {
         # same test
         test_yaml_regexp "/tests/$i/test" selftest_fail
         # with the same RNG seed
-        test_yaml_regexp "/tests/$i/state/seed" "\\Q${yamldump[/tests/0/fail/seed]}\\E"
+        extract_from_yaml "/tests/$i/state/seed"
+        [[ "$value" = "${yamldump[/tests/0/fail/seed]}" ]]
         # reporting correctly
         test_yaml_regexp "/tests/$i/state/retry" True
         test_yaml_numeric "/tests/$i/state/iteration" "value == $i"
@@ -963,7 +964,8 @@ fail_common() {
         # same test
         test_yaml_regexp "/tests/$i/test" selftest_fail
         # with the same RNG seed
-        test_yaml_regexp "/tests/$i/state/seed" "\\Q${yamldump[/tests/4/fail/seed]}\\E"
+        extract_from_yaml "/tests/$i/state/seed"
+        [[ "$value" = "${yamldump[/tests/4/fail/seed]}" ]]
         # reporting correctly
         test_yaml_regexp "/tests/$i/state/retry" True
         test_yaml_numeric "/tests/$i/state/iteration" "value == $i - 4"
