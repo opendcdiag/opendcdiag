@@ -70,7 +70,7 @@ test_yaml_regexp() {
     return 1
 }
 
-test_fail_socket1() {
+test_run_fakesockets() {
     if $is_debug; then
         if (( MAX_PROC < 4 )); then
             skip "Need at least 4 logical processors to run this test"
@@ -84,6 +84,10 @@ test_fail_socket1() {
         fi
         "$@" --cpuset=c0t0,c1t0
     fi
+}
+
+test_fail_socket1() {
+    test_run_fakesockets "$@"
 
     # only one socket should have had problems
     test_yaml_regexp "/tests/0/fail/cpu-mask" 'None|\.+:\.*X[.X]*(:.+)?'
@@ -432,6 +436,32 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/result" skip
     test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
     test_yaml_regexp "/tests/0/skip-reason" '.*skip.*'
+}
+
+selftest_log_skip_init_socket_common() {
+    local slicename=$1
+    local testname=$2
+    declare -A yamldump
+    test_run_fakesockets sandstone_selftest --max-cores-per-slice=2 -e $testname
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" $testname
+
+    # Because only 1 socket skipped, this is actually a pass
+    test_yaml_regexp "/tests/0/result" pass
+    test_yaml_absent "/tests/0/skip-category"
+    test_yaml_absent "/tests/0/skip-reason"
+
+    # But there should still be a skip message
+    test_yaml_regexp "/tests/0/threads/0/thread" "$slicename"
+}
+
+@test "selftest_log_skip_init_socket0" {
+    selftest_log_skip_init_socket_common 'main' selftest_log_skip_init_socket0
+}
+
+@test "selftest_log_skip_init_socket1" {
+    selftest_log_skip_init_socket_common 'main 1' selftest_log_skip_init_socket1
 }
 
 @test "selftest_log_skip_run_all_threads" {
