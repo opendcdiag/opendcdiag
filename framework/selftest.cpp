@@ -208,9 +208,17 @@ static int selftest_log_skip_init(struct test *test)
     return EXIT_SKIP;
 }
 
-static int selftest_log_skip_run(struct test *test, int cpu)
+template <int PackageId> static int selftest_log_skip_socket_init(struct test *test)
 {
-    log_skip(SelftestSkipCategory, "Control shouldn't reach here");
+    if (num_packages() == 1 && cpu_info[0].package_id == PackageId)
+        return selftest_log_skip_init(test);
+    return EXIT_SUCCESS;
+}
+
+template <int PackageId> static int selftest_log_skip_socket_run(struct test *test, int cpu)
+{
+    if (num_packages() == 1 && cpu_info[0].package_id == PackageId)
+        return selftest_skip_run(test, cpu);
     return EXIT_SUCCESS;
 }
 
@@ -899,7 +907,23 @@ static struct test selftests_array[] = {
     .description = "This test will test the log_skip feature in the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_log_skip_init,
-    .test_run = selftest_log_skip_run,
+    .test_run = selftest_skip_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_log_skip_init_socket0",
+    .description = "Skips using log_skip() in the init function only in socket 0",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_log_skip_socket_init<0>,
+    .test_run = selftest_log_skip_socket_run<0>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_log_skip_init_socket1",
+    .description = "Skips using log_skip() in the init function only in socket 1",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_log_skip_socket_init<1>,
+    .test_run = selftest_log_skip_socket_run<1>,
     .desired_duration = -1,
 },
 {
