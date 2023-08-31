@@ -178,6 +178,7 @@ private:
     static std::string thread_id_header(int cpu, int verbosity);
     void maybe_print_messages_header(int fd);
     void print_thread_header(int fd, int cpu, int verbosity);
+    void maybe_print_slice_resource_usage(int fd, int slice);
     static int print_test_knobs(int fd, mmap_region r);
     int print_one_thread_messages(int fd, mmap_region r, int level);
     void print_result_line();
@@ -2199,6 +2200,7 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
             writeln(fd, indent_spaces(), "  - thread: main");
         else
             writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(cpu));
+        maybe_print_slice_resource_usage(fd, cpu);
     } else {
         dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), cpu);
         dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(cpu, verbosity).c_str());
@@ -2221,6 +2223,44 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
         }
     }
     writeln(fd, indent_spaces(), "    messages:");
+}
+
+void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
+{
+    switch (slices[slice].result) {
+    case TestResult::Skipped:
+    case TestResult::Passed:
+    case TestResult::Failed:
+    case TestResult::OperatingSystemError:
+        if (sApp->shmem->verbosity >= 3)
+            break;
+        return;
+
+    case TestResult::Killed:
+    case TestResult::CoreDumped:
+    case TestResult::OutOfMemory:
+    case TestResult::TimedOut:
+    case TestResult::Interrupted:
+        break;
+    }
+
+    auto runtime = slices[slice].endtime - sApp->current_test_starttime;
+    writeln(fd, indent_spaces(), "    runtime: ", format_duration(runtime, FormatDurationOptions::WithoutUnit));
+
+#ifndef _WIN32
+    using namespace std::chrono;
+    const struct rusage &usage = slices[slice].usage;
+    auto utime = seconds(usage.ru_utime.tv_sec) + microseconds(usage.ru_utime.tv_usec);
+    auto stime = seconds(usage.ru_stime.tv_sec) + microseconds(usage.ru_stime.tv_usec);
+    dprintf(fd, "%s    resource-usage: { utime: %s, stime: %s, cpuavg: %.1f, maxrss: %lld, majflt: %lld, "
+                "minflt: %lld, voluntary-cs: %lld, involutary-cs: %lld }\n",
+            indent_spaces().data(),
+            format_duration(utime, FormatDurationOptions::WithoutUnit).c_str(),
+            format_duration(stime, FormatDurationOptions::WithoutUnit).c_str(),
+            (utime + stime) * 100.0 / runtime,
+            (long long)usage.ru_maxrss, (long long)usage.ru_majflt, (long long)usage.ru_minflt,
+            (long long)usage.ru_nvcsw, (long long)usage.ru_nivcsw);
+#endif // !_WIN32
 }
 
 int YamlLogger::print_test_knobs(int fd, mmap_region r)

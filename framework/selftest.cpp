@@ -937,7 +937,8 @@ static struct test selftests_array[] = {
     .description = "Runs for the requested time, but busy-waiting", // or practically so
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
     .test_run = selftest_timedpass_run<0>,
-    .desired_duration = 200
+    .desired_duration = 200,
+    .fracture_loop_count = -1,
 },
 {
     .id = "selftest_timedpass_tooshort",

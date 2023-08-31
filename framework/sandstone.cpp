@@ -1579,6 +1579,7 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
         if (ret <= 0)
             return 0;
 
+        auto now = MonotonicTimePoint::clock::now();
         if (pollfd &pfd = children.pollfds.back(); pfd.revents & POLLIN) {
             // one child (or more than one) is crashing
             debug_crashed_child();
@@ -1592,7 +1593,8 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
 
             // wait for this child
             struct forkfd_info info;
-            EINTR_LOOP(ret, forkfd_wait4(pfd.fd, &info, WNOHANG, nullptr));
+            struct rusage usage;
+            EINTR_LOOP(ret, forkfd_wait4(pfd.fd, &info, WNOHANG, &usage));
             if (ret == -1) {
                 if (errno == EAGAIN)
                     continue;           // shouldn't happen...
@@ -1604,6 +1606,8 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             pfd.events = 0;
             children.handles[i] = 0;
             children.results[i] = test_result_from_exit_code(info);
+            children.results[i].endtime = now;
+            children.results[i].usage = usage;
             --children_left;
         }
         return 0;
@@ -1637,6 +1641,7 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
         }
 
         children.results[idx] = test_result_from_exit_code(result);
+        children.results[idx].endtime = MonotonicTimePoint::clock::now();
         --children_left;
         return 0;
     };
