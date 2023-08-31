@@ -1735,15 +1735,6 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         debug_init_child();
     }
 
-    uint64_t required_cpu_features = test->minimum_cpu | test->compiler_minimum_cpu;
-    if (uint64_t missing = required_cpu_features & ~cpu_features) {
-        // for brevity, don't report the bits that the framework itself needs
-        missing &= ~_compilerCpuFeatures;
-        log_skip(CpuNotSupportedSkipCategory, "test requires %s\n", cpu_features_to_string(missing).c_str());
-        (void) missing;
-        return TestResult::Skipped;
-    }
-
     TestResult state = TestResult::Passed;
 
     do {
@@ -2044,7 +2035,18 @@ static void run_one_test_children(ChildrenList &children, int *tc, const struct 
 static TestResult run_one_test_once(int *tc, const struct test *test)
 {
     ChildrenList children;
-    run_one_test_children(children, tc, test);
+    if (uint64_t missing = (test->minimum_cpu | test->compiler_minimum_cpu) & ~cpu_features) {
+        init_per_thread_data();
+
+        // for brevity, don't report the bits that the framework itself needs
+        missing &= ~_compilerCpuFeatures;
+        log_skip(CpuNotSupportedSkipCategory, "test requires %s\n", cpu_features_to_string(missing).c_str());
+        (void) missing;
+
+        children.results.emplace_back(ChildExitStatus{ TestResult::Skipped });
+    } else {
+        run_one_test_children(children, tc, test);
+    }
 
     // print results and find out if the test failed
     TestResult testResult = logging_print_results(children.results, tc, test);
