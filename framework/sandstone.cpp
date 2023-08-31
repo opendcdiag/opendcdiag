@@ -814,6 +814,13 @@ static void init_internal(const struct test *test)
     logging_init(test);
 }
 
+static void init_per_thread_data()
+{
+    auto initer = [](auto *data, int) { data->init(); };
+    for_each_main_thread(initer);
+    for_each_test_thread(initer);
+}
+
 static void initialize_smi_counts()
 {
     std::optional<uint64_t> v = sApp->count_smi_events(cpu_info[0].cpu_number);
@@ -1738,9 +1745,7 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         int ret = 0;
         test->per_thread = sApp->user_thread_data.data();
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
-        auto initer = [](auto *data, int) { data->init(); };
-        for_each_main_thread(initer);
-        for_each_test_thread(initer);
+        init_per_thread_data();
 
         sApp->test_tests_init(test);
         if (test->test_init) {
