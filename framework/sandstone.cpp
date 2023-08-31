@@ -2007,9 +2007,8 @@ static int slices_for_test(const struct test *test)
     return plan.size();
 }
 
-static TestResult run_one_test_once(int *tc, const struct test *test)
+static void run_one_test_children(ChildrenList &children, int *tc, const struct test *test)
 {
-    ChildrenList children;
     int child_count = slices_for_test(test);
     if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
         assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test
@@ -2040,6 +2039,12 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
 
     /* wait for the children */
     wait_for_children(children, tc, test);
+}
+
+static TestResult run_one_test_once(int *tc, const struct test *test)
+{
+    ChildrenList children;
+    run_one_test_children(children, tc, test);
 
     // print results and find out if the test failed
     TestResult testResult = logging_print_results(children.results, tc, test);
