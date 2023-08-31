@@ -1099,6 +1099,10 @@ function selftest_logerror_common() {
     test_yaml_regexp "/exit" invalid
     test_yaml_regexp "/tests/0/result" 'timed out'
     test_yaml_numeric "/tests/0/test-runtime" 'value >= 1000'
+    test_yaml_numeric "/tests/0/threads/0/runtime" 'value >= 1000'
+    if ! $is_windows; then
+        test_yaml_regexp "/tests/0/threads/0/resource-usage" '\{.*\}'
+    fi
     for ((i = 1; i <= MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/state" failed
         n=$((-1 + yamldump[/tests/0/threads/$i/messages@len]))
@@ -1129,9 +1133,14 @@ selftest_freeze_socket1_common() {
     done
     for ((j = 0; j < i; ++j)); do
         if ((j < i - 1)); then
+            test_yaml_numeric "/tests/0/threads/$j/runtime" 'value > 0'
             test_yaml_absent "/tests/0/threads/$j/messages/0/text"
         else
+            test_yaml_numeric "/tests/0/threads/$j/runtime" 'value > 1000'
             test_yaml_regexp "/tests/0/threads/$j/messages/0/text" '.* Child .* did not exit.*'
+        fi
+        if ! $is_windows; then
+            test_yaml_regexp "/tests/0/threads/$j/resource-usage" '\{.*\}'
         fi
     done
 

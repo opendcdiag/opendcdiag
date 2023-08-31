@@ -40,6 +40,10 @@
 #include "interrupt_monitor.hpp"
 #include "thermal_monitor.hpp"
 
+#ifndef _WIN32
+#  include <sys/resource.h>     // for struct rusage
+#endif
+
 #ifndef O_NOSIGPIPE
 #  define O_NOSIGPIPE 0
 #endif
@@ -144,6 +148,11 @@ struct ChildExitStatus
     // for TestKilled and TestCoreDumped, on Unix it's the signal number;
     // on Windows it's an NTSTATUS
     unsigned extra = 0;
+
+    MonotonicTimePoint endtime = {};
+#ifndef _WIN32
+    struct rusage usage = {};
+#endif
 };
 
 struct test_group
