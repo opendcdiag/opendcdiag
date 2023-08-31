@@ -86,7 +86,7 @@ test_fail_socket1() {
     fi
 
     # only one socket should have had problems
-    test_yaml_regexp "/tests/0/fail/cpu-mask" 'None|\.:X(:\.)*'
+    test_yaml_regexp "/tests/0/fail/cpu-mask" 'None|\.+:\.*X[.X]*(:.+)?'
 }
 
 @test "time parse negative" {
