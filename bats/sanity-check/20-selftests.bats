@@ -1116,14 +1116,27 @@ function selftest_logerror_common() {
 
 selftest_freeze_socket1_common() {
     declare -A yamldump
-    test_fail_socket1 sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_socket1 --timeout=1s
+    test_fail_socket1 sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_socket1 --timeout=1s "$@"
     [[ "$status" -eq 2 ]]
     test_yaml_regexp "/exit" invalid
     test_yaml_regexp "/tests/0/result" 'timed out'
     test_yaml_numeric "/tests/0/test-runtime" 'value >= 1000'
 
+    for ((i = 0; i <= yamldump[/tests/0/threads@len]; ++i)); do
+        if [[ "${yamldump[/tests/0/threads/$i/thread]}" != main* ]]; then
+            break
+        fi
+    done
+    for ((j = 0; j < i; ++j)); do
+        if ((j < i - 1)); then
+            test_yaml_absent "/tests/0/threads/$j/messages/0/text"
+        else
+            test_yaml_regexp "/tests/0/threads/$j/messages/0/text" '.* Child .* did not exit.*'
+        fi
+    done
+
     # only one socket should have frozen
-    for ((i = 1; i <= yamldump[/tests/0/threads@len]; ++i)); do
+    for (( ; i <= yamldump[/tests/0/threads@len]; ++i)); do
         if [[ "${yamldump[/tests/0/threads/$i/id/package]}" = 1 ]]; then
             test_yaml_regexp "/tests/0/threads/$i/state" failed
             n=$((-1 + yamldump[/tests/0/threads/$i/messages@len]))
