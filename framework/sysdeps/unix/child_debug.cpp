@@ -432,7 +432,7 @@ static bool create_crash_pipe(int xsave_size)
 
     int rcvbuf;
     socklen_t size = sizeof(rcvbuf);
-    if (getsockopt(crashpipe[CrashPipeParent], SOL_SOCKET, SO_RCVBUF, &rcvbuf, &size) == 0) {
+    if (getsockopt(crashpipe[CrashPipeParent], SOL_SOCKET, SO_SNDBUF, &rcvbuf, &size) == 0) {
         if (rcvbuf >= xsave_size)
             xsave_size = 0;
     }
