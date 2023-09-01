@@ -82,7 +82,7 @@ test_fail_socket1() {
         if (( status != 0 )); then
             skip "Test only works with Debug builds (to mock the topology) or multi-socket systems"
         fi
-        "$@" --cpuset=c0
+        "$@" --cpuset=c0t0,c1t0
     fi
 
     # only one socket should have had problems
