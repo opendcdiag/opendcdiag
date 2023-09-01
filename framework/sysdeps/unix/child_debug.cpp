@@ -427,6 +427,7 @@ static bool create_crash_pipe(int xsave_size)
     // set the buffer sizes
     xsave_size += sizeof(CrashContext::Fixed) + sizeof(CrashContext::mc);
     xsave_size += 256;      // add some headroom; the Linux kernel subtracts 32
+    xsave_size *= sApp->shmem->main_thread_count;
     xsave_size = ROUND_UP_TO(xsave_size, 1024U);
 
     int rcvbuf;
