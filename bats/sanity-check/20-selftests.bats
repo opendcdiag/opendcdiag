@@ -1293,7 +1293,7 @@ crash_context_socket1_common() {
     fi
 
     # Check that gdb can attach to running processes
-    sleep 2m &
+    sleep 120 &
     pid=$!
     if ! gdb -batch -pid $pid -ex kill >/dev/null 2>/dev/null; then
         kill $pid
