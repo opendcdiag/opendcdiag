@@ -1121,13 +1121,12 @@ selftest_crash_common() {
 
     local test=$1
     local code=$2
-    local reason=$3
     if $is_windows; then
-        code=$4
-        reason=$5
-    else
+        code=$3
+        reason=$4
+    elif [[ "$code" != "" ]]; then
         # transform symbolic name to code
-        code=$(kill -l $code)
+        reason=`python3 -c "from signal import *; print(strsignal($code)); exit($code)"` || code=$?
     fi
     if [[ "$code" == "" ]]; then
         skip "Test skipped on this platform"
@@ -1144,39 +1143,39 @@ selftest_crash_common() {
 }
 
 @test "selftest_abortinit" {
-    selftest_crash_common selftest_abortinit SIGABRT "Aborted" 0xC0000602 "Aborted"
+    selftest_crash_common selftest_abortinit SIGABRT 0xC0000602 "Aborted"
 }
 
 @test "selftest_abort" {
-    selftest_crash_common selftest_abort SIGABRT "Aborted" 0xC0000602 "Aborted"
+    selftest_crash_common selftest_abort SIGABRT 0xC0000602 "Aborted"
 }
 
 @test "selftest_sigill" {
-    selftest_crash_common selftest_sigill SIGILL "Illegal instruction" 0xC000001D "Illegal instruction"
+    selftest_crash_common selftest_sigill SIGILL 0xC000001D "Illegal instruction"
 }
 
 @test "selftest_sigfpe" {
-    selftest_crash_common selftest_sigfpe SIGFPE "Floating point exception" 0xC0000094 'Integer division by zero'
+    selftest_crash_common selftest_sigfpe SIGFPE 0xC0000094 'Integer division by zero'
 }
 
 @test "selftest_sigbus" {
-    selftest_crash_common selftest_sigbus SIGBUS "Bus error"
+    selftest_crash_common selftest_sigbus SIGBUS
 }
 
 @test "selftest_sigsegv_init" {
-    selftest_crash_common selftest_sigsegv SIGSEGV "Segmentation fault" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigsegv SIGSEGV 0xC0000005 'Access violation'
 }
 
 @test "selftest_sigsegv" {
-    selftest_crash_common selftest_sigsegv SIGSEGV "Segmentation fault" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigsegv SIGSEGV 0xC0000005 'Access violation'
 }
 
 @test "selftest_sigsegv_cleanup" {
-    selftest_crash_common selftest_sigsegv SIGSEGV "Segmentation fault" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigsegv SIGSEGV 0xC0000005 'Access violation'
 }
 
 @test "selftest_sigsegv_instruction" {
-    selftest_crash_common selftest_sigsegv_instruction SIGSEGV "Segmentation fault" 0xC0000005 'Access violation'
+    selftest_crash_common selftest_sigsegv_instruction SIGSEGV 0xC0000005 'Access violation'
 }
 
 @test "selftest_fastfail" {
@@ -1185,7 +1184,7 @@ selftest_crash_common() {
     fi
 
     # I don't know *why* we get this error, but we do
-    selftest_crash_common selftest_fastfail x x 0xC0000409 "Stack buffer overrun"
+    selftest_crash_common selftest_fastfail ''  0xC0000409 "Stack buffer overrun"
 }
 
 @test "selftest_sigkill" {
@@ -1216,7 +1215,7 @@ selftest_crash_common() {
 
 @test "selftest_malloc_fail" {
     declare -A yamldump
-    selftest_crash_common selftest_malloc_fail SIGABRT "Aborted" 0xC0000017 "Out of memory condition"
+    selftest_crash_common selftest_malloc_fail SIGABRT 0xC0000017 "Out of memory condition"
     test_yaml_regexp "/tests/0/stderr messages" 'Out of memory condition'
 }
 
