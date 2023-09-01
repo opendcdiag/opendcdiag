@@ -1423,7 +1423,7 @@ selftest_cpuset_unsorted() {
 
 @test "cpuset=number (inverse order)" {
     # make a list in inverse order
-    local -a cpuset=($($SANDSTONE --dump-cpu-info | tac |
+    local -a cpuset=($($SANDSTONE --dump-cpu-info | sort -rn |
                            awk '/^[0-9]/ { printf "%d,", $1; }'))
     cpuset=${cpuset%,}          # remove last comma
 
