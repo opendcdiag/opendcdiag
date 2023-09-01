@@ -1060,10 +1060,12 @@ void debug_crashed_child()
 
     // receive the context
     alignas(16) uint8_t xsave_area[xsave_size];     // Variable Length Array, a.k.a. alloca
-    CrashContext ctx = CrashContext::receive(sApp->shmem->server_debug_socket,
-                                             { xsave_area, size_t(xsave_size) });
+    for (;;) {
+        CrashContext ctx = CrashContext::receive(sApp->shmem->server_debug_socket,
+                                                 { xsave_area, size_t(xsave_size) });
 
-    if (ctx.contents != CrashContext::NoContents) {
+        if (ctx.contents == CrashContext::NoContents)
+            break;
         char buf[std::numeric_limits<pid_t>::digits10 + 2];
         sprintf(buf, "%d", ctx.fixed.pid);
 
@@ -1071,14 +1073,14 @@ void debug_crashed_child()
             attach_gdb(buf);
         else
             print_crash_info(buf, ctx);
-    }
 
-    // release the child
-    auto &thread_state = sApp->main_thread_data()->thread_state;
-    thread_state.load(std::memory_order_acquire);
-    if (on_crash_action != context_on_crash) {
-        thread_state.store(thread_debugged, std::memory_order_relaxed);
-        futex_wake_all(&thread_state);
+        // release the child
+        auto &thread_state = sApp->main_thread_data()->thread_state;
+        thread_state.load(std::memory_order_acquire);
+        if (on_crash_action != context_on_crash) {
+            thread_state.store(thread_debugged, std::memory_order_relaxed);
+            futex_wake_all(&thread_state);
+        }
     }
 }
 
