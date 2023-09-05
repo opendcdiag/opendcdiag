@@ -1518,8 +1518,6 @@ struct ChildrenList
                 CloseHandle(h);
         }
     }
-
-    std::vector<intptr_t> handles;
 #else
     ~ChildrenList()
     {
@@ -1530,8 +1528,8 @@ struct ChildrenList
     }
 
     std::vector<pollfd> pollfds;
-    std::vector<pid_t> handles;
 #endif
+    std::vector<pid_t> handles;
     std::vector<ChildExitStatus> results;
 
     void add(StartedChild child)
