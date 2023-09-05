@@ -1648,6 +1648,10 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
         children.results[idx] = test_result_from_exit_code(result);
         children.results[idx].endtime = MonotonicTimePoint::clock::now();
         --children_left;
+
+        // replace the handle with a valid, dummy, non-signalled handle
+        CloseHandle(handles[idx]);
+        children.handles[idx] = intptr_t(CreateEvent(nullptr, true, false, nullptr));
         return 0;
     };
     (void) tc;
@@ -1658,7 +1662,7 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
     auto terminate_children = [&] {
         for (size_t i = 0; i < children.handles.size(); ++i) {
             auto child = children.handles[i];
-            if (child) {
+            if (children.results[i].endtime == MonotonicTimePoint{}) {
                 debug_hung_child(child);
 #ifdef _WIN32
                 log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
@@ -1670,7 +1674,6 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             }
         }
     };
-
     auto wait_for_all_children = [&](Duration remaining) {
         MonotonicTimePoint deadline = steady_clock::now() + remaining;
         for ( ; children_left && remaining > 0s; remaining = deadline - steady_clock::now()) {
