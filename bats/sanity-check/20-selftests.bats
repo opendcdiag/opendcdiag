@@ -295,7 +295,7 @@ tap_negative_check() {
     test_yaml_regexp "/version" '.*'
 
     local os=`uname -sr`
-    if [[ "$SANDSTONE" = "wine "* ]]; then
+    if [[ "$SANDSTONE" = "wine "* ]] || [[ "$os" = MINGW* ]]; then
         os=`wine cmd /c ver | sed -n "s/\r$//;s/.*Windows /Windows v/p"`
     fi
     [[ "${yamldump[/os]}" = "$os"* ]]
