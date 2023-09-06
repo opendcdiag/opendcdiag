@@ -1769,6 +1769,8 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
             state = TestResult::Failed;
             break;
         } else if (ret < 0) {
+            if (ret != EXIT_SKIP)
+                log_skip(RuntimeSkipCategory, "Unexpected OS error: %s", strerror(-ret));
             state = TestResult::Skipped;
             break;
         }
