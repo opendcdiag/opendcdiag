@@ -870,6 +870,7 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
     if (ctx.rip != ctx.crash_address)
         message += stdprintf(", CR2 = %p", ctx.crash_address);
     if (ctx.trap_nr >= 0) {
+#ifdef __x86_64__
         static const char trap_names[][4] = {
             "DE", "DB", "NMI", "BP",
             "OF", "BR", "UD", "NM",
@@ -885,6 +886,7 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
 
         message += stdprintf(", trap=%d (%s), error_code = 0x%lx",
                              ctx.trap_nr, trap_name, ctx.error_code);
+#endif
     }
 
     log_message(cpu, SANDSTONE_LOG_ERROR "%s", message.c_str());
