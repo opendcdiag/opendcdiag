@@ -154,7 +154,11 @@ set pagination off
 set confirm off
 python handle = %#tx; print('ok')
 )";
-static const char gdb_bt_commands[] = R"(printf "Backtrace:"
+static const char gdb_bt_commands[] =
+#ifndef __x86_64__
+        "info registers\n"
+#endif
+        R"(printf "Backtrace:"
 thread apply all bt full
 quit
 )";
