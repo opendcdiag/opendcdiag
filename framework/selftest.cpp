@@ -161,6 +161,7 @@ static int selftest_logs_getcpu_run(struct test *test, int cpu)
 #if defined(_WIN32)
     PROCESSOR_NUMBER number;
     GetCurrentProcessorNumberEx(&number);
+    // see win32/cpu_affinity.cpp
     cpu_number = number.Group * 64 + number.Number;
 #elif defined(__linux__) || defined(__FreeBSD__)
     cpu_number = sched_getcpu();

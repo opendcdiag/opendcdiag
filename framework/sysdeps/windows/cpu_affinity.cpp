@@ -5,37 +5,29 @@
 
 #include <topology.h>
 
+#include <limits>
+
 #include <windows.h>
 
-static int *cpus_per_group;
-static int group_count;
+static constexpr unsigned MaxLogicalProcessorsPerGroup =
+        std::numeric_limits<KAFFINITY>::digits;
 
-static constexpr WORD MaxLogicalProcessorsPerGroup = 64;
-
-static WORD processor_group_for(LogicalProcessor n)
+static constexpr LogicalProcessor from_processor_number(PROCESSOR_NUMBER n)
 {
-    int count = 0;
-    int i = 0;
-
-    for (; i < group_count; i++) {
-        if (count + cpus_per_group[i] > int(n))
-            break;
-        count += cpus_per_group[i];
-    }
-    return i;
+    return LogicalProcessor(n.Group * MaxLogicalProcessorsPerGroup + n.Number);
 }
 
-static BYTE processor_in_group(LogicalProcessor n)
+static constexpr PROCESSOR_NUMBER to_processor_number(LogicalProcessor lp)
 {
-    int count = 0;
-    int i = 0;
+    PROCESSOR_NUMBER n = {};
+    n.Group = unsigned(lp) / MaxLogicalProcessorsPerGroup;
+    n.Number = unsigned(lp) % MaxLogicalProcessorsPerGroup;
+    return n;
+}
 
-    for (; i < group_count; i++) {
-        if (count + cpus_per_group[i] > int(n))
-            break;
-        count += cpus_per_group[i];
-    }
-    return int(n) - count;
+static void set_thread_name(const char *thread_name)
+{
+    (void) thread_name;
 }
 
 LogicalProcessorSet ambient_logical_processor_set()
@@ -43,28 +35,24 @@ LogicalProcessorSet ambient_logical_processor_set()
     LogicalProcessorSet result = {};        // memsets to zero
     static_assert(sizeof(result.array[0]) * CHAR_BIT == MaxLogicalProcessorsPerGroup);
 
-    group_count = GetActiveProcessorGroupCount();
-    int total_cpu_count = 0;
-    cpus_per_group = (int *)malloc(sizeof(int) * group_count);
-    for (WORD i = 0; i < group_count; ++i) {
-        DWORD processors = GetActiveProcessorCount(i);
-        cpus_per_group[i] = processors;
-        for (int j = 0; j < processors; j++)
-            result.set(LogicalProcessor(total_cpu_count + j));
-        total_cpu_count += processors;
+    WORD group_count = GetActiveProcessorGroupCount();
+    PROCESSOR_NUMBER number = {};
+    for (number.Group = 0; number.Group < group_count; ++number.Group) {
+        DWORD processors = GetActiveProcessorCount(number.Group);
+        for (number.Number = 0; number.Number < processors; number.Number++)
+            result.set(from_processor_number(number));
     }
     return result;
 }
 
 bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
 {
+    set_thread_name(thread_name);
     if (n == LogicalProcessor(-1))
         return true;            // don't change affinity
 
-    PROCESSOR_NUMBER processorNumber = {};
+    PROCESSOR_NUMBER processorNumber = to_processor_number(n);
     GROUP_AFFINITY groupAffinity = {};
-    processorNumber.Group = processor_group_for(n);
-    processorNumber.Number = processor_in_group(n);
     groupAffinity.Group = processorNumber.Group;
     groupAffinity.Mask = KAFFINITY(1) << processorNumber.Number;
 
