@@ -1905,12 +1905,9 @@ static StartedChild spawn_child(const struct test *test, int child_number)
     // _spawn on Windows requires argv elements to be quoted if they contain space.
     const char * const argv0 = SANDSTONE_EXECUTABLE_NAME ".exe";
     if (sApp->gdb_server_comm.size()) {
-        // we need the name of the temporary file holding the shmem, because
-        // the handles don't inherit properly via gdbserver
-        HANDLE hShmem = HANDLE(_get_osfhandle(sApp->shmemfd));
-        shmemfdstr.resize(MAX_PATH);
-        DWORD len = GetFinalPathNameByHandleA(hShmem, shmemfdstr.data(), MAX_PATH, FILE_NAME_OPENED);
-        shmemfdstr.resize(len);
+        // we need the actual Windows handle, because the file
+        // descriptors don't inherit properly via gdbserver
+       shmemfdstr = stdprintf("h%tx", _get_osfhandle(sApp->shmemfd));
     }
 #else
     const char * const argv0 = SANDSTONE_EXECUTABLE_NAME;
@@ -2631,8 +2628,14 @@ static int exec_mode_run(int argc, char **argv)
         char *end;
         long n = strtol(arg, &end, 10);
         if (__builtin_expect(int(n) != n || n < 0 || *end, false)) {
-#ifndef NDEBUG
-            return open(arg, O_RDWR);
+#if defined(_WIN32) && !defined(NDEBUG)
+           if (*arg == 'h') {
+               // a handle
+               n = _open_osfhandle(strtoll(arg + 1, &end, 16), O_RDWR);
+               if (n >= 0)
+                   return int(n);
+               perror("_open_osfhandle");
+           }
 #endif
             exit(EX_DATAERR);
         }
