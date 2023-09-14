@@ -308,6 +308,9 @@ tap_negative_check() {
 
     # just verify these exist
     for ((i = 0; i < MAX_PROC; ++i)); do
+        if $is_windows; then
+            test_yaml_numeric "/cpu-info/$i/logical-group" 'value >= 0'
+        fi
         test_yaml_numeric "/cpu-info/$i/logical" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/package" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/core" 'value >= 0'
@@ -1506,9 +1509,6 @@ selftest_cpuset_unsorted() {
 @test "thread usage" {
     local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
     nproc=${#cpuset[@]}
-    if $is_windows && ((nproc > 64)); then
-        skip "FIXME: Too many CPUs on Windows"
-    fi
 
     # Don't use sandstone_selftest to avoid -n$MAX_PROC
     VALIDATION=dump
