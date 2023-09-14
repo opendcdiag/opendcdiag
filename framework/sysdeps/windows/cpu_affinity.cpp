@@ -71,8 +71,26 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
 
 bool pin_to_logical_processors(CpuRange range, const char *thread_name)
 {
-    // nothing
-    (void) range;
-    (void) thread_name;
+    set_thread_name(thread_name);
+    const struct cpu_info *first_cpu = &cpu_info[range.starting_cpu];
+    const struct cpu_info *last_cpu = &cpu_info[range.starting_cpu + range.cpu_count - 1];
+    PROCESSOR_NUMBER first = to_processor_number(LogicalProcessor(first_cpu->cpu_number));
+    PROCESSOR_NUMBER last = to_processor_number(LogicalProcessor(last_cpu->cpu_number));
+    if (first.Group != last.Group) {
+        // do nothing; if we're running on Windows 11 or Server 2022, we're
+        // already a multi-group process, so leave it at that
+        return true;
+    }
+
+    GROUP_AFFINITY groupAffinity = { .Mask = KAFFINITY(-1), .Group = first.Group };
+    if (last.Number != MaxLogicalProcessorsPerGroup) {
+        groupAffinity.Mask = KAFFINITY(1) << (last.Number + 1 - first.Number);
+        groupAffinity.Mask -= 1;
+    }
+    groupAffinity.Mask <<= first.Number;
+    if (SetThreadGroupAffinity(GetCurrentThread(), &groupAffinity, nullptr) == 0) {
+        win32_perror("SetThreadGroupAffinity");
+        return false;
+    }
     return true;
 }
