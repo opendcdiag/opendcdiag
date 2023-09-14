@@ -2171,9 +2171,16 @@ void YamlLogger::maybe_print_messages_header(int fd)
 std::string YamlLogger::thread_id_header(int cpu, int verbosity)
 {
     struct cpu_info *info = cpu_info + cpu;
-    std::string line = stdprintf("{ logical: %*d, package: %d, core: %*d, thread: %d",
-                                 thread_core_spacing().logical, info->cpu_number, info->package_id,
-                                 thread_core_spacing().core, info->core_id, info->thread_id);
+    std::string line;
+#ifdef _WIN32
+    line = stdprintf("{ logical-group: %2u, logical: %2u, ",
+                     // see win32/cpu_affinity.cpp
+                     info->cpu_number / 64u, info->cpu_number % 64u);
+#else
+    line = stdprintf("{ logical: %*d, ", thread_core_spacing().logical, info->cpu_number);
+#endif
+    line += stdprintf("package: %d, core: %*d, thread: %d",
+                     info->package_id, thread_core_spacing().core, info->core_id, info->thread_id);
     if (verbosity > 1) {
         auto add_value_or_null = [&line](const char *fmt, uint64_t value) {
             if (value)
