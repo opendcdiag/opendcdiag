@@ -14,6 +14,7 @@ framework_files += \
         'tmpfile.c',
         'ucrt-mapping.c',
         'unistd.c',
+        'win32_perror.c',
         '../generic/kvm.c',
         '../generic/memfpt.c',
         '../generic/msr.c',

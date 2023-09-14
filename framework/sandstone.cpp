@@ -243,16 +243,7 @@ static const char *path_to_exe()
 static void perror_for_mmap(const char *msg)
 {
 #ifdef _WIN32
-    DWORD dwFlags = FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS |
-            FORMAT_MESSAGE_ARGUMENT_ARRAY | FORMAT_MESSAGE_ALLOCATE_BUFFER;
-    LPCVOID lpSource = nullptr;
-    DWORD dwMessageId = GetLastError();
-    DWORD dwLanguageId = 0;
-    LPSTR lpBuffer = nullptr;
-    DWORD nSize = 0;
-    FormatMessage(dwFlags, lpSource, dwMessageId, dwLanguageId, (LPTSTR)&lpBuffer, nSize, nullptr);
-    fprintf(stderr, "%s: %s\n", msg, lpBuffer);
-    LocalFree(lpBuffer);
+    win32_perror(msg);
 #else
     perror(msg);
 #endif

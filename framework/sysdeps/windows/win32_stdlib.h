@@ -30,6 +30,10 @@ int posix_memalign(void **memptr, size_t alignment, size_t size);
 void *aligned_alloc(size_t alignment, size_t size);
 void *valloc(size_t size);
 
+/* not stdlib.h, but injected here because we're lazy;
+ * prints the GetLastError() message instead of errno. */
+void win32_perror(const char *s);
+
 #ifdef __cplusplus
 }
 #endif
