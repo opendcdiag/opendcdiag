@@ -674,7 +674,8 @@ void apply_cpuset_param(char *param)
     LogicalProcessorSet result = {};
     new_cpu_info.reserve(old_cpu_info.size());
 
-    for (char *arg = strtok(param, ","); arg; arg = strtok(nullptr, ",")) {
+    std::string p = param;
+    for (char *arg = strtok(p.data(), ","); arg; arg = strtok(nullptr, ",")) {
         const char *orig_arg = arg;
         auto parse_int = [&arg, orig_arg]() {
             errno = 0;
