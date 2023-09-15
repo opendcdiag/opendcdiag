@@ -3461,7 +3461,7 @@ int main(int argc, char **argv)
         case use_builtin_test_list_option:
             if (!SandstoneConfig::HasBuiltinTestList) {
                 fprintf(stderr, "%s: --use-builtin-test-list specified but this build does not "
-                                "have a built-in test list.", argv[0]);
+                                "have a built-in test list.\n", argv[0]);
                 return EX_USAGE;
             }
             use_builtin_test_list = true;
