@@ -496,7 +496,7 @@ static inline const char *convert_kvm_exit_code_to_string(int kvm_exit_code)
         "KVM_EXIT_HLT",
         "KVM_EXIT_MMIO",
         "KVM_EXIT_IRQ_WINDOW_OPEN",
-        "KVM_EXIT_SHUTDOWN"
+        "KVM_EXIT_SHUTDOWN",
         "KVM_EXIT_FAIL_ENTRY",
         "KVM_EXIT_INTR",
         "KVM_EXIT_SET_TPR",
