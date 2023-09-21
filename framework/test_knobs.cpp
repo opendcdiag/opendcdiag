@@ -13,6 +13,7 @@
 #include <boost/algorithm/string.hpp>
 
 namespace {
+#include <cstdlib>
 class TestKeyWrapper
 {
     std::string storage;
@@ -59,6 +60,11 @@ private:
 public:
     static void set_knob(std::string key, std::string value)
     {
+#ifndef __GLIBC__
+        std::string temp = key + "=" + value;
+        putenv(temp.c_str());
+#endif
+
         Entry *e = instance().find_key(key);
         if (e)
             e->value = std::move(value);
@@ -68,6 +74,11 @@ public:
 
     static std::string_view get_knob(std::string_view key)
     {
+        auto envvar_value = std::getenv(std::string(key).c_str());
+        if (envvar_value){
+            return std::string_view{envvar_value};
+        }
+
         const Entry *e = instance().find_key(key);
         return e ? e->value : std::string_view();
     }
