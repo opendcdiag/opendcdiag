@@ -338,14 +338,15 @@ static constexpr unsigned maskFromRatio()
     int BitPosition = __builtin_ctzll(Ratio::den);
 
     // because this is constexpr, the following expression will check the range of BitPosition
-    return 1U << (BitPosition - 1);
+    return 1U << BitPosition;
 }
 
 template <typename Ratio>
 static int selftest_randomfail_run(struct test *test, int cpu)
 {
     constexpr unsigned Value = maskFromRatio<Ratio>();
-    return rand() % (Value * sApp->thread_count) ? EXIT_SUCCESS : EXIT_FAILURE;
+    unsigned ratio = (Value * sApp->thread_count);
+    return rand() % ratio ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 template <useconds_t Sleeptime, typename Ratio>
