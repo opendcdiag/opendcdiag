@@ -2160,7 +2160,7 @@ static void analyze_test_failures(int tc, const struct test *test, int fail_coun
                 int nthreads = 0;
                 fail_pattern = 0;
                 for (const Topology::Thread &thr : core->threads) {
-                    uint64_t this_pattern = per_cpu_failures[thr.cpu()];
+                    auto this_pattern = per_cpu_failures[thr.cpu()];
                     if (this_pattern == 0)
                         all_threads_failed_once = false;
                     if (++nthreads == 1) {
@@ -2212,11 +2212,12 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     }
     auto mark_up_per_cpu_fail = [&per_cpu_fails, &fail_count](int i) {
         ++fail_count;
-        if (i >= 64)
-            return;     // we only have 64 bits
+        if (i >= SandstoneApplication::MaxRetestCount)
+            return;
         for_each_test_thread([&](PerThreadData::Test *data, int i) {
+            using U = SandstoneApplication::PerCpuFailures::value_type;
             if (data->has_failed())
-                per_cpu_fails[i] |= uint64_t(1) << i;
+                per_cpu_fails[i] |= U(1) << i;
         });
     };
 

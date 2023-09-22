@@ -354,7 +354,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         std::array<Slices, 2> plans;
     };
 
-    using PerCpuFailures = std::vector<uint64_t>;
+    using PerCpuFailures = std::vector<__uint128_t>;
     struct SharedMemory;
 
     SlicePlans slice_plans;
@@ -380,7 +380,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool ignore_os_errors = false;
     bool force_test_time = false;
     bool service_background_scan = false;
-    static constexpr int MaxRetestCount = 64;
+    static constexpr int MaxRetestCount = sizeof(PerCpuFailures::value_type) * 8;
     int retest_count = 10;
     int total_retest_count = -2;
     int max_test_count = INT_MAX;
