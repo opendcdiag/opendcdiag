@@ -94,7 +94,7 @@ RtlGetVersion(
 #endif
 
 
-#define PROGRAM_VERSION         SANDSTONE_EXECUTABLE_NAME "-" GIT_ID
+static const char program_version[] = SANDSTONE_EXECUTABLE_NAME "-" GIT_ID;
 
 static int real_stdout_fd = STDOUT_FILENO;
 static int tty = -1;
@@ -924,18 +924,18 @@ static void print_reproduction_details()
 {
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value:
-        logging_printf(LOG_LEVEL_QUIET, "version = " PROGRAM_VERSION "\n");
+        logging_printf(LOG_LEVEL_QUIET, "version = %s\n", program_version);
         logging_printf(LOG_LEVEL_QUIET, "current_time = %s\n", iso8601_time_now(Iso8601Format::WithMs));
         logging_printf(LOG_LEVEL_VERBOSE(1), "os = %s\n", os_info().c_str());
         return;
 
     case SandstoneApplication::OutputFormat::tap:
-        logging_printf(LOG_LEVEL_QUIET, "# Built from git commit: " PROGRAM_VERSION "\n");
+        logging_printf(LOG_LEVEL_QUIET, "# Built from git commit: %s\n", program_version);
         logging_printf(LOG_LEVEL_QUIET, "# Current time: %s\n", iso8601_time_now(Iso8601Format::WithMs));
         break;
 
     case SandstoneApplication::OutputFormat::yaml:
-        logging_printf(LOG_LEVEL_QUIET, "version: " PROGRAM_VERSION "\n");
+        logging_printf(LOG_LEVEL_QUIET, "version: %s\n", program_version);
         // timestamp in the iteration start
         break;
 
@@ -948,7 +948,7 @@ static void print_reproduction_details()
 
 void logging_print_version()
 {
-    printf(PROGRAM_VERSION "\n");
+    printf("%s\n", program_version);
 }
 
 void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout)
@@ -978,7 +978,8 @@ void logging_print_header(int argc, char **argv, ShortDuration test_duration, Sh
 
     case SandstoneApplication::OutputFormat::tap:
         logging_printf(LOG_LEVEL_QUIET, "# %s\n", cmdline.data());
-        logging_printf(LOG_LEVEL_VERBOSE(1), "# " PROGRAM_VERSION "; Operating system: %s\n", os_info().c_str());
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# %s; Operating system: %s\n",
+                       program_version, os_info().c_str());
         logging_printf(LOG_LEVEL_VERBOSE(2), "# Target test duration is %s per test, timeout %s\n",
                        format_duration(test_duration, FormatDurationOptions::WithUnit).c_str(),
                        format_duration(test_timeout, FormatDurationOptions::WithUnit).c_str());
@@ -2081,7 +2082,7 @@ void TapFormatLogger::maybe_print_yaml_marker(int fd)
     std::string_view nothing;
     terminator = yamlseparator;
     writeln(fd, yamlseparator,
-            "\n  info: {version: " PROGRAM_VERSION
+            "\n  info: {version: ", program_version,
             ", timestamp: ", iso8601_time_now(Iso8601Format::WithoutMs),
             cpu_has_feature(cpu_feature_hypervisor) ? ", virtualized: true" : nothing,
             "}");
@@ -2511,7 +2512,7 @@ void YamlLogger::print()
 void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout)
 {
     logging_printf(LOG_LEVEL_QUIET, "command-line: '%s'\n", cmdline.data());
-    logging_printf(LOG_LEVEL_QUIET, "version: " PROGRAM_VERSION "\n");
+    logging_printf(LOG_LEVEL_QUIET, "version: %s\n", program_version);
     logging_printf(LOG_LEVEL_VERBOSE(1), "os: %s\n", os_info().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "timing: { duration: %s, timeout: %s }\n",
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str(),
