@@ -978,7 +978,7 @@ void logging_print_header(int argc, char **argv, ShortDuration test_duration, Sh
 
     case SandstoneApplication::OutputFormat::tap:
         logging_printf(LOG_LEVEL_QUIET, "# %s\n", cmdline.data());
-        logging_printf(LOG_LEVEL_VERBOSE(1), "# Operating system: %s\n", os_info().c_str());
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# " PROGRAM_VERSION "; Operating system: %s\n", os_info().c_str());
         logging_printf(LOG_LEVEL_VERBOSE(2), "# Target test duration is %s per test, timeout %s\n",
                        format_duration(test_duration, FormatDurationOptions::WithUnit).c_str(),
                        format_duration(test_timeout, FormatDurationOptions::WithUnit).c_str());
