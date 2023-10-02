@@ -1626,10 +1626,17 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
 #elif defined(_WIN32)
     auto kill_children = [] { };
     auto single_wait = [&](milliseconds timeout) {
+        HANDLE handles[MAXIMUM_WAIT_OBJECTS];
+        DWORD nCount = 0;
+        for (auto it = children.handles.begin(); it != children.handles.end() && nCount < MAXIMUM_WAIT_OBJECTS; ++it) {
+            HANDLE hnd = HANDLE(*it);
+            if (hnd == INVALID_HANDLE_VALUE)
+                continue;
+            handles[nCount] = hnd;
+            ++nCount;
+        }
         bool bWaitAll = false;
-        auto handles = reinterpret_cast<const HANDLE *>(children.handles.data());
-        DWORD result = WaitForMultipleObjects(children.handles.size(), handles,
-                                              bWaitAll, timeout.count());
+        DWORD result = WaitForMultipleObjects(nCount, handles, bWaitAll, timeout.count());
         if (__builtin_expect(result == WAIT_FAILED, false)) {
             fprintf(stderr, "%s: WaitForMultipleObjects() failed: %lx; children left = %d\n",
                     program_invocation_name, GetLastError(), children_left);
@@ -1639,19 +1646,25 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             return 0;
 
         int idx = result - WAIT_OBJECT_0;
-        if (GetExitCodeProcess(handles[idx], &result) == 0) {
+        HANDLE hExited = handles[idx];
+        if (GetExitCodeProcess(hExited, &result) == 0) {
             fprintf(stderr, "%s: GetExitCodeProcess(child = %p) failed: %lx\n",
                     program_invocation_name, handles[idx], GetLastError());
             abort();
         }
 
-        children.results[idx] = test_result_from_exit_code(result);
-        children.results[idx].endtime = MonotonicTimePoint::clock::now();
+        auto childResult = test_result_from_exit_code(result);
+        childResult.endtime = MonotonicTimePoint::clock::now();
+        // close the handle and store result
+        for (idx = 0; idx < int(children.handles.size()); ++idx) {
+            if (hExited == HANDLE(children.handles[idx])) {
+                CloseHandle(hExited);
+                children.handles[idx] = intptr_t(INVALID_HANDLE_VALUE);
+                children.results[idx] = childResult;
+                break;
+            }
+        }
         --children_left;
-
-        // replace the handle with a valid, dummy, non-signalled handle
-        CloseHandle(handles[idx]);
-        children.handles[idx] = intptr_t(CreateEvent(nullptr, true, false, nullptr));
         return 0;
     };
     (void) tc;
