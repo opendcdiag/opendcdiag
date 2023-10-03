@@ -32,6 +32,7 @@ struct CrashContext
     char xsave_area[];      // C99 Flexible Array Member
 };
 static CrashContext *preallocatedContext = nullptr;
+static uintptr_t executableImageStart, executableImageEnd;
 static HANDLE hSlot = INVALID_HANDLE_VALUE;
 
 static bool open_mailslot()
@@ -98,6 +99,11 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
     ctx->fixedContext = *info->ContextRecord;
     ptrdiff_t context_size = sizeof(*ctx);
 
+    // did the crash happen inside the executable?
+    if (uintptr_t(info->ExceptionRecord->ExceptionAddress) >= executableImageStart
+            && uintptr_t(info->ExceptionRecord->ExceptionAddress) < executableImageEnd)
+        ctx->header.baseAddress = executableImageStart;
+
     if (!WriteFile(HANDLE(sApp->shmem->child_debug_socket), ctx, context_size, nullptr, nullptr))
         win32_perror("WriteFile for mailslot");
     if (!SetEvent(HANDLE(sApp->shmem->debug_event)))
@@ -140,6 +146,13 @@ void debug_init_child()
     if (!SandstoneConfig::ChildDebugCrashes || sApp->shmem->debug_event == 0)
         return;
     assert(sApp->shmem->child_debug_socket != intptr_t(INVALID_HANDLE_VALUE));
+
+    MEMORY_BASIC_INFORMATION info;
+    DWORD infosize = VirtualQuery(LPCVOID(&handler), &info, sizeof(info));
+    if (infosize) {
+        executableImageStart = uintptr_t(info.AllocationBase);
+        executableImageEnd = executableImageStart + info.RegionSize;
+    }
 
     preallocatedContext = new CrashContext;
 
