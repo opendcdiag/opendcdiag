@@ -5,6 +5,8 @@
 
 #include "sandstone.h"
 #include "sandstone_p.h"
+#include "sandstone_context_dump.h"
+#include "win32_errorstrings.h"
 
 #include <windows.h>
 
@@ -16,9 +18,21 @@ DECLSPEC_IMPORT BOOLEAN WINAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBuff
 
 #define WIN_TEMP_MAX_RETIRES            16
 
-static HANDLE hSlot = INVALID_HANDLE_VALUE;
+struct CrashContext
+{
+    static_assert(alignof(CONTEXT) <= alignof(std::max_align_t));
+    struct Header {
+        DWORD_PTR baseAddress;
+        int thread_num;
+    };
 
-static_assert(alignof(CONTEXT) <= alignof(std::max_align_t));
+    Header header;
+    EXCEPTION_RECORD exceptionRecord;
+    CONTEXT fixedContext;
+    char xsave_area[];      // C99 Flexible Array Member
+};
+static CrashContext *preallocatedContext = nullptr;
+static HANDLE hSlot = INVALID_HANDLE_VALUE;
 
 static bool open_mailslot()
 {
@@ -77,7 +91,11 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
         Sleep(INFINITE);
     }
 
-    auto ctx = info->ContextRecord;
+    // copy the context's fixed portions
+    CrashContext *ctx = preallocatedContext;
+    ctx->header.thread_num = thread_num;
+    ctx->exceptionRecord = *info->ExceptionRecord;
+    ctx->fixedContext = *info->ContextRecord;
     ptrdiff_t context_size = sizeof(*ctx);
 
     if (!WriteFile(HANDLE(sApp->shmem->child_debug_socket), ctx, context_size, nullptr, nullptr))
@@ -88,11 +106,42 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+static void print_exception_info(const CrashContext *ctx)
+{
+    std::string message =
+            stdprintf("Received exception 0x%x (%s), RIP = 0x%tx",
+                      unsigned(ctx->exceptionRecord.ExceptionCode),
+                      status_code_to_string(ctx->exceptionRecord.ExceptionCode),
+                      uintptr_t(ctx->exceptionRecord.ExceptionAddress));
+    if (ctx->header.baseAddress) {
+        ptrdiff_t basedAddress = reinterpret_cast<char *>(ctx->exceptionRecord.ExceptionAddress) -
+                reinterpret_cast<char *>(ctx->header.baseAddress);
+        message += stdprintf(" (base+0x%tx)", basedAddress);
+    }
+
+    if (ctx->exceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION
+            || ctx->exceptionRecord.ExceptionCode == EXCEPTION_IN_PAGE_ERROR) {
+        message += stdprintf(", CR2 = 0x%llx access=%c",
+                             ctx->exceptionRecord.ExceptionInformation[1],
+                             ctx->exceptionRecord.ExceptionInformation[0] ? 'W' : 'R');
+    } else if (ctx->exceptionRecord.NumberParameters) {
+        // no documentation for these, but they may be useful
+        message += ", parameters [";
+        for (int i = 0; i < int(ctx->exceptionRecord.NumberParameters); ++i)
+            message += stdprintf("%tx", uintptr_t(ctx->exceptionRecord.ExceptionInformation[i]));
+        message += ']';
+    }
+
+    log_message(ctx->header.thread_num, SANDSTONE_LOG_ERROR "%s", message.c_str());
+}
+
 void debug_init_child()
 {
     if (!SandstoneConfig::ChildDebugCrashes || sApp->shmem->debug_event == 0)
         return;
     assert(sApp->shmem->child_debug_socket != intptr_t(INVALID_HANDLE_VALUE));
+
+    preallocatedContext = new CrashContext;
 
     // install the vectored exception handler
     PVOID h = AddVectoredExceptionHandler(true, handler);
@@ -136,7 +185,10 @@ void debug_crashed_child()
         if (!ReadFile(hSlot, buf.data(), dwNextMessage, &dwNextMessage, nullptr))
             break;
 
-        // ### use received context
+        auto ctx = reinterpret_cast<CrashContext *>(buf.data());
+        if (ctx->header.thread_num < -1 || ctx->header.thread_num > sApp->thread_count)
+            ctx->header.thread_num = -1;
+        print_exception_info(ctx);
     }
 
     // got here on failure
