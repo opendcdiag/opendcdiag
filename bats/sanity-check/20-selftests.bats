@@ -1415,8 +1415,7 @@ selftest_crash_common() {
         skip "Windows-only test"
     fi
 
-    # I don't know *why* we get this error, but we do
-    selftest_crash_common selftest_fastfail ''  0xC0000409 "Stack buffer overrun"
+    selftest_crash_common selftest_fastfail ''  0xC0000409 "Program self-triggered abnormal termination"
 }
 
 @test "selftest_sigkill" {

@@ -72,6 +72,7 @@
 #ifdef _WIN32
 #  include <ntstatus.h>
 #  include <windows.h>
+#  include "win32_errorstrings.h"
 #  define dup _dup
 #  define dup2 _dup2
 #  define _PATH_DEVNULL "NUL"
@@ -2015,21 +2016,7 @@ std::string TapFormatLogger::fail_info_details()
     assert(status.result != TestResult::TimedOut);
     assert(status.result != TestResult::Interrupted);
 #ifdef _WIN32
-    switch (status.extra) {
-    case static_cast<unsigned>(STATUS_FAIL_FAST_EXCEPTION):
-        return "Aborted";
-    case STATUS_ACCESS_VIOLATION:
-        return "Access violation";
-    case STATUS_ILLEGAL_INSTRUCTION:
-        return "Illegal instruction";
-    case STATUS_INTEGER_DIVIDE_BY_ZERO:
-        return "Integer division by zero";
-    case STATUS_NO_MEMORY:
-        return "Out of memory condition";
-    case STATUS_STACK_BUFFER_OVERRUN:
-        return "Stack buffer overrun";
-    }
-    return "Unknown";
+    return status_code_to_string(status.extra);
 #else
     return strsignal(status.extra);
 #endif
