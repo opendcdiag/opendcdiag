@@ -37,7 +37,7 @@ test_yaml_numeric() {
     extract_from_yaml "$query"
     shift
     if [[ -n "$value" ]]; then
-        if awk -v value="$value" "BEGIN{exit(!($@))}" /dev/null; then
+        if awk -v value="$value" "BEGIN{exit(!($*))}" /dev/null; then
             return 0
         fi
     fi
@@ -1375,11 +1375,15 @@ selftest_crash_common() {
 }
 
 @test "selftest_abortinit" {
-    selftest_crash_common selftest_abortinit SIGABRT 0xC0000602 "Aborted"
+    # 0xC0000602 is STATUS_FAIL_FAST_EXCEPTION
+    # 0xC0000409 is STATUS_STACK_BUFFER_OVERRUN, which is not a buffer overrun
+    # - see https://devblogs.microsoft.com/oldnewthing/20190108-00/?p=100655
+    #       https://devblogs.microsoft.com/oldnewthing/20080404-00/?p=22863
+    selftest_crash_common selftest_abortinit SIGABRT '0xC0000602 || value == 0xC0000409' "Aborted"
 }
 
 @test "selftest_abort" {
-    selftest_crash_common selftest_abort SIGABRT 0xC0000602 "Aborted"
+    selftest_crash_common selftest_abort SIGABRT '0xC0000602 || value == 0xC0000409' "Aborted"
 }
 
 @test "selftest_sigill" {
@@ -1454,14 +1458,10 @@ selftest_crash_context_common() {
     if $is_asan; then
         skip "Crashing tests skipped with ASAN"
     fi
-    if $is_windows; then
-        skip "Backtrace functionality not available on Windows"
-    fi
     if [[ `uname -r` = *-azure ]]; then
         skip "GitHub Hosted Actions somehow make this impossible"
     fi
 
-    local signum=`kill -l SEGV`
     sandstone_selftest "$@"
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
@@ -1471,7 +1471,12 @@ selftest_crash_context_common() {
     local threadidx=$((yamldump[/tests/0/threads@len] - 1))
     test_yaml_regexp "/tests/0/threads/$threadidx/state" "failed"
     test_yaml_regexp "/tests/0/threads/$threadidx/messages/0/level" "error"
-    test_yaml_regexp "/tests/0/threads/$threadidx/messages/0/text" ".*Received signal $signum \((Segmentation fault|Access violation)\) code=[0-9]+.* RIP = 0x.*"
+    if $is_windows; then
+        test_yaml_regexp "/tests/0/threads/$threadidx/messages/0/text" ".*Received exception 0xc0000005 \(Access violation\), RIP = 0x.*"
+    else
+        local signum=`kill -l SEGV`
+        test_yaml_regexp "/tests/0/threads/$threadidx/messages/0/text" ".*Received signal $signum \((Segmentation fault|Access violation)\) code=[0-9]+.* RIP = 0x.*"
+    fi
 
     if [[ `uname -m` = x86_64 ]]; then
         # OpenDCDiag's built-in register dumper is only implemented for x86-64
@@ -1488,11 +1493,11 @@ selftest_crash_context_common() {
 
     # Ensure we can use this option even if gdb isn't found
     # (can't use run_sandstone_yaml here because we empty $PATH)
-    (
+    if ! $is_windows; then (
         PATH=
         run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o - >/dev/null
         [[ $status -eq 1 ]]     # instead of 64 (EX_USAGE)
-    )
+    ); fi
 }
 
 crash_context_socket1_common() {

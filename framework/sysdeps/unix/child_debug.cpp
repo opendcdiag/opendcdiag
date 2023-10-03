@@ -7,6 +7,8 @@
 #  define _XOPEN_SOURCE 1
 #endif
 
+#include "sandstone_child_debug_common.h"
+
 #include "sandstone_p.h"
 #include "sandstone_context_dump.h"
 #include "sandstone_iovec.h"
@@ -120,7 +122,6 @@ struct CrashContext
         return result;
     }
 
-    static int xsave_size_for_bitvector(uint64_t xsave_bv);
 private:
     CrashContext(std::span<uint8_t> xsave_buffer)
         : xsave_buffer(xsave_buffer), mc{}
@@ -369,49 +370,6 @@ static bool check_gdb_available()
 
     return false;
 }
-
-#ifdef __x86_64__
-// get the size of the context to transfer
-inline int CrashContext::xsave_size_for_bitvector(uint64_t xsave_bv)
-{
-    uint32_t eax, ebx, ecx, edx;
-    int xsave_size = FXSAVE_SIZE;
-    if (!__get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx))
-        return xsave_size;
-
-    // did the bit vector disable any bits that are in CPUID?
-    uint64_t cpuid_bv = eax | uint64_t(edx) << 32;
-    if (cpuid_bv & ~xsave_bv) {
-        // yes, find the end of the highest state that we *are* transferring
-        int bit = 2;
-        uint64_t mask = XSave_Ymm_Hi128;
-        xsave_bv &= ~(XSave_SseState | XSave_X87);  // included in FXSAVE
-        for ( ; xsave_bv; ++bit, mask <<= 1) {
-            if ((xsave_bv & mask) == 0)
-                continue;
-            xsave_bv &= ~mask;
-            __cpuid_count(0xd, bit, eax, ebx, ecx, edx);
-            int size = eax;
-            int offset = ebx;
-            xsave_size = std::max(xsave_size, size + offset);
-        }
-    } else {
-        // no, we'll transfer the entire context
-        xsave_size = ebx;
-    }
-    return xsave_size;
-}
-
-static int get_xsave_size()
-{
-    return CrashContext::xsave_size_for_bitvector(-1);
-}
-#else
-static int get_xsave_size()
-{
-    return 0;
-}
-#endif
 
 static bool create_crash_pipe(int xsave_size)
 {
