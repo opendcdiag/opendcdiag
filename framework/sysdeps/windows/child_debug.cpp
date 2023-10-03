@@ -109,6 +109,8 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
     if (!SetEvent(HANDLE(sApp->shmem->debug_event)))
         win32_perror("SetEvent for mailslot");
 
+    TerminateProcess(GetCurrentProcess(), info->ExceptionRecord->ExceptionCode);
+    __builtin_unreachable();
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -186,12 +188,10 @@ void debug_crashed_child()
 
     std::string buf;
     DWORD dwNextMessage = 0;
+    AutoClosingFile log;
     while (GetMailslotInfo(hSlot, nullptr, &dwNextMessage, nullptr, nullptr)) {
-        if (dwNextMessage == MAILSLOT_NO_MESSAGE) {
-            if (log)
-                fclose(log);
+        if (dwNextMessage == MAILSLOT_NO_MESSAGE)
             return;
-        }
 
         if (buf.size() < dwNextMessage)
             buf.resize(dwNextMessage);
@@ -199,9 +199,35 @@ void debug_crashed_child()
             break;
 
         auto ctx = reinterpret_cast<CrashContext *>(buf.data());
-        if (ctx->header.thread_num < -1 || ctx->header.thread_num > sApp->thread_count)
-            ctx->header.thread_num = -1;
+        int cpu = ctx->header.thread_num;
+        if (cpu < -1 || cpu > sApp->thread_count)
+            cpu = ctx->header.thread_num = -1;
         print_exception_info(ctx);
+
+        // no open_memstream() or fcookieopen() in MSVCRT or UCRT, so we use
+        // a real file
+        if (!log)
+            log.f = tmpfile();
+        if (!log)
+            continue;
+
+        fseek(log, 0, SEEK_SET);
+        fprintf(log, "Registers:\n");
+#ifdef __x86_64__
+        dump_gprs(log, &ctx->fixedContext);
+#endif
+
+        long size = ftell(log);
+        if (size < 0)
+            continue;
+        if (buf.size() < size_t(size))
+            buf.resize(size);
+
+        fseek(log, 0, SEEK_SET);
+        size = fread(buf.data(), 1, size, log);
+
+        logging_user_messages_stream(cpu, LOG_LEVEL_VERBOSE(2))
+                .write(std::string_view(buf.data(), size));
     }
 
     // got here on failure
