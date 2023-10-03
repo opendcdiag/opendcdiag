@@ -3,12 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "sandstone.h"
+#include "sandstone_child_debug_common.h"
+
 #include "sandstone_p.h"
 #include "sandstone_context_dump.h"
 #include "win32_errorstrings.h"
 
 #include <windows.h>
+
+#if defined(__x86_64__) && !defined(CONTEXT_XSTATE)
+#  define CONTEXT_XSTATE        (CONTEXT_AMD64 | 0x00000040L)
+#endif
 
 #ifndef RtlGenRandom
 #  define RtlGenRandom SystemFunction036
@@ -20,18 +25,24 @@ DECLSPEC_IMPORT BOOLEAN WINAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBuff
 
 struct CrashContext
 {
-    static_assert(alignof(CONTEXT) <= alignof(std::max_align_t));
     struct Header {
         DWORD_PTR baseAddress;
         int thread_num;
     };
 
+    static constexpr DWORD DesiredContextFlags =
+#ifdef __x86_64__
+            CONTEXT_SEGMENTS | CONTEXT_XSTATE |
+#endif
+            CONTEXT_FULL;
+
     Header header;
     EXCEPTION_RECORD exceptionRecord;
-    CONTEXT fixedContext;
+    alignas(64) CONTEXT fixedContext;
     char xsave_area[];      // C99 Flexible Array Member
 };
 static CrashContext *preallocatedContext = nullptr;
+static ptrdiff_t preallocatedContextSize = 0;
 static uintptr_t executableImageStart, executableImageEnd;
 static HANDLE hSlot = INVALID_HANDLE_VALUE;
 
@@ -96,8 +107,11 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
     CrashContext *ctx = preallocatedContext;
     ctx->header.thread_num = thread_num;
     ctx->exceptionRecord = *info->ExceptionRecord;
-    ctx->fixedContext = *info->ContextRecord;
     ptrdiff_t context_size = sizeof(*ctx);
+    if (CopyContext(&ctx->fixedContext, CrashContext::DesiredContextFlags, info->ContextRecord))
+        context_size = preallocatedContextSize;
+    else
+        ctx->fixedContext = *info->ContextRecord;
 
     // did the crash happen inside the executable?
     if (uintptr_t(info->ExceptionRecord->ExceptionAddress) >= executableImageStart
@@ -113,6 +127,48 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
     __builtin_unreachable();
     return EXCEPTION_CONTINUE_SEARCH;
 }
+
+#ifdef __x86_64__
+static void print_non_gprs(FILE *log, PCONTEXT ctx)
+{
+    // Windows doesn't store the XSAVE state in a contiguous block, so
+    // we have to put it back together.
+    int xsave_size = get_xsave_size();
+    if (xsave_size < FXSAVE_SIZE + 64)
+        xsave_size = FXSAVE_SIZE;               // legacy only (FXSAVE)
+
+    alignas(64) char xsave_area[xsave_size];    // -Wvla
+    memset(xsave_area, 0, xsave_size);
+    memcpy(xsave_area, &ctx->FloatSave, sizeof(XMM_SAVE_AREA32));
+
+    if (xsave_size > FXSAVE_SIZE) {
+        // copy the rest of the features to where they ought to be
+        PDWORD64 xsave_bv_ptr = reinterpret_cast<PDWORD64>(xsave_area + FXSAVE_SIZE);
+        if (GetXStateFeaturesMask(ctx, xsave_bv_ptr) && *xsave_bv_ptr) {
+            // these are already in the fixed context record:
+            DWORD64 xsave_bv = *xsave_bv_ptr & ~XSTATE_MASK_LEGACY;
+
+            for (int bit = XSTATE_AVX; xsave_bv; ++bit) {
+                uint32_t eax, ebx, ecx, edx;
+                DWORD length;
+                DWORD64 mask = DWORD64(1) << bit;
+                if ((xsave_bv & mask) == 0)
+                    continue;
+                xsave_bv &= ~mask;
+                void *src = LocateXStateFeature(ctx, bit, &length);
+
+                __cpuid_count(0xd, bit, eax, ebx, ecx, edx);
+                if (eax == length)
+                    memcpy(xsave_area + ebx, src, eax);
+                else
+                    *xsave_bv_ptr &= ~mask;
+            }
+        }
+    }
+
+    dump_xsave(log, xsave_area, xsave_size, -1);
+}
+#endif
 
 static void print_exception_info(const CrashContext *ctx)
 {
@@ -156,7 +212,19 @@ void debug_init_child()
         executableImageEnd = executableImageStart + info.RegionSize;
     }
 
-    preallocatedContext = new CrashContext;
+    PCONTEXT pContext;
+    DWORD contextLength;
+    InitializeContext(nullptr, CrashContext::DesiredContextFlags, nullptr, &contextLength);
+    preallocatedContextSize = sizeof(CrashContext) + contextLength - sizeof(CONTEXT);
+    void *ptr = aligned_alloc(alignof(CrashContext), preallocatedContextSize);
+    preallocatedContext = new (ptr) CrashContext;
+    if (!InitializeContext(&preallocatedContext->fixedContext,
+                           CrashContext::DesiredContextFlags, &pContext, &contextLength)
+            || pContext != &preallocatedContext->fixedContext) {
+        free(ptr);
+        preallocatedContext = nullptr;
+        return;
+    }
 
     // install the vectored exception handler
     PVOID h = AddVectoredExceptionHandler(true, handler);
@@ -215,6 +283,7 @@ void debug_crashed_child()
         fprintf(log, "Registers:\n");
 #ifdef __x86_64__
         dump_gprs(log, &ctx->fixedContext);
+        print_non_gprs(log, &ctx->fixedContext);
 #endif
 
         long size = ftell(log);
