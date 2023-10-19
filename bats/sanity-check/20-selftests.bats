@@ -1525,3 +1525,52 @@ selftest_cpuset_unsorted() {
         test_yaml_regexp "/tests/0/threads/$i/messages/0/text" "I> ${cpuset[$i]}\$"
     done
 }
+
+selftest_interrupt_common() {
+    local timeout=30000
+    local signal=$1
+    local -i signum=$(kill -l $signal)
+    if $is_windows; then
+        skip "Unix-only test"
+    fi
+
+    # We can't use sandstone_selftest or run_sandstone_yaml here - must run directly
+    local yamlfile=`mktempfile output-XXXXXX.yaml`
+    $SANDSTONE -Y -o - -n1 --max-test-loop-count=0 --selftests -e selftest_timedpass -t $timeout > $yamlfile &
+    local pid=$!
+
+    # let's wait for the test to actually start
+    sleep 1
+
+    # now kill it, wait for it to finish, and capture the exit status
+    kill -$signal $pid
+    local -i exitcode=0
+    wait $pid || exitcode=$?
+
+    (echo ---; sed 's/\r$//' $yamlfile ) | \
+        tee -a total_log_output.yaml # for bats' logger
+    declare -A yamldump
+    local structure=$(python3 $BATS_TEST_COMMONDIR/dumpyaml.py < $yamlfile)
+    rm -f -- $yamlfile
+    eval "yamldump=($structure)"
+
+    # Confirm it was the correct signal
+    if (( exitcode != (128 | signum) )); then
+        echo >&2 'Incorrect exit code:' $exitcode
+        false
+    fi
+
+    test_yaml_regexp "/exit" interrupted
+    test_yaml_regexp "/tests/0/result" interrupted
+    test_yaml_numeric "/tests/0/time-at-end/elapsed" "value < $timeout"
+}
+
+@test "interrupt-SIGHUP" {
+    selftest_interrupt_common HUP
+}
+@test "interrupt-SIGINT" {
+    selftest_interrupt_common INT
+}
+@test "interrupt-SIGTERM" {
+    selftest_interrupt_common TERM
+}

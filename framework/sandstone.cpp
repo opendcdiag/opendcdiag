@@ -1544,8 +1544,11 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
     children.pollfds.emplace_back(pollfd{ .fd = sApp->shmem->server_debug_socket, .events = POLLIN });
     auto remove_debug_socket = scopeExit([&] { children.pollfds.pop_back(); });
 
-    auto single_wait = [&](milliseconds timeout) {
+    auto single_wait = [&, caughtSignal = 0](milliseconds timeout) mutable {
         int ret = poll(children.pollfds.data(), children.pollfds.size(), timeout.count());
+        if (ret == 0)
+            return 0;           // timed out
+
         if (__builtin_expect(ret < 0 && errno != EINTR, false)) {
             perror("poll");
             exit(EX_OSERR);
@@ -1567,13 +1570,13 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
                                                 "(press Ctrl+C again to exit without waiting)\n");
                 logging_print_log_file_name();
                 enable_interrupt_catch();       // re-arm SIGINT handler
+                caughtSignal = signal;
+                return 0;
             } else {
                 // for any other signal (e.g., SIGTERM), we don't
                 return int(signal);
             }
         }
-        if (ret <= 0)
-            return 0;
 
         auto now = MonotonicTimePoint::clock::now();
         if (pollfd &pfd = children.pollfds.back(); pfd.revents & POLLIN) {
@@ -1606,7 +1609,7 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             children.results[i].usage = usage;
             --children_left;
         }
-        return 0;
+        return caughtSignal;
     };
     auto kill_children = [&] {
         for (pid_t child : children.handles) {
@@ -1682,7 +1685,7 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
         MonotonicTimePoint deadline = steady_clock::now() + remaining;
         for ( ; children_left && remaining > 0s; remaining = deadline - steady_clock::now()) {
             int ret = single_wait(ceil<milliseconds>(remaining));
-            if (ret >= 0)
+            if (ret == 0)
                 continue;
 
             for (ChildExitStatus &result : children.results)
