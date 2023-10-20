@@ -672,8 +672,15 @@ int logging_close_global(int exitcode)
     if (!SandstoneConfig::NoLogging) {
         if (exitcode != EXIT_SUCCESS) {
             logging_print_log_file_name();
-            logging_printf(LOG_LEVEL_QUIET,
-                           exitcode == EXIT_FAILURE ? "exit: fail\n" : "exit: invalid\n");
+            if (exitcode == EXIT_FAILURE) {
+                logging_printf(LOG_LEVEL_QUIET, "exit: fail\n");
+            }
+            else if (exitcode > 128) {
+                logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
+            }
+            else {
+                logging_printf(LOG_LEVEL_QUIET, "exit: invalid\n");
+            }
         } else if (sApp->shmem->verbosity >= 0) {
             logging_printf(LOG_LEVEL_QUIET, "exit: pass\n");
         }
@@ -1157,12 +1164,12 @@ void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ..
     va_start(va, fmt);
     std::string msg = create_filtered_message_string(fmt, va);
     va_end(va);
-    
+
     msg.insert(msg.begin(), category);
 
     if (msg[msg.size() - 1] == '\n')
         msg.pop_back(); // remove trailing newline
-             
+
     log_message_for_thread(thread_num, SkipMessages, LOG_LEVEL_VERBOSE(1), msg);
 }
 
@@ -1522,13 +1529,13 @@ static void format_and_print_message(int fd, int message_level, std::string_view
             } else {
                 writeln(fd, indent_spaces(), "  skip-reason: |1");
                 print_content_indented(fd, "   ", message);
-            }   
+            }
         } else {
             if (from_thread_message) // are you writing individual thread's message?
                 writeln(fd, "  - |");
             else                     // are you writing init thread's message?
                 writeln(fd, "\n", indent_spaces(), " - |");
-            print_content_indented(fd, "    ", message); 
+            print_content_indented(fd, "    ", message);
         }
     } else {
         /* single line */
@@ -1545,7 +1552,7 @@ static void format_and_print_message(int fd, int message_level, std::string_view
                 char c = '\'';
                 print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
             } else { // are you writing init thread's message?
-                print_content_single_line(fd, "'", message, "'"); 
+                print_content_single_line(fd, "'", message, "'");
             }
         }
     }
@@ -1600,8 +1607,8 @@ int AbstractLogger::print_one_thread_messages(int fd, PerThreadData::Common *dat
         case Preformatted:
             IGNORE_RETVAL(write(fd, ptr, delim - ptr));
             break;
-        
-        case SkipMessages: 
+
+        case SkipMessages:
             if (!skipInMainThread) {
                 // Only print if the result line didn't already include this
                 std::string skip_message;
@@ -1773,7 +1780,7 @@ void KeyValuePairLogger::print(int tc)
     logging_printf(LOG_LEVEL_QUIET, "%s_result = %s\n", test->id,
                    testResult == TestResult::Skipped ? "skip" :
                    testResult == TestResult::Passed ? "pass" : "fail");
-    
+
     if (testResult == TestResult::Skipped && !skipInMainThread) {
         logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "RuntimeSkipCategory");
         logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
@@ -1926,6 +1933,8 @@ void TapFormatLogger::print(int tc)
         extra += format_status_code();
         break;
     case TestResult::OutOfMemory:
+        extra += "Out of memory";
+        break;
     case TestResult::Killed:
         extra += "Killed: ";
         extra += format_status_code();
@@ -2334,7 +2343,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
         case Preformatted:
             IGNORE_RETVAL(write(fd, message.data(), message.size()));
             break;
-        
+
         case SkipMessages:
             if (!skipInMainThread) {
                 // Only print if the result line didn't already include this
@@ -2343,7 +2352,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
                 format_and_print_message(fd, 4, std::string_view{&skip_message[0], skip_message.size()}, true);
             }
             break;
-        
+
         case UsedKnobValue:
             assert(sApp->shmem->log_test_knobs);
             continue;       // not break

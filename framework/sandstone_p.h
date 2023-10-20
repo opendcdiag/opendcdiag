@@ -124,12 +124,12 @@ enum class TestResult : int8_t {
     Skipped = -1,
     Passed,
     Failed,
-    Killed,
     CoreDumped,
     OperatingSystemError,
     OutOfMemory,
     TimedOut,
     Interrupted,
+    Killed,
 };
 
 enum ThreadState : int {

@@ -326,34 +326,39 @@ static int test_result_to_exit_code(TestResult result)
 static ChildExitStatus test_result_from_exit_code(forkfd_info info)
 {
     ChildExitStatus r = {};
-    r.extra = info.status;
     if (info.code == CLD_EXITED) {
         // normal exit
         int8_t status = info.status;    // the cast to int8_t transforms 255 into -1
         switch (status) {
         case -1:
             r.result = TestResult::Skipped;
-            r.extra = 0;
             break;
         case EXIT_SUCCESS:
             r.result = TestResult::Passed;
-            r.extra = 0;
             break;
         case EXIT_FAILURE:
             r.result = TestResult::Failed;
-            r.extra = 0;
             break;
         default:
             // a FW problem getting started
             r.result = TestResult::OperatingSystemError;
+            r.extra = info.status;
             break;
         }
-    } else if (info.code == CLD_KILLED || info.code == CLD_DUMPED) {
-        r.result = info.code == CLD_KILLED ? TestResult::Killed : TestResult::CoreDumped;
-        if (info.status == SIGKILL)
+    } else if (info.code == CLD_KILLED) {
+        if (info.status == SIGINT) {
+            r.result = TestResult::Interrupted;
+        } else if (info.status == SIGKILL)
             r.result = TestResult::OutOfMemory;
         else if (info.status == SIGQUIT)
             r.result = TestResult::TimedOut;
+        else {
+            r.result = TestResult::Killed;
+            r.extra = info.status;
+        }
+    } else if (info.code == CLD_DUMPED) {
+        r.result = TestResult::CoreDumped;
+        r.extra = info.status;
     } else {
         assert(false && "Impossible condition; did we get a CLD_STOPPED??");
         __builtin_unreachable();
@@ -1550,8 +1555,12 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             perror("poll");
             exit(EX_OSERR);
         }
+        // timeout
+        if (ret == 0) {
+            return 0;
+        }
+        // we've received a signal, which one?
         if (ret < 0) {
-            // we've received a signal, which one?
             auto [signal, count] = last_signal();
             if (signal != 0) {
                 // forward the signal to all children
@@ -1567,13 +1576,13 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
                                                 "(press Ctrl+C again to exit without waiting)\n");
                 logging_print_log_file_name();
                 enable_interrupt_catch();       // re-arm SIGINT handler
+                // "nothing has happend", poll will handle EOF in a second.
+                return 0;
             } else {
-                // for any other signal (e.g., SIGTERM), we don't
+                // request the app to stop on signal
                 return int(signal);
             }
         }
-        if (ret <= 0)
-            return 0;
 
         auto now = MonotonicTimePoint::clock::now();
         if (pollfd &pfd = children.pollfds.back(); pfd.revents & POLLIN) {
@@ -1682,24 +1691,23 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
         MonotonicTimePoint deadline = steady_clock::now() + remaining;
         for ( ; children_left && remaining > 0s; remaining = deadline - steady_clock::now()) {
             int ret = single_wait(ceil<milliseconds>(remaining));
-            if (ret >= 0)
-                continue;
+            // handle "immediate" signals
+            if (ret > 0) {
+                logging_print_results(children.results, tc, test);
+                if (ret == SIGINT) {
+                    logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
+                } else if (ret == SIGTERM) {
+                    logging_printf(LOG_LEVEL_QUIET, "exit: terminated\n");
+                } else {
+                    logging_printf(LOG_LEVEL_QUIET, "exit: killed\n");
+                }
+                logging_flush();
 
-            for (ChildExitStatus &result : children.results)
-                result = { TestResult::Interrupted };
-
-            // Problem waiting: we must have caught a signal
-            // (child has likely not been able to write results)
-            int sig = ret;
-
-            logging_print_results(children.results, tc, test);
-            logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
-            logging_flush();
-
-            // now exit with the same signal
-            disable_interrupt_catch();
-            raise(sig);
-            _exit(128 | sig);           // just in case
+                // now exit with the same signal
+                disable_interrupt_catch();
+                raise(ret);
+                _exit(128 | ret);           // just in case
+            }
         }
     };
 
@@ -2261,11 +2269,11 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
              && MonotonicTimePoint::clock::now() < first_iteration_target && auto_fracture))
             sApp->shmem->current_max_loop_count *= 2;
 
-        /* don't repeat skipped tests */
-        if (state == TestResult::Skipped)
+        /* don't repeat skipped/interrupted tests */
+        if ((state == TestResult::Skipped) || (state >= TestResult::Interrupted))
             goto out;
 
-        if (state != TestResult::Passed) {
+        if (state >= TestResult::Failed) {
             // this counts as the first failure regardless of how many fractures we've run
             mark_up_per_cpu_fail(0);
             break;
@@ -2309,7 +2317,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
             state = run_one_test_once(tc, test);
             cleanup_internal(test);
 
-            if (state > TestResult::Passed)
+            if (state >= TestResult::Failed)
                 mark_up_per_cpu_fail(iterations);
         }
 
@@ -3220,6 +3228,7 @@ int main(int argc, char **argv)
     int max_cores_per_slice = 0;
     int opt;
     int tc = 0;
+    int total_interrupted = 0;
     int total_failures = 0;
     int total_successes = 0;
     int total_skips = 0;
@@ -3822,17 +3831,19 @@ int main(int argc, char **argv)
         lastTestResult = run_one_test(&tc, test, per_cpu_failures);
 
         total_tests_run++;
-        if (lastTestResult == TestResult::Failed) {
-            ++total_failures;
-            // keep the record of failures to triage later
-            triage_tests.push_back(test);
-            if (fatal_errors)
-                break;
+        if ((lastTestResult == TestResult::Interrupted) || (lastTestResult == TestResult::Killed)) {
+            ++total_interrupted;
         } else if (lastTestResult == TestResult::Passed) {
             ++total_successes;
         } else if (lastTestResult == TestResult::Skipped) {
             ++total_skips;
             if (sApp->fatal_skips)
+                break;
+        } else {
+            ++total_failures;
+            // keep the record of failures to triage later
+            triage_tests.push_back(test);
+            if (fatal_errors)
                 break;
         }
         if (total_tests_run >= sApp->max_test_count)
@@ -3862,10 +3873,14 @@ int main(int argc, char **argv)
     }
 
     int exit_code = EXIT_SUCCESS;
-
-    if (total_failures || (total_skips && sApp->fatal_skips))
+    if (total_interrupted != 0) {
+        exit_code = 128 + SIGINT;
+    }
+    else if (total_failures || (total_skips && sApp->fatal_skips)) {
         exit_code = EXIT_FAILURE;
+    }
 
     exit_code = print_application_footer(exit_code, per_cpu_failures);
-    return logging_close_global(exit_code);
+    exit_code = logging_close_global(exit_code);
+    return exit_code;
 }
