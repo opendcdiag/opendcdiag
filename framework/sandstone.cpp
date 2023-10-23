@@ -1544,6 +1544,12 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
     children.pollfds.emplace_back(pollfd{ .fd = sApp->shmem->server_debug_socket, .events = POLLIN });
     auto remove_debug_socket = scopeExit([&] { children.pollfds.pop_back(); });
 
+    auto kill_children = [&](int sig = SIGKILL) {
+        for (pid_t child : children.handles) {
+            if (child)
+                kill(child, sig);
+        }
+    };
     auto single_wait = [&, caughtSignal = 0](milliseconds timeout) mutable {
         int ret = poll(children.pollfds.data(), children.pollfds.size(), timeout.count());
         if (ret == 0)
@@ -1558,10 +1564,7 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             auto [signal, count] = last_signal();
             if (signal != 0) {
                 // forward the signal to all children
-                for (pid_t child : children.handles) {
-                    if (child > 0)
-                        kill(child, signal);
-                }
+                kill_children(signal);
             }
 
             // if it was SIGINT, we print a message and wait for the test
@@ -1610,12 +1613,6 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             --children_left;
         }
         return caughtSignal;
-    };
-    auto kill_children = [&] {
-        for (pid_t child : children.handles) {
-            if (child)
-                kill(child, SIGKILL);
-        }
     };
 #elif defined(_WIN32)
     auto kill_children = [] { };
