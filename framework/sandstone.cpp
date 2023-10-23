@@ -1658,8 +1658,6 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
         --children_left;
         return 0;
     };
-    (void) tc;
-    (void) test;
 #else
 #  error "What platform is this?"
 #endif
