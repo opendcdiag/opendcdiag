@@ -39,6 +39,7 @@
 #include "topology.h"
 #include "interrupt_monitor.hpp"
 #include "thermal_monitor.hpp"
+#include "frequency_manager.hpp"
 
 #ifndef _WIN32
 #  include <sys/resource.h>     // for struct rusage
@@ -381,6 +382,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool ignore_unknown_tests = false;
     bool force_test_time = false;
     bool service_background_scan = false;
+    bool vary_frequency_mode = false;
     static constexpr int MaxRetestCount = sizeof(PerCpuFailures::value_type) * 8;
     int retest_count = 10;
     int total_retest_count = -2;
@@ -397,6 +399,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
+    FrequencyManager frequency_manager;
 
 #ifndef __linux__
     std::string path_to_self;
