@@ -170,6 +170,7 @@ enum {
     total_retest_on_failure,
     ud_on_failure_option,
     use_builtin_test_list_option,
+    vary_frequency,
     version_option,
     weighted_testrun_option,
 };
@@ -2246,6 +2247,11 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
 
     /* First we go to do our -- possibly fractured -- normal run, we'll do retries after */
     for (sApp->current_iteration_count = 0;; ++sApp->current_iteration_count) {
+
+        //change frequency per fracture
+        if (sApp->vary_frequency_mode == true)
+            sApp->frequency_manager.change_frequency();
+
         init_internal(test);
 
         // calculate starttime->endtime, reduce the overhead to have better test runtime calculations
@@ -2318,6 +2324,10 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
     }
 
 out:
+    //reset frequency level idx for the next test
+    if (sApp->vary_frequency_mode)
+        sApp->frequency_manager.reset_frequency_level_idx();
+    
     random_advance_seed();      // advance seed for the next test
     logging_flush();
     return state;
@@ -3199,6 +3209,7 @@ int main(int argc, char **argv)
         { "total-time", required_argument, nullptr, 'T' },
         { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
         { "use-builtin-test-list", optional_argument, nullptr, use_builtin_test_list_option },
+        { "vary-frequency", no_argument, nullptr, vary_frequency},
         { "verbose", no_argument, nullptr, 'v' },
         { "version", no_argument, nullptr, version_option },
         { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
@@ -3563,6 +3574,14 @@ int main(int argc, char **argv)
                 sApp->shmem->max_messages_per_thread = INT_MAX;
             break;
 
+        case vary_frequency:
+            if (!FrequencyManager::FrequencyManagerWorks) {
+                fprintf(stderr, "%s: --vary-frequency works only on Linux\n", program_invocation_name);
+                return EX_USAGE;
+            }
+            sApp->vary_frequency_mode = true;
+            break;
+        
         case version_option:
             logging_print_version();
             return EXIT_SUCCESS;
@@ -3721,6 +3740,10 @@ int main(int argc, char **argv)
         sApp->mce_count_last = std::accumulate(sApp->mce_counts_start.begin(), sApp->mce_counts_start.end(), uint64_t(0));
     }
 
+    //if --vary-frequency mode is used, do a initial setup and checks for running different frequencies
+    if (sApp->vary_frequency_mode)
+        sApp->frequency_manager.initial_setup();
+
 #ifndef __OPTIMIZE__
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
 #endif
@@ -3862,6 +3885,10 @@ int main(int argc, char **argv)
     }
 
     int exit_code = EXIT_SUCCESS;
+
+    //done running all the tests, restore system to the initial state
+    if (sApp->vary_frequency_mode)
+        sApp->frequency_manager.restore_initial_state();
 
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
