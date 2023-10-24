@@ -108,6 +108,12 @@ if framework_config.get('SANDSTONE_SSL_BUILD') == 1
                         static: get_option('ssl_link_type') == 'static')
   if crypto_dep.found()
       framework_files += ['sandstone_ssl.cpp', 'sandstone_ssl_rand.cpp']
+
+    if framework_config.get('SANDSTONE_SSL_LINKED') == 0
+        # If we're trying to dlopen() only, we need to be more careful
+        crypto_dep = crypto_dep.partial_dependency(compile_args: true, includes: true,
+                                                   link_args: false, links: false)
+    endif
   else
       # If we cannot find libcrypto, disable SSL build
       framework_config.set10('SANDSTONE_SSL_BUILD', 0)
