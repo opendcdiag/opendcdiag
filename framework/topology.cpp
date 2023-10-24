@@ -806,11 +806,11 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 
             pin_to_logical_processor(lp);
             init_cpu_info(&cpu_info[i], curr_cpu);
+            try_detection<topo_impls>(&cpu_info[i]);
             try_detection<family_impls>(&cpu_info[i]);
             try_detection<ppin_impls>(&cpu_info[i]);
             try_detection<ucode_impls>(&cpu_info[i]);
             try_detection<cache_info_impls>(&cpu_info[i]);
-            try_detection<topo_impls>(&cpu_info[i]);
         }
         return nullptr;
     };
