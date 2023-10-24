@@ -466,7 +466,11 @@ static const char *char_to_skip_category(int val)
     case SkipCategory(8):
         return "OsNotSupportedSkipCategory";
     case SkipCategory(9):
-        return "ThreadIssueSkipCategory";
+        return "TestResourceIssueSkipCategory";
+    case SkipCategory(10):
+        return "CpuTopologyIssueSkipCategory";
+    case SkipCategory(11):
+        return "OSResourceIssueSkipCategory";
     }
 
     return "NO CATEGORY PRESENT";

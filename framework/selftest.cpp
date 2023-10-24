@@ -246,7 +246,7 @@ static int selftest_log_skip_newline_init(struct test *test)
 
 static int selftest_log_skip_newline_run(struct test *test, int cpu)
 {
-    log_skip(RuntimeSkipCategory, "This message should never be displayed");
+    log_skip(SelftestSkipCategory, "This message should never be displayed");
     return EXIT_FAILURE;
 }
 
