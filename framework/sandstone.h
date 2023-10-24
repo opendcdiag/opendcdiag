@@ -91,7 +91,9 @@ typedef enum SkipCategory {
     RuntimeSkipCategory,
     SelftestSkipCategory,
     OsNotSupportedSkipCategory,
-    ThreadIssueSkipCategory
+    TestResourceIssueSkipCategory,
+    CpuTopologyIssueSkipCategory,
+    OSResourceIssueSkipCategory
 } SkipCategory;
 
 /// logs a skip message to the logfile. log_skip accepts the category to which the skip belongs to
