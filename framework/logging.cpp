@@ -1098,6 +1098,8 @@ void logging_init(const struct test *test)
     case SandstoneApplication::OutputFormat::no_output:
         return;                 // short-circuit
     }
+
+    logging_flush();
 }
 
 void logging_init_child_preexec()
