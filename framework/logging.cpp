@@ -1813,7 +1813,6 @@ void KeyValuePairLogger::print(int tc)
             logging_printf(LOG_LEVEL_VERBOSE(1), "%s_earliest_fail_time = %s\n", test->id, time.c_str());
     }
 
-    logging_flush();
     print_thread_messages();
     print_child_stderr();
     logging_flush();
@@ -1953,7 +1952,6 @@ void TapFormatLogger::print(int tc)
 
     logging_printf(loglevel(), "%s\n", tap_line.c_str());
 
-    logging_flush();
     print_thread_messages();
     if (sApp->shmem->verbosity >= 1)
         print_child_stderr();
@@ -2468,8 +2466,6 @@ void YamlLogger::print()
     const double freq_avg = freqs / num_cpus();
     if (std::isfinite(freq_avg) && freq_avg != 0.0)
         logging_printf(LOG_LEVEL_VERBOSE(1), "  avg-freq-mhz: %.1f\n", freq_avg);
-
-    logging_flush();
 
     if (sApp->shmem->log_test_knobs) {
         struct mmap_region main_mmap = maybe_mmap_log(sApp->main_thread_data());
