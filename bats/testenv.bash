@@ -54,6 +54,15 @@ function setup_sandstone()
     fi
 }
 
+function mktempfile() {
+    # find a temporary directory for us
+    local tmpdir=$BATS_TEST_TMPDIR
+    tmpdir=${tmpdir-$BATS_TMPDIR}
+    tmpdir=${tmpdir-$TMPDIR}
+    tmpdir=${tmpdir-/tmp}
+    TMPDIR=$tmpdir mktemp --tmpdir "$@"
+}
+
 function run_sandstone_yaml_post()
 {
     # any test may override
@@ -66,7 +75,7 @@ function run_sandstone_yaml()
     [[ " $* " == *" --selftests "* ]] || is_selftest=0
 
     # bats' "run" function would help, but it fails on older bats...
-    local yamlfile=`mktemp output-XXXXXX.yaml`
+    local yamlfile=`mktempfile output-XXXXXX.yaml`
     local command="$SANDSTONE -Y -o - \"\$@\" >&3; echo \$?"
     if [[ -n "$TASKSET" ]]; then
         command="taskset ${TASKSET} $command"
