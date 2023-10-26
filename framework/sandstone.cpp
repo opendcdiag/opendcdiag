@@ -1316,6 +1316,10 @@ static void dump_cpu_info()
     }
 }
 
+static void suggest_help(char **argv) {
+    printf("Try '%s --help' for more information.\n", argv[0]);
+}
+
 static void usage(char **argv)
 {
     static const char usageText[] = R"(%s [options]
@@ -3566,7 +3570,7 @@ int main(int argc, char **argv)
             /* long option setting a value */
             continue;
         default:
-            usage(argv);
+            suggest_help(argv);
             return EX_USAGE;
         }
     }
@@ -3603,10 +3607,12 @@ int main(int argc, char **argv)
                 logging_print_version();
                 return EXIT_SUCCESS;
 
-            default:
             case 'h':
                 usage(argv);
                 return opt == 'h' ? EXIT_SUCCESS : EX_USAGE;
+            default:
+                suggest_help(argv);
+                return EX_USAGE;
             }
         }
 
