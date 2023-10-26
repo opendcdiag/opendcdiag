@@ -21,9 +21,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#if __has_include(<fnmatch.h>)
-#  include <fnmatch.h>
-#endif
+#include <fnmatch.h>
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -2476,14 +2474,10 @@ static NameMatchingStatus test_matches_name(const struct test *test, const char 
     // match test ID exactly
     if (strcmp(name, test->id) == 0)
         return NameMatchesExactly;
-#if __has_include(<fnmatch.h>)
+
     // match test ID as a wildcard
     if (fnmatch(name, test->id, 0) == 0)
         return NameMatches;
-#elif defined(_WIN32)
-    if (PathMatchSpecA(test->id, name))
-        return NameMatches;
-#endif
 
     // does it match one of the groups?
     if (*name == '@') {
