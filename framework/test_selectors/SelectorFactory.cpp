@@ -79,6 +79,7 @@ static void prepare_test(/*nonconst*/ struct test *test)
     if (test->groups)
         apply_group_inits(test);
 
+#ifdef SANDSTONE
     if (test->flags & test_type_kvm) {
         if (!test->test_init) {
             test->test_init = kvm_generic_init;
@@ -86,6 +87,7 @@ static void prepare_test(/*nonconst*/ struct test *test)
             test->test_cleanup = kvm_generic_cleanup;
         }
     }
+#endif
 }
 
 void add_test(std::vector<struct test *> &test_list, /*nonconst*/ struct test *test)
@@ -119,16 +121,17 @@ static NameMatchingStatus test_matches_name(const struct test *test, const char 
 
 static void print_unknown_test(const char *name)
 {
+    if (sApp->ignore_unknown_tests)
+        return;
     fprintf(stderr, "%s: Cannot find test '%s'\n", program_invocation_name, name);
     exit(EX_USAGE);
 }
 
 void add_tests(std::span<struct test> test_set, std::vector<struct test *> &test_list, const char *name)
 {
-    constexpr auto options = TestSearchOptions(MatchWildcard | MatchGroups);
     int count = 0;
     for (struct test &test: test_set) {
-        auto matches = test_matches_name(&test, name, options);
+        auto matches = test_matches_name(&test, name);
         if (!matches)
             continue;
 
@@ -148,10 +151,9 @@ void add_tests(std::span<struct test> test_set, std::vector<struct test *> &test
 
 void disable_tests(std::span<struct test> test_set, const char *name)
 {
-    constexpr auto options = TestSearchOptions(MatchWildcard | MatchGroups);
     int count = 0;
     for (struct test &test : test_set) {
-        if (test_matches_name(&test, name, options)) {
+        if (test_matches_name(&test, name)) {
             disable_test(&test);
             ++count;
         }
