@@ -121,6 +121,7 @@ enum {
     fatal_skips_option,
     gdb_server_option,
     ignore_os_errors_option,
+    ignore_unknown_tests_option,
     is_asan_option,
     is_debug_option,
     force_test_time_option,
@@ -1351,6 +1352,8 @@ Common command-line options are:
  --ignore-os-error, --ignore-timeout
      Continue execution of Sandstone even if a test encounters an operating
      system error (this includes tests timing out).
+ --ignore-unknown-tests
+     Ignore unknown tests listed on --enable and --disable.
  -h, --help
      Print help.
  -l, --list
@@ -2981,8 +2984,9 @@ int main(int argc, char **argv)
         { "fatal-skips", no_argument, nullptr, fatal_skips_option },
         { "fork-mode", required_argument, nullptr, 'f' },
         { "help", no_argument, nullptr, 'h' },
-        { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-os-errors", no_argument, nullptr, ignore_os_errors_option },
+        { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
+        { "ignore-unknown-tests", no_argument, nullptr, ignore_unknown_tests_option },
         { "list", no_argument, nullptr, 'l' },
         { "list-tests", no_argument, nullptr, raw_list_tests },
         { "list-group-members", required_argument, nullptr, raw_list_group_members },
@@ -3202,6 +3206,9 @@ int main(int argc, char **argv)
 #endif
         case ignore_os_errors_option:
             sApp->ignore_os_errors = true;
+            break;
+        case ignore_unknown_tests_option:
+            sApp->ignore_unknown_tests = true;
             break;
         case is_asan_option:
         case is_debug_option:

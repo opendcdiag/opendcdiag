@@ -769,17 +769,85 @@ test_random() {
     test_random $SEED 0:0:0 0:0:1 0:1:0 0:1:1
 }
 
-test_list_file() {
-    local -a list=("$@")
-    local -i count=${#list[@]}
+@test "--disable" {
+    local expected=selftest_pass
     declare -A yamldump
+
+    sandstone_selftest $($SANDSTONE --selftests --list-tests | sed -e /$expected/d -e 's/\r$//; s/^/--disable=/')
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # Confirm we've run the test we expected to run
+    test_yaml_regexp "/tests/0/test" selftest_pass
+}
+
+@test "wildcard --enable" {
+    local tests=($($SANDSTONE --selftests --list-group-members @positive | sed -n '/^selftest_logs/{s/\r$//; p}'))
+    [[ ${#tests[@]} -gt 0 ]]
+
+    declare -A yamldump
+    sandstone_selftest -e 'selftest_logs*'
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # Confirm we've run the tests we expected to run
+    test_yaml_numeric "/tests@len" 'value == '${#tests[@]}
+    for ((i = 0; i < ${#tests[@]}; ++i)); do
+        test_yaml_regexp "/tests/$i/test" "${tests[$i]}"
+    done
+}
+
+@test "wildcard --disable" {
+    declare -A yamldump
+
+    # Note: order matters!
+    sandstone_selftest --disable 'selftest_logs?*' -e 'selftest_logs*'
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # Confirm we've run the test we expected to run
+    test_yaml_regexp "/tests/0/test" selftest_logs
+    test_yaml_numeric '/tests@len' 'value == 1'
+}
+
+@test "--ignore-unknown-tests" {
+    local invalid_test=this_test_does_not_exist
+    declare -A yamldump
+
+    # Confirm it doesn't exist
+    set -- -e $invalid_test -e selftest_pass
+    run $SANDSTONE --selftest "$@"
+    ((status == 64))
+    [[ "$output" = *\'$invalid_test\'* ]]
+
+    # Now check we can ignore it
+    selftest_pass --ignore-unknown-test "$@"
+
+    # Ditto on ignoring it
+    selftest_pass --ignore-unknown-test --disable=$invalid_test "$@"
+}
+
+test_list_file_common() {
+    declare -A yamldump
+    local listcontents=$1
+    local extraargs=()
+    shift
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" = -- ]]; then
+            shift
+            break
+        fi
+        extraargs+=("$1")
+        shift
+    done
 
     local testlistfile=`mktempfile list.XXXXXX`
     echo "=== test list ==="
-    printf '%s\n' "${list[@]}" | tee "$testlistfile"
+    printf "$listcontents" | tee "$testlistfile"
     echo "=== ==="
 
-    sandstone_selftest --test-list-file "$testlistfile"
+    sandstone_selftest --test-list-file "$testlistfile" "${extraargs[@]}"
+
     rm -f -- "$testlistfile"
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
@@ -787,11 +855,7 @@ test_list_file() {
     # confirm each test
     local -i i=0
     local entry
-    for entry in "${list[@]}"; do
-        if [[ "$entry" = "" ]] || [[ "$entry" = "#"* ]]; then
-            continue;
-        fi
-
+    for entry; do
         test_yaml_regexp "/tests/$i/result" "pass"
         test_yaml_regexp "/tests/$i/test" "${entry%:*}"
 
@@ -809,6 +873,20 @@ test_list_file() {
     test_yaml_numeric "/tests@len" "value = $i"
 }
 
+test_list_file() {
+    local listcontents
+    local -a expectedtests=()
+    local arg
+    for arg; do
+        listcontents="$listcontents$arg\\n"
+        arg=${arg%#*}
+        if [[ "$arg" != "" ]]; then
+            expectedtests+=("$arg")
+        fi
+    done
+    test_list_file_common "$listcontents" -- "${expectedtests[@]}"
+}
+
 @test "--test-list-file with 1 test" {
     test_list_file selftest_pass
 }
@@ -823,6 +901,37 @@ test_list_file() {
 
 @test "--test-list-file with comments and empty lines" {
     test_list_file '# a file list' '' selftest_pass '' '# the end!'
+}
+
+@test "--test-list-file with --disable" {
+    test_list_file_common 'selftest_pass\nselftest_logs' --disable=selftest_logs -- selftest_pass
+}
+
+@test "--test-list-file with wildcard --disable" {
+    local testlist=$($SANDSTONE --selftests --list-group-members @positive |
+                         grep '/selftest_logs/ { printf "%s\\n", $1 }')
+
+    test_list_file_common "selftest_pass\\n$testlist" -- selftest_pass
+}
+
+@test "--test-list-file with unknown test name" {
+    # This doesn't produce valid YAML output, so run directly
+    local name=`mktemp -u selftest_XXXXXX`
+    local testlistfile=`mktempfile list.XXXXXX`
+
+    echo "$name" > $testlistfile
+    run $SANDSTONE -Y -o - --selftests --test-list-file "$testlistfile"
+    rm -f -- "$testlistfile"
+
+    echo "$output"
+    [[ $status -eq 64 ]]        # exit(EX_USAGE)
+    grep -qwF "$name" <<<"$output"
+}
+
+@test "--test-list-file --ignore-unknown-test with unknown test name" {
+    local name=`mktemp -u selftest_XXXXXX`
+    test_list_file_common "selftest_pass\\n$name\\nselftest_logs" --ignore-unknown-tests -- \
+                          selftest_pass selftest_logs
 }
 
 test_list_randomize() {
@@ -909,20 +1018,6 @@ test_list_file_ignores_beta() {
 
 @test "--test-list-file --test-list-randomize ignores beta test" {
     test_list_file_ignores_beta --test-list-randomize
-}
-
-@test "--test-list-file with unknown test name" {
-    # This doesn't produce valid YAML output, so run directly
-    local name=`mktemp -u selftest_XXXXXX`
-    local testlistfile=`mktempfile list.XXXXXX`
-
-    echo "$name" > $testlistfile
-    run $SANDSTONE -Y -o - --selftests --test-list-file "$testlistfile"
-    rm -f -- "$testlistfile"
-
-    echo "$output"
-    [[ $status -eq 64 ]]        # exit(EX_USAGE)
-    grep -qwF "$name" <<<"$output"
 }
 
 @test "--test-list-randomize" {

@@ -378,6 +378,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
             fork_each_test;
 #endif
     bool ignore_os_errors = false;
+    bool ignore_unknown_tests = false;
     bool force_test_time = false;
     bool service_background_scan = false;
     static constexpr int MaxRetestCount = sizeof(PerCpuFailures::value_type) * 8;
