@@ -7,6 +7,7 @@ framework_files += \
         'child_debug.cpp',
         'cpu_affinity.cpp',
         'fcntl.c',
+        'fnmatch.c',
         'mman.c',
         'resource.cpp',
         'signals.cpp',
