@@ -279,6 +279,7 @@ executable(
         '-march=haswell',
         debug_c_flags,
         default_cpp_warn,
+	'-USANDSTONE',
     ],
     build_by_default : false,
     native : true,

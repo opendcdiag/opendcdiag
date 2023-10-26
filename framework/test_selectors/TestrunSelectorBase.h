@@ -22,26 +22,11 @@ protected:
     {
     }
 
-    struct test * testid_to_test(const char *id, bool silent)
-    {
-        for (struct test *test: testinfo) {
-            if (strcmp(id, test->id) == 0) {
-                // check the quality level
-                if (test->quality_level >= sApp->requested_quality)
-                    return test;
-
-                // silently skip if the requested quality is too high
-                return nullptr;
-            }
-        }
-        if (!silent) {
-            fprintf(stderr, "\nERROR: Attempt to specify non-existent test id [%s] in list file\n", id);
-            exit(EX_USAGE);
-        }
-        return nullptr;
-    }
+    // in sandstone.cpp
+    struct test * testid_to_test(const char *id, bool silent);
 
 public:
+
     virtual ~TestrunSelector() = default;
     virtual struct test * get_next_test() = 0;
     virtual void reset_selector() {};

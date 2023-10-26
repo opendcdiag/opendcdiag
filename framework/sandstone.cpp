@@ -21,7 +21,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <fnmatch.h>
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -53,8 +52,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-#include <math.h>
 
 #include "cpu_features.h"
 #include "forkfd.h"
@@ -2397,162 +2394,6 @@ static void list_group_members(const char *groupname)
     exit(EX_USAGE);
 }
 
-static void apply_group_inits(/*nonconst*/ struct test *test)
-{
-    // Create an array with the replacement functions per group and cache.
-    // If the group_init function decides that the group cannot run at all, it
-    // will return a pointer to a replacement function that will in turn cause
-    // the test to fail or skip during test_init().
-
-    std::span<const struct test_group> groups = { &__start_test_group, &__stop_test_group };
-    static auto replacements = [=]() {
-        struct Result {
-            decltype(test_group::group_init) group_init;
-            decltype(test_group::group_init()) replacement;
-        };
-
-        std::vector<Result> replacements(groups.size());
-        size_t i = 0;
-        for ( ; i < replacements.size(); ++i) {
-            replacements[i].group_init = groups[i].group_init;
-            replacements[i].replacement = nullptr;
-        }
-        return replacements;
-    }();
-
-    for (auto ptr = test->groups; *ptr; ++ptr) {
-        for (size_t i = 0; i < groups.size(); ++i) {
-            if (*ptr != &groups.begin()[i])
-                continue;
-            if (replacements[i].group_init && !replacements[i].replacement) {
-                // call the group_init function, only once
-                replacements[i].replacement = replacements[i].group_init();
-                replacements[i].group_init = nullptr;
-            }
-            if (replacements[i].replacement) {
-                test->test_init = replacements[i].replacement;
-                return;
-            }
-        }
-    }
-}
-
-static void run_test_preinit(/*nonconst*/ struct test *test)
-{
-    if (test->test_preinit) {
-        test->test_preinit(test);
-        test->test_preinit = nullptr;   // don't rerun in case the test is re-added
-    }
-    if (test->groups)
-        apply_group_inits(test);
-}
-
-static void add_test(std::vector<struct test *> &test_list, /*nonconst*/ struct test *test)
-{
-    if (test) {
-        run_test_preinit(test);
-
-        if (test->flags & test_type_kvm) {
-            if (!test->test_init) {
-                test->test_init = kvm_generic_init;
-                test->test_run = kvm_generic_run;
-                test->test_cleanup = kvm_generic_cleanup;
-            }
-        }
-    }
-    test_list.push_back(test);
-}
-
-static void disable_test(struct test *test)
-{
-    test->quality_level = TEST_QUALITY_SKIP;
-}
-
-enum NameMatchingStatus { NameDoesNotMatch = 0, NameMatches, NameMatchesExactly };
-static NameMatchingStatus test_matches_name(const struct test *test, const char *name)
-{
-    // match test ID exactly
-    if (strcmp(name, test->id) == 0)
-        return NameMatchesExactly;
-
-    // match test ID as a wildcard
-    if (fnmatch(name, test->id, 0) == 0)
-        return NameMatches;
-
-    // does it match one of the groups?
-    if (*name == '@') {
-        for (auto ptr = test->groups; ptr && *ptr; ++ptr) {
-            if (strcmp(name + 1, (*ptr)->id) == 0)
-                return NameMatches;
-        }
-    }
-
-    return NameDoesNotMatch;
-}
-
-static void add_tests(std::vector<struct test *> &test_list, const char *name)
-{
-    int count = 0;
-    for (struct test &test: test_set) {
-        auto matches = test_matches_name(&test, name);
-        if (!matches)
-            continue;
-
-        run_test_preinit(&test);
-        ++count;
-        if (test.quality_level >= sApp->requested_quality) {
-            add_test(test_list, &test);
-        } else if (test_list.empty()) {
-            // add a dummy entry just so the list isn't empty
-            test_list.push_back(nullptr);
-        }
-    }
-
-    if (count == 0) {
-        fprintf(stderr, "Cannot find test '%s'\n", name);
-        exit(EX_USAGE);
-    }
-}
-
-static void disable_tests(const char *name)
-{
-    int count = 0;
-    for (struct test &test : test_set) {
-        if (test_matches_name(&test, name)) {
-            disable_test(&test);
-            ++count;
-        }
-    }
-
-    if (count == 0) {
-        if (!strcmp(name, "mce_check")) {
-            if constexpr (InterruptMonitor::InterruptMonitorWorks)
-                disable_test(&mce_test);
-        } else {
-            fprintf(stderr, "Cannot find test '%s'\n", name);
-            exit(EX_USAGE);
-        }
-    }
-}
-
-static void generate_test_list(std::vector<struct test *> &test_list,
-                               int min_quality = sApp->requested_quality)
-{
-    if (SandstoneConfig::RestrictedCommandLine || test_list.empty()) {
-        if (!SandstoneConfig::RestrictedCommandLine && sApp->fatal_skips)
-            fprintf(stderr, "# WARNING: --fatal-skips used with full test suite. This will probably fail.\n"
-                            "# You may want to specify a controlled list of tests to run.\n");
-        /* generate test list based on quality levels only */
-        for (struct test &test : test_set) {
-            if (test.quality_level >= min_quality)
-                add_test(test_list, &test);
-        }
-    } else if (test_list.front() == nullptr) {
-        /* remove the dummy entry we added (see add_tests()) */
-        test_list.erase(test_list.begin());
-    }
-}
-
 static struct test *get_next_test_iteration(void)
 {
     static int iterations = 0;
@@ -3258,10 +3099,10 @@ int main(int argc, char **argv)
            (opt = simple_getopt(argc, argv, long_options)) != -1) {
         switch (opt) {
         case disable_option:
-            disable_tests(optarg);
+            disable_tests(test_set, optarg);
             break;
         case 'e':
-            add_tests(test_list, optarg);
+            add_tests(test_set, test_list, optarg);
             test_selection_strategy = Ordered;
             break;
         case 'f':
@@ -3732,7 +3573,7 @@ int main(int argc, char **argv)
 
         // include ALL tests in this test list, including TEST_QUALITY_SKIP;
         // the test selector will filter those out
-        generate_test_list(test_list, INT_MIN);
+        generate_test_list(test_list, test_set, INT_MIN);
         test_selector = create_list_file_test_selector(std::move(test_list), test_list_file_path,
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
@@ -3759,7 +3600,7 @@ int main(int argc, char **argv)
                 add_test(test_list, test);
             }
         } else {
-            generate_test_list(test_list);
+            generate_test_list(test_list, test_set);
         }
         if (!test_selector) {
             weighted_run_info weights[] = { { nullptr } };
