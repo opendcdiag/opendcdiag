@@ -4,15 +4,6 @@
 # SPDX-License-Identifier: Apache-2.0
 load ../testenv
 
-mktempfile() {
-    # find a temporary directory for us
-    local tmpdir=$BATS_TEST_TMPDIR
-    tmpdir=${tmpdir-$BATS_TMPDIR}
-    tmpdir=${tmpdir-$TMPDIR}
-    tmpdir=${tmpdir-/tmp}
-    TMPDIR=$tmpdir mktemp --tmpdir "$@"
-}
-
 sandstone_selftest() {
     VALIDATION=dump
     run_sandstone_yaml -n$MAX_PROC --disable=mce_check --no-triage --selftests --timeout=20s --retest-on-failure=0 -Y2 "$@"
