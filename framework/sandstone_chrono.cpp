@@ -100,3 +100,34 @@ coarse_steady_clock::time_point coarse_steady_clock::now() noexcept
     return time_point(seconds(ts.tv_sec) + nanoseconds(ts.tv_nsec));
 }
 #endif
+
+uint64_t sandstone_user_cpu_time(uint64_t from)
+{
+#ifdef __unix__
+    struct rusage time;
+    if (getrusage(RUSAGE_THREAD, &time) < 0) {
+        return 0;
+    }
+    return (1000000LL * time.ru_utime.tv_sec) + time.ru_utime.tv_usec - from;
+#else
+    return 0;
+#endif
+}
+
+uint64_t sandstone_sys_cpu_time(uint64_t from)
+{
+#ifdef __unix__
+    struct rusage time;
+    if (getrusage(RUSAGE_THREAD, &time) < 0) {
+        return 0;
+    }
+    return (1000000LL * time.ru_stime.tv_sec) + time.ru_stime.tv_usec - from;
+#else
+    return 0;
+#endif
+}
+
+uint64_t sandstone_wall_clock_time(uint64_t from)
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(MonotonicTimePoint::clock::now().time_since_epoch()).count() - from;
+}
