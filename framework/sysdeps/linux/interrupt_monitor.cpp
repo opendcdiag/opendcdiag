@@ -30,12 +30,12 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
     }();
 
     std::vector<uint32_t> result;
+    if (!f)
+        return result;
 
     char *line = nullptr;
     size_t len = 0;
-    ssize_t nread;
-    if (!f)
-        return result;
+    auto free_line = scopeExit([&] { free(line); });
 
     while (f && (nread = getline(&line, &len, f)) != -1) {
         // Skip any blanks at the start of the line
@@ -57,7 +57,6 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
         }
         break;
     }
-    free(line);
 
     // reset the file pointer for the next time we get called
     fseek(f, 0, SEEK_SET);
