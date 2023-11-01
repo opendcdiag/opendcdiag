@@ -24,14 +24,27 @@ static char *skip_to_non_blank(char *ptr)
     return ptr;
 }
 
-static std::vector<int> parse_header(char *line, ssize_t nread)
+static const std::vector<int> &parse_header(char *line, ssize_t nread)
 {
+    static struct {
+        std::string header_line;
+        std::vector<int> result;
+    } cache;
+
+    if (nread <= 0) {
+        cache = {};
+        return cache.result;
+    }
+
+    std::string_view header_line(line, nread);
+    if (cache.header_line == header_line)
+        return cache.result;
+
+    // cache this result for later
+    cache.header_line = header_line;
+
     // read every CPU number to create the mapping
     static const char cpu[] = "CPU";
-    std::vector<int> result;
-    if (nread <= 0)
-        return result;
-
     char *ptr = skip_to_non_blank(line);
     while (strncmp(ptr, cpu, strlen(cpu)) == 0) {
         char *endptr;
@@ -40,11 +53,11 @@ static std::vector<int> parse_header(char *line, ssize_t nread)
         if (n == 0 && ptr == endptr)
             break;
 
-        result.push_back(n);
+        cache.result.push_back(n);
         ptr = skip_to_non_blank(endptr);
     }
 
-    return result;
+    return cache.result;
 }
 
 // this function reads the interrupts file and returns a list of integers corresponding
@@ -76,7 +89,7 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
 
     // read the header and create the CPU mapping
     ssize_t nread = getline(&line, &len, f);
-    std::vector<int> cpu_mapping = parse_header(line, nread);
+    const std::vector<int> &cpu_mapping = parse_header(line, nread);
     if (cpu_mapping.size() == 0) {
         // failed to parse the header!
         fclose(f);
