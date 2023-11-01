@@ -37,7 +37,7 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
     size_t len = 0;
     auto free_line = scopeExit([&] { free(line); });
 
-    while (f && (nread = getline(&line, &len, f)) != -1) {
+    while (getline(&line, &len, f) != -1) {
         // Skip any blanks at the start of the line
         char *ptr = line;
         while (*ptr && isblank(*ptr))
