@@ -449,27 +449,27 @@ static uint8_t status_level(char letter)
 static const char *char_to_skip_category(int val)
 {
     switch (val) {
-    case SkipCategory(1):
+    case ResourceIssueSkipCategory:
         return "ResourceIssueSkipCategory";
-    case SkipCategory(2):
+    case CpuNotSupportedSkipCategory:
         return "CpuNotSupportedSkipCategory";
-    case SkipCategory(3):
+    case DeviceNotFoundSkipCategory:
         return "DeviceNotFoundSkipCategory";
-    case SkipCategory(4):
+    case DeviceNotConfiguredSkipCategory:
         return "DeviceNotConfiguredSkipCategory";
-    case SkipCategory(5):
+    case UnknownSkipCategory:
         return "UnknownSkipCategory";
-    case SkipCategory(6):
+    case RuntimeSkipCategory:
         return "RuntimeSkipCategory";
-    case SkipCategory(7):
+    case SelftestSkipCategory:
         return "SelftestSkipCategory";
-    case SkipCategory(8):
+    case OsNotSupportedSkipCategory:
         return "OsNotSupportedSkipCategory";
-    case SkipCategory(9):
+    case TestResourceIssueSkipCategory:
         return "TestResourceIssueSkipCategory";
-    case SkipCategory(10):
+    case CpuTopologyIssueSkipCategory:
         return "CpuTopologyIssueSkipCategory";
-    case SkipCategory(11):
+    case OSResourceIssueSkipCategory:
         return "OSResourceIssueSkipCategory";
     }
 
