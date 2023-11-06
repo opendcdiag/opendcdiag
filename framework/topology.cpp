@@ -244,20 +244,7 @@ static FILE *fopenat(int dfd, const char *name)
         close(fd);
     return f;
 };
-#endif /* __linux__ */
 
-static void init_cpu_info(struct cpu_info *info, int os_cpu) {
-    memset(info, 0, sizeof(struct cpu_info));
-    /* fill everything with -1 to indicate n/a and set the OS cpu id. */
-    info->cpu_number = os_cpu;
-    info->package_id = -1;
-    info->core_id = -1;
-    info->thread_id = -1;
-
-    std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
-}
-
-#ifdef __linux__
 static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
 {
     FILE *f;
@@ -785,6 +772,23 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             return apply_mock_topology(mock_topology, enabled_cpus);
     }
 
+    int curr_cpu = 0;
+    for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
+        auto lp = LogicalProcessor(curr_cpu);
+        while (!enabled_cpus.is_set(lp)) {
+            lp = LogicalProcessor(++curr_cpu);
+        }
+
+        /* fill everything with -1 to indicate n/a and set the OS cpu id. */
+        auto info = cpu_info + i;
+        info->cpu_number = curr_cpu;
+        info->package_id = -1;
+        info->core_id = -1;
+        info->thread_id = -1;
+
+        std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
+    }
+
     auto detect = [](void *ptr) -> void * {
         auto enabled_cpus = *static_cast<const LogicalProcessorSet *>(ptr);
         int curr_cpu = 0;
@@ -795,7 +799,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             }
 
             pin_to_logical_processor(lp);
-            init_cpu_info(&cpu_info[i], curr_cpu);
             try_detection<topo_impls>(&cpu_info[i]);
             try_detection<family_impls>(&cpu_info[i]);
             try_detection<ppin_impls>(&cpu_info[i]);
