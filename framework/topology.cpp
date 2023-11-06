@@ -394,7 +394,7 @@ static bool fill_topo_cpuid(struct cpu_info *info)
         subleaf++;
     } while (1);
     info->package_id = d >> pkg_shift;
-    return true;
+    return info->core_id != -1;
 }
 
 static bool fill_ucode_msr(struct cpu_info *info)
