@@ -338,6 +338,129 @@ static bool fill_topo_sysfs(struct cpu_info *info)
 
     return true;
 }
+#elif defined(_WIN32)
+
+// The definition of CACHE_RELATIONSHIP in MinGW's headers is outdated
+struct CACHE_RELATIONSHIP_2 {
+    BYTE Level;
+    BYTE Associativity;
+    WORD LineSize;
+    DWORD CacheSize;
+    PROCESSOR_CACHE_TYPE Type;
+    BYTE Reserved[18];
+    WORD                 GroupCount;
+    union {
+        GROUP_AFFINITY GroupMask;
+        GROUP_AFFINITY GroupMasks[ANYSIZE_ARRAY];
+    };
+};
+
+static bool fill_topo_sysfs(struct cpu_info *info)
+{
+    if (info != &cpu_info[0])
+        return info->core_id != -1; // we only need to run once
+
+    DWORD length = 0;
+    GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+        return false;
+
+    auto buffer = std::make_unique<unsigned char[]>(length);
+    auto lpi = new (buffer.get()) SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX;
+
+    if (!GetLogicalProcessorInformationEx(RelationAll, lpi, &length))
+        return false;
+
+    static constexpr unsigned CpusPerGroup =
+            std::numeric_limits<KAFFINITY>::digits;
+
+    std::span infos(info, info + num_cpus());
+    auto first_cpu_for_group = [infos](unsigned group) -> struct cpu_info * {
+        for (struct cpu_info &info : infos) {
+            if (info.cpu_number / CpusPerGroup == group)
+                return &info;
+        }
+        return nullptr;
+    };
+
+    auto for_each_proc_in = [&](unsigned groupCount, GROUP_AFFINITY *groups, auto lambda) {
+        // find the first CPU matching this group
+        for (GROUP_AFFINITY &ga : std::span(groups, groupCount)) {
+            struct cpu_info *info = first_cpu_for_group(ga.Group);
+            if (!info)
+                continue;
+
+            KAFFINITY mask = ga.Mask;
+            while (mask) {
+                int n = std::countr_zero(mask);
+                mask &= ~(1 << n);
+
+                // find the CPU matching this number in this group
+                for ( ; info < std::to_address(infos.end()); ++info) {
+                    unsigned group = info->cpu_number / CpusPerGroup;
+                    unsigned number = info->cpu_number % CpusPerGroup;
+                    if (group == ga.Group && number < n)
+                        continue;
+                    if (group == ga.Group && number == n)
+                        lambda(info++);
+                    break;
+                }
+            }
+        }
+    };
+
+    unsigned char *ptr = buffer.get();
+    unsigned char *end = ptr + length;
+
+    int pkg_id = 0;
+    int core_id = 0;
+    for ( ; ptr < end; ptr += lpi->Size) {
+        lpi = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(ptr);
+        switch (lpi->Relationship) {
+        case RelationProcessorPackage:
+            for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
+                             [&](struct cpu_info *info) {
+                                 info->package_id = pkg_id;
+                             }
+                );
+            ++pkg_id;
+            core_id = 0;
+            break;
+
+        case RelationProcessorCore:
+            for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
+                             [&, thread_id = 0](struct cpu_info *info) mutable {
+                                 info->core_id = core_id;
+                                 info->thread_id = thread_id++;
+                             }
+                );
+            ++core_id;
+            break;
+
+        case RelationCache: {
+            auto &cache = *reinterpret_cast<CACHE_RELATIONSHIP_2 *>(&lpi->Cache);
+            for_each_proc_in(cache.GroupCount, cache.GroupMasks,
+                             [&](struct cpu_info *info) {
+                                 int level = cache.Level - 1;
+                                 if (level >= std::size(info->cache))
+                                     return;
+                                 if (cache.Type == CacheUnified
+                                         || cache.Type == CacheInstruction)
+                                     info->cache[level].cache_instruction = cache.CacheSize;
+                                 if (cache.Type == CacheUnified
+                                         || cache.Type == CacheData)
+                                     info->cache[level].cache_data = cache.CacheSize;
+                             }
+                );
+        }
+
+        default:
+            break;
+        }
+    }
+
+    return info->core_id != -1;
+}
 #else /* __linux__ */
 static auto fill_topo_sysfs = nullptr;
 #endif /* __linux__ */
