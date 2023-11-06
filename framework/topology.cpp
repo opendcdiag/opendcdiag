@@ -257,13 +257,67 @@ static void init_cpu_info(struct cpu_info *info, int os_cpu) {
     std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
 }
 
+#ifdef __linux__
+static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
+{
+    FILE *f;
+    char buf[256];  // size repeated in fscanf below
+
+    // Read cache information
+    for (int j = 0; ; ++j) {
+        int level;
+
+        sprintf(buf, "cache/index%d", j);
+        auto_fd cachefd{openat(cpufd, buf, O_PATH | O_CLOEXEC)};
+        if (cachefd == -1)
+            break;
+
+        f = fopenat(cachefd, "level");
+        if (!f)
+            continue;
+        IGNORE_RETVAL(fscanf(f, "%d", &level));
+        fclose(f);
+
+        if (level <= int(sizeof(info->cache) / sizeof(info->cache[0]))) {
+            int size;
+            char suffix = '\0';
+            f = fopenat(cachefd, "size");
+            if (!f)
+                continue;
+            IGNORE_RETVAL(fscanf(f, "%d%c", &size, &suffix));
+            fclose(f);
+
+            if (suffix == 'K')
+                size *= 1024;
+            else if (suffix == 'M')
+                size *= 1024 * 1024;
+
+            f = fopenat(cachefd, "type");
+            if (!f)
+                continue;
+            IGNORE_RETVAL(fscanf(f, "%255s", buf));
+            fclose(f);
+
+            if (strcmp(buf, "Instruction") == 0)
+                info->cache[level - 1].cache_instruction = size;
+            else if (strcmp(buf, "Data") == 0)
+                info->cache[level - 1].cache_data = size;
+            else
+                info->cache[level - 1].cache_instruction =
+                        info->cache[level - 1].cache_data = size;
+        }
+    }
+    return true;
+}
+
 static bool fill_topo_sysfs(struct cpu_info *info)
 {
-#ifdef __linux__
     FILE *f;
 
     auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
     if (cpufd < 0)
+        return false;
+    if (!fill_cache_info_sysfs(info, cpufd))
         return false;
 
     // Read the topology
@@ -296,11 +350,10 @@ static bool fill_topo_sysfs(struct cpu_info *info)
     fclose(f);
 
     return true;
-#else /* __linux__ */
-    return false;
-#endif /* __linux__ */
-
 }
+#else /* __linux__ */
+static auto fill_topo_sysfs = nullptr;
+#endif /* __linux__ */
 
 #ifdef __x86_64__
 static bool fill_family_cpuid(struct cpu_info *info)
@@ -359,6 +412,56 @@ static bool fill_family_cpuid(struct cpu_info *info)
     return true;
 }
 
+static bool fill_cache_info_cpuid(struct cpu_info *info)
+{
+    /* since info->cache is statically allocated */
+    static int max_levels = sizeof(info->cache) / sizeof(*info->cache);
+
+    /* read the leaf 0x04: deterministic cache parameters */
+    uint32_t a, b, c, d; /* eax, ebx, ecx, edx */
+    int subleaf = 0; /* incrementing subleaf index */
+
+    do {
+        int ways, parts, line_sz, sets;
+        int level, size;
+
+        __cpuid_count(0x04, subleaf, a, b, c, d);
+
+        if (!(a & 0xf)) break; /* first 4 bits eax are 0 -- no more info */
+
+        level = (a >> 5) & 0x7; /* eax 3 bits 07:05 */
+        if (level > max_levels) return 1; /* this is fatal. */
+
+        /* cache topology */
+        ways = ((b >> 22) & ((1 << 9) - 1)) + 1; /* ebx 9 bits 31:22 plus 1 */
+        parts = ((b >> 12) & ((1 << 9) - 1)) + 1; /* ebx 9 bits 21:12 plus 1 */
+        line_sz = (b & ((1 << 12) - 1)) + 1; /* ebx 12 bits 11:0 plus 1*/
+        sets = c + 1; /* entire ecx plus 1 */
+
+        size = ways * parts * line_sz * sets;
+
+        switch (a & 0xf) { /* first four eax bits are type */
+            case 1: /* data */
+                info->cache[level - 1].cache_data = size;
+                break;
+            case 2: /* instruction */
+                info->cache[level - 1].cache_instruction = size;
+                break;
+            case 3: /* unified */
+                info->cache[level - 1].cache_data =
+                    info->cache[level - 1].cache_instruction =
+                    size;
+                break;
+            default: /* at this point it's > 3, i.e. a reserved value. */
+                return 1;
+        }
+        subleaf++;
+
+    } while (a);
+
+    return true;
+}
+
 static bool fill_topo_cpuid(struct cpu_info *info)
 {
     int curr_cpu = info->cpu_number;
@@ -370,6 +473,8 @@ static bool fill_topo_cpuid(struct cpu_info *info)
              pkg_shift = 0;
 
     if (curr_cpu < 0)
+        return false;
+    if (!fill_cache_info_cpuid(info))
         return false;
 
     do {
@@ -488,59 +593,8 @@ static bool fill_ppin_msr(struct cpu_info *info)
     info->ppin = 0;
     return read_msr(info->cpu_number, 0x4F, &info->ppin); /* MSR_PPIN */
 }
-
-static bool fill_cache_info_cpuid(struct cpu_info *info)
-{
-    /* since info->cache is statically allocated */
-    static int max_levels = sizeof(info->cache) / sizeof(*info->cache);
-
-    /* read the leaf 0x04: deterministic cache parameters */
-    uint32_t a, b, c, d; /* eax, ebx, ecx, edx */
-    int subleaf = 0; /* incrementing subleaf index */
-
-    do {
-        int ways, parts, line_sz, sets;
-        int level, size;
-
-        __cpuid_count(0x04, subleaf, a, b, c, d);
-
-        if (!(a & 0xf)) break; /* first 4 bits eax are 0 -- no more info */
-
-        level = (a >> 5) & 0x7; /* eax 3 bits 07:05 */
-        if (level > max_levels) return 1; /* this is fatal. */
-
-        /* cache topology */
-        ways = ((b >> 22) & ((1 << 9) - 1)) + 1; /* ebx 9 bits 31:22 plus 1 */
-        parts = ((b >> 12) & ((1 << 9) - 1)) + 1; /* ebx 9 bits 21:12 plus 1 */
-        line_sz = (b & ((1 << 12) - 1)) + 1; /* ebx 12 bits 11:0 plus 1*/
-        sets = c + 1; /* entire ecx plus 1 */
-
-        size = ways * parts * line_sz * sets;
-
-        switch (a & 0xf) { /* first four eax bits are type */
-            case 1: /* data */
-                info->cache[level - 1].cache_data = size;
-                break;
-            case 2: /* instruction */
-                info->cache[level - 1].cache_instruction = size;
-                break;
-            case 3: /* unified */
-                info->cache[level - 1].cache_data =
-                    info->cache[level - 1].cache_instruction =
-                    size;
-                break;
-            default: /* at this point it's > 3, i.e. a reserved value. */
-                return 1;
-        }
-        subleaf++;
-
-    } while (a);
-
-    return true;
-}
 #else
 constexpr auto fill_ppin_msr = nullptr;
-constexpr auto fill_cache_info_cpuid = nullptr;
 #endif // __x86_64__
 
 static bool fill_ppin_sysfs(struct cpu_info *info)
@@ -557,67 +611,6 @@ static bool fill_ppin_sysfs(struct cpu_info *info)
 #endif
 
     return false;
-}
-
-static bool fill_cache_info_sysfs(struct cpu_info *info)
-{
-#ifdef __linux__
-    FILE *f;
-    char buf[256];  // size repeated in fscanf below
-
-    sprintf(buf, "/sys/devices/system/cpu/cpu%d", info->cpu_number);
-    auto_fd cpufd{open(buf, O_PATH | O_CLOEXEC)};
-    if (cpufd < 0)
-        return false;
-
-    // Read cache information
-    for (int j = 0; ; ++j) {
-        int level;
-
-        sprintf(buf, "cache/index%d", j);
-        auto_fd cachefd{openat(cpufd, buf, O_PATH | O_CLOEXEC)};
-        if (cachefd == -1)
-            break;
-
-        f = fopenat(cachefd, "level");
-        if (!f)
-            continue;
-        IGNORE_RETVAL(fscanf(f, "%d", &level));
-        fclose(f);
-
-        if (level <= int(sizeof(info->cache) / sizeof(info->cache[0]))) {
-            int size;
-            char suffix = '\0';
-            f = fopenat(cachefd, "size");
-            if (!f)
-                continue;
-            IGNORE_RETVAL(fscanf(f, "%d%c", &size, &suffix));
-            fclose(f);
-
-            if (suffix == 'K')
-                size *= 1024;
-            else if (suffix == 'M')
-                size *= 1024 * 1024;
-
-            f = fopenat(cachefd, "type");
-            if (!f)
-                continue;
-            IGNORE_RETVAL(fscanf(f, "%255s", buf));
-            fclose(f);
-
-            if (strcmp(buf, "Instruction") == 0)
-                info->cache[level - 1].cache_instruction = size;
-            else if (strcmp(buf, "Data") == 0)
-                info->cache[level - 1].cache_data = size;
-            else
-                info->cache[level - 1].cache_instruction =
-                        info->cache[level - 1].cache_data = size;
-        }
-    }
-    return true;
-#else /* __linux__ */
-    return false;
-#endif /*__linux__ */
 }
 
 template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
@@ -649,7 +642,6 @@ template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
 typedef bool (* fill_family_func)(struct cpu_info *);
 typedef bool (* fill_ppin_func)(struct cpu_info *);
 typedef bool (* fill_ucode_func)(struct cpu_info *);
-typedef bool (* fill_cache_info_func)(struct cpu_info *);
 typedef bool (* fill_topo_func)(struct cpu_info *);
 
 static const fill_family_func family_impls[] = { fill_family_cpuid };
@@ -657,8 +649,6 @@ static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
 /* prefer sysfs, fallback to MSR. the latter is not reliable and may require
  * root. */
 static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
-/* prefer CPUID, fallback to sysfs. */
-static const fill_cache_info_func cache_info_impls[] = { fill_cache_info_cpuid, fill_cache_info_sysfs };
 /* prefer CPUID, fallback to sysfs. */
 static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
 
@@ -810,7 +800,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             try_detection<family_impls>(&cpu_info[i]);
             try_detection<ppin_impls>(&cpu_info[i]);
             try_detection<ucode_impls>(&cpu_info[i]);
-            try_detection<cache_info_impls>(&cpu_info[i]);
         }
         return nullptr;
     };
