@@ -2459,12 +2459,11 @@ static struct test *get_next_test(int tc)
     return test;
 }
 
-static void wait_delay_between_tests()
+static bool wait_delay_between_tests()
 {
     useconds_t useconds = duration_cast<microseconds>(sApp->delay_between_tests).count();
-
     // make the system call even if delay_between_tests == 0
-    usleep(useconds);
+    return usleep(useconds) == 0;
 }
 
 static int exec_mode_run(int argc, char **argv)
@@ -2904,11 +2903,11 @@ static void background_scan_update_load_threshold(MonotonicTimePoint now)
 }
 
 // Don't run tests unless load is low or it's time to run a test anyway
-static void background_scan_wait()
+static bool background_scan_wait()
 {
     auto as_seconds = [](Duration d) -> int { return duration_cast<seconds>(d).count(); };
 
-    auto do_wait = [](Duration base_wait, Duration variable) {
+    auto do_wait = [](Duration base_wait, Duration variable) -> bool {
         microseconds ubase = duration_cast<microseconds>(base_wait);
         microseconds uvar = duration_cast<microseconds>(variable);
 
@@ -2917,7 +2916,7 @@ static void background_scan_wait()
         auto deviation = duration_cast<microseconds>(uvar * random_factor);
         microseconds sleep_time = ubase + deviation;
 
-        usleep(sleep_time.count());
+        return usleep(sleep_time.count()) == 0;
     };
     using namespace SandstoneBackgroundScanConstants;
 
@@ -2937,14 +2936,18 @@ static void background_scan_wait()
                                              "%d s, waiting %d +/- %d s\n",
                        sApp->background_scan.timestamp.size(), as_seconds(elapsed),
                        as_seconds(expected_start), as_seconds(MinimumDelayBetweenTests));
-        do_wait(expected_start, MinimumDelayBetweenTests);
+        if (!do_wait(expected_start, MinimumDelayBetweenTests)) {
+            return false;
+        }
         goto skip_wait;
     }
 
     logging_printf(LOG_LEVEL_VERBOSE(3), "# Background scan: waiting %d +/- 10%% s\n",
                    as_seconds(MinimumDelayBetweenTests));
     while (1) {
-        do_wait(MinimumDelayBetweenTests, MinimumDelayBetweenTests / 10);
+        if (!do_wait(MinimumDelayBetweenTests, MinimumDelayBetweenTests / 10)) {
+            return false;
+        }
 
 skip_wait:
         now = MonotonicTimePoint::clock::now();
@@ -2973,6 +2976,7 @@ skip_wait:
                        idle_load, sApp->background_scan.load_idle_threshold,
                        as_seconds(MinimumDelayBetweenTests));
     }
+    return true;
 }
 
 extern constexpr const uint64_t minimum_cpu_features = _compilerCpuFeatures;
@@ -3653,10 +3657,17 @@ int main(int argc, char **argv)
             logging_print_iteration_start();
             initialize_smi_counts();  // used by smi_count test
         } else if (lastTestResult != TestResult::Skipped) {
-            if (sApp->service_background_scan)
-                background_scan_wait();
-            else
-                wait_delay_between_tests();
+            if (sApp->service_background_scan) {
+                if (!background_scan_wait()) {
+                    logging_printf(LOG_LEVEL_VERBOSE(2), "# Background scan: waiting between tests interrupted\n");
+                    break;
+                }
+            } else {
+                if (!wait_delay_between_tests()) {
+                    logging_printf(LOG_LEVEL_VERBOSE(2), "# Test execution interrupted between tests\n");
+                    break;
+                }
+            }
         }
 
         // Note temporal coupling here with restarting
