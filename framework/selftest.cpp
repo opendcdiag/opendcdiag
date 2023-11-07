@@ -209,6 +209,49 @@ static int selftest_log_skip_init(struct test *test)
     return EXIT_SKIP;
 }
 
+static int selftest_logerror_init(struct test *test)
+{
+    log_error("Error logged in init, test is not expected to run any threads");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_logskip_success_cleanup(struct test *test)
+{
+    log_skip(SelftestSkipCategory, "SUCCESS after logskip from cleanup");
+    return EXIT_SKIP;
+}
+
+static int selftest_logskip_skip_cleanup(struct test *test)
+{
+    log_skip(SelftestSkipCategory, "SKIP after logskip from cleanup");
+    return EXIT_SKIP;
+}
+
+static int selftest_skip_cleanup(struct test *test)
+{
+    log_info("SKIP returned silently from cleanup");
+    return EXIT_SKIP;
+}
+
+static int selftest_errno_cleanup(struct test *test)
+{
+    log_info("Unexpected OS error reported from cleanup");
+    errno = ENOMEM;
+    return -errno;
+}
+
+static int selftest_logerror_success_cleanup(struct test *test)
+{
+    log_error("Error logged in cleanup");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_fail_cleanup(struct test *test)
+{
+    log_info("cleanup returns FAIL");
+    return EXIT_FAILURE;
+}
+
 template <int PackageId> static int selftest_log_skip_socket_init(struct test *test)
 {
     if (num_packages() == 1 && cpu_info[0].package_id == PackageId)
@@ -960,6 +1003,42 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
+    .id = "selftest_skip_cleanup",
+    .description = "SKIP in the cleanup function",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logs_random_init,
+    .test_run = selftest_pass_run,
+    .test_cleanup = selftest_skip_cleanup,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_oserror_cleanup",
+    .description = "OS error in the cleanup function",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logs_random_init,
+    .test_run = selftest_pass_run,
+    .test_cleanup = selftest_errno_cleanup,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_logskip_success_cleanup",
+    .description = "Log skip message with SUCCESS in the cleanup function",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logs_random_init,
+    .test_run = selftest_pass_run,
+    .test_cleanup = selftest_logskip_success_cleanup,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_logskip_skip_cleanup",
+    .description = "Log skip message with SKIP in the cleanup function",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logs_random_init,
+    .test_run = selftest_pass_run,
+    .test_cleanup = selftest_logskip_skip_cleanup,
+    .desired_duration = -1,
+},
+{
     .id = "selftest_maybe_skip_750ms",
     .description = "Requests to run for 750 ms (could be skipped)",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
@@ -1117,6 +1196,14 @@ static struct test selftests_array[] = {
     /* Negative tests */
 
 {
+    .id = "selftest_logerror_init",
+    .description = "Fails on error logged in init",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logerror_init,
+    .test_run = selftest_failinit_run,
+    .desired_duration = -1,
+},
+{
     .id = "selftest_fail",
     .description = "Fails by way of returning",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
@@ -1133,10 +1220,28 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
+    .id = "selftest_fail_cleanup",
+    .description = "Fails in the cleanup function",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logs_random_init,
+    .test_run = selftest_pass_run,
+    .test_cleanup = selftest_fail_cleanup,
+    .desired_duration = -1,
+},
+{
     .id = "selftest_logerror",
     .description = "Fails by calling log_error()",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_logerror_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_logerror_cleanup",
+    .description = "Fails by calling log_error() in the cleanup function",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logs_random_init,
+    .test_run = selftest_pass_run,
+    .test_cleanup = selftest_logerror_success_cleanup,
     .desired_duration = -1,
 },
 {

@@ -452,6 +452,50 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/skip-reason" '.*skip.*'
 }
 
+@test "selftest_skip_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_skip_cleanup
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_skip_cleanup
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" RuntimeSkipCategory
+    test_yaml_regexp "/tests/0/skip-reason" 'SKIP requested in cleanup'
+}
+
+@test "selftest_oserror_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_oserror_cleanup
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_oserror_cleanup
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" RuntimeSkipCategory
+    test_yaml_regexp "/tests/0/skip-reason" 'Unexpected OS error in cleanup.*'
+}
+
+@test "selftest_logskip_success_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logskip_success_cleanup
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_logskip_success_cleanup
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
+    test_yaml_regexp "/tests/0/skip-reason" 'SUCCESS after logskip from cleanup'
+}
+
+@test "selftest_logskip_skip_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logskip_skip_cleanup
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_logskip_skip_cleanup
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
+    test_yaml_regexp "/tests/0/skip-reason" 'SKIP after logskip from cleanup'
+}
+
 selftest_log_skip_init_socket_common() {
     local slicename=$1
     local testname=$2
@@ -1038,6 +1082,42 @@ test_list_file_ignores_beta() {
     i=$((-1 + yamldump[/tests/0/threads/0/messages@len]))
     test_yaml_regexp "/tests/0/threads/0/messages/$i/level" error
     test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
+}
+
+@test "selftest_logerror_init" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logerror_init
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    i=$((0 + yamldump[/tests/0/threads@len]))
+    [[ "$i" -eq 1 ]]
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> Error logged in init.*'
+}
+
+@test "selftest_logerror_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logerror_cleanup
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    i=$((0 + yamldump[/tests/0/threads@len]))
+    [[ "$i" -eq 1 ]]
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/1/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/1/text" 'E> Error logged in cleanup'
+}
+
+@test "selftest_fail_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_cleanup
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    i=$((0 + yamldump[/tests/0/threads@len]))
+    [[ "$i" -eq 1 ]]
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/1/level" info
+    test_yaml_regexp "/tests/0/threads/0/messages/1/text" 'I> cleanup returns FAIL'
 }
 
 @test "selftest_failinit_socket1 --max-cores-per-slice" {
