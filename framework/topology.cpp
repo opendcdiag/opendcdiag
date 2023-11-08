@@ -822,6 +822,13 @@ void apply_cpuset_param(char *param)
                 exit(EX_USAGE);
             }
             add_to_set(*cpu);
+        } else if ( strcmp( p.data(), "odd") == 0 || strcmp( p.data(), "even") == 0){
+            int desired_remainder = strcmp(p.data(), "odd") == 0 ? 1 : 0;
+            for (struct cpu_info &cpu : old_cpu_info)
+            {
+                if (cpu.cpu_number % 2 == desired_remainder)
+                    add_to_set(cpu);
+            } 
         } else if (c >= 'a' && c <= 'z') {
             // topology search
             auto set_if_unset = [orig_arg](int n, int &where, const char *what) {

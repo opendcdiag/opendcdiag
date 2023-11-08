@@ -29,6 +29,7 @@ test_yaml_absent() {
     printf "Key is not absent:\\n"
     printf "query:      %s\n" "$query"
     printf "value =     %s\n" "${yamldump[$query]}"
+    return 1
 }
 
 test_yaml_numeric() {
@@ -1646,10 +1647,11 @@ selftest_cpuset_unsorted() {
 
     # Get all the processor numbers
     i=0
-    for expected_logical in `$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1; }'`; do
+    for expected_logical; do
         test_yaml_numeric "/cpu-info/$i/logical" "value == $expected_logical"
         i=$((i + 1))
     done
+    test_yaml_absent "/cpu-info/$i/logical"
 }
 
 @test "cpuset=number (inverse order)" {
@@ -1657,6 +1659,7 @@ selftest_cpuset_unsorted() {
     local -a cpuset=($($SANDSTONE --dump-cpu-info | sort -rn |
                            awk '/^[0-9]/ { printf "%d,", $1; }'))
     cpuset=${cpuset%,}          # remove last comma
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1; }'`)
 
     selftest_cpuset_unsorted "$cpuset" "${cpuinfo[@]}"
 }
@@ -1667,8 +1670,21 @@ selftest_cpuset_unsorted() {
     local -a cpuset=($($SANDSTONE --dump-cpu-info | sort -rnk2,3 |
                            awk '/^[0-9]/ { printf "%d,", $1; }'))
     cpuset=${cpuset%,}          # remove last comma
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1; }'`)
 
     selftest_cpuset_unsorted "$cpuset" "${cpuinfo[@]}"
+}
+
+@test "cpuset=even" {
+    #Get the even number of logical cpus
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | awk '$1%2==0 &&  /^[0-9]/ {print $1}'`)
+    selftest_cpuset_unsorted "even" "${cpuinfo[@]}"
+}
+
+@test "cpuset=odd" {
+    #Get the odd number of logical cpus
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | awk '$1%2!=0 && /^[0-9]/ {printf "%d " ,$1}'`)
+    selftest_cpuset_unsorted "odd" "${cpuinfo[@]}"
 }
 
 # Confirm that we are roughly using the threads we said we would
