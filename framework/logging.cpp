@@ -449,27 +449,27 @@ static const char *char_to_skip_category(int val)
 {
     switch (val) {
     case ResourceIssueSkipCategory:
-        return "ResourceIssueSkipCategory";
+        return "ResourceIssue";
     case CpuNotSupportedSkipCategory:
-        return "CpuNotSupportedSkipCategory";
+        return "CpuNotSupported";
     case DeviceNotFoundSkipCategory:
-        return "DeviceNotFoundSkipCategory";
+        return "DeviceNotFound";
     case DeviceNotConfiguredSkipCategory:
-        return "DeviceNotConfiguredSkipCategory";
+        return "DeviceNotConfigured";
     case UnknownSkipCategory:
-        return "UnknownSkipCategory";
+        return "Unknown";
     case RuntimeSkipCategory:
-        return "RuntimeSkipCategory";
+        return "Runtime";
     case SelftestSkipCategory:
-        return "SelftestSkipCategory";
+        return "Selftest";
     case OsNotSupportedSkipCategory:
-        return "OsNotSupportedSkipCategory";
+        return "OsNotSupported";
     case TestResourceIssueSkipCategory:
-        return "TestResourceIssueSkipCategory";
+        return "TestResourceIssue";
     case CpuTopologyIssueSkipCategory:
-        return "CpuTopologyIssueSkipCategory";
+        return "CpuTopologyIssue";
     case OSResourceIssueSkipCategory:
-        return "OSResourceIssueSkipCategory";
+        return "OSResourceIssue";
     }
 
     return "NO CATEGORY PRESENT";
@@ -1782,7 +1782,7 @@ void KeyValuePairLogger::print(int tc)
                    testResult == TestResult::Passed ? "pass" : "fail");
 
     if (testResult == TestResult::Skipped && !skipInMainThread) {
-        logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "RuntimeSkipCategory");
+        logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "Runtime");
         logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
                        "All CPUs skipped while executing 'test_run()' function, check log for details");
     } else if (testResult == TestResult::Skipped) {
@@ -1797,7 +1797,7 @@ void KeyValuePairLogger::print(int tc)
             if (file_log_fd != real_stdout_fd)
                 format_and_print_message(file_log_fd, -1, message, false);
         } else {
-            logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "UnknownSkipCategory");
+            logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "Unknown");
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
                            "Unknown, check main thread message for details or use -vv option for more info");
         }
@@ -1912,10 +1912,10 @@ void TapFormatLogger::print(int tc)
                 extra += "(" + std::string(char_to_skip_category(init_skip_message[0])) +
                         " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
             else
-                extra += "(UnknownSkipCategory: check main thread message for details or "
+                extra += "(Unknown: check main thread message for details or "
                             "use -vv option for more info)";
         } else {
-            extra += "(RuntimeSkipCategory: All CPUs skipped while executing 'test_run()' "
+            extra += "(Runtime: All CPUs skipped while executing 'test_run()' "
                      "function, check log for details)";
         }
         [[fallthrough]];
@@ -2379,7 +2379,7 @@ void YamlLogger::print_result_line()
     case TestResult::Skipped:
         logging_printf(loglevel, "  result: skip\n");
         if (!skipInMainThread) {
-            logging_printf(loglevel, "  skip-category: %s\n", "RuntimeSkipCategory");
+            logging_printf(loglevel, "  skip-category: %s\n", "Runtime");
             logging_printf(loglevel, "  skip-reason: %s\n",
                            "All CPUs skipped while executing 'test_run()' function, check log "
                            "for details");
@@ -2394,7 +2394,7 @@ void YamlLogger::print_result_line()
                     format_and_print_message(real_stdout_fd, -1, message, false);
                 format_and_print_message(file_log_fd, -1, message, false);
             } else {
-                logging_printf(loglevel, "  skip-category: %s\n", "UnknownSkipCategory");
+                logging_printf(loglevel, "  skip-category: %s\n", "Unknown");
                 logging_printf(loglevel, "  skip-reason: %s\n",
                                "Unknown, check main thread message for details or use -vv "
                                "option for more info");

@@ -428,7 +428,7 @@ selftest_pass() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_skip_minimum_cpu
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/skip-category" CpuNotSupportedSkipCategory
+    test_yaml_regexp "/tests/0/skip-category" CpuNotSupported
     test_yaml_regexp "/tests/0/skip-reason" '.*test requires.*'
 }
 
@@ -439,7 +439,7 @@ selftest_pass() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_log_skip_init
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
+    test_yaml_regexp "/tests/0/skip-category" Selftest
     test_yaml_regexp "/tests/0/skip-reason" '.*skip.*'
 }
 
@@ -450,7 +450,7 @@ selftest_pass() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_skip_cleanup
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/skip-category" RuntimeSkipCategory
+    test_yaml_regexp "/tests/0/skip-category" Runtime
     test_yaml_regexp "/tests/0/skip-reason" 'SKIP requested in cleanup'
 }
 
@@ -461,7 +461,7 @@ selftest_pass() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_oserror_cleanup
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/skip-category" RuntimeSkipCategory
+    test_yaml_regexp "/tests/0/skip-category" Runtime
     test_yaml_regexp "/tests/0/skip-reason" 'Unexpected OS error in cleanup.*'
 }
 
@@ -472,7 +472,7 @@ selftest_pass() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_skipmsg_success_cleanup
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
+    test_yaml_regexp "/tests/0/skip-category" Selftest
     test_yaml_regexp "/tests/0/skip-reason" 'SUCCESS after skipmsg from cleanup'
 }
 
@@ -483,7 +483,7 @@ selftest_pass() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_skipmsg_skip_cleanup
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
+    test_yaml_regexp "/tests/0/skip-category" Selftest
     test_yaml_regexp "/tests/0/skip-reason" 'SKIP after skipmsg from cleanup'
 }
 
@@ -520,7 +520,7 @@ selftest_log_skip_init_socket_common() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_log_skip_run_all_threads
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/skip-category" RuntimeSkipCategory
+    test_yaml_regexp "/tests/0/skip-category" Runtime
     test_yaml_regexp "/tests/0/skip-reason" '.*test_run().*'
     for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/messages/0/level" skip
@@ -548,7 +548,7 @@ selftest_log_skip_init_socket_common() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_log_skip_newline
     test_yaml_regexp "/tests/0/result" skip
-    test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
+    test_yaml_regexp "/tests/0/skip-category" Selftest
     test_yaml_regexp "/tests/0/skip-reason" $'.*\n.*\n.*'
 }
 
