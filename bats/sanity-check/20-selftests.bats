@@ -474,26 +474,26 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/skip-reason" 'Unexpected OS error in cleanup.*'
 }
 
-@test "selftest_logskip_success_cleanup" {
+@test "selftest_skipmsg_success_cleanup" {
     declare -A yamldump
-    sandstone_selftest -e selftest_logskip_success_cleanup
+    sandstone_selftest -e selftest_skipmsg_success_cleanup
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/test" selftest_logskip_success_cleanup
+    test_yaml_regexp "/tests/0/test" selftest_skipmsg_success_cleanup
     test_yaml_regexp "/tests/0/result" skip
     test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
-    test_yaml_regexp "/tests/0/skip-reason" 'SUCCESS after logskip from cleanup'
+    test_yaml_regexp "/tests/0/skip-reason" 'SUCCESS after skipmsg from cleanup'
 }
 
-@test "selftest_logskip_skip_cleanup" {
+@test "selftest_skipmsg_skip_cleanup" {
     declare -A yamldump
-    sandstone_selftest -e selftest_logskip_skip_cleanup
+    sandstone_selftest -e selftest_skipmsg_skip_cleanup
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/test" selftest_logskip_skip_cleanup
+    test_yaml_regexp "/tests/0/test" selftest_skipmsg_skip_cleanup
     test_yaml_regexp "/tests/0/result" skip
     test_yaml_regexp "/tests/0/skip-category" SelftestSkipCategory
-    test_yaml_regexp "/tests/0/skip-reason" 'SKIP after logskip from cleanup'
+    test_yaml_regexp "/tests/0/skip-reason" 'SKIP after skipmsg from cleanup'
 }
 
 selftest_log_skip_init_socket_common() {
@@ -1096,9 +1096,9 @@ test_list_file_ignores_beta() {
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> Error logged in init.*'
 }
 
-@test "selftest_logerror_cleanup" {
+@test "selftest_errormsg_cleanup" {
     declare -A yamldump
-    sandstone_selftest -e selftest_logerror_cleanup
+    sandstone_selftest -e selftest_errormsg_cleanup
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     i=$((0 + yamldump[/tests/0/threads@len]))

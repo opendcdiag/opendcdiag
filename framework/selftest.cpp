@@ -215,15 +215,15 @@ static int selftest_logerror_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_logskip_success_cleanup(struct test *test)
+static int selftest_skipmsg_success_cleanup(struct test *test)
 {
-    log_skip(SelftestSkipCategory, "SUCCESS after logskip from cleanup");
+    log_skip(SelftestSkipCategory, "SUCCESS after skipmsg from cleanup");
     return EXIT_SKIP;
 }
 
-static int selftest_logskip_skip_cleanup(struct test *test)
+static int selftest_skipmsg_skip_cleanup(struct test *test)
 {
-    log_skip(SelftestSkipCategory, "SKIP after logskip from cleanup");
+    log_skip(SelftestSkipCategory, "SKIP after skipmsg from cleanup");
     return EXIT_SKIP;
 }
 
@@ -240,7 +240,7 @@ static int selftest_errno_cleanup(struct test *test)
     return -errno;
 }
 
-static int selftest_logerror_success_cleanup(struct test *test)
+static int selftest_errormsg_success_cleanup(struct test *test)
 {
     log_error("Error logged in cleanup");
     return EXIT_SUCCESS;
@@ -1021,21 +1021,21 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
-    .id = "selftest_logskip_success_cleanup",
+    .id = "selftest_skipmsg_success_cleanup",
     .description = "Log skip message with SUCCESS in the cleanup function",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
-    .test_cleanup = selftest_logskip_success_cleanup,
+    .test_cleanup = selftest_skipmsg_success_cleanup,
     .desired_duration = -1,
 },
 {
-    .id = "selftest_logskip_skip_cleanup",
+    .id = "selftest_skipmsg_skip_cleanup",
     .description = "Log skip message with SKIP in the cleanup function",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
-    .test_cleanup = selftest_logskip_skip_cleanup,
+    .test_cleanup = selftest_skipmsg_skip_cleanup,
     .desired_duration = -1,
 },
 {
@@ -1236,12 +1236,12 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
-    .id = "selftest_logerror_cleanup",
+    .id = "selftest_errormsg_cleanup",
     .description = "Fails by calling log_error() in the cleanup function",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
-    .test_cleanup = selftest_logerror_success_cleanup,
+    .test_cleanup = selftest_errormsg_success_cleanup,
     .desired_duration = -1,
 },
 {
