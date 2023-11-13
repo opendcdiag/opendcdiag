@@ -46,7 +46,7 @@ unsigned char *SandstoneTestThreadAttributes::allocate_stack_block()
     auto ptr = static_cast<unsigned char *>(map);
     for (int i = 0; i < num_cpus(); ++i) {
         ptr += GuardSize;
-        mprotect(ptr, THREAD_STACK_SIZE, PROT_READ | PROT_WRITE);
+        IGNORE_RETVAL(mprotect(ptr, THREAD_STACK_SIZE, PROT_READ | PROT_WRITE));
         ptr += THREAD_STACK_SIZE;
     }
     return ptr;

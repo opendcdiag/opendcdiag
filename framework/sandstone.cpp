@@ -1115,7 +1115,7 @@ static void protect_shmem()
     size_t protected_len = sApp->shmem->thread_data_offset;
     assert(protected_len == ROUND_UP_TO_PAGE(protected_len) &&
             "SharedMemory::main_thread_data is not page-aligned");
-    mprotect(sApp->shmem, protected_len, PROT_READ);
+    IGNORE_RETVAL(mprotect(sApp->shmem, protected_len, PROT_READ));
 }
 
 static void slice_plan_init(int max_cores_per_slice)
