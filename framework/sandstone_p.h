@@ -553,7 +553,19 @@ template <typename Lambda> static void for_each_test_thread(Lambda &&l)
 struct AutoClosingFile
 {
     FILE *f = nullptr;
+    AutoClosingFile(FILE *f = nullptr) : f(f) {}
     ~AutoClosingFile() { if (f) fclose(f); }
+    AutoClosingFile(const AutoClosingFile &) = delete;
+    AutoClosingFile(AutoClosingFile &&other) : f(other.f) { other.f = nullptr; }
+    AutoClosingFile &operator=(const AutoClosingFile &) = delete;
+    AutoClosingFile &operator=(AutoClosingFile &&other)
+    {
+        if (f)
+            fclose(f);
+        f = other.f;
+        other.f = nullptr;
+        return *this;
+    }
     operator FILE *() const { return f; }
 };
 
@@ -565,10 +577,28 @@ struct Pipe
     int &out()                  { return fds[1]; }
     void close_input()          { do_close(in()); }
     void close_output()         { do_close(out()); }
+    explicit operator bool()    { return in() != -1 || out() != -1; }
+
     Pipe()                      { open(); }
     Pipe(DontCreateFlag)        { }
     ~Pipe()                     { close_input(); close_output(); }
-    explicit operator bool()    { return in() != -1 || out() != -1; }
+    Pipe(const Pipe &) = delete;
+    Pipe &operator=(const Pipe &) = delete;
+    Pipe(Pipe &&other)
+    {
+        fds[0] = other.fds[0];
+        fds[1] = other.fds[1];
+        other.fds[0] = other.fds[1] = -1;
+    }
+    Pipe &operator=(Pipe &&other)
+    {
+        close_input();
+        close_output();
+        fds[0] = other.fds[0];
+        fds[1] = other.fds[1];
+        other.fds[0] = other.fds[1] = -1;
+        return *this;
+    }
 
     int open(int reserved = PIPE_BUF)
     {
@@ -613,6 +643,11 @@ template <typename F> inline auto scopeExit(F &&f)
     struct Scope {
         F f;
         bool dismissed = false;
+        Scope(F &&f) : f(std::move(f)) {}
+        Scope(const Scope &) = delete;
+        Scope(Scope &&) = default;
+        Scope &operator=(const Scope &) = delete;
+        Scope &operator=(Scope &&) = delete;
         ~Scope() { if (!dismissed) f(); }
         void dismiss() { dismissed = true; }
         void run_now() { f(); dismiss(); }
