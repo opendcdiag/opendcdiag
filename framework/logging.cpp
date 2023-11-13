@@ -1951,7 +1951,7 @@ std::string TapFormatLogger::fail_info_details()
     if (!should_print_fail_info())
         return result;
 
-    auto add_value = [&result](std::string s, char separator) {
+    auto add_value = [&result](const std::string &s, char separator) {
         if (s.empty()) {
             result += "null";
         } else if (!separator) {
