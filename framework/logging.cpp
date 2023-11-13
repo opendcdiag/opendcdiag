@@ -130,6 +130,7 @@ protected:
     bool should_print_fail_info() const;
 
     // shared between the TAP and key-value loggers; YAML overrides
+    static void format_and_print_message(int fd, std::string_view message, bool from_thread_message);
     int print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level);
 };
 
@@ -179,6 +180,8 @@ private:
     void print_thread_header(int fd, int cpu, int verbosity);
     void maybe_print_slice_resource_usage(int fd, int slice);
     static int print_test_knobs(int fd, mmap_region r);
+    static void format_and_print_message(int fd, std::string_view level, std::string_view message);
+    static void format_and_print_skip_reason(int fd, std::string_view message);
     int print_one_thread_messages(int fd, mmap_region r, int level);
     void print_result_line();
 
@@ -430,6 +433,7 @@ static const char *quality_string(const struct test *test)
 /* which level of "quiet" should this log print at */
 static uint8_t status_level(char letter)
 {
+    // note: the YAML logger requires that the message levels have a 1:1 mapping
     switch (letter) {
     case 'E':
         return LOG_LEVEL_QUIET;         /* always */
@@ -1506,52 +1510,22 @@ static void print_content_single_line(int fd, std::string_view before,
     writeln(fd, before, escape_for_single_line(message, escaped), after);
 }
 
-static void format_and_print_message(int fd, int message_level, std::string_view message, bool from_thread_message)
+void AbstractLogger::format_and_print_message(int fd, std::string_view message, bool from_thread_message)
 {
-    const char *levels[] = { "error", "warning", "info", "debug", "skip" }; //levels for yaml
-
     if (message.find('\n') != std::string_view::npos) {
         /* multi line */
-        if (current_output_format() == SandstoneApplication::OutputFormat::yaml) {
-            if (from_thread_message) {
-                 if (message_level > int(std::size(levels)))
-                    message_level = std::size(levels) - 1;
-
-                // trim a trailing newline, if any (just one)
-                if (message[message.size() - 1] == '\n')
-                    message.remove_suffix(1);
-
-                writeln(fd, indent_spaces(), "    - level: ", levels[message_level]);
-                writeln(fd, indent_spaces(), "      text: |1");
-                print_content_indented(fd, "       ", message);
-            } else {
-                writeln(fd, indent_spaces(), "  skip-reason: |1");
-                print_content_indented(fd, "   ", message);
-            }
-        } else {
-            if (from_thread_message) // are you writing individual thread's message?
-                writeln(fd, "  - |");
-            else                     // are you writing init thread's message?
-                writeln(fd, "\n", indent_spaces(), " - |");
-            print_content_indented(fd, "    ", message);
-        }
+        if (from_thread_message) // are you writing individual thread's message?
+            writeln(fd, "  - |");
+        else                     // are you writing init thread's message?
+            writeln(fd, "\n", indent_spaces(), " - |");
+        print_content_indented(fd, "    ", message);
     } else {
         /* single line */
-        if (current_output_format() == SandstoneApplication::OutputFormat::yaml) {
-            if (from_thread_message) {
-                writevec(fd, indent_spaces(), "    - { level: ", levels[message_level]);
-                print_content_single_line(fd, ", text: '", message, "' }");
-            } else {
-                writevec(fd, indent_spaces());
-                print_content_single_line(fd, "  skip-reason: '", message, "'");
-            }
-        } else {
-            if (from_thread_message) { // are you writing individual thread's message?
-                char c = '\'';
-                print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
-            } else { // are you writing init thread's message?
-                print_content_single_line(fd, "'", message, "'");
-            }
+        if (from_thread_message) { // are you writing individual thread's message?
+            char c = '\'';
+            print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
+        } else { // are you writing init thread's message?
+            print_content_single_line(fd, "'", message, "'");
         }
     }
 }
@@ -1599,7 +1573,7 @@ int AbstractLogger::print_one_thread_messages(int fd, PerThreadData::Common *dat
         std::string_view message(ptr, delim - ptr);
         switch (log_type_from_code(code)) {
         case UserMessages:
-            format_and_print_message(fd, -1, message, true);
+            format_and_print_message(fd, message, true);
             break;
 
         case Preformatted:
@@ -1611,7 +1585,7 @@ int AbstractLogger::print_one_thread_messages(int fd, PerThreadData::Common *dat
                 // Only print if the result line didn't already include this
                 std::string skip_message;
                 format_skip_message(skip_message, message);
-                format_and_print_message(fd, -1, std::string_view{&skip_message[0], skip_message.size()}, true);
+                format_and_print_message(fd, skip_message, true);
             }
             break;
 
@@ -1793,9 +1767,9 @@ void KeyValuePairLogger::print(int tc)
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, char_to_skip_category(init_skip_message[0]));
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = ", test->id);
             std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
-            format_and_print_message(real_stdout_fd, -1, message, false);
+            format_and_print_message(real_stdout_fd, message, false);
             if (file_log_fd != real_stdout_fd)
-                format_and_print_message(file_log_fd, -1, message, false);
+                format_and_print_message(file_log_fd, message, false);
         } else {
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "Unknown");
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
@@ -2309,8 +2283,40 @@ int YamlLogger::print_test_knobs(int fd, mmap_region r)
     return print_count;
 }
 
+void YamlLogger::format_and_print_message(int fd, std::string_view level, std::string_view message)
+{
+    if (message.find('\n') != std::string_view::npos) {
+        /* multi line */
+        // trim a trailing newline, if any (just one)
+        if (message[message.size() - 1] == '\n')
+            message.remove_suffix(1);
+
+        writeln(fd, indent_spaces(), "    - level: ", level);
+        writeln(fd, indent_spaces(), "      text: |1");
+        print_content_indented(fd, "       ", message);
+    } else {
+        /* single line */
+        writevec(fd, indent_spaces(), "    - { level: ", level);
+        print_content_single_line(fd, ", text: '", message, "' }");
+    }
+}
+
+void YamlLogger::format_and_print_skip_reason(int fd, std::string_view message)
+{
+    if (message.find('\n') != std::string_view::npos) {
+        /* multi line */
+        writeln(fd, indent_spaces(), "  skip-reason: |1");
+        print_content_indented(fd, "   ", message);
+    } else {
+        writevec(fd, indent_spaces());
+        print_content_single_line(fd, "  skip-reason: '", message, "'");
+    }
+}
+
 inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level)
 {
+    const char *levels[] = { "error", "warning", "info", "debug" };
+
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
@@ -2333,7 +2339,8 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
 
         switch (log_type_from_code(code)) {
         case UserMessages:
-            format_and_print_message(fd, message_level, message, true);
+            assert(size_t(message_level) < std::size(levels));
+            format_and_print_message(fd, levels[message_level], message);
             break;
 
         case Preformatted:
@@ -2345,7 +2352,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
                 // Only print if the result line didn't already include this
                 std::string skip_message;
                 format_skip_message(skip_message, message);
-                format_and_print_message(fd, 4, std::string_view{&skip_message[0], skip_message.size()}, true);
+                format_and_print_message(fd, "skip", skip_message);
             }
             break;
 
@@ -2391,8 +2398,8 @@ void YamlLogger::print_result_line()
                                char_to_skip_category(init_skip_message[0]));
                 std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
                 if (loglevel <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd)
-                    format_and_print_message(real_stdout_fd, -1, message, false);
-                format_and_print_message(file_log_fd, -1, message, false);
+                    format_and_print_skip_reason(real_stdout_fd, message);
+                format_and_print_skip_reason(file_log_fd, message);
             } else {
                 logging_printf(loglevel, "  skip-category: %s\n", "Unknown");
                 logging_printf(loglevel, "  skip-reason: %s\n",
