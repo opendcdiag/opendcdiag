@@ -37,8 +37,9 @@ public:
 
     std::vector<Package> packages;
 
-    Topology(std::vector<Package> pkgs) {
-        packages = pkgs;
+    Topology(std::vector<Package> pkgs)
+    {
+        packages = std::move(pkgs);
     }
 
     bool isValid() const        { return !packages.empty(); }

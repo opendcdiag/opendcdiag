@@ -916,7 +916,7 @@ static std::string os_info()
 #endif
     if (kernel.empty())
         return "<unknown>";
-    os_info = kernel;
+    os_info = std::move(kernel);
     if (!libc.empty())
         os_info += ", " + libc;
 #if SANDSTONE_SSL_BUILD
