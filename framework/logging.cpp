@@ -1639,7 +1639,7 @@ format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurati
 
 static ChildExitStatus find_most_serious_result(std::span<const ChildExitStatus> results)
 {
-    auto comparator = [](ChildExitStatus s1, ChildExitStatus s2) {
+    auto comparator = [](const ChildExitStatus &s1, const ChildExitStatus &s2) {
         return s1.result < s2.result;
     };
     return *std::max_element(results.begin(), results.end(), comparator);
@@ -1979,7 +1979,7 @@ std::string TapFormatLogger::fail_info_details()
     return result;
 }
 
-[[gnu::pure]] static const char *crash_reason(ChildExitStatus status)
+[[gnu::pure]] static const char *crash_reason(const ChildExitStatus &status)
 {
     assert(status.result != TestResult::Passed);
     assert(status.result != TestResult::Skipped);
@@ -2007,7 +2007,7 @@ std::string TapFormatLogger::fail_info_details()
 #endif
 }
 
-[[gnu::pure]] static const char *sysexit_reason(ChildExitStatus status)
+[[gnu::pure]] static const char *sysexit_reason(const ChildExitStatus &status)
 {
     assert(status.result == TestResult::OperatingSystemError);
     switch (status.extra) {
