@@ -1549,9 +1549,11 @@ static std::string get_skip_message(int thread_num)
     return skip_message;
 }
 
-static inline void format_skip_message(std::string &skip_message, std::string_view message)
+static std::string_view format_skip_message(std::string_view message)
 {
-    skip_message += message.substr(1, message.size());
+    // skip messages contain a byte with the category identifier that we must
+    // not print
+    return message.substr(1);
 }
 
 /// Returns the lowest priority found
@@ -1583,9 +1585,7 @@ int AbstractLogger::print_one_thread_messages(int fd, PerThreadData::Common *dat
         case SkipMessages:
             if (!skipInMainThread) {
                 // Only print if the result line didn't already include this
-                std::string skip_message;
-                format_skip_message(skip_message, message);
-                format_and_print_message(fd, skip_message, true);
+                format_and_print_message(fd, format_skip_message(message), true);
             }
             break;
 
@@ -2350,9 +2350,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
         case SkipMessages:
             if (!skipInMainThread) {
                 // Only print if the result line didn't already include this
-                std::string skip_message;
-                format_skip_message(skip_message, message);
-                format_and_print_message(fd, "skip", skip_message);
+                format_and_print_message(fd, "skip", format_skip_message(message));
             }
             break;
 
