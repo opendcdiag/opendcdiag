@@ -1947,8 +1947,8 @@ void TapFormatLogger::print(int tc)
 
     std::string tap_line = stdprintf("%s %3i %s", okstring, tc, test->id);
     if (extra.size()) {
-        static constexpr std::string_view separator = "# ";
-        size_t newsize = std::max(tap_line.size(), size_t(32)) + separator.size() + extra.size();
+        static constexpr std::string_view separator = " # ";
+        size_t newsize = std::max(tap_line.size(), size_t(31)) + separator.size() + extra.size();
         tap_line.reserve(newsize);
         if (tap_line.size() < 32)
             tap_line.resize(32, ' ');
