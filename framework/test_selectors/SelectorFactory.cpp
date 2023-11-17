@@ -14,6 +14,7 @@
 #include "sandstone.h"
 #include "sandstone_kvm.h"
 #include "sandstone_p.h"
+#include "sandstone_test_lists.h"
 
 #include <vector>
 #include <fnmatch.h>
@@ -203,6 +204,26 @@ void generate_test_list(std::vector<struct test *> &test_list, std::span<struct 
     } else if (test_list.front() == nullptr) {
         /* remove the dummy entry we added (see add_tests()) */
         test_list.erase(test_list.begin());
+    }
+}
+
+std::optional<const std::span<struct test * const>> auto_detect_test_list(const std::span<const TestList*> test_lists,
+                                                                          const TestList* default_test_list)
+{
+#ifdef SANDSTONE
+    auto it = std::find_if(test_lists.begin(), test_lists.end(), [](const auto* res) {
+        return (res->features & cpu_features) == res->features;
+    });
+
+    if (it != test_lists.end()) {
+        return (*it)->content;
+    }
+#endif
+
+    if (default_test_list) {
+        return default_test_list->content;
+    } else {
+        return std::nullopt;
     }
 }
 

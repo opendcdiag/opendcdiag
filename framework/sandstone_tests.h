@@ -56,6 +56,12 @@ __attribute__((weak)) extern const struct test_group __stop_test_group;
 inline std::span<struct test> regular_tests = { &__start_tests, &__stop_tests };
 extern const std::span<struct test> selftests;
 
+struct TestList {
+    uint64_t features;
+    const char* name;
+    const std::span<struct test* const> content;
+};
+
 }
 #endif
 

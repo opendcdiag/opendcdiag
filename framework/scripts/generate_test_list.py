@@ -72,26 +72,47 @@ def main():
             test_list.append(l)
             all_tests[l] = 1
 
+    has_any_lists = len(test_lists) > 0
+
     # generate the .cpp file
     with open(cpp_file, 'w') as f:
         f.write('#include <span>\n')
-        f.write(f'#include "{h_file_basename}"\n\n')
-        f.write('using namespace std;\n\n')
+        f.write(f'#include "{h_file_basename}"\n')
+        f.write('#include "sandstone_tests.h"\n')
+        f.write('#include "SelectorFactory.h"\n')
         decls = [ f'extern struct test _test_{test};' for test in sorted(all_tests.keys()) ]
         f.write('\n'.join(decls))
         f.write('\n\n')
+
         for name, tests in test_lists.items():
-            f.write(f'static constexpr struct test * const {name}_test_list[] = {{')
+            f.write(f'static constexpr struct test * const {name}_test_list_[] = {{')
             test_list = [ f'    &_test_{test}' for test in tests ]
             f.write(',\n'.join(test_list))
             f.write('\n};\n\n')
+            f.write(f'static const struct TestList {name}_test_list = {{ {"cpu_" + name if name != "default" else 0}, "{name}", {name}_test_list_ }};\n\n')
+
+        if has_any_lists:
+            f.write('static const struct TestList* test_lists[] = {\n')
+            for name, _ in test_lists.items():
+                if default_name is not None and name != default_name:
+                    f.write(f'    &{name}_test_list,\n')
+            if default_name is not None:
+                f.write(f'    &{default_name}_test_list\n') # put default list as last one
+            f.write('};\n\n')
+
         # write selector function
-        f.write('optional<const span<struct test * const>> get_test_list(const char *test_list_name) {\n')
-        if default_name is not None:
-            f.write(f'    if (!test_list_name) return {default_name}_test_list;\n')
+        f.write('std::optional<const std::span<struct test * const>> get_test_list(const char *test_list_name) {\n')
+        if has_any_lists:
+            if default_name is not None:
+                f.write(f'    if (!test_list_name || !strcmp(test_list_name, "auto")) return auto_detect_test_list(test_lists, &{default_name}_test_list);\n')
+            else:
+                f.write(f'    if (!test_list_name || !strcmp(test_list_name, "auto")) return auto_detect_test_list(test_lists);\n')
         for name in test_lists.keys():
-            f.write(f'    if  (!strcmp(test_list_name, "{name}")) return {name}_test_list;\n')
-        f.write('    return nullopt;\n')
+            f.write(f'    if (!strcmp(test_list_name, "{name}")) return {name}_test_list.content;\n')
+        if default_name is not None:
+            f.write(f'    return {default_name}_test_list.content;\n')
+        else:
+            f.write('    return std::nullopt;\n')
         f.write('}\n')
 
     # generate .h file

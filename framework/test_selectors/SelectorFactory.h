@@ -22,6 +22,8 @@ void add_tests(std::span<struct test> test_set, std::vector<struct test *> &test
 void disable_tests(std::span<struct test> test_set, const char *name);
 void generate_test_list(std::vector<struct test *> &test_list, std::span<struct test> test_set,
                                int min_quality = sApp->requested_quality);
+std::optional<const std::span<struct test * const>> auto_detect_test_list(const std::span<const TestList*> test_lists,
+        const TestList* default_test_list = nullptr);
 
 extern TestrunSelector * setup_test_selector(
         WeightedTestScheme         selectScheme,
