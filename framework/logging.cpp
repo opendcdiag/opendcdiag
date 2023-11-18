@@ -452,8 +452,6 @@ static uint8_t status_level(char letter)
 static const char *char_to_skip_category(int val)
 {
     switch (val) {
-    case ResourceIssueSkipCategory:
-        return "ResourceIssue";
     case CpuNotSupportedSkipCategory:
         return "CpuNotSupported";
     case DeviceNotFoundSkipCategory:
