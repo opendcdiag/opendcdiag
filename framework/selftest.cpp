@@ -169,7 +169,7 @@ static int selftest_logs_getcpu_run(struct test *test, int cpu)
     log_skip(OsNotSupportedSkipCategory, "No API to get the CPU number on this OS");
 #endif
     if (cpu_number == -1)
-        log_skip(ResourceIssueSkipCategory, "OS failed: %m");
+        log_skip(OSResourceIssueSkipCategory, "OS failed: %m");
     log_info("%d", cpu_number);
     return EXIT_SUCCESS;
 }

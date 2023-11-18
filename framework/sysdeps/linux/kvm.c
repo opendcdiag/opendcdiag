@@ -580,7 +580,7 @@ int kvm_generic_run(struct test *test, int cpu)
             ctx.vm_fd = kvm_generic_create_vm(kvm_fd);
             if (ctx.vm_fd < 0) {
                 if (errno == EBUSY) {
-                    log_skip(ResourceIssueSkipCategory, "Cannot create VM: device busy");
+                    log_skip(OSResourceIssueSkipCategory, "Cannot create VM: device busy");
                     result = EXIT_SKIP;
                     goto epilogue;
                 }
