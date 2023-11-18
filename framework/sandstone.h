@@ -84,17 +84,16 @@ extern "C" {
 
 // skip categories
 typedef enum SkipCategory {
-    ResourceIssueSkipCategory = 1,
-    CpuNotSupportedSkipCategory,
+    CpuNotSupportedSkipCategory = 1,
+    CpuTopologyIssueSkipCategory,
+    TestResourceIssueSkipCategory,
+    OSResourceIssueSkipCategory,
+    OsNotSupportedSkipCategory,
     DeviceNotFoundSkipCategory,
     DeviceNotConfiguredSkipCategory,
     UnknownSkipCategory,
     RuntimeSkipCategory,
     SelftestSkipCategory,
-    OsNotSupportedSkipCategory,
-    TestResourceIssueSkipCategory,
-    CpuTopologyIssueSkipCategory,
-    OSResourceIssueSkipCategory
 } SkipCategory;
 
 /// logs a skip message to the logfile. log_skip accepts the category to which the skip belongs to
