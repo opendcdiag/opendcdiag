@@ -16,6 +16,7 @@
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/kdf.h>
 #include <openssl/md5.h>
 #include <openssl/modes.h>
 //#include <openssl/mdc2.h>
@@ -509,6 +510,26 @@
     F(HMAC_size)                                \
     F(HMAC_Update)                              \
     /**/
+
+
+#define SANDSTONE_SSL_KDF_FUNCTIONS(F)          \
+    F(EVP_PKEY_CTX_set_tls1_prf_md)             \
+    F(EVP_PKEY_CTX_set1_tls1_prf_secret)        \
+    F(EVP_PKEY_CTX_add1_tls1_prf_seed)          \
+    F(EVP_PKEY_CTX_set_hkdf_md)                 \
+    F(EVP_PKEY_CTX_set1_hkdf_salt)              \
+    F(EVP_PKEY_CTX_set1_hkdf_key)               \
+    F(EVP_PKEY_CTX_add1_hkdf_info)              \
+    F(EVP_PKEY_CTX_set_hkdf_mode)               \
+    F(EVP_PKEY_CTX_set1_pbe_pass)               \
+    F(EVP_PKEY_CTX_set1_scrypt_salt)            \
+    F(EVP_PKEY_CTX_set_scrypt_N)                \
+    F(EVP_PKEY_CTX_set_scrypt_r)                \
+    F(EVP_PKEY_CTX_set_scrypt_p)                \
+    F(EVP_PKEY_CTX_set_scrypt_maxmem_bytes)     \
+    /**/
+
+
 
 #define SANDSTONE_SSL_EVP_FUNCTIONS(F)           \
     F(EVP_aes_128_cbc_hmac_sha1)                 \
@@ -1961,6 +1982,7 @@
     SANDSTONE_SSL_EVP_FUNCTIONS(F)              \
     SANDSTONE_SSL_HMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_GENERIC_FUNCTIONS(F)          \
+    SANDSTONE_SSL_KDF_FUNCTIONS(F)              \
     SANDSTONE_SSL_MD5_FUNCTIONS(F)              \
     SANDSTONE_SSL_PARAM_FUNCTIONS(F)            \
     SANDSTONE_SSL_PEM_FUNCTIONS(F)              \
