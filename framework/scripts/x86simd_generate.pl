@@ -284,7 +284,7 @@ struct X86Architecture
 };
 
 static const struct X86Architecture x86_architectures[] = {|;
-for (sort keys %sorted_archs) {
+for (sort { $b <=> $a } keys %sorted_archs) {
     my $arch = $sorted_archs{$_};
     next if $arch->{base} eq "<>";
     printf "    { cpu_%s, \"%s\" },\n", $arch->{id}, $arch->{prettyname};
