@@ -1289,6 +1289,9 @@ static void dump_cpu_info()
             detected = arch.name;
             break;
         }
+        if (sApp->shmem->verbosity > 1)
+            printf("CPU is not %s: missing %s\n", arch.name,
+                   cpu_features_to_string(arch.features & ~cpu_features).c_str());
     }
     printf("Detected CPU: %s; family-model-stepping (hex): %02x-%02x-%02x; CPU features: %s\n",
            detected, cpu_info[0].family, cpu_info[0].model, cpu_info[0].stepping,
