@@ -1576,7 +1576,7 @@ crash_context_socket1_common() {
 
     # can't use sandstone_selftest because of --no-triage
     VALIDATION=dump
-    run_sandstone_yaml -n$MAX_PROC --disable=mce_check --selftests --timeout=20s --retest-on-failure=0 -Y -e selftest_fail_socket1
+    run_sandstone_yaml -n$MAX_PROC --disable=mce_check --selftests --timeout=20s --retest-on-failure=0 -Y -e selftest_fail_socket1 --triage
 
     # confirm the topology took effect
     for ((i = 0; i < 4; ++i)); do

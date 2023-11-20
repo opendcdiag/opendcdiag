@@ -3091,7 +3091,7 @@ int main(int argc, char **argv)
     int total_skips = 0;
     int thread_count = -1;
     bool fatal_errors = false;
-    bool do_not_triage = false;
+    bool do_not_triage = true;
     const char *on_hang_arg = nullptr;
     const char *on_crash_arg = nullptr;
 
