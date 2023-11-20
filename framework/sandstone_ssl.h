@@ -10,6 +10,7 @@
 #include <openssl/aes.h>
 #include <openssl/bio.h>
 #include <openssl/blowfish.h>
+#include <openssl/bn.h>
 #include <openssl/cmac.h>
 #include <openssl/core_names.h>
 #include <openssl/crypto.h>
@@ -277,6 +278,113 @@
     F(BF_ofb64_encrypt)                         \
     F(BF_options)                               \
     F(BF_set_key)                               \
+    /**/
+
+#define SANDSTONE_SSL_BN_FUNCTIONS(F)           \
+    F(BN_add)                                   \
+    F(BN_add_word)                              \
+    F(BN_bin2bn)                                \
+    F(BN_bn2bin)                                \
+    F(BN_bn2binpad)                             \
+    F(BN_bn2dec)                                \
+    F(BN_bn2hex)                                \
+    F(BN_bn2lebinpad)                           \
+    F(BN_bn2mpi)                                \
+    F(BN_bn2nativepad)                          \
+    F(BN_check_prime)                           \
+    F(BN_clear_bit)                             \
+    F(BN_clear_free)                            \
+    F(BN_clear)                                 \
+    F(BN_cmp)                                   \
+    F(BN_copy)                                  \
+    F(BN_CTX_end)                               \
+    F(BN_CTX_free)                              \
+    F(BN_CTX_get)                               \
+    F(BN_CTX_new_ex)                            \
+    F(BN_CTX_new)                               \
+    F(BN_CTX_secure_new_ex)                     \
+    F(BN_CTX_secure_new)                        \
+    F(BN_CTX_start)                             \
+    F(BN_dec2bn)                                \
+    F(BN_div)                                   \
+    F(BN_div_recp)                              \
+    F(BN_div_word)                              \
+    F(BN_dup)                                   \
+    F(BN_exp)                                   \
+    F(BN_free)                                  \
+    F(BN_from_montgomery)                       \
+    F(BN_gcd)                                   \
+    F(BN_GENCB_call)                            \
+    F(BN_GENCB_free)                            \
+    F(BN_GENCB_get_arg)                         \
+    F(BN_GENCB_new)                             \
+    F(BN_GENCB_set)                             \
+    F(BN_GENCB_set_old)                         \
+    F(BN_generate_prime_ex2)                    \
+    F(BN_generate_prime_ex)                     \
+    F(BN_generate_prime)                        \
+    F(BN_get_word)                              \
+    F(BN_hex2bn)                                \
+    F(BN_is_bit_set)                            \
+    F(BN_is_odd)                                \
+    F(BN_is_one)                                \
+    F(BN_is_prime_ex)                           \
+    F(BN_is_prime_fasttest_ex)                  \
+    F(BN_is_prime_fasttest)                     \
+    F(BN_is_prime)                              \
+    F(BN_is_word)                               \
+    F(BN_is_zero)                               \
+    F(BN_lebin2bn)                              \
+    F(BN_lshift1)                               \
+    F(BN_lshift)                                \
+    F(BN_mask_bits)                             \
+    F(BN_mod_add)                               \
+    F(BN_mod_exp)                               \
+    F(BN_mod_exp_mont_consttime)                \
+    F(BN_mod_exp_mont_consttime_x2)             \
+    F(BN_mod_exp_mont)                          \
+    F(BN_mod_inverse)                           \
+    F(BN_mod_mul)                               \
+    F(BN_mod_mul_montgomery)                    \
+    F(BN_mod_mul_reciprocal)                    \
+    F(BN_mod_sqr)                               \
+    F(BN_mod_sqrt)                              \
+    F(BN_mod_sub)                               \
+    F(BN_mod_word)                              \
+    F(BN_mpi2bn)                                \
+    F(BN_mul)                                   \
+    F(BN_mul_word)                              \
+    F(BN_native2bn)                             \
+    F(BN_new)                                   \
+    F(BN_nnmod)                                 \
+    F(BN_num_bits)                              \
+    F(BN_num_bits_word)                         \
+    F(BN_print_fp)                              \
+    F(BN_print)                                 \
+    F(BN_priv_rand_ex)                          \
+    F(BN_priv_rand)                             \
+    F(BN_priv_rand_range_ex)                    \
+    F(BN_priv_rand_range)                       \
+    F(BN_pseudo_rand)                           \
+    F(BN_pseudo_rand_range)                     \
+    F(BN_rand_ex)                               \
+    F(BN_rand)                                  \
+    F(BN_rand_range_ex)                         \
+    F(BN_rand_range)                            \
+    F(BN_rshift1)                               \
+    F(BN_rshift)                                \
+    F(BN_secure_new)                            \
+    F(BN_security_bits)                         \
+    F(BN_set_bit)                               \
+    F(BN_set_word)                              \
+    F(BN_sqr)                                   \
+    F(BN_sub)                                   \
+    F(BN_sub_word)                              \
+    F(BN_swap)                                  \
+    F(BN_to_montgomery)                         \
+    F(BN_ucmp)                                  \
+    F(BN_value_one)                             \
+    F(BN_with_flags)                            \
     /**/
 
 #define SANDSTONE_SSL_CMAC_FUNCTIONS(F)         \
@@ -1847,6 +1955,7 @@
     SANDSTONE_SSL_AES_FUNCTIONS(F)              \
     SANDSTONE_SSL_BIO_FUNCTIONS(F)              \
     SANDSTONE_SSL_BF_FUNCTIONS(F)               \
+    SANDSTONE_SSL_BN_FUNCTIONS(F)               \
     SANDSTONE_SSL_CMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_CRYPTO_FUNCTIONS(F)           \
     SANDSTONE_SSL_EVP_FUNCTIONS(F)              \
