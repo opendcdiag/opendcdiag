@@ -164,6 +164,7 @@ enum {
     test_tests_option,
     timeout_option,
     total_retest_on_failure,
+    triage_option,
     ud_on_failure_option,
     use_builtin_test_list_option,
     vary_frequency,
@@ -3029,6 +3030,7 @@ int main(int argc, char **argv)
         { "mem-samples-per-log", required_argument, nullptr, mem_samples_per_log_option},
         { "no-memory-sampling", no_argument, nullptr, no_mem_sampling_option },
         { "no-slicing", no_argument, nullptr, no_slicing_option },
+        { "triage", no_argument, nullptr, triage_option },
         { "no-triage", no_argument, nullptr, no_triage_option },
         { "on-crash", required_argument, nullptr, on_crash_option },
         { "on-hang", required_argument, nullptr, on_hang_option },
@@ -3256,6 +3258,9 @@ int main(int argc, char **argv)
             break;
         case no_slicing_option:
             max_cores_per_slice = -1;
+            break;
+        case triage_option:
+            do_not_triage = false;
             break;
         case no_triage_option:
             do_not_triage = true;
