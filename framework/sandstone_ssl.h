@@ -14,6 +14,7 @@
 #include <openssl/cmac.h>
 #include <openssl/core_names.h>
 #include <openssl/crypto.h>
+#include <openssl/ec.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/kdf.h>
@@ -495,6 +496,67 @@
     F(CRYPTO_zalloc)                            \
     F(OSSL_LIB_CTX_new)                         \
     F(OSSL_LIB_CTX_free)                        \
+    /**/
+
+#define SANDSTONE_SSL_EC_FUNCTIONS(F)           \
+    F(EC_GROUP_check)                           \
+    F(EC_GROUP_check_discriminant)              \
+    F(EC_GROUP_check_named_curve)               \
+    F(EC_GROUP_clear_free)                      \
+    F(EC_GROUP_cmp)                             \
+    F(EC_GROUP_copy)                            \
+    F(EC_GROUP_dup)                             \
+    F(EC_GROUP_free)                            \
+    F(EC_GROUP_get0_cofactor)                   \
+    F(EC_GROUP_get0_field)                      \
+    F(EC_GROUP_get0_generator)                  \
+    F(EC_GROUP_get0_order)                      \
+    F(EC_GROUP_get0_seed)                       \
+    F(EC_GROUP_get_asn1_flag)                   \
+    F(EC_GROUP_get_basis_type)                  \
+    F(EC_GROUP_get_cofactor)                    \
+    F(EC_GROUP_get_curve)                       \
+    F(EC_GROUP_get_curve_name)                  \
+    F(EC_GROUP_get_degree)                      \
+    F(EC_GROUP_get_ecparameters)                \
+    F(EC_GROUP_get_ecpkparameters)              \
+    F(EC_GROUP_get_field_type)                  \
+    F(EC_GROUP_get_order)                       \
+    F(EC_GROUP_get_point_conversion_form)       \
+    F(EC_GROUP_get_seed_len)                    \
+    F(EC_GROUP_new)                             \
+    F(EC_GROUP_new_by_curve_name)               \
+    F(EC_GROUP_new_by_curve_name_ex)            \
+    F(EC_GROUP_new_from_ecparameters)           \
+    F(EC_GROUP_new_from_ecpkparameters)         \
+    F(EC_GROUP_new_from_params)                 \
+    F(EC_GROUP_order_bits)                      \
+    F(EC_GROUP_set_asn1_flag)                   \
+    F(EC_GROUP_set_curve)                       \
+    F(EC_GROUP_set_curve_name)                  \
+    F(EC_GROUP_set_generator)                   \
+    F(EC_GROUP_set_point_conversion_form)       \
+    F(EC_GROUP_set_seed)                        \
+    F(EC_POINT_add)                             \
+    F(EC_POINT_clear_free)                      \
+    F(EC_POINT_cmp)                             \
+    F(EC_POINT_copy)                            \
+    F(EC_POINT_dbl)                             \
+    F(EC_POINT_dup)                             \
+    F(EC_POINT_free)                            \
+    F(EC_POINT_get_affine_coordinates)          \
+    F(EC_POINT_hex2point)                       \
+    F(EC_POINT_invert)                          \
+    F(EC_POINT_is_at_infinity)                  \
+    F(EC_POINT_is_on_curve)                     \
+    F(EC_POINT_mul)                             \
+    F(EC_POINT_new)                             \
+    F(EC_POINT_oct2point)                       \
+    F(EC_POINT_point2hex)                       \
+    F(EC_POINT_point2oct)                       \
+    F(EC_POINT_set_affine_coordinates)          \
+    F(EC_POINT_set_compressed_coordinates)      \
+    F(EC_POINT_set_to_infinity)                 \
     /**/
 
 #define SANDSTONE_SSL_HMAC_FUNCTIONS(F)         \
@@ -2006,6 +2068,7 @@
     SANDSTONE_SSL_BN_FUNCTIONS(F)               \
     SANDSTONE_SSL_CMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_CRYPTO_FUNCTIONS(F)           \
+    SANDSTONE_SSL_EC_FUNCTIONS(F)               \
     SANDSTONE_SSL_EVP_FUNCTIONS(F)              \
     SANDSTONE_SSL_HMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_GENERIC_FUNCTIONS(F)          \
