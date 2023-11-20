@@ -721,6 +721,7 @@
     F(EVP_CIPHER_CTX_free)                       \
     F(EVP_CIPHER_CTX_get_app_data)               \
     F(EVP_CIPHER_CTX_get_cipher_data)            \
+    F(EVP_CIPHER_CTX_get_params)                 \
     F(EVP_CIPHER_CTX_iv_length)                  \
     F(EVP_CIPHER_CTX_key_length)                 \
     /*F(EVP_CIPHER_CTX_mode)*/                   \
@@ -770,6 +771,7 @@
     F(EVP_DecryptFinal_ex)                       \
     F(EVP_DecryptFinal)                          \
     F(EVP_DecryptInit_ex)                        \
+    F(EVP_DecryptInit_ex2)                       \
     F(EVP_DecryptInit)                           \
     F(EVP_DecryptUpdate)                         \
     F(EVP_des_cbc)                               \
@@ -928,19 +930,28 @@
     F(EVP_PKEY_CTX_ctrl_uint64)                  \
     F(EVP_PKEY_CTX_dup)                          \
     F(EVP_PKEY_CTX_free)                         \
+    F(EVP_PKEY_CTX_new)                          \
+    F(EVP_PKEY_CTX_new_from_name)                \
     F(EVP_PKEY_CTX_new_id)                       \
+    F(EVP_PKEY_CTX_set_group_name)               \
+    F(EVP_PKEY_CTX_set_rsa_padding)              \
+    F(EVP_PKEY_CTX_set_signature_md)             \
     /*F(EVP_PKEY_CTX_set_rsa_keygen_bits)*/          \
     F(EVP_PKEY_decrypt)                          \
     F(EVP_PKEY_decrypt_init)                     \
     F(EVP_PKEY_derive)                           \
     F(EVP_PKEY_derive_init)                      \
     F(EVP_PKEY_derive_set_peer)                  \
+    F(EVP_PKEY_derive_set_peer_ex)               \
     F(EVP_PKEY_encrypt)                          \
     F(EVP_PKEY_encrypt_init)                     \
     F(EVP_PKEY_free)                             \
-    F(EVP_PKEY_get0_asn1)                        \
+    F(EVP_PKEY_fromdata)                         \
+    F(EVP_PKEY_fromdata_init)                    \
     F(EVP_PKEY_get0_DH)                          \
     F(EVP_PKEY_get0_DSA)                         \
+    F(EVP_PKEY_get0_asn1)                        \
+    F(EVP_PKEY_get_size)                         \
     F(EVP_PKEY_get0_EC_KEY)                      \
     F(EVP_PKEY_get0_engine)                      \
     F(EVP_PKEY_get0_hmac)                        \
