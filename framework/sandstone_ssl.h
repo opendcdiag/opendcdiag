@@ -1273,8 +1273,54 @@
     /**/
 
 #define SANDSTONE_SSL_RAND_FUNCTIONS(F)         \
+    F(EVP_RAND_CTX_free)                        \
+    F(EVP_RAND_CTX_get0_rand)                   \
+    F(EVP_RAND_CTX_get_params)                  \
+    F(EVP_RAND_CTX_gettable_params)             \
+    F(EVP_RAND_CTX_new)                         \
+    F(EVP_RAND_CTX_set_params)                  \
+    F(EVP_RAND_CTX_settable_params)             \
+    F(EVP_RAND_do_all_provided)                 \
+    F(EVP_RAND_enable_locking)                  \
+    F(EVP_RAND_fetch)                           \
+    F(EVP_RAND_free)                            \
+    F(EVP_RAND_generate)                        \
+    F(EVP_RAND_get0_description)                \
+    F(EVP_RAND_get0_name)                       \
+    F(EVP_RAND_get0_provider)                   \
+    F(EVP_RAND_get_params)                      \
+    F(EVP_RAND_get_state)                       \
+    F(EVP_RAND_get_strength)                    \
+    F(EVP_RAND_gettable_ctx_params)             \
+    F(EVP_RAND_gettable_params)                 \
+    F(EVP_RAND_instantiate)                     \
+    F(EVP_RAND_is_a)                            \
+    F(EVP_RAND_names_do_all)                    \
+    F(EVP_RAND_nonce)                           \
+    F(EVP_RAND_reseed)                          \
+    F(EVP_RAND_settable_ctx_params)             \
+    F(EVP_RAND_uninstantiate)                   \
+    F(EVP_RAND_up_ref)                          \
+    F(EVP_RAND_verify_zeroization)              \
+    F(RAND_add)                                 \
     F(RAND_bytes)                               \
+    F(RAND_bytes_ex)                            \
+    F(RAND_file_name)                           \
+    F(RAND_get0_primary)                        \
+    F(RAND_get0_private)                        \
+    F(RAND_get0_public)                         \
+    F(RAND_get_rand_method)                     \
+    F(RAND_keep_random_devices_open)            \
+    F(RAND_load_file)                           \
+    F(RAND_poll)                                \
+    F(RAND_priv_bytes)                          \
+    F(RAND_priv_bytes_ex)                       \
+    F(RAND_seed)                                \
     F(RAND_set_DRBG_type)                       \
+    F(RAND_set_rand_method)                     \
+    F(RAND_set_seed_source_type)                \
+    F(RAND_status)                              \
+    F(RAND_write_file)                          \
     /**/
 
 #define SANDSTONE_SSL_RSA_FUNCTIONS(F)          \
