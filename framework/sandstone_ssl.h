@@ -21,6 +21,7 @@
 #include <openssl/modes.h>
 //#include <openssl/mdc2.h>
 //#include <openssl/ripemd.h>
+#include <openssl/param_build.h>
 #include <openssl/pem.h>
 #include <openssl/provider.h>
 #include <openssl/rand.h>
@@ -1038,6 +1039,32 @@
     /**/
 
 #define SANDSTONE_SSL_PARAM_FUNCTIONS(F)        \
+    F(OSSL_PARAM_BLD_free)                      \
+    F(OSSL_PARAM_BLD_new)                       \
+    F(OSSL_PARAM_BLD_push_BN)                   \
+    F(OSSL_PARAM_BLD_push_BN_pad)               \
+    F(OSSL_PARAM_BLD_push_double)               \
+    F(OSSL_PARAM_BLD_push_int)                  \
+    F(OSSL_PARAM_BLD_push_int32)                \
+    F(OSSL_PARAM_BLD_push_int64)                \
+    F(OSSL_PARAM_BLD_push_long)                 \
+    F(OSSL_PARAM_BLD_push_octet_ptr)            \
+    F(OSSL_PARAM_BLD_push_octet_string)         \
+    F(OSSL_PARAM_BLD_push_size_t)               \
+    F(OSSL_PARAM_BLD_push_time_t)               \
+    F(OSSL_PARAM_BLD_push_uint)                 \
+    F(OSSL_PARAM_BLD_push_uint32)               \
+    F(OSSL_PARAM_BLD_push_uint64)               \
+    F(OSSL_PARAM_BLD_push_ulong)                \
+    F(OSSL_PARAM_BLD_push_utf8_ptr)             \
+    F(OSSL_PARAM_BLD_push_utf8_string)          \
+    F(OSSL_PARAM_BLD_to_param)                  \
+    F(OSSL_PARAM_construct_end)                 \
+    F(OSSL_PARAM_construct_int)                 \
+    F(OSSL_PARAM_construct_octet_string)        \
+    F(OSSL_PARAM_construct_uint)                \
+    F(OSSL_PARAM_construct_utf8_string)         \
+    F(OSSL_PARAM_free)                          \
     F(OSSL_PARAM_locate)                        \
     F(OSSL_PARAM_set_int)                       \
     F(OSSL_PARAM_set_size_t)                    \
