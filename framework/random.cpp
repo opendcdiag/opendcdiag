@@ -500,25 +500,26 @@ void random_init_global(const char *seed_from_user)
         sApp->random_engine->reloadGlobalState(ptr);
     } else {
         // it was a file, read our seed from there
-        EngineType engine_type = LCG;
-        if (haveAes()) {
-            uint8_t type;
-            if (read(fd, &type, 1) != 1) {
-                perror("read");
+        auto read_from_seed = [&](auto &where) {
+            off_t n = read(fd, &where, sizeof(where));
+            if (n != sizeof(where)) {
+                if (seed_from_user)
+                    fprintf(stderr, "%s: could not read from %s: %s\n", program_invocation_name,
+                            seed_from_user, n < 0 ? strerror(errno) : "File too short");
                 exit(EX_IOERR);
             }
-            if (type & 2)
+            return true;
+        };
+
+        EngineType engine_type = LCG;
+        if (haveAes()) {
+            if (uint8_t type; read_from_seed(type) && (type & 2))
                 engine_type = AESSequence;
         }
         make_engine(engine_type);
 
         thread_rng buffer;
-        memset(&buffer, 0, sizeof(buffer));
-        if (read(fd, buffer.u32, sizeof(buffer)) != sizeof(buffer)) {
-            // will never happen
-            perror("read");
-            exit(EX_IOERR);
-        }
+        read_from_seed(buffer);
         close(fd);
 
         // create the engine from the seed
