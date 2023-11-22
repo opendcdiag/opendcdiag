@@ -39,6 +39,7 @@ DECLSPEC_IMPORT BOOLEAN WINAPI SystemFunction036(PVOID RandomBuffer, ULONG Rando
 
 #ifdef __x86_64__
 #  include <immintrin.h>
+#  define RANDOM_HAS_AES        1
 #endif
 
 #ifndef O_CLOEXEC
@@ -51,7 +52,7 @@ union alignas(64) thread_rng {
     uint32_t u32[sizeof(u8) / sizeof(uint32_t)];
     uint64_t u64[sizeof(u8) / sizeof(uint64_t)];
     __uint128_t u128[sizeof(u8) / sizeof(__uint128_t)];
-#ifdef __AES__
+#ifdef __x86_64__
     __m128i m128[sizeof(u8) / sizeof(__m128i)];
 #endif
 };
@@ -78,7 +79,7 @@ enum EngineType {
 static constexpr std::initializer_list<EngineType> engine_types = {
     Constant,
     LCG,
-#ifdef __AES__
+#ifdef RANDOM_HAS_AES
     AESSequence,
 #endif
 };
@@ -292,9 +293,15 @@ int EngineWrapper<std::minstd_rand>::generateInt(thread_rng *generator)
 
 template struct EngineWrapper<std::minstd_rand>;
 
-#ifdef __AES__
+#ifdef RANDOM_HAS_AES
 // -- AES engine (generates numbers by running AES over a state) --
+static bool haveAes()
+{
+    return cpu_has_feature(cpu_feature_aes);
+}
 
+#pragma GCC push_options
+#pragma GCC target("aes")
 struct aes_engine
 {
     __m128i state[2];
@@ -366,9 +373,15 @@ __uint128_t EngineWrapper<aes_engine>::generate128(thread_rng *generator)
     uint64_t h = _mm_extract_epi64(r, 1);
     return l | (__uint128_t(h) << 64);
 }
+#pragma GCC pop_options
 
 template struct EngineWrapper<aes_engine>;
-#endif // __AES__
+#else
+static bool haveAes()
+{
+    return false;
+}
+#endif // RANDOM_HAS_AES
 
 } // unnamed namespace
 
@@ -394,10 +407,16 @@ static EngineType engineFromName(const char *argument)
         return strncmp(argument, name, strlen(name)) == 0;
     };
     for (EngineType type : engine_types) {
-        if (starts_with(engineNameFromType(type)))
+        if (starts_with(engineNameFromType(type))) {
+            if (type == AESSequence && !haveAes()) {
+                fprintf(stderr, "%s: engine type '%s' not available on this system.\n",
+                        program_invocation_name, engineNameFromType(type));
+                exit(EX_USAGE);
+            }
             return type;
+        }
     }
-    fprintf(stderr, "invalid random engine seed '%s'\n", argument);
+    fprintf(stderr, "%s: invalid random engine seed '%s'\n", program_invocation_name, argument);
     exit(EX_USAGE);
 }
 
@@ -420,11 +439,12 @@ void random_init_global(const char *seed_from_user)
             sApp->random_engine.reset(new EngineWrapper<constant_value_engine>(engine_type));
             return;
         case AESSequence:
-#ifdef __AES__
+#ifdef RANDOM_HAS_AES
             sApp->random_engine.reset(new EngineWrapper<aes_engine>(engine_type));
             return;
 #else
-            [[fallthrough]];
+            assert("Impossible condition: shouldn't have reached here");
+            __builtin_unreachable();
 #endif
         case LCG:
             sApp->random_engine.reset(new EngineWrapper<std::minstd_rand>(engine_type));
@@ -463,7 +483,9 @@ void random_init_global(const char *seed_from_user)
         SeedSequence sseq(randomdataptr);
 
         // create the engine from the seed
-        EngineType engine_type = randomdata & 0x80 ? LCG : AESSequence; // random bit from ASLR
+        EngineType engine_type = LCG;
+        if (haveAes() && randomdata & 0x80)
+            engine_type = AESSequence;
         make_engine(engine_type);
         sApp->random_engine->seedGlobalEngine(sseq);
 #else
@@ -478,14 +500,16 @@ void random_init_global(const char *seed_from_user)
         sApp->random_engine->reloadGlobalState(ptr);
     } else {
         // it was a file, read our seed from there
-        uint8_t type;
-        if (read(fd, &type, 1) != 1) {
-            // will never happen
-            perror("read");
-            exit(EX_IOERR);
+        EngineType engine_type = LCG;
+        if (haveAes()) {
+            uint8_t type;
+            if (read(fd, &type, 1) != 1) {
+                perror("read");
+                exit(EX_IOERR);
+            }
+            if (type & 2)
+                engine_type = AESSequence;
         }
-        static_assert(int(AESSequence) == int(LCG) + 2, "Internal assumption broken");
-        EngineType engine_type = EngineType((type & 2) + int(LCG));
         make_engine(engine_type);
 
         thread_rng buffer;
