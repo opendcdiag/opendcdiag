@@ -97,6 +97,17 @@ close_hslot:
 
 static LONG WINAPI handler(EXCEPTION_POINTERS *info)
 {
+    // Ignore non-error or user-defined exceptions. See
+    // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/87fba13e-bf06-450e-83b1-9241dc81e781
+    //  Bits    Meaning     Required value
+    //  30:31   severity    3 (STATUS_SEVERITY_ERROR)
+    //  29      customer    0 (Microsoft-defined)
+    //  28      reserved    0
+    //  16:27   facility    0 (NT kernel)
+    DWORD code = info->ExceptionRecord->ExceptionCode;
+    if ((code >> 16) != 0xC000)
+        return EXCEPTION_CONTINUE_SEARCH;
+
     static std::atomic_flag in_crash_handler = {};
     if (in_crash_handler.test_and_set()) {
         // wait forever

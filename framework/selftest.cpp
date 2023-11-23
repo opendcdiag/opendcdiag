@@ -56,6 +56,8 @@ using uint128_t = __uint128_t;
 
 struct SelftestException : std::exception
 {
+    int cpu;
+    SelftestException(int cpu = -1) : cpu(cpu) {}
     const char *what() const noexcept override
     {
         return "OpenDCDiag C++ selftest exception";
@@ -188,6 +190,16 @@ static int selftest_logs_random_init(struct test *test)
 static int selftest_logs_random_run(struct test *test, int cpu)
 {
     return selftest_logs_random_init(test);
+}
+
+static int selftest_cxxthrowcatch_run(struct test *test, int cpu)
+{
+    try {
+        throw SelftestException(cpu);
+    } catch (SelftestException &e) {
+        memcmp_or_fail(&e.cpu, &cpu, 1);
+        return EXIT_SUCCESS;
+    }
 }
 
 static int selftest_skip_init(struct test *test)
@@ -937,6 +949,13 @@ static struct test selftests_array[] = {
     .description = "Logs some random numbers",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_logs_random_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_cxxthrowcatch",
+.description = "Throws and catches a C++ exception",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_cxxthrowcatch_run,
     .desired_duration = -1,
 },
 {
