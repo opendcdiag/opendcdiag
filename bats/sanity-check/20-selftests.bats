@@ -410,6 +410,16 @@ selftest_pass() {
     [[ ${yamldump[/tests]} != *selftest_pass_low_quality* ]]
 }
 
+@test "selftest_cxxthrowcatch" {
+    # Note: we want to test with the crash handler enabled (--on-crash)
+    declare -A yamldump
+    sandstone_selftest --on-crash=context -e selftest_cxxthrowcatch
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_cxxthrowcatch
+    test_yaml_regexp "/tests/0/result" pass
+}
+
 @test "selftest_skip" {
     declare -A yamldump
     sandstone_selftest -e selftest_skip
