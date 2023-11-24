@@ -945,7 +945,7 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             exit(EX_USAGE);
         }
 
-        if (SandstoneConfig::ChildBacktrace && on_crash_action & backtrace_on_hang) {
+        if (SandstoneConfig::ChildBacktrace && on_crash_action & attach_gdb_on_crash) {
             if (gdb_available == -1)
                 gdb_available = check_gdb_available();
             if (!gdb_available) {
