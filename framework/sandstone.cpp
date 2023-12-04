@@ -3432,7 +3432,7 @@ int main(int argc, char **argv)
 
         case max_logdata_option: {
             sApp->shmem->max_logdata_per_thread = ParseIntArgument<unsigned>{
-                    .name = "--max-log-data",
+                    .name = "--max-logdata",
                     .explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))",
                     .base = 0,      // accept hex
                     .range_mode = OutOfRangeMode::Saturate
