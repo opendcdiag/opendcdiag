@@ -826,6 +826,15 @@ static void cleanup_internal(const struct test *test)
     logging_finish();
 }
 
+static int cleanup_global(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures)
+{
+    if (sApp->vary_frequency_mode)
+        sApp->frequency_manager.restore_initial_state();
+
+    exit_code = print_application_footer(exit_code, std::move(per_cpu_failures));
+    return logging_close_global(exit_code);
+}
+
 template <uint64_t X, uint64_t Y, typename P = int>
 static void inline __attribute__((always_inline)) assembly_marker(P param = 0)
 {
@@ -1691,16 +1700,15 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
 
             // Problem waiting: we must have caught a signal
             // (child has likely not been able to write results)
-            int sig = ret;
+            int exit_code = 128 | ret;
 
             logging_print_results(children.results, tc, test);
-            logging_printf(LOG_LEVEL_QUIET, "exit: interrupted\n");
-            logging_flush();
+            exit_code = cleanup_global(exit_code, {});
 
             // now exit with the same signal
             disable_interrupt_catch();
-            raise(sig);
-            _exit(128 | sig);           // just in case
+            raise(exit_code & 0x7f);
+            _exit(exit_code);           // just in case
         }
     };
 
@@ -2079,9 +2087,7 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
     case TestResult::TimedOut:
     case TestResult::OutOfMemory:
         if (!sApp->ignore_os_errors) {
-            logging_flush();
-            int exit_code = print_application_footer(EXIT_INVALID, {});
-            _exit(logging_close_global(exit_code));
+            _exit(cleanup_global(EXIT_INVALID, {}));
         } else {
             // not a pass either, but won't affect the result
             testResult = TestResult::Skipped;
@@ -3756,14 +3762,9 @@ int main(int argc, char **argv)
     }
 
     int exit_code = EXIT_SUCCESS;
-
-    //done running all the tests, restore system to the initial state
-    if (sApp->vary_frequency_mode)
-        sApp->frequency_manager.restore_initial_state();
-
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
 
-    exit_code = print_application_footer(exit_code, per_cpu_failures);
-    return logging_close_global(exit_code);
+    // done running all the tests, clean up and exit
+    return cleanup_global(exit_code, std::move(per_cpu_failures));
 }

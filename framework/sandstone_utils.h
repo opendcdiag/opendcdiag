@@ -30,6 +30,7 @@
 /* Extra codes used by the application only */
 #define EXIT_INVALID        2
 //#define EXIT_ABORTED        3
+#define EXIT_INTERRUPTED    128     /* OR'ed with signal */
 
 // Macro to help create a std::string from variable arguments: @p fmt must be
 // both the printf-style format string and the last argument before the variadic list
