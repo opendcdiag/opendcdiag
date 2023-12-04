@@ -2080,7 +2080,7 @@ static TestResult run_one_test_once(int *tc, const struct test *test)
     case TestResult::OutOfMemory:
         if (!sApp->ignore_os_errors) {
             logging_flush();
-            int exit_code = print_application_footer(2, {});
+            int exit_code = print_application_footer(EXIT_INVALID, {});
             _exit(logging_close_global(exit_code));
         } else {
             // not a pass either, but won't affect the result

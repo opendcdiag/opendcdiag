@@ -27,6 +27,10 @@
 #define EXIT_NOTINSTALLED 5     /* The program is not installed. */
 #define EXIT_MEMORY     204     /* Failed to perform an action due to memory shortage. */
 
+/* Extra codes used by the application only */
+#define EXIT_INVALID        2
+//#define EXIT_ABORTED        3
+
 // Macro to help create a std::string from variable arguments: @p fmt must be
 // both the printf-style format string and the last argument before the variadic list
 #define va_start_and_stdprintf(fmt)                     \
