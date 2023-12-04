@@ -2042,8 +2042,9 @@ static void run_one_test_children(ChildrenList &children, int *tc, const struct 
                 TestResult result = child_run(const_cast<struct test *>(test), i);
                 if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
                     _exit(test_result_to_exit_code(result));
-                else
-                    children.results.emplace_back(ChildExitStatus{ result });
+
+                children.results.emplace_back(ChildExitStatus{ result });
+                return;
             } else {
                 children.add(ret);
             }
