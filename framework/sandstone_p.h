@@ -82,14 +82,6 @@ struct mmap_region
 };
 
 /*
- * Called from sandstone_main() before logging_global_init() and before
- * logging_global_finish(). Feel free to add your own banner or footer. Be
- * careful about corrupting the log output.
- */
-void print_application_banner(void);
-int print_application_footer(int exit_code);
-
-/*
  * Called from sandstone_main(). The default weak implementation performs no
  * checks, they just return. Feel free to implement a strong version elsewhere
  * if you prefer the framework to check for system or CPU criteria.
@@ -692,6 +684,14 @@ void random_init_thread(int thread_num);
 
 /* sandstone.cpp */
 TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails);
+
+/*
+ * Called from sandstone_main() before logging_global_init() and before
+ * logging_global_finish(). Feel free to add your own banner or footer. Be
+ * careful about corrupting the log output.
+ */
+void print_application_banner();
+int print_application_footer(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures);
 
 #endif
 

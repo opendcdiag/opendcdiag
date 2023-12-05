@@ -676,15 +676,28 @@ int logging_close_global(int exitcode)
 {
     progress_bar_flush();
     if (!SandstoneConfig::NoLogging) {
-        if (exitcode != EXIT_SUCCESS) {
+        if (exitcode != EXIT_SUCCESS)
             logging_print_log_file_name();
-            logging_printf(LOG_LEVEL_QUIET,
-                           exitcode == EXIT_FAILURE ? "exit: fail\n" : "exit: invalid\n");
-        } else if (sApp->shmem->verbosity >= 0) {
-            logging_printf(LOG_LEVEL_QUIET, "exit: pass\n");
-        }
-    }
 
+        const char *exitline = [&] {
+            switch (exitcode) {
+            case EXIT_SUCCESS:
+                if (sApp->shmem->verbosity >= 0)
+                    return "pass";
+                return (const char *)nullptr;
+            case EXIT_FAILURE:
+                return "fail";
+            default:
+                if (exitcode & EXIT_INTERRUPTED)
+                    return "interrupted";
+                [[fallthrough]];
+            case EXIT_INVALID:
+                return "invalid";
+            }
+        }();
+        if (exitline)
+            logging_printf(LOG_LEVEL_QUIET, "exit: %s\n", exitline);
+    }
     if (exitcode == EXIT_SUCCESS && delete_log_on_success) {
         close(file_log_fd);
         remove(sApp->file_log_path.c_str());
