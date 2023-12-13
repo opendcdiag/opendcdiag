@@ -552,11 +552,6 @@ int kvm_generic_run(struct test *test, int cpu)
         return EXIT_FAILURE;
     }
 
-    __auto_type fail_entry = (struct sandstone_kvm_fail_entry *) ctx.runs->padding;
-    __auto_type msr = (struct sandstone_kvm_exit_x86_read_write_msr *) ctx.runs->padding;
-    __auto_type xen = (struct sandstone_kvm_xen_exit *) ctx.runs->padding;
-    __auto_type notify = (struct kvm_notify *) ctx.runs->padding;
-
     int count = 0;
     do {
         /* Every 16 loops reset the A bit for the memory */
@@ -636,6 +631,12 @@ int kvm_generic_run(struct test *test, int cpu)
             stop = 1;
             result = EXIT_FAILURE;
 
+            __auto_type fail_entry = (struct sandstone_kvm_fail_entry *) ctx.runs->padding;
+#ifdef __x86_64__
+            __auto_type msr = (struct sandstone_kvm_exit_x86_read_write_msr *) ctx.runs->padding;
+#endif
+            __auto_type xen = (struct sandstone_kvm_xen_exit *) ctx.runs->padding;
+            __auto_type notify = (struct kvm_notify *) ctx.runs->padding;
             switch (ctx.runs->exit_reason) {
                 case KVM_EXIT_HLT:
                     {
