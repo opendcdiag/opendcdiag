@@ -436,7 +436,7 @@ static int kvm_generic_setup_vcpu(kvm_ctx_t *ctx)
     }
 }
 
-static void kvm_log_registers(const char *log_level, const struct kvm_regs *gprs)
+static void kvm_log_registers(const struct kvm_regs *gprs)
 {
     static const struct FlagMapping {
         uint32_t bit;
@@ -468,12 +468,12 @@ static void kvm_log_registers(const char *log_level, const struct kvm_regs *gprs
     if (ptr != flags)
         ptr[-1] = '\0';
 
-    log_message(thread_num, SANDSTONE_LOG_INFO "%sRegister dump:\n"
+    log_message(thread_num, SANDSTONE_LOG_INFO "Register dump:\n"
                             "rax = 0x%016llx rbx = 0x%016llx rcx = 0x%016llx rdx = 0x%016llx\n"
                             "rsi = 0x%016llx rdi = 0x%016llx rsp = 0x%016llx rbp = 0x%016llx\n"
                             "r8  = 0x%016llx r9  = 0x%016llx rcx = 0x%016llx r11 = 0x%016llx\n"
                             "r12 = 0x%016llx r13 = 0x%016llx r14 = 0x%016llx r15 = 0x%016llx\n"
-                            "rip = 0x%016llx rflags = 0x%016llx [%s]", log_level,
+                            "rip = 0x%016llx rflags = 0x%016llx [%s]",
                 gprs->rax, gprs->rbx, gprs->rcx, gprs->rdx,
                 gprs->rsi, gprs->rdi, gprs->rsp, gprs->rbp,
                 gprs->r8, gprs->r9, gprs->rcx, gprs->r11,
@@ -649,7 +649,7 @@ int kvm_generic_run(struct test *test, int cpu)
                             case 0:
                                 break;
                             default:
-                                kvm_log_registers(SANDSTONE_LOG_INFO, &cregs);
+                                kvm_log_registers(&cregs);
                                 log_error("KVM test reported exit code %lld", cregs.rax);
                                 result = EXIT_FAILURE;
                                 break;
