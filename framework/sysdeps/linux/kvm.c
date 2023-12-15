@@ -635,6 +635,9 @@ int kvm_generic_run(struct test *test, int cpu)
             stop = 1;
             result = EXIT_FAILURE;
 
+            struct kvm_regs cregs;
+            IOCTL_OR_RET(ctx.cpu_fd, KVM_GET_REGS, &cregs);
+
             __auto_type fail_entry = (struct sandstone_kvm_fail_entry *) ctx.runs->padding;
 #ifdef __x86_64__
             __auto_type msr = (struct sandstone_kvm_exit_x86_read_write_msr *) ctx.runs->padding;
@@ -643,21 +646,14 @@ int kvm_generic_run(struct test *test, int cpu)
             __auto_type notify = (struct kvm_notify *) ctx.runs->padding;
             switch (ctx.runs->exit_reason) {
                 case KVM_EXIT_HLT:
-                    {
-                        struct kvm_regs cregs;
-
-                        stop = 1;
-                        result = EXIT_SUCCESS;
-                        IOCTL_OR_RET(ctx.cpu_fd, KVM_GET_REGS, &cregs);
-                        switch (cregs.rax) {
-                            case 0:
-                                break;
-                            default:
-                                kvm_log_registers(&cregs);
-                                log_error("KVM test reported exit code %lld", cregs.rax);
-                                result = EXIT_FAILURE;
-                                break;
-                        }
+                    switch (cregs.rax) {
+                        case 0:
+                            stop = 1;
+                            result = EXIT_SUCCESS;
+                            break;
+                        default:
+                            log_error("KVM test reported exit code %lld", cregs.rax);
+                            break;
                     }
                     break;
                 case KVM_EXIT_UNKNOWN:
@@ -847,6 +843,9 @@ int kvm_generic_run(struct test *test, int cpu)
                     log_error("Unexpected exit reason: %d.\n", ctx.runs->exit_reason);
                     break;
             }
+
+            if (result != EXIT_SUCCESS)
+                kvm_log_registers(&cregs);
         } while (!stop);
 
         if ((result == EXIT_SUCCESS) && (ctx.config->check_handler != NULL))
