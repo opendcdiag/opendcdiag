@@ -438,6 +438,7 @@ static int kvm_generic_setup_vcpu(kvm_ctx_t *ctx)
 
 static void kvm_log_registers(const struct kvm_regs *gprs)
 {
+#ifdef __x86_64__
     static const struct FlagMapping {
         uint32_t bit;
         char name[4];
@@ -479,6 +480,9 @@ static void kvm_log_registers(const struct kvm_regs *gprs)
                 gprs->r8, gprs->r9, gprs->rcx, gprs->r11,
                 gprs->r12, gprs->r13, gprs->r14, gprs->r15,
                 gprs->rip, gprs->rflags, flags);
+#else
+    (void) gprs;
+#endif // machine-specific
 }
 
 #ifndef MADV_COLD
