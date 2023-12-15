@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define _GNU_SOURCE     1
 #include <errno.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -436,9 +437,49 @@ static int kvm_generic_setup_vcpu(kvm_ctx_t *ctx)
     }
 }
 
-static void kvm_log_registers(const struct kvm_regs *gprs)
+#ifdef __x86_64__
+static char *kvm_log_segment(const struct kvm_segment *seg)
+{
+    char type[6] = "";
+    if (seg->s) {
+        char *t = type;
+        if (seg->type & 8) {
+            // code
+            *t++ = seg->type & 2 ? 'R' : '-';
+            *t++ = '-';
+            *t++ = 'X';
+            if (seg->type & 4)
+                *t++ = 'c';     // conforming
+        } else {
+            // data
+            *t++ = 'R';
+            *t++ = seg->type & 2 ? 'W' : '-';
+            *t++ = '-';
+            if (seg->type & 4)
+                *t++ = 'e';     // expand-down
+        }
+        if (seg->type & 1)
+            *t++ = 'a';         // accessed
+        *t = '\0';
+    } else {
+        // system??
+        snprintf(type, sizeof(type), "0x%x", seg->type);
+    }
+
+    char *ret = NULL;
+    asprintf(&ret, "0x%04x base = 0x%012llx limit = 0x%08x s=%d type=%s dpl=%d db=%d g=%d l=%d %s",
+             seg->selector, seg->base, seg->limit, seg->s, type, seg->dpl, seg->db, seg->g, seg->l,
+             seg->present ? "present" : "");
+    return ret;
+}
+#endif // __x86_64__
+
+static void kvm_log_registers(const kvm_ctx_t *ctx, const struct kvm_regs *gprs)
 {
 #ifdef __x86_64__
+    struct kvm_sregs sregs;
+    char *extra_dump = NULL;
+
     static const struct FlagMapping {
         uint32_t bit;
         char name[4];
@@ -469,17 +510,52 @@ static void kvm_log_registers(const struct kvm_regs *gprs)
     if (ptr != flags)
         ptr[-1] = '\0';
 
+    if (ioctl(ctx->cpu_fd, KVM_GET_SREGS, &sregs) == 0) {
+        struct kvm_xcrs xcrs;
+        __u64 xcr0 = 0;
+        if (ioctl(ctx->cpu_fd, KVM_GET_XCRS, &xcrs) == 0)
+            xcr0 = xcrs.xcrs[0].value;
+
+        char *cs = kvm_log_segment(&sregs.cs);
+        char *ds = kvm_log_segment(&sregs.ds);
+        char *es = kvm_log_segment(&sregs.es);
+        char *fs = kvm_log_segment(&sregs.fs);
+        char *gs = kvm_log_segment(&sregs.gs);
+        char *ss = kvm_log_segment(&sregs.ss);
+        asprintf(&extra_dump, "\n cs  = %s"
+                              "\n ds  = %s"
+                              "\n es  = %s"
+                              "\n fs  = %s"
+                              "\n gs  = %s"
+                              "\n ss  = %s"
+                              "\n cr0 = 0x%08llx cr2 = %#llx cr3 = 0x%016llx cr4 = 0x%08llx efer = 0x%03llx xcr0 = 0x%06llx"
+                              "\n gdt: base = 0x%016llx limit = 0x%04x"
+                              "\n ldt: base = 0x%016llx limit = 0x%04x",
+                 cs, ds, es, fs, gs, ss,
+                 sregs.cr0, sregs.cr2, sregs.cr3, sregs.cr4, sregs.efer, xcr0,
+                 sregs.gdt.base, sregs.gdt.limit, sregs.ldt.base, sregs.ldt.limit);
+        free(cs);
+        free(ds);
+        free(es);
+        free(fs);
+        free(gs);
+        free(ss);
+    }
+
     log_message(thread_num, SANDSTONE_LOG_INFO "Register dump:\n"
-                            "rax = 0x%016llx rbx = 0x%016llx rcx = 0x%016llx rdx = 0x%016llx\n"
-                            "rsi = 0x%016llx rdi = 0x%016llx rsp = 0x%016llx rbp = 0x%016llx\n"
-                            "r8  = 0x%016llx r9  = 0x%016llx rcx = 0x%016llx r11 = 0x%016llx\n"
-                            "r12 = 0x%016llx r13 = 0x%016llx r14 = 0x%016llx r15 = 0x%016llx\n"
-                            "rip = 0x%016llx rflags = 0x%016llx [%s]",
+                            " rax = 0x%016llx rbx = 0x%016llx rcx = 0x%016llx rdx = 0x%016llx\n"
+                            " rsi = 0x%016llx rdi = 0x%016llx rsp = 0x%016llx rbp = 0x%016llx\n"
+                            " r8  = 0x%016llx r9  = 0x%016llx rcx = 0x%016llx r11 = 0x%016llx\n"
+                            " r12 = 0x%016llx r13 = 0x%016llx r14 = 0x%016llx r15 = 0x%016llx\n"
+                            " rip = 0x%016llx rflags = 0x%016llx [%s]%s",
                 gprs->rax, gprs->rbx, gprs->rcx, gprs->rdx,
                 gprs->rsi, gprs->rdi, gprs->rsp, gprs->rbp,
                 gprs->r8, gprs->r9, gprs->rcx, gprs->r11,
                 gprs->r12, gprs->r13, gprs->r14, gprs->r15,
-                gprs->rip, gprs->rflags, flags);
+                gprs->rip, gprs->rflags, flags,
+                extra_dump ? extra_dump : "\n<KVM_GET_SREGS failed>");
+    free(extra_dump);
+
 #else
     (void) gprs;
 #endif // machine-specific
@@ -845,7 +921,7 @@ int kvm_generic_run(struct test *test, int cpu)
             }
 
             if (result != EXIT_SUCCESS)
-                kvm_log_registers(&cregs);
+                kvm_log_registers(&ctx, &cregs);
         } while (!stop);
 
         if ((result == EXIT_SUCCESS) && (ctx.config->check_handler != NULL))
