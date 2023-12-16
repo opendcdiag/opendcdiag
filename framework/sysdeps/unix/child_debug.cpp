@@ -874,20 +874,17 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
 
     // now include the register state
     if (handle && ctx.contents & CrashContext::MachineContext) {
-        char *buffer = nullptr;
-        size_t buflen = 0;
-        FILE *log = open_memstream(&buffer, &buflen);
-        fprintf(log, "Registers:\n");
+        std::string log;
 
 #ifdef __x86_64__
         dump_gprs(log, &ctx.mc);
         dump_xsave(log, ctx.xsave_buffer.data(), ctx.xsave_buffer.size(), -1);
 #endif
 
-        fclose(log);
-        logging_user_messages_stream(cpu, LOG_LEVEL_VERBOSE(2))
-                .write(std::string_view(buffer, buflen));
-        free(buffer);
+        if (log.size()) {
+            log.insert(0, "Registers:\n");
+            log_message_preformatted(cpu, LOG_LEVEL_VERBOSE(2), log);
+        }
     }
 }
 
