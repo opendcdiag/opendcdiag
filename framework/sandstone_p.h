@@ -281,42 +281,6 @@ struct SandstoneBackgroundScan
 #endif
 };
 
-class LoggingStream
-{
-public:
-    LoggingStream(int fd = -1) : fd(fd) {}
-    LoggingStream(const LoggingStream &) = delete;
-    LoggingStream &operator=(const LoggingStream &) = delete;
-    constexpr LoggingStream(LoggingStream &&other) : fd(other.fd)
-    {
-        other.fd = -1;
-    }
-    constexpr LoggingStream &operator=(LoggingStream &&other)
-    {
-        std::swap(fd, other.fd);
-        return *this;
-    }
-
-    ~LoggingStream()
-    {
-        if (fd != -1)
-            write('\0');
-    }
-    operator int() const
-    {
-        return fd;
-    }
-
-    template <typename... Args> ssize_t write(Args &&... args)
-    {
-        return writevec(fd, std::forward<Args>(args)...);
-    }
-
-private:
-    int fd;
-    friend LoggingStream logging_user_messages_stream(int thread_num, int level);
-};
-
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
     enum class OutputFormat : int8_t {
@@ -674,7 +638,6 @@ void logging_flush(void);
 void logging_init(const struct test *test);
 void logging_init_child_preexec();
 void logging_finish();
-LoggingStream logging_user_messages_stream(int thread_num, int level);
 TestResult logging_print_results(std::span<const ChildExitStatus> status, int *tc, const struct test *test);
 
 /* random.cpp */
