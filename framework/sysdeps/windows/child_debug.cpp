@@ -140,7 +140,7 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
 }
 
 #ifdef __x86_64__
-static void print_non_gprs(FILE *log, PCONTEXT ctx)
+static void print_non_gprs(std::string &log, PCONTEXT ctx)
 {
     // Windows doesn't store the XSAVE state in a contiguous block, so
     // we have to put it back together.
@@ -283,31 +283,16 @@ void debug_crashed_child()
             cpu = ctx->header.thread_num = -1;
         print_exception_info(ctx);
 
-        // no open_memstream() or fcookieopen() in MSVCRT or UCRT, so we use
-        // a real file
-        if (!log)
-            log.f = tmpfile();
-        if (!log)
-            continue;
-
-        fseek(log, 0, SEEK_SET);
-        fprintf(log, "Registers:\n");
+        std::string log;
 #ifdef __x86_64__
         dump_gprs(log, &ctx->fixedContext);
         print_non_gprs(log, &ctx->fixedContext);
 #endif
 
-        long size = ftell(log);
-        if (size < 0)
-            continue;
-        if (buf.size() < size_t(size))
-            buf.resize(size);
-
-        fseek(log, 0, SEEK_SET);
-        size = fread(buf.data(), 1, size, log);
-
-        logging_user_messages_stream(cpu, LOG_LEVEL_VERBOSE(2))
-                .write(std::string_view(buf.data(), size));
+        if (log.size()) {
+            log.insert(0, "Registers:\n");
+            log_message_preformatted(cpu, LOG_LEVEL_VERBOSE(2), log);
+        }
     }
 
     // got here on failure
