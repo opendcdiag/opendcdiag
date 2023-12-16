@@ -197,7 +197,7 @@ static void print_segment(FILE *f, const char *name, uint16_t value)
 }
 
 #if defined(__linux__)
-void dump_gprs(FILE *f, const mcontext_t *mc)
+void dump_gprs(FILE *f, SandstoneMachineContext mc)
 {
     static constexpr struct {
         char name[4];
@@ -233,7 +233,7 @@ void dump_gprs(FILE *f, const mcontext_t *mc)
     }
 }
 #elif defined(__FreeBSD__)
-void dump_gprs(FILE *f, const mcontext_t *mc)
+void dump_gprs(FILE *f, SandstoneMachineContext mc)
 {
     using register_t = decltype(mc->mc_rax);
     static constexpr struct {
@@ -265,7 +265,7 @@ void dump_gprs(FILE *f, const mcontext_t *mc)
     print_segment(f, "gs", mc->mc_gs);
 }
 #elif defined(__APPLE__) || defined(__MACH__)
-void dump_gprs(FILE *f, const mcontext_t mc)
+void dump_gprs(FILE *f, SandstoneMachineContext mc)
 {
     auto *state = &mc->__ss;
     using ThreadState = std::decay_t<decltype(*state)>;
@@ -299,7 +299,7 @@ void dump_gprs(FILE *f, const mcontext_t mc)
     print_segment(f, "gs", state->__gs);
 }
 #elif defined(_WIN32)
-void dump_gprs(FILE *f, const mcontext_t *mc)
+void dump_gprs(FILE *f, SandstoneMachineContext mc)
 {
     static constexpr struct {
         char name[4];
