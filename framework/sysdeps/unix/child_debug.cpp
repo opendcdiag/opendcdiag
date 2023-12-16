@@ -501,11 +501,16 @@ static int run_process(int stdout_fd, const char *args[])
     return -1;
 }
 
-static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle, int cpu)
+static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
 {
     using namespace std::chrono;
     using namespace std::chrono_literals;
     constexpr auto GdbCommunicationTimeout = SandstoneConfig::Debug ? 1h : 30s;
+
+    struct R {
+        std::string thread_info;    // output of "frame" and "x/i $pc" (if Python is supported)
+        std::string backtrace;      // output of "thread apply all bt full"
+    } result;
 
     ssize_t ret;
     char buf[4096];
@@ -533,11 +538,11 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
         static const char needle[] = "(gdb) ";
         ret = wait_for_more();
         if (ret <= 0)
-            return;
+            return result;
 
         ret = read(in, buf, sizeof(buf) - 1);
         if (ret <= 0)
-            return;
+            return result;
         buf[ret] = '\0';
 
         // ### the needle may be split between buffers!
@@ -551,31 +556,31 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
     // send a python command setting the search handle
     ret = dprintf(out, gdb_preamble_commands, handle);
     if (ret <= 0)
-        return;
+        return result;
     ret = wait_for_more();
     if (ret <= 0)
-        return;
+        return result;
 
     ret = read(in, buf, sizeof(buf) - 1);
     if (ret <= 0)
-        return;
+        return result;
     buf[ret] = '\0';
 
     bool send_python = handle && (strcmp(buf, "ok\n") == 0);
     if (send_python) {
         ret = write(out, gdb_python_commands, strlen(gdb_python_commands));
         if (ret != ssize_t(strlen(gdb_python_commands)))
-            return;
+            return result;
 
         // skip the >>>>> caused by the multi-line python command
         for (;;) {
             ret = wait_for_more();
             if (ret <= 0)
-                return;
+                return result;
 
             ret = read(in, buf, sizeof(buf) - 1);
             if (ret <= 0)
-                return;
+                return result;
             buf[ret] = '\0';
 
             char *msg = buf;
@@ -592,53 +597,43 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
         for (;;) {
             static const char needle[] = "..Done..\n";
             if (ret >= strlen(needle) && strcmp(buf + ret - strlen(needle), needle) == 0) {
-                buf[ret - strlen(needle)] = '\0';
+                result.thread_info = std::string_view(buf, ret - strlen(needle));
                 break;
             }
 
             ssize_t ret2 = wait_for_more();
             if (ret2 <= 0)
-                return;
+                return result;
 
             ret2 = read(in, buf + ret, sizeof(buf) - ret);
             if (ret2 <= 0)
-                return;
+                return result;
             buf[ret + ret2] = '\0';
             ret += ret2;
-        }
-
-        if (cpu != -1) {
-            // log to the specific CPU
-            log_message(cpu, SANDSTONE_LOG_WARNING "%s", buf);
-        } else {
-            IGNORE_RETVAL(write(log, buf, strlen(buf)));
         }
     }
 
     // now get the actual backtrace (includes "quit")
     ret = write(out, gdb_bt_commands, strlen(gdb_bt_commands));
     if (ret != ssize_t(strlen(gdb_bt_commands)))
-        return;
+        return result;
 
     // splice backtrace from gdb to our log file
     for (;;) {
         ret = wait_for_more();
         if (ret <= 0)
-            return;
+            return result;
 
-#if defined(SPLICE_F_NONBLOCK)
-        ret = splice(in, nullptr, log, nullptr, std::numeric_limits<int>::max(),
-                     SPLICE_F_NONBLOCK);
-#else
         ret = read(in, buf, sizeof(buf));
-        if (ret > 0)
-            IGNORE_RETVAL(write(log, buf, ret));
-#endif
         if (ret == -1 && (errno == EINTR || errno == EWOULDBLOCK))
             continue;
         if (ret <= 0)
-            return;
+            return result;
+
+        result.backtrace += std::string_view(buf, ret);
     }
+
+    return result;
 }
 
 static void generate_backtrace(const char *pidstr, int slice, uintptr_t handle = 0, int cpu = -1)
@@ -685,10 +680,11 @@ static void generate_backtrace(const char *pidstr, int slice, uintptr_t handle =
         sigaction(SIGPIPE, &ign_sigpipe, &old_sigpipe);
     }
 
-    {
-        LoggingStream stream = logging_user_messages_stream(-slice - 1, LOG_LEVEL_VERBOSE(2));
-        communicate_gdb_backtrace(stream, gdb_out.in(), gdb_in.out(), handle, cpu);
-    }
+    auto r = communicate_gdb_backtrace(gdb_out.in(), gdb_in.out(), handle);
+    if (r.thread_info.size())
+        log_message(cpu, SANDSTONE_LOG_WARNING "%s", r.thread_info.c_str());
+    if (r.backtrace.size())
+        log_message_preformatted(-slice - 1, LOG_LEVEL_VERBOSE(2), r.backtrace);
 
     // close the pipes and wait for gdb to exit
     gdb_in.close_output();
