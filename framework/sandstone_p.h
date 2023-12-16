@@ -661,6 +661,7 @@ void debug_crashed_child(std::span<const pid_t> children);
 void debug_hung_child(pid_t child, std::span<const pid_t> children);
 
 /* logging.cpp */
+void log_message_preformatted(int thread_num, int level, std::string_view msg);
 int logging_stdout_fd(void);
 void logging_init_global(void);
 void logging_init_global_child();
