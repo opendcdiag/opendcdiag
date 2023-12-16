@@ -1139,15 +1139,6 @@ void logging_finish()
 {
 }
 
-LoggingStream logging_user_messages_stream(int thread_num, int level)
-{
-    LoggingStream stream(sApp->thread_data(thread_num)->log_fd);
-    sApp->thread_data(thread_num)->messages_logged.fetch_add(1, std::memory_order_relaxed);
-    uint8_t code = message_code(UserMessages, level);
-    stream.write(code);
-    return stream;
-}
-
 static inline void assert_log_message(const char *fmt)
 {
     assert(fmt);
