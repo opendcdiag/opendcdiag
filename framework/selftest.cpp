@@ -901,6 +901,8 @@ static const kvm_config_t *selftest_kvm_config_real_setup_check()
 
 BEGIN_ASM_FUNCTION(payload_prot_64bit_fail)
     asm("mov $1, %eax\n"
+        "fld1\n"
+        "pcmpeqb %xmm0, %xmm0\n"
         "hlt");
 END_ASM_FUNCTION()
 
@@ -918,6 +920,7 @@ static const kvm_config_t *selftest_kvm_config_prot_64bit_fail()
 
 BEGIN_ASM16_FUNCTION(payload_real_16bit_fail)
     asm("mov $1, %ax\n"
+        "fld1\n"
         "hlt");
 END_ASM_FUNCTION()
 
