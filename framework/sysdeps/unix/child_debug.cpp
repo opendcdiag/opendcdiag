@@ -29,8 +29,9 @@
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
-#include <sys/socket.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
 #include <ucontext.h>
@@ -448,6 +449,33 @@ static int run_process(int stdout_fd, const char *args[])
     IGNORE_RETVAL(writeln(STDERR_FILENO, "# Could not start '", args[0], "': ", strerror(errno)));
     _exit(1);
     return -1;
+}
+
+static std::string run_process(const char *args[])
+{
+    // Not using a pipe here because we don't know how much the child process
+    // will write, and run_process() above waits for it to end.
+    int stdout_fd = open_memfd(MemfdCloseOnExec);
+    int ret = run_process(stdout_fd, args);
+
+    std::string log;
+    if (ret < 0)
+        return log;
+
+    // read the entire output
+    struct stat st;
+    if (fstat(stdout_fd, &st) < 0 || st.st_size == 0)
+        return log;
+
+    ssize_t total_read = 0;
+    log.resize(st.st_size);
+    while (total_read < log.size()) {
+        EINTR_LOOP(ret, read(stdout_fd, log.data() + total_read, log.size() - total_read));
+        if (ret <= 0)
+            break;
+    }
+    log.resize(total_read);
+    return log;
 }
 
 static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
@@ -1052,8 +1080,7 @@ void debug_hung_child(pid_t child)
     if (on_hang_action == print_ps_on_hang) {
         const char *ps_args[] =
             { "ps", "Hww", "-opid,tid,psr,vsz,rss,wchan,%cpu,stat,time,comm,args", buf, nullptr };
-        LoggingStream stream = logging_user_messages_stream(-1, LOG_LEVEL_VERBOSE(2));
-        run_process(stream, ps_args);
+        log_message_preformatted(-1, LOG_LEVEL_VERBOSE(2), run_process(ps_args));
     } else if (SandstoneConfig::ChildBacktrace) {
         if (on_hang_action == attach_gdb_on_hang) {
             attach_gdb(buf);
