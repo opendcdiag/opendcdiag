@@ -654,6 +654,7 @@ static_assert(std::is_trivially_copyable_v<SandstoneApplication::SharedMemory>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::SharedMemory>);
 
 /* logging.cpp */
+void log_message_preformatted(int thread_num, int level, std::string_view msg);
 int logging_stdout_fd(void);
 void logging_init_global(void);
 void logging_init_global_child();
