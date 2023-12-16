@@ -21,6 +21,8 @@ typedef const struct _CONTEXT *SandstoneMachineContext;
 #define FXSAVE_SIZE     0x200
 
 #ifdef __cplusplus
+# include <string>
+
 extern "C" {
 #endif
 
@@ -29,7 +31,9 @@ extern void dump_xsave(FILE *, const void *xsave_area, size_t xsave_size, int xs
 
 #ifdef __cplusplus
 }
-#endif  // __cplusplus
 
+void dump_gprs(std::string &out, SandstoneMachineContext);
+void dump_xsave(std::string &out, const void *xsave_area, size_t xsave_size, int xsave_dump_mask);
+#endif  // __cplusplus
 
 #endif  // SANDSTONE_CONTEXT_DUMP_H

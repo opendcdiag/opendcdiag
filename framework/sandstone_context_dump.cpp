@@ -4,6 +4,7 @@
  */
 
 #include "sandstone_context_dump.h"
+#include "sandstone_utils.h"
 #include "sandstone.h"
 
 #ifdef __x86_64__
@@ -154,50 +155,52 @@ static ptrdiff_t xsave_offset(XSaveBits bit)
 };
 
 template <int N, typename T>
-static void print_flag_description(FILE *f, uint64_t value, T (&array)[N])
+static void print_flag_description(std::string &f, uint64_t value, T (&array)[N])
 {
     for (size_t i = 0; i < std::size(array); ++i) {
         uint64_t bit = UINT64_C(1) << i;
         const char *name = array[i];
-        if ((value & bit) && *name)
-            fprintf(f, "%s ", name);
+        if ((value & bit) && *name) {
+            f += name;
+            f += ' ';
+        }
     }
 }
 
-static void print_gpr(FILE *f, const char *name, int64_t value)
+static void print_gpr(std::string &f, const char *name, int64_t value)
 {
-    fprintf(f, " %-5s = 0x%016" PRIx64, name, value);
+    f += stdprintf(" %-5s = 0x%016" PRIx64, name, value);
     if (value <= 4096 && value >= -4096)
-        fprintf(f, " (%d)", int(value));
-    fputc('\n', f);
+        f += stdprintf(" (%d)", int(value));
+    f += '\n';
 }
 
-static void print_rip(FILE *f, uintptr_t rip)
+static void print_rip(std::string &f, uintptr_t rip)
 {
-    fprintf(f, " %-5s = 0x%016tx", "rip", rip);
+    f += stdprintf(" %-5s = 0x%016tx", "rip", rip);
 #ifdef __unix__
     uint8_t *ptr = reinterpret_cast<uint8_t *>(rip);
     Dl_info dli;
     if (dladdr(ptr, &dli) && dli.dli_sname)
-        fprintf(f, " <%s+%#tx>", dli.dli_sname, ptr - static_cast<uint8_t *>(dli.dli_saddr));
+        f += stdprintf(" <%s+%#tx>", dli.dli_sname, ptr - static_cast<uint8_t *>(dli.dli_saddr));
 #endif
-    fputc('\n', f);
+    f += '\n';
 }
 
-static void print_eflags(FILE *f, uint64_t value)
+static void print_eflags(std::string &f, uint64_t value)
 {
-    fprintf(f, " flags = 0x%08" PRIx64 " [ ", value);
+    f += stdprintf(" flags = 0x%08" PRIx64 " [ ", value);
     print_flag_description(f, value, eflags);
-    fputs("]\n", f);
+    f += "]\n";
 }
 
-static void print_segment(FILE *f, const char *name, uint16_t value)
+static void print_segment(std::string &f, const char *name, uint16_t value)
 {
-    fprintf(f, " %-5s = 0x%x\n", name, value);
+    f += stdprintf(" %-5s = 0x%x\n", name, value);
 }
 
 #if defined(__linux__)
-void dump_gprs(FILE *f, SandstoneMachineContext mc)
+void dump_gprs(std::string &f, SandstoneMachineContext mc)
 {
     static constexpr struct {
         char name[4];
@@ -233,7 +236,7 @@ void dump_gprs(FILE *f, SandstoneMachineContext mc)
     }
 }
 #elif defined(__FreeBSD__)
-void dump_gprs(FILE *f, SandstoneMachineContext mc)
+void dump_gprs(std::string &f, SandstoneMachineContext mc)
 {
     using register_t = decltype(mc->mc_rax);
     static constexpr struct {
@@ -265,7 +268,7 @@ void dump_gprs(FILE *f, SandstoneMachineContext mc)
     print_segment(f, "gs", mc->mc_gs);
 }
 #elif defined(__APPLE__) || defined(__MACH__)
-void dump_gprs(FILE *f, SandstoneMachineContext mc)
+void dump_gprs(std::string &f, SandstoneMachineContext mc)
 {
     auto *state = &mc->__ss;
     using ThreadState = std::decay_t<decltype(*state)>;
@@ -299,7 +302,7 @@ void dump_gprs(FILE *f, SandstoneMachineContext mc)
     print_segment(f, "gs", state->__gs);
 }
 #elif defined(_WIN32)
-void dump_gprs(FILE *f, SandstoneMachineContext mc)
+void dump_gprs(std::string &f, SandstoneMachineContext mc)
 {
     static constexpr struct {
         char name[4];
@@ -331,12 +334,12 @@ void dump_gprs(FILE *f, SandstoneMachineContext mc)
 }
 #endif
 
-static void print_x87mmx_registers(FILE *f, const Fxsave *state)
+static void print_x87mmx_registers(std::string &f, const Fxsave *state)
 {
     int fptop = (state->fsw >> 11) & 7;
-    fprintf(f, " fcw   = %#x\n fsw   = %#x [ ", state->fcw, state->fsw);
+    f += stdprintf(" fcw   = %#x\n fsw   = %#x [ ", state->fcw, state->fsw);
     print_flag_description(f, state->fsw, fsw);
-    fprintf(f, "top=%d ]\n ftw   = %#x\n", fptop, state->ftw);
+    f += stdprintf("top=%d ]\n ftw   = %#x\n", fptop, state->ftw);
 
     if (state->ftw == 0)
         return;                 // no tags, nothing to display, so save space
@@ -347,24 +350,24 @@ static void print_x87mmx_registers(FILE *f, const Fxsave *state)
         effective = i;
 
         auto st = state->st + effective;
-        fprintf(f, " st(%zu) = %04x%016" PRIx64 " (%La)\n",
+        f += stdprintf(" st(%zu) = %04x%016" PRIx64 " (%La)\n",
                 i, st->as_hex.high16, st->as_hex.low64, st->as_float);
     }
 }
 
-static void print_xmm_register(FILE *f, const xmmreg &ptr)
+static void print_xmm_register(std::string &f, const xmmreg &ptr)
 {
     uint64_t low = uint64_t(ptr.u);
     uint64_t high = uint64_t(ptr.u >> 8 * sizeof(low));
-    fprintf(f, "%016" PRIx64 ":%016" PRIx64 " ", high, low);
+    f += stdprintf("%016" PRIx64 ":%016" PRIx64 " ", high, low);
 }
 
-static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
+static void print_avx_registers(std::string &f, const Fxsave *state, XSaveBits mask)
 {
     // start with the MXCSR
-    fprintf(f, " mxcsr = 0x%08x [ ", state->mxcsr);
+    f += stdprintf(" mxcsr = 0x%08x [ ", state->mxcsr);
     print_flag_description(f, state->mxcsr, mxcsr);
-    fprintf(f, "RC=%s ]\n", rounding_modes[(state->mxcsr & _MM_ROUND_MASK) / _MM_ROUND_DOWN]);
+    f += stdprintf("RC=%s ]\n", rounding_modes[(state->mxcsr & _MM_ROUND_MASK) / _MM_ROUND_DOWN]);
 
     char nameprefix = 'x';
     auto base = reinterpret_cast<const uint8_t *>(state);
@@ -393,7 +396,7 @@ static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
     }
 
     for (int i = 0; i < int(std::size(state->xmm)); ++i) {
-        fprintf(f, " %cmm%-2d = ", nameprefix, i);
+        f += stdprintf(" %cmm%-2d = ", nameprefix, i);
         if (zmmhstate) {
             print_xmm_register(f, zmmhstate[i].xmm[1]);
             print_xmm_register(f, zmmhstate[i].xmm[0]);
@@ -401,20 +404,20 @@ static void print_avx_registers(FILE *f, const Fxsave *state, XSaveBits mask)
         if (ymmhstate)
             print_xmm_register(f, ymmhstate[i]);
         print_xmm_register(f, state->xmm[i]);
-        fputc('\n', f);
+        f += '\n';
     }
     for (int i = 0; hizmmstate && i < 16; ++i) {
         nameprefix = 'z';
-        fprintf(f, " %cmm%-2d = ", nameprefix, i + 16);
+        f += stdprintf(" %cmm%-2d = ", nameprefix, i + 16);
         for (int j = std::size(hizmmstate->xmm) - 1; j >= 0; --j)
             print_xmm_register(f, hizmmstate[i].xmm[j]);
-        fputc('\n', f);
+        f += '\n';
     }
     for (int i = 0; opmaskstate && i < 8; ++i)
-        fprintf(f, "    k%d = 0x%016" PRIx64 "\n", i, uint64_t(opmaskstate[i]));
+        f += stdprintf("    k%d = 0x%016" PRIx64 "\n", i, uint64_t(opmaskstate[i]));
 }
 
-static void print_amx_tiles_palette1(FILE *f, const Fxsave *state, const amx_tileconfig *tileconfig)
+static void print_amx_tiles_palette1(std::string &f, const Fxsave *state, const amx_tileconfig *tileconfig)
 {
     // should we even print the 8 kB of tile data?
     //auto info = amx_palette1_info();
@@ -432,24 +435,24 @@ static void print_amx_tiles_palette1(FILE *f, const Fxsave *state, const amx_til
 
     auto base = reinterpret_cast<const uint8_t *>(state) + offset;
     for (int reg = 0; reg < info.max_names; ++reg) {
-        fprintf(f, " tmm%-2d =", reg);
+        f += stdprintf(" tmm%-2d =", reg);
         if (tileconfig->rows[reg] == 0) {
-            fprintf(f, " <0 rows>\n");
+            f += stdprintf(" <0 rows>\n");
             continue;
         }
 
         const uint8_t *tiledata = base + reg * info.bytes_per_tile;
         for (int row = 0; row < tileconfig->rows[reg]; ++row) {
             const uint8_t *rowdata = tiledata + row * info.bytes_per_row;
-            fprintf(f, " %d: {", row);
+            f += stdprintf(" %d: {", row);
             for (int i = 0; i < tileconfig->colsb[reg]; ++i)
-                fprintf(f, " %02x", rowdata[i]);
-            fprintf(f, " }\n");
+                f += stdprintf(" %02x", rowdata[i]);
+            f += stdprintf(" }\n");
         }
     }
 }
 
-static void print_amx_state(FILE *f, const Fxsave *state, XSaveBits mask)
+static void print_amx_state(std::string &f, const Fxsave *state, XSaveBits mask)
 {
     int offset = xsave_offset(XSave_Xtilecfg);
     if (offset + sizeof(amx_tileconfig) <= Fxsave::size)
@@ -457,9 +460,9 @@ static void print_amx_state(FILE *f, const Fxsave *state, XSaveBits mask)
 
     auto base = reinterpret_cast<const uint8_t *>(state);
     auto tileconfig = reinterpret_cast<const amx_tileconfig *>(base + offset);
-    fprintf(f, " xtilecfg = palette: %u, start_row: %u\n", tileconfig->palette, tileconfig->start_row);
+    f += stdprintf(" xtilecfg = palette: %u, start_row: %u\n", tileconfig->palette, tileconfig->start_row);
     for (size_t i = 0; i < std::size(tileconfig->colsb); ++i)
-        fprintf(f, "            tile%-2zu { colsb: %u, rows: %u }\n",
+        f += stdprintf("            tile%-2zu { colsb: %u, rows: %u }\n",
                 i, tileconfig->colsb[i], tileconfig->rows[i]);
 
     if (mask & XSave_Xtiledata) {
@@ -473,7 +476,7 @@ static inline uint64_t __attribute__((target("xsave"))) do_xgetbv()
     return _xgetbv(0);
 }
 
-void dump_xsave(FILE *f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
+void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
 {
     // sanity check the state
     XSaveBits mask = XSaveBits(xsave_dump_mask);
@@ -514,6 +517,23 @@ void dump_xsave(FILE *f, const void *xsave_area, size_t xsave_size, int xsave_du
 
     if (mask & XSave_AmxState)
         print_amx_state(f, state, mask);
+}
+
+// C API
+void dump_gprs(FILE *f, SandstoneMachineContext mc)
+{
+    std::string out;
+    dump_gprs(out, mc);
+    if (out.size())
+        fwrite(out.c_str(), 1, out.size(), f);
+}
+
+void dump_xsave(FILE *f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
+{
+    std::string out;
+    dump_xsave(out, xsave_area, xsave_size, xsave_dump_mask);
+    if (out.size())
+        fwrite(out.c_str(), 1, out.size(), f);
 }
 
 #endif // x86-64
