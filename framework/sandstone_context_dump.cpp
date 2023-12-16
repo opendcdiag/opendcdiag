@@ -520,20 +520,22 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
 }
 
 // C API
-void dump_gprs(FILE *f, SandstoneMachineContext mc)
+char *dump_gprs(SandstoneMachineContext mc)
 {
     std::string out;
     dump_gprs(out, mc);
     if (out.size())
-        fwrite(out.c_str(), 1, out.size(), f);
+        return strdup(out.c_str());
+    return nullptr;
 }
 
-void dump_xsave(FILE *f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
+char *dump_xsave(const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
 {
     std::string out;
     dump_xsave(out, xsave_area, xsave_size, xsave_dump_mask);
     if (out.size())
-        fwrite(out.c_str(), 1, out.size(), f);
+        return strdup(out.c_str());
+    return nullptr;
 }
 
 #endif // x86-64
