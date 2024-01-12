@@ -4,10 +4,10 @@
  */
 
 #ifndef WIN32_FCNTL_H
-#define WIN32_FCTNL_H
+#define WIN32_FCNTL_H
 
 #include_next <fcntl.h>
-#include <stdlib.h>
+#include <sys/types.h>          /* for off_t */
 
 #ifdef __cplusplus
 extern "C" {
