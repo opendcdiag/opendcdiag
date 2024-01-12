@@ -2742,6 +2742,20 @@ static void warn_deprecated_opt(const char *opt)
 /* Setup of the performance counters we read to get getloadavg() on linux. */
 #ifdef _WIN32
 
+/* We dynamically open pdh.dll because it's not always present in all Windows
+   installations (notably lacking from WinPE). */
+namespace {
+struct PdhFunctions {
+    decltype(&::PdhOpenQueryA) PdhOpenQueryA;
+    decltype(&::PdhAddEnglishCounterA) PdhAddEnglishCounterA;
+    decltype(&::PdhCollectQueryDataEx) PdhCollectQueryDataEx;
+    decltype(&::PdhGetFormattedCounterValue) PdhGetFormattedCounterValue;
+
+    bool load_library();
+};
+}
+static PdhFunctions pdh;
+
 /* Performance counters we are going to read */
 static const char PQL_COUNTER_PATH[] = "\\System\\Processor Queue Length";
 static HCOUNTER pql_counter;
@@ -2757,15 +2771,41 @@ static constexpr double   EXP_LOADAVG = exp(5.0 / (5.0 * 60.0)); // exp(5sec/5mi
 static std::atomic<double> loadavg = 0.0;
 static double last_tick_seconds;
 
+bool PdhFunctions::load_library()
+{
+    HMODULE pdhDll = LoadLibraryExA("pdh.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!pdhDll)
+        return false;
+
+    auto getProc = [&](auto &pfn, const char *name) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
+        pfn = reinterpret_cast<decltype(+pfn)>(GetProcAddress(pdhDll, name));
+#pragma GCC diagnostic pop
+        return pfn != nullptr;
+    };
+
+    if (getProc(PdhOpenQueryA, "PdhOpenQueryA")
+            && getProc(PdhAddEnglishCounterA, "PdhAddEnglishCounterA")
+            && getProc(PdhCollectQueryDataEx, "PdhCollectQueryDataEx")
+            && getProc(PdhGetFormattedCounterValue, "PdhGetFormattedCounterValue"))
+        return true;
+
+    /* failed somehow */
+    FreeLibrary(pdhDll);
+    *this = {};
+    return false;
+}
+
 static void loadavg_windows_callback(PVOID, BOOLEAN)
 {
     PDH_FMT_COUNTERVALUE vpql, vpt;
 
-    if (PdhGetFormattedCounterValue((PDH_HCOUNTER)pql_counter, PDH_FMT_DOUBLE, 0, &vpql) != ERROR_SUCCESS) {
+    if (pdh.PdhGetFormattedCounterValue((PDH_HCOUNTER)pql_counter, PDH_FMT_DOUBLE, 0, &vpql) != ERROR_SUCCESS) {
         return;
     }
 
-    if (PdhGetFormattedCounterValue((PDH_HCOUNTER)pt_counter, PDH_FMT_DOUBLE, 0, &vpt) != ERROR_SUCCESS) {
+    if (pdh.PdhGetFormattedCounterValue((PDH_HCOUNTER)pt_counter, PDH_FMT_DOUBLE, 0, &vpt) != ERROR_SUCCESS) {
         return;
     }
 
@@ -2802,24 +2842,37 @@ static int setup_windows_loadavg_perf_counters()
     HQUERY load_query;
     HANDLE load_event;
 
+    if (!pdh.load_library()) {
+        win32_perror("Failed to load pdh.dll to determine when the system is idle");
+        return 1;
+    }
+
     last_tick_seconds = GetTickCount64() / 1000.0;
 
-    if (PdhOpenQueryA(NULL, 0, &load_query) != ERROR_SUCCESS)
-        return 1;
-
-    if (PdhAddEnglishCounterA(load_query, PQL_COUNTER_PATH, 0, &pql_counter))
+    if (pdh.PdhOpenQueryA(NULL, 0, &load_query) != ERROR_SUCCESS) {
+        win32_perror("PdhOpenQueryA");
         return 2;
+    }
 
-    if (PdhAddEnglishCounterA(load_query, PT_COUNTER_PATH, 0, &pt_counter))
-        return 2;
-
-    load_event = CreateEventA(NULL, FALSE, FALSE, "AvgLoad5sEvent");
-    if (load_event == NULL) {
+    if (pdh.PdhAddEnglishCounterA(load_query, PQL_COUNTER_PATH, 0, &pql_counter)) {
+        win32_perror("PdhAddEnglishCounterA on Processor Queue Length");
         return 3;
     }
 
-    if (PdhCollectQueryDataEx(load_query, SAMPLE_INTERVAL_SECONDS, load_event) != ERROR_SUCCESS) {
+    if (pdh.PdhAddEnglishCounterA(load_query, PT_COUNTER_PATH, 0, &pt_counter)) {
+        win32_perror("PdhAddEnglishCounterA on Processor Time");
         return 4;
+    }
+
+    load_event = CreateEventA(NULL, FALSE, FALSE, "AvgLoad5sEvent");
+    if (load_event == NULL) {
+        win32_perror("CreateEvent");
+        return 5;
+    }
+
+    if (pdh.PdhCollectQueryDataEx(load_query, SAMPLE_INTERVAL_SECONDS, load_event) != ERROR_SUCCESS) {
+        win32_perror("PdhCollectQueryDataEx");
+        return 6;
     }
 
     HANDLE h; // Dummy handle, we don't ever use it, It's closed by the system when the program exits.
@@ -2827,7 +2880,8 @@ static int setup_windows_loadavg_perf_counters()
         RegisterWaitForSingleObject(&h, load_event, (WAITORTIMERCALLBACK)loadavg_windows_callback, NULL, INFINITE, WT_EXECUTEDEFAULT);
 
     if (register_callback_status == 0) {
-        return 5;
+        win32_perror("RegisterWaitForSingleObject");
+        return 7;
     }
 
     return 0;
