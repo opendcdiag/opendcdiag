@@ -2195,7 +2195,6 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
                 dprintf(fd, "%s    freq_mhz: %.1f\n", indent_spaces().data(), effective_freq_mhz);
         }
     }
-    writeln(fd, indent_spaces(), "    messages:");
 }
 
 void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
@@ -2312,6 +2311,11 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
     const char *end = ptr + r.size;
     const char *delim;
 
+    auto print_messages_header = [&]() {
+        if (lowest_level == INT_MAX)
+            writeln(fd, indent_spaces(), "    messages:");
+    };
+
     for ( ; ptr < end; ptr = delim + 1) {
         delim = static_cast<const char *>(memchr(ptr, '\0', end - ptr));
         if (!delim)
@@ -2330,16 +2334,19 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
         switch (log_type_from_code(code)) {
         case UserMessages:
             assert(size_t(message_level) < std::size(levels));
+            print_messages_header();
             format_and_print_message(fd, levels[message_level], message);
             break;
 
         case Preformatted:
+            print_messages_header();
             IGNORE_RETVAL(write(fd, message.data(), message.size()));
             break;
 
         case SkipMessages:
             if (!skipInMainThread) {
                 // Only print if the result line didn't already include this
+                print_messages_header();
                 format_and_print_message(fd, "skip", format_skip_message(message));
             }
             break;
