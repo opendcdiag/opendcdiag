@@ -56,6 +56,7 @@
 
 #include "cpu_features.h"
 #include "forkfd.h"
+#include "futex.h"
 
 #include "sandstone.h"
 #include "sandstone_p.h"
@@ -153,6 +154,7 @@ enum {
     service_option,
     shortened_runtime_option,
     strict_runtime_option,
+    synchronize_threads_option,
     syslog_runtime_option,
     temperature_threshold_option,
     test_delay_option,
@@ -626,6 +628,149 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
 #undef maybe_log_error
 }
 
+namespace {
+class BarrierThreadSynchronization : public SandstoneThreadSynchronizationBase
+{
+public:
+    struct alignas(64) AlignedAtomicInt : std::atomic_int {
+        using std::atomic_int::atomic;
+    };
+
+    void init() noexcept override;
+    void synchronize() noexcept override { do_sync(); }
+    virtual void do_wait(std::atomic_int &, int) noexcept;
+    virtual void do_wake(std::atomic_int &) noexcept;
+    void do_sync() noexcept;
+
+    std::array<AlignedAtomicInt, 2> phases;
+    AlignedAtomicInt phase_idx = 0;
+};
+
+void BarrierThreadSynchronization::init() noexcept
+{
+    phases[0].store(num_cpus(), std::memory_order_relaxed);
+    phases[1].store(INT_MAX, std::memory_order_relaxed);
+    phase_idx.store(0, std::memory_order_relaxed);
+}
+
+void BarrierThreadSynchronization::do_sync() noexcept
+{
+    int idx = phase_idx.load(std::memory_order_relaxed);
+    auto &phase = phases[idx];
+
+    // are we the last to arrive?
+    int remaining = phase.fetch_add(-1, std::memory_order_relaxed) - 1;
+    assert(remaining >= 0);
+    assert(remaining < num_cpus());
+    if (remaining > 0) {
+        // not the last, so wait
+        return do_wait(phase, remaining);
+    }
+
+    // yes, set up the next phase
+    idx ^= 1;
+    phases[idx].store(num_cpus(), std::memory_order_relaxed);
+    phase_idx.store(idx, std::memory_order_relaxed);
+    do_wake(phase);
+}
+
+void BarrierThreadSynchronization::do_wait(std::atomic_int &phase, int) noexcept
+{
+    while (phase.load(std::memory_order_relaxed) >= 0) {
+        // no pause
+    }
+}
+
+void BarrierThreadSynchronization::do_wake(std::atomic_int &phase) noexcept
+{
+    // release the other threads
+    phase.store(-1, std::memory_order_relaxed);
+}
+
+class FutexThreadSynchronization : public BarrierThreadSynchronization
+{
+public:
+    void do_wait(std::atomic_int &phase, int remaining) noexcept override;
+    void do_wake(std::atomic_int &phase) noexcept override;
+};
+
+void FutexThreadSynchronization::do_wait(std::atomic_int &phase, int remaining) noexcept
+{
+    while (futex_wait(&phase, remaining) != 0) {
+        remaining = phase.load(std::memory_order_relaxed);
+        if (remaining < 0)
+            return;
+    }
+}
+
+void FutexThreadSynchronization::do_wake(std::atomic_int &phase) noexcept
+{
+    BarrierThreadSynchronization::do_wake(phase);
+    futex_wake_all(&phase);
+}
+
+#ifdef __x86_64__
+#pragma GCC push_options
+#pragma GCC target("waitpkg")
+
+static constexpr int WaitpkgWaitState = 1;       // C0.1
+void check_waitpkg()
+{
+    if (cpu_has_feature(cpu_feature_waitpkg)) {
+        // test that the OS has enabled this
+        uint64_t current_tsc = __rdtsc();
+        if (_tpause(WaitpkgWaitState, current_tsc + 1) == 0)
+            return;
+    }
+
+    fprintf(stderr, "%s: waitpkg is not supported on this CPU or this OS.\n",
+            program_invocation_name);
+    exit(EX_OSERR);
+}
+
+class TPauseThreadSynchronization : public BarrierThreadSynchronization
+{
+public:
+    TPauseThreadSynchronization() { check_waitpkg(); }
+    void do_wait(std::atomic_int &phase, int remaining) noexcept override;
+    void do_wake(std::atomic_int &phase) noexcept override;
+
+    std::atomic<uint64_t> tsc;
+};
+
+void TPauseThreadSynchronization::do_wait(std::atomic_int &phase, int remaining) noexcept
+{
+    BarrierThreadSynchronization::do_wait(phase, remaining);
+    _tpause(WaitpkgWaitState, tsc.load(std::memory_order_relaxed));
+}
+
+void TPauseThreadSynchronization::do_wake(std::atomic_int &phase) noexcept
+{
+    uint64_t target_tsc = __rdtsc() + 16;
+    tsc.store(target_tsc, std::memory_order_relaxed);
+    BarrierThreadSynchronization::do_wake(phase);
+    _tpause(WaitpkgWaitState, target_tsc);
+}
+
+class UMWaitThreadSynchronization : public BarrierThreadSynchronization
+{
+public:
+    UMWaitThreadSynchronization() { check_waitpkg(); }
+    void do_wait(std::atomic_int &phase, int remaining) noexcept override;
+};
+
+void UMWaitThreadSynchronization::do_wait(std::atomic_int &phase, int remaining) noexcept
+{
+    _umonitor(&phase);      // arm the monitor first
+    if (phase.load(std::memory_order_relaxed) < 0)
+        return;
+    _umwait(WaitpkgWaitState, __rdtsc() + 128);
+}
+
+#pragma GCC pop_options
+#endif
+} // unnamed namespace
+
 static ShortDuration test_duration()
 {
     /* global (-t) option overrides this all */
@@ -729,7 +874,12 @@ bool test_time_condition() noexcept
     if (max_loop_count_exceeded(current_test))
         return 0;  // end the test if max loop count exceeded
 
-    return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
+    if (wallclock_deadline_has_expired(sApp->shmem->current_test_endtime))
+        return 0;
+
+    if (sApp->thread_synchronization)
+        sApp->thread_synchronization->synchronize();
+    return 1;
 }
 
 bool test_is_retry() noexcept
@@ -950,6 +1100,10 @@ int test_run_wrapper_function(const struct test *test, int thread_number)
 
 void test_loop_start() noexcept
 {
+#ifdef __x86_64__
+    sApp->test_thread_data(thread_num)->last_tsc = __rdtsc();
+#endif
+
     using namespace AssemblyMarker;
     assembly_marker<TestLoop, Start>();
 }
@@ -1834,6 +1988,8 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         signals_init_child();
         debug_init_child();
     }
+    if (sApp->thread_synchronization)
+        sApp->thread_synchronization->init();
 
     prepare_test(test);
 
@@ -3131,6 +3287,7 @@ int main(int argc, char **argv)
         { "service", no_argument, nullptr, service_option },
         { "shorten-runtime", required_argument, nullptr, shortened_runtime_option },
         { "strict-runtime", no_argument, nullptr, strict_runtime_option },
+        { "synchronize-threads", required_argument, nullptr, synchronize_threads_option },
         { "syslog", no_argument, nullptr, syslog_runtime_option },
         { "temperature-threshold", required_argument, nullptr, temperature_threshold_option },
         { "test-delay", required_argument, nullptr, test_delay_option },
@@ -3391,6 +3548,26 @@ int main(int argc, char **argv)
             break;
         case strict_runtime_option:
             sApp->shmem->use_strict_runtime = true;
+            break;
+        case synchronize_threads_option:
+            if (std::string_view(optarg) == "barrier") {
+                sApp->thread_synchronization = new BarrierThreadSynchronization;
+            } else if (std::string_view(optarg) == "futex") {
+                sApp->thread_synchronization = new FutexThreadSynchronization;
+#ifdef __x86_64__
+            } else if (std::string_view(optarg) == "tpause") {
+                sApp->thread_synchronization = new TPauseThreadSynchronization;
+            } else if (std::string_view(optarg) == "umwait") {
+                sApp->thread_synchronization = new UMWaitThreadSynchronization;
+#endif
+            } else {
+                fprintf(stderr, "%s: invalid option --synchronize-threads=%s. Valid options are: barrier, futex"
+#ifdef __x86_64__
+                                ", tpause, umwait"
+#endif
+                                "\n", argv[0], optarg);
+                return EX_USAGE;
+            }
             break;
         case syslog_runtime_option:
             sApp->syslog_ident = program_invocation_name;
