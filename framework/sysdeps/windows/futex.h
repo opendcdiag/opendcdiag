@@ -17,7 +17,7 @@ static inline int futex_wait(void *ptr, int expected)
 
 static inline int futex_wake_one(void *ptr)
 {
-    WakeByAddressOne(ptr);
+    WakeByAddressSingle(ptr);
     return 0;
 }
 
