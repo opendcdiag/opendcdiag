@@ -214,8 +214,6 @@ private:
 
 static SandstoneApplication::OutputFormat current_output_format()
 {
-    if (SandstoneConfig::NoLogging)
-        return SandstoneApplication::OutputFormat::no_output;
     return sApp->shmem->output_format;
 }
 
