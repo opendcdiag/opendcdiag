@@ -130,7 +130,7 @@ struct WeightedPicker {
     uint64_t sum_of_weights = 0;
     std::map<T, uint32_t>  weights;
     explicit WeightedPicker(std::map<T, uint32_t>  weights){
-        this->weights = weights;
+        this->weights = std::move(weights);
         prepare_picker();
     }
 
