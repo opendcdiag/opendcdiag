@@ -80,7 +80,6 @@ static int eigen_sparse_init(struct test *test) {
     }
     if (solver.info() != Eigen::Success) {
         report_fail(test);
-        return EXIT_FAILURE;
     }
 
     test->data = d.release();
@@ -104,11 +103,9 @@ static int eigen_sparse_run(struct test *test, int cpu) {
         }
         if (solver.info() != Eigen::Success) {
             report_fail(test);
-            return EXIT_FAILURE;
         }
         if (x != d->golden) {
             report_fail(test);
-            return EXIT_FAILURE;
         }
     } while (test_time_condition(test));
     return EXIT_SUCCESS;
