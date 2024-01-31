@@ -15,11 +15,11 @@ class FrequencyManager
 private:
 
 #ifdef __linux__
-    int max_frequency_supported;
-    int min_frequency_supported;
+    int max_frequency_supported = 0;
+    int min_frequency_supported = 0;
     std::vector<std::string> per_cpu_initial_scaling_governor;
     std::vector<std::string> per_cpu_initial_scaling_setspeed;
-    int current_set_frequency;
+    int current_set_frequency = 0;
     std::vector<int> frequency_levels;
     int frequency_level_idx = 0;
     static constexpr int total_frequency_levels = 9;
