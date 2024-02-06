@@ -24,7 +24,5 @@ option('version_suffix', type : 'string', value: '',
     description : 'Suffix to be added to the version number (e.g., build variant)')
 option('builtin_test_list', type : 'string', value : '',
     description : 'List of name-file pairs that specify the built-in test lists to be embedded into the binary, e.g. default:data/default.txt,skx:data/skx.txt')
-option('flavor', type : 'combo', choices : ['default', 'ga', 'ga-dev'], value : 'default',
-    description : 'Select one of the novel build flavors (ga, ga-dev) or the default')
 option('ssl_link_type', type: 'combo', choices : ['none', 'dynamic', 'loaded', 'static'], value: 'none',
     description : 'Link with openssl library if available (default none).')
