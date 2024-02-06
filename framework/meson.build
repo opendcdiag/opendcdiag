@@ -54,9 +54,6 @@ elif cc.has_type('__fp16') and cpp.has_type('__fp16')
         framework_config.set('SANDSTONE_FP16_TYPE', '__fp16')
 endif
 
-framework_config.set10('SANDSTONE_GA', get_option('flavor') == 'ga')
-framework_config.set10('SANDSTONE_GA_DEV', get_option('flavor') == 'ga-dev')
-
 framework_config.set10('SANDSTONE_BUILTIN_TEST_LIST', get_option('builtin_test_list') != '')
 framework_config.set_quoted('SANDSTONE_EXECUTABLE_NAME', get_option('executable_name'))
 framework_config.set_quoted('SANDSTONE_FALLBACK_EXEC', get_option('fallback_exec'))
