@@ -22,9 +22,6 @@
 #mesondefine SANDSTONE_STATIC
 #mesondefine SANDSTONE_BUILTIN_TEST_LIST
 
-#mesondefine SANDSTONE_GA
-#mesondefine SANDSTONE_GA_DEV
-
 #mesondefine SANDSTONE_FP16_TYPE
 #mesondefine SANDSTONE_SSL_BUILD
 #mesondefine SANDSTONE_SSL_LINKED
@@ -44,8 +41,6 @@
 namespace SandstoneConfig {
 static constexpr bool Debug = DEBUG;
 static constexpr bool StaticLink = SANDSTONE_STATIC;
-
-static constexpr bool GeneralAvailability = SANDSTONE_GA;
 
 // keep alphabetical order, please
 static constexpr bool ChildBacktrace = SANDSTONE_CHILD_BACKTRACE;
