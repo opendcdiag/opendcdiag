@@ -803,6 +803,7 @@
     F(EVP_DigestFinalXOF)                        \
     F(EVP_Digest)                                \
     F(EVP_DigestInit_ex)                         \
+    F(EVP_DigestInit_ex2)                        \
     F(EVP_DigestInit)                            \
     F(EVP_DigestSignFinal)                       \
     F(EVP_DigestSign)                            \
@@ -843,6 +844,8 @@
     F(EVP_md5)                                   \
     F(EVP_md5_sha1)                              \
     F(EVP_MD_block_size)                         \
+    F(EVP_MD_fetch)                              \
+    F(EVP_MD_free)                               \
     /*F(EVP_mdc2)                                \
     F(EVP_MD_CTX_block_size)*/                   \
     F(EVP_MD_CTX_clear_flags)                    \
@@ -932,6 +935,7 @@
     F(EVP_PKEY_CTX_free)                         \
     F(EVP_PKEY_CTX_new)                          \
     F(EVP_PKEY_CTX_new_from_name)                \
+    F(EVP_PKEY_CTX_new_from_pkey)                \
     F(EVP_PKEY_CTX_new_id)                       \
     F(EVP_PKEY_CTX_set_group_name)               \
     F(EVP_PKEY_CTX_set_rsa_padding)              \
@@ -2114,6 +2118,7 @@
 
 #define SANDSTONE_SSL_PROVIDER_FUNCTIONS(F)     \
     F(OSSL_PROVIDER_add_builtin)                \
+    F(OSSL_PROVIDER_load)                       \
     F(OSSL_PROVIDER_try_load)                   \
     F(OSSL_PROVIDER_unload)                     \
     /**/
