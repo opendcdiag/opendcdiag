@@ -576,6 +576,30 @@
 
 
 #define SANDSTONE_SSL_KDF_FUNCTIONS(F)          \
+    F(EVP_KDF_CTX_dup)                          \
+    F(EVP_KDF_CTX_free)                         \
+    F(EVP_KDF_CTX_get_kdf_size)                 \
+    F(EVP_KDF_CTX_get_params)                   \
+    F(EVP_KDF_CTX_gettable_params)              \
+    F(EVP_KDF_CTX_kdf)                          \
+    F(EVP_KDF_CTX_new)                          \
+    F(EVP_KDF_CTX_reset)                        \
+    F(EVP_KDF_CTX_set_params)                   \
+    F(EVP_KDF_CTX_settable_params)              \
+    F(EVP_KDF_derive)                           \
+    F(EVP_KDF_do_all_provided)                  \
+    F(EVP_KDF_fetch)                            \
+    F(EVP_KDF_free)                             \
+    F(EVP_KDF_get0_description)                 \
+    F(EVP_KDF_get0_name)                        \
+    F(EVP_KDF_get0_provider)                    \
+    F(EVP_KDF_get_params)                       \
+    F(EVP_KDF_gettable_ctx_params)              \
+    F(EVP_KDF_gettable_params)                  \
+    F(EVP_KDF_is_a)                             \
+    F(EVP_KDF_names_do_all)                     \
+    F(EVP_KDF_settable_ctx_params)              \
+    F(EVP_KDF_up_ref)                           \
     F(EVP_PKEY_CTX_set_tls1_prf_md)             \
     F(EVP_PKEY_CTX_set1_tls1_prf_secret)        \
     F(EVP_PKEY_CTX_add1_tls1_prf_seed)          \
