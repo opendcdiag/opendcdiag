@@ -168,6 +168,7 @@ enum {
     ud_on_failure_option,
     use_builtin_test_list_option,
     vary_frequency,
+    vary_uncore_frequency,
     version_option,
     weighted_testrun_option,
 };
@@ -830,6 +831,9 @@ static int cleanup_global(int exit_code, SandstoneApplication::PerCpuFailures pe
 {
     if (sApp->vary_frequency_mode)
         sApp->frequency_manager.restore_core_frequency_initial_state();
+
+    if (sApp->vary_uncore_frequency_mode)
+        sApp->frequency_manager.restore_uncore_frequency_initial_state();
 
     exit_code = print_application_footer(exit_code, std::move(per_cpu_failures));
     return logging_close_global(exit_code);
@@ -2279,6 +2283,10 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
         if (sApp->vary_frequency_mode == true)
             sApp->frequency_manager.change_core_frequency();
         
+        //change uncore frequency per fracture
+        if (sApp->vary_uncore_frequency_mode == true)
+            sApp->frequency_manager.change_uncore_frequency();
+
         init_internal(test);
 
         // calculate starttime->endtime, reduce the overhead to have better test runtime calculations
@@ -2352,7 +2360,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
 
 out:
     //reset frequency level idx for the next test
-    if (sApp->vary_frequency_mode)
+    if (sApp->vary_frequency_mode || sApp->vary_uncore_frequency_mode)
         sApp->frequency_manager.reset_frequency_level_idx();
     
     random_advance_seed();      // advance seed for the next test
@@ -3137,6 +3145,7 @@ int main(int argc, char **argv)
         { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
         { "use-builtin-test-list", optional_argument, nullptr, use_builtin_test_list_option },
         { "vary-frequency", no_argument, nullptr, vary_frequency},
+        { "vary-uncore-frequency", no_argument, nullptr, vary_uncore_frequency},
         { "verbose", no_argument, nullptr, 'v' },
         { "version", no_argument, nullptr, version_option },
         { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
@@ -3515,6 +3524,14 @@ int main(int argc, char **argv)
             sApp->vary_frequency_mode = true;
             break;
         
+        case vary_uncore_frequency:
+            if (!FrequencyManager::FrequencyManagerWorks) {
+                fprintf(stderr, "%s: --vary-uncore-frequency works only on Linux\n", program_invocation_name);
+                return EX_USAGE;
+            }
+            sApp->vary_uncore_frequency_mode = true;
+            break;
+
         case version_option:
             logging_print_version();
             return EXIT_SUCCESS;
@@ -3673,9 +3690,13 @@ int main(int argc, char **argv)
         sApp->mce_count_last = std::accumulate(sApp->mce_counts_start.begin(), sApp->mce_counts_start.end(), uint64_t(0));
     }
 
-    //if --vary-frequency mode is used, do a initial setup and checks for running different frequencies
+    //if --vary-frequency mode is used, do a initial setup for running different frequencies
     if (sApp->vary_frequency_mode)
         sApp->frequency_manager.initial_core_frequency_setup();
+
+    //if --vary-uncore-frequency mode is used, do a initial setup for running different frequencies
+    if (sApp->vary_uncore_frequency_mode)
+        sApp->frequency_manager.initial_uncore_frequency_setup();
 
 #ifndef __OPTIMIZE__
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
