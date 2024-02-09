@@ -15,13 +15,13 @@ class FrequencyManager
 private:
 
 #ifdef __linux__
-    int max_frequency_supported = 0;
-    int min_frequency_supported = 0;
+    int max_core_frequency_supported = 0;
+    int min_core_frequency_supported = 0;
     std::vector<std::string> per_cpu_initial_scaling_governor;
     std::vector<std::string> per_cpu_initial_scaling_setspeed;
     int current_set_frequency = 0;
-    std::vector<int> frequency_levels;
-    int frequency_level_idx = 0;
+    std::vector<int> core_frequency_levels;
+    int core_frequency_level_idx = 0;
     static constexpr int total_frequency_levels = 9;
 
     std::string read_file(const std::string &file_path)
@@ -68,20 +68,24 @@ private:
         return frequency;
     }
 
-    void populate_frequency_levels()
+    void populate_frequency_levels(auto &min_max_frequency, bool is_core)
     {
-        frequency_levels.push_back(max_frequency_supported);
-        frequency_levels.push_back(min_frequency_supported); 
+        std::vector<int> tmp_frequency_levels;
+        tmp_frequency_levels.push_back(min_max_frequency.second);
+        tmp_frequency_levels.push_back(min_max_frequency.first);
 
-        std::vector<int> tmp = frequency_levels;
+        std::vector<int> tmp = tmp_frequency_levels;
 
-        while (frequency_levels.size() != total_frequency_levels)
+        while (tmp_frequency_levels.size() < total_frequency_levels)
         {
             std::sort(tmp.begin(), tmp.end(), std::greater<int>());
             for (int idx = 1; idx < tmp.size(); idx++)
-                frequency_levels.push_back((tmp[idx] + tmp[idx - 1]) / 2);
-            tmp = frequency_levels;
+                tmp_frequency_levels.push_back((tmp[idx] + tmp[idx - 1]) / 2);
+            tmp = tmp_frequency_levels;
         }
+
+        if (is_core)
+            core_frequency_levels = std::move(tmp_frequency_levels);
     }
 
     void check_if_userspace_present()
@@ -110,7 +114,7 @@ private:
 public:
     FrequencyManager() {}
 
-    void initial_setup()
+    void initial_core_frequency_setup()
     {
 #ifdef __linux__
         /* check if "userspace" frequency governor is available. Not all distributions have it*/
@@ -118,13 +122,14 @@ public:
 
         /* record supported max and min frequencies */
         std::string cpuinfo_max_freq_path{"/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"};
-        max_frequency_supported = get_frequency_from_file(cpuinfo_max_freq_path);
+        max_core_frequency_supported = get_frequency_from_file(cpuinfo_max_freq_path);
 
         std::string cpuinfo_min_freq_path{"/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"};
-        min_frequency_supported = get_frequency_from_file(cpuinfo_min_freq_path);
+        min_core_frequency_supported = get_frequency_from_file(cpuinfo_min_freq_path);
 
         // populate different frequencies for each test to run
-        populate_frequency_levels();
+        std::pair<int, int> min_max_frequency(min_core_frequency_supported, max_core_frequency_supported);
+        populate_frequency_levels(min_max_frequency, true);
 
         // save states
         for (int cpu = 0; cpu < num_cpus(); cpu++) {
@@ -146,10 +151,10 @@ public:
 #endif 
     }
 
-    void change_frequency()
+    void change_core_frequency()
     {
 #ifdef __linux__
-        current_set_frequency = frequency_levels[frequency_level_idx++ % total_frequency_levels];
+        current_set_frequency = core_frequency_levels[core_frequency_level_idx++ % total_frequency_levels];
         
         for (int cpu = 0; cpu < num_cpus(); cpu++) {
             std::string scaling_setspeed = BASE_FREQ_PATH;
@@ -160,7 +165,7 @@ public:
 #endif
     }
 
-    void restore_initial_state()
+    void restore_core_frequency_initial_state()
     {
 #ifdef __linux__
         for (int cpu = 0; cpu < num_cpus(); cpu++) {
@@ -182,7 +187,7 @@ public:
     void reset_frequency_level_idx()
     {
 #ifdef __linux__
-        frequency_level_idx = 0;
+        core_frequency_level_idx = 0;
 #endif
     }
 
