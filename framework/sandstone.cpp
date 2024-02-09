@@ -829,7 +829,7 @@ static void cleanup_internal(const struct test *test)
 static int cleanup_global(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures)
 {
     if (sApp->vary_frequency_mode)
-        sApp->frequency_manager.restore_initial_state();
+        sApp->frequency_manager.restore_core_frequency_initial_state();
 
     exit_code = print_application_footer(exit_code, std::move(per_cpu_failures));
     return logging_close_global(exit_code);
@@ -2281,8 +2281,8 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
 
         //change frequency per fracture
         if (sApp->vary_frequency_mode == true)
-            sApp->frequency_manager.change_frequency();
-
+            sApp->frequency_manager.change_core_frequency();
+        
         init_internal(test);
 
         // calculate starttime->endtime, reduce the overhead to have better test runtime calculations
@@ -3681,7 +3681,7 @@ int main(int argc, char **argv)
 
     //if --vary-frequency mode is used, do a initial setup and checks for running different frequencies
     if (sApp->vary_frequency_mode)
-        sApp->frequency_manager.initial_setup();
+        sApp->frequency_manager.initial_core_frequency_setup();
 
 #ifndef __OPTIMIZE__
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
