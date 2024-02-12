@@ -55,6 +55,13 @@ public:
         free_code_buffer();
     }
 
+    // Default constructor
+    ManagedCodeBuffer() {}
+
+    // Do not allow to copy
+    ManagedCodeBuffer(const ManagedCodeBuffer& other) = delete;
+    ManagedCodeBuffer& operator=(const ManagedCodeBuffer& other) = delete;
+
     bool allocate(size_t size) {
         free_code_buffer();
         buffer_ptr = static_cast<uint8_t *>(
