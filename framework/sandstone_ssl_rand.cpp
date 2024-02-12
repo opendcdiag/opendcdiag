@@ -31,13 +31,11 @@ static int sandstone_rand_instantiate(void *ctx, unsigned int strength, int pred
                                const unsigned char *pstr, size_t pstr_len,
                                const OSSL_PARAM params[])
 {
-    ctx = reinterpret_cast<void *>(EVP_RAND_STATE_READY);
     return 1;
 }
 
 static int sandstone_rand_uninstantiate(void *ctx)
 {
-    ctx = reinterpret_cast<void *>(EVP_RAND_STATE_UNINITIALISED);
     return 1;
 }
 
@@ -50,7 +48,7 @@ static int sandstone_rand_generate(void *ctx, unsigned char *out, size_t outlen,
 }
 
 /* Infra for future thread-safe support */
-static int sandstone_rand_enable_locking(ossl_unused void *ctx)
+static int sandstone_rand_enable_locking(void *ctx)
 {
     return 1;
 }
