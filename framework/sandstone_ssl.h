@@ -1521,6 +1521,8 @@
 #define SANDSTONE_SSL_X509_FUNCTIONS(F)         \
     F(i2d_X509_bio)                             \
     F(d2i_X509_bio)                             \
+    F(d2i_PrivateKey_bio)                       \
+    F(d2i_PUBKEY_bio)                           \
     F(X509_add1_ext_i2d)                        \
     F(X509_add1_reject_object)                  \
     F(X509_add1_trust_object)                   \
