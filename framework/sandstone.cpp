@@ -62,8 +62,6 @@
 #include "sandstone_kvm.h"
 #include "sandstone_system.h"
 #include "sandstone_thread.h"
-#include "test_selectors/SelectorFactory.h"
-
 #include "sandstone_tests.h"
 #include "sandstone_utils.h"
 #include "topology.h"
@@ -206,10 +204,6 @@ struct test mce_test = {
     .quality_level = TEST_QUALITY_SKIP
 };
 #endif
-
-// this needs to be a global, raw pointer because we leak memory (nothing here
-// ever gets freed and we don't care -- the application is exiting anyway)
-static TestrunSelector *test_selector;
 
 static void find_thyself(char *argv0)
 {
@@ -3176,9 +3170,6 @@ int main(int argc, char **argv)
     const char *builtin_test_list_name = nullptr;
     int starting_test_number = 1;  // One based count for user interface, not zero based
     int ending_test_number = INT_MAX;
-    WeightedTestScheme test_selection_strategy = Alphabetical;
-    WeightedTestLength weighted_testrunner_runtimes = NormalTestrunTimes;
-    std::vector<struct test *> test_list;
 
     thread_num = -1;            /* indicate main thread */
     find_thyself(argv[0]);
@@ -3211,8 +3202,6 @@ int main(int argc, char **argv)
             disable_tests(test_set, optarg);
             break;
         case 'e':
-            add_tests(test_set, test_list, optarg);
-            test_selection_strategy = Ordered;
             break;
         case 'f':
             if (strcmp(optarg, "no") == 0 || strcmp(optarg, "no-fork") == 0) {
@@ -3320,9 +3309,6 @@ int main(int argc, char **argv)
             // these options are only accessible in the command-line if the
             // corresponding functionality is active
             return EXIT_SUCCESS;
-        case longer_runtime_option:
-            weighted_testrunner_runtimes = LongerTestrunTimes;
-            break;
         case max_cores_per_slice_option:
             max_cores_per_slice = ParseIntArgument<>{
                     .name = "--max-cores-per-slice",
@@ -3384,9 +3370,6 @@ int main(int argc, char **argv)
                     .range_mode = OutOfRangeMode::Saturate
             }();
             break;
-        case shortened_runtime_option:
-            weighted_testrunner_runtimes = ShortenedTestrunTimes;
-            break;
         case strict_runtime_option:
             sApp->shmem->use_strict_runtime = true;
             break;
@@ -3419,7 +3402,8 @@ int main(int argc, char **argv)
                                 "have a built-in test list.\n", argv[0]);
                 return EX_USAGE;
             }
-            test_selection_strategy = Ordered;
+            // FIXME:
+            // test_selection_strategy = Ordered;
             builtin_test_list_name = optarg ? optarg : "auto";
             break;
         case temperature_threshold_option:
@@ -3457,21 +3441,6 @@ int main(int argc, char **argv)
                     .name = "--total-retest-on-failure",
                     .min = -1
             }();
-            break;
-
-        case weighted_testrun_option:
-            // Warning: Only looking at first 3 characters of each of these
-            if (strncasecmp(optarg, "repeat", 3) == 0) {
-                test_selection_strategy = Repeating;
-            } else if (strncasecmp(optarg, "non-repeat", 3) == 0) {
-                test_selection_strategy = NonRepeating;
-            } else if (strncasecmp(optarg, "priority", 3) == 0) {
-                test_selection_strategy = Prioritized;
-            } else {
-                fprintf(stderr, "Cannot determine weighted testrunner type (%s is invalid - use repeat/non-repeat)", optarg);
-                return EX_USAGE;
-            }
-            weighted_testrunner_runtimes = NormalTestrunTimes;
             break;
 
         case test_list_file_option:
@@ -3530,25 +3499,29 @@ int main(int argc, char **argv)
             return EXIT_SUCCESS;
         case one_sec_option:
             test_list_randomize = true;
-            test_selection_strategy = Repeating;
+            // FIXME:
+            // test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
             sApp->endtime = sApp->starttime + 1s;
             break;
         case thirty_sec_option:
             test_list_randomize = true;
-            test_selection_strategy = Repeating;
+            // FIXME:
+            // test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
             sApp->endtime = sApp->starttime + 30s;
             break;
         case two_min_option:
             test_list_randomize = true;
-            test_selection_strategy = Repeating;
+            // FIXME:
+            // test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
             sApp->endtime = sApp->starttime + 2min;
             break;
         case five_min_option:
             test_list_randomize = true;
-            test_selection_strategy = Repeating;
+            // FIXME:
+            // test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
             sApp->endtime = sApp->starttime + 5min;
             break;
@@ -3564,11 +3537,14 @@ int main(int argc, char **argv)
             break;
 
             /* deprecated options */
+        case longer_runtime_option:
         case max_concurrent_threads_option:
         case mem_sample_time_option:
         case mem_samples_per_log_option:
         case no_mem_sampling_option:
         case schedule_by_option:
+        case shortened_runtime_option:
+        case weighted_testrun_option:
             warn_deprecated_opt(long_options[coptind].name);
             break;
 
@@ -3580,13 +3556,6 @@ int main(int argc, char **argv)
             return EX_USAGE;
         }
     }
-
-    if (test_list_randomize) {
-        if ((test_selection_strategy == Ordered) || (test_selection_strategy == Alphabetical)) {
-            test_selection_strategy = NonRepeating;
-        }
-    }
-
 
     if (SandstoneConfig::RestrictedCommandLine) {
         // Default options for the simplified OpenDCDiag cmdline
@@ -3632,7 +3601,8 @@ int main(int argc, char **argv)
         sApp->thermal_throttle_temp = INT_MIN;
         do_not_triage = SandstoneConfig::NoTriage;
         fatal_errors = true;
-        test_selection_strategy = Ordered;
+        // FIXME: 
+        // test_selection_strategy = Ordered;
         builtin_test_list_name = "auto";
 
         static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,

@@ -14,7 +14,6 @@ framework_incdir = [
     top_incdir,
     include_directories([
         '.',
-        'test_selectors',
         sysdeps_dir,
     ])
 ]
@@ -91,8 +90,6 @@ framework_files = files(
     'sandstone_utils.cpp',
     'static_vectors.c',
     'test_knobs.cpp',
-    'test_selectors/SelectorFactory.cpp',
-    'test_selectors/WeightedSelectorBase.cpp',
     'sandstone_context_dump.cpp',
     'topology.cpp',
 )
@@ -197,9 +194,6 @@ unittests_sources += files(
     'sandstone_data.cpp',
     'sandstone_utils.cpp',
     'test_knobs.cpp',
-    'test_selectors/SelectorFactory.cpp',
-    'test_selectors/WeightedSelectorBase.cpp',
-    'unit-tests/WeightedTestSelector_tests.cpp',
     'unit-tests/sandstone_data_tests.cpp',
     'unit-tests/sandstone_test_utils_tests.cpp',
     'unit-tests/sandstone_utils_tests.cpp',
