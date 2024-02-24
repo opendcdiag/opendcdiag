@@ -15,12 +15,6 @@
 extern "C" {
 #endif
 
-struct testrun_info
-{
-    struct test *test;
-    int duration_ms;
-};
-
 struct weighted_run_info
 {
     struct test *test;
