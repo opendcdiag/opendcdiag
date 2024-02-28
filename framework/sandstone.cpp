@@ -3174,7 +3174,6 @@ int main(int argc, char **argv)
     // test selection
     const char *test_list_file_path = nullptr;
     bool test_list_randomize = false;
-    bool use_builtin_test_list = false;
     const char *builtin_test_list_name = nullptr;
     int starting_test_number = 1;  // One based count for user interface, not zero based
     int ending_test_number = INT_MAX;
@@ -3419,10 +3418,8 @@ int main(int argc, char **argv)
                                 "have a built-in test list.\n", argv[0]);
                 return EX_USAGE;
             }
-            use_builtin_test_list = true;
             test_selection_strategy = Ordered;
-            if (optarg)
-                builtin_test_list_name = optarg;
+            builtin_test_list_name = optarg ? optarg : "default";
             break;
         case temperature_threshold_option:
             if (strcmp(optarg, "disable") == 0)
@@ -3627,7 +3624,7 @@ int main(int argc, char **argv)
         do_not_triage = SandstoneConfig::NoTriage;
         fatal_errors = true;
         test_selection_strategy = Ordered;
-        use_builtin_test_list = true;
+        builtin_test_list_name = "default";
 
         static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,
                 "Restricted command-line build must have a built-in test list");
@@ -3689,7 +3686,7 @@ int main(int argc, char **argv)
 
     // If we want to use the weighted testrunner we need to initialize it
     if (test_list_file_path) {
-        if (use_builtin_test_list)
+        if (builtin_test_list_name)
             logging_printf(LOG_LEVEL_QUIET,
                            "# WARNING: both --test-list-file and --use-builtin-test-list "
                            "specified, using test file \"%s\".\n", test_list_file_path);
@@ -3707,7 +3704,7 @@ int main(int argc, char **argv)
                                                        starting_test_number, ending_test_number,
                                                        test_list_randomize);
     } else {
-        if (use_builtin_test_list) {
+        if (builtin_test_list_name) {
             if (test_list.size()) {
                 if (!SandstoneConfig::RestrictedCommandLine) {
                     logging_printf(LOG_LEVEL_QUIET,
