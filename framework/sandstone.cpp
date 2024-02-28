@@ -3419,7 +3419,7 @@ int main(int argc, char **argv)
                 return EX_USAGE;
             }
             test_selection_strategy = Ordered;
-            builtin_test_list_name = optarg ? optarg : "default";
+            builtin_test_list_name = optarg ? optarg : "auto";
             break;
         case temperature_threshold_option:
             if (strcmp(optarg, "disable") == 0)
@@ -3624,7 +3624,7 @@ int main(int argc, char **argv)
         do_not_triage = SandstoneConfig::NoTriage;
         fatal_errors = true;
         test_selection_strategy = Ordered;
-        builtin_test_list_name = "default";
+        builtin_test_list_name = "auto";
 
         static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,
                 "Restricted command-line build must have a built-in test list");
