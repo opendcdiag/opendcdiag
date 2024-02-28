@@ -10,66 +10,21 @@ env:
   GIT_CONFIG_SYSTEM: /tmp/gitconfig
 
 jobs:
-  build-linux-gcc:
+  Linux:
     runs-on: ubuntu-latest
     container: debian:sid
+    strategy:
+      matrix:
+        include:
+        - { name: GCC, selftests: "selftests" }
+        - { name: Clang, env: "CC=clang-16 CXX=clang++-16" }
     steps:
+    - name: setup environment
+      run: printf '%s\n' ${{ matrix.env }} | tee -a ${GITHUB_ENV}
     - name: Install distro packages
       run: |
         DEBIAN_FRONTEND=noninteractive apt-get -y update
         DEBIAN_FRONTEND=noninteractive apt-get -y install \
-            bats \
-            elfutils \
-            file \
-            git \
-            libboost-dev \
-            libeigen3-dev \
-            libgtest-dev \
-            libssl-dev \
-            libzstd-dev \
-            meson \
-            ninja-build \
-            python3-yaml \
-            zlib1g-dev
-    - uses: actions/checkout@v2
-    - name: setup Git
-      run: git config --system safe.directory '*'
-    - name: meson setup -Dbuildtype=debugoptimized
-      run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized
-    - name: ninja build
-      run: ninja -C builddir
-    - name: ninja build unittests
-      run: ninja -C builddir unittests
-    - name: run unittests
-      run: |
-        ./builddir/unittests \
-          --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
-    - name: confirm opendcdiag runs
-      run: |
-        builddir/opendcdiag --version
-        builddir/opendcdiag --dump-cpu-info
-    - name: run selftests
-      run: |
-        ulimit -St 120
-        SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
-    - name: run tests quickly
-      run: |
-        ulimit -St 120
-        nproc=`nproc`
-        nproc=$((nproc > 4 ? 4 : nproc))
-        builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
-
-  build-linux-clang:
-    runs-on: ubuntu-latest
-    container: debian:sid
-    env:
-      CC: clang-16
-      CXX: clang++-16
-    steps:
-    - name: Install distro packages
-      run: |
-        DEBIAN_FRONTEND=noninteractive apt-get -y update
-        DEBIAN_FRONTEND=noninteractive apt-get -y install --no-install-recommends \
             bats \
             ca-certificates \
             ${CC} \
@@ -88,7 +43,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: setup Git
       run: git config --system safe.directory '*'
-    - name: meson setup -Dbuildtype=debugoptimized
+    - name: meson setup
       run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized
     - name: ninja build
       run: ninja -C builddir
@@ -96,11 +51,17 @@ jobs:
       run: |
         builddir/opendcdiag --version
         builddir/opendcdiag --dump-cpu-info
-# Disabled: some negative tests fail to fail the way they're supposed to
-#    - name: run selftests
-#      run: |
-#        ulimit -St 120
-#        SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
+    - name: ninja build unittests
+      run: ninja -C builddir unittests
+    - name: run unittests
+      run: |
+        ./builddir/unittests \
+          --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
+    - name: run selftests
+      if: ${{ matrix.selftests }}
+      run: |
+        ulimit -St 120
+        SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
     - name: run tests quickly
       run: |
         ulimit -St 120
@@ -108,7 +69,8 @@ jobs:
         nproc=$((nproc > 4 ? 4 : nproc))
         builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
 
-  build-windows:
+
+  Windows:
     runs-on: ubuntu-latest
     container: fedora:38
     env:
@@ -152,8 +114,9 @@ jobs:
         # Disable the GUI debugger
         wine reg add 'HKEY_LOCAL_MACHINE\Software\Wine\winedbg' /v ShowCrashDialog /t REG_DWORD /d 00000000
     - name: confirm Wine works
+      run: wine cmd /c ver
+    - name: confirm OpenDCDiag runs
       run: |
-        wine cmd /c ver
         wine builddir-windows-cross/opendcdiag.exe --version
         wine builddir-windows-cross/opendcdiag.exe --dump-cpu-info
     - name: run selftests
