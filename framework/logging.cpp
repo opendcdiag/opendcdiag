@@ -774,6 +774,14 @@ static void log_message_preformatted(int thread_num, std::string_view msg)
     if (msg[0] == 'E')
         logging_mark_thread_failed(thread_num);
 
+    return log_message_preformatted(thread_num, level, msg);
+}
+
+void log_message_preformatted(int thread_num, int level, std::string_view msg)
+{
+    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+        return;
+
     std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
     if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread)
         return;
@@ -1129,15 +1137,6 @@ void logging_init_child_preexec()
 
 void logging_finish()
 {
-}
-
-LoggingStream logging_user_messages_stream(int thread_num, int level)
-{
-    LoggingStream stream(sApp->thread_data(thread_num)->log_fd);
-    sApp->thread_data(thread_num)->messages_logged.fetch_add(1, std::memory_order_relaxed);
-    uint8_t code = message_code(UserMessages, level);
-    stream.write(code);
-    return stream;
 }
 
 static inline void assert_log_message(const char *fmt)
