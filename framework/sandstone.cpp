@@ -3718,14 +3718,15 @@ int main(int argc, char **argv)
                 }
             }
 
-            auto builtin_test_list = get_test_list(builtin_test_list_name);
+            TestList builtin_test_list = select_test_list(builtin_test_list_name);
 
-            if (!builtin_test_list) {
+            if (!builtin_test_list.tests) {
                 logging_printf(LOG_LEVEL_QUIET,
                         "# ERROR: the list '%s' specified with --use-builtin-test-list does not exist.\n", builtin_test_list_name);
                 exit(EX_USAGE);
             }
-            for (auto &test : *builtin_test_list) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# Using test list '%s'\n", builtin_test_list.name);
+            for (auto &test : *builtin_test_list.tests) {
                 add_test(test_list, test);
             }
         } else {

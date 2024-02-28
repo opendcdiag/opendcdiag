@@ -156,12 +156,7 @@ def main():
         f.write('    const std::optional<std::span<struct test* const>> tests;\n')
         f.write('} TestList;\n\n')
 
-        f.write('const TestList& select_test_list(const char *);\n\n')
-
-        f.write('static inline std::optional<const std::span<struct test * const>> get_test_list(const char *name)\n')
-        f.write('{\n')
-        f.write('    return select_test_list(name).tests;\n')
-        f.write('}\n')
+        f.write('const TestList& select_test_list(const char *);\n')
 
     exit(0)
 
