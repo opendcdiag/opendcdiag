@@ -86,6 +86,7 @@ framework_files = files(
     'sandstone.cpp',
     'sandstone_chrono.cpp',
     'sandstone_data.cpp',
+    'sandstone_tests.cpp',
     'sandstone_test_groups.cpp',
     'sandstone_thread.cpp',
     'sandstone_utils.cpp',
