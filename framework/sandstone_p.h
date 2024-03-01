@@ -371,7 +371,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
             fork_each_test;
 #endif
     bool ignore_os_errors = false;
-    bool ignore_unknown_tests = false;
     bool force_test_time = false;
     bool service_background_scan = false;
     bool vary_frequency_mode = false;
@@ -382,6 +381,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     int max_test_count = INT_MAX;
     int max_test_loop_count = 0;
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
+    int current_test_count;
     MonotonicTimePoint starttime = MonotonicTimePoint::clock::now();
     MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;
@@ -675,7 +675,7 @@ void logging_init(const struct test *test);
 void logging_init_child_preexec();
 void logging_finish();
 LoggingStream logging_user_messages_stream(int thread_num, int level);
-TestResult logging_print_results(std::span<const ChildExitStatus> status, int *tc, const struct test *test);
+TestResult logging_print_results(std::span<const ChildExitStatus> status, const struct test *test);
 
 /* random.cpp */
 void random_init_global(const char *argument);
