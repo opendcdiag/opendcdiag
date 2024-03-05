@@ -38,12 +38,6 @@ static inline void *check_null_pointer(void *ptr)
 extern "C" {
 void *aligned_alloc(size_t alignment, size_t size)
 {
-#ifdef _UCRT
-    // Use ucrt's _aligned_recalloc
-    return check_null_pointer(_aligned_recalloc(NULL, 1, size, alignment));
-#endif
-
-    // old VC6 CRT doesn't have _aligned_recalloc, so we align and memset
     void *ptr = check_null_pointer(_aligned_malloc(size, alignment));
     return memset(ptr, 0, size);
 }
@@ -95,11 +89,6 @@ size_t aligned_msize(void *ptr)
 
 void *realloc(void *ptr, size_t size)
 {
-#ifdef _UCRT
-    // Use ucrt's _aligned_recalloc
-    return check_null_pointer(_aligned_recalloc(ptr, 1, size, DEFAULT_ALIGNMENT));
-#endif
-
     size_t oldsize = aligned_msize(ptr);
     void *newptr = check_null_pointer(_aligned_realloc(ptr, size, DEFAULT_ALIGNMENT));
     size = aligned_msize(newptr);
