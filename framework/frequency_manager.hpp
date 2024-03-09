@@ -111,7 +111,7 @@ private:
             exit(EX_IOERR);
         }
 
-        while (fscanf(file, "%s", read_file)) {
+        while (fscanf(file, "%s", read_file) != EOF) {
             if (strcmp(read_file, "userspace") == 0) {
                 fclose(file);
                 return;
