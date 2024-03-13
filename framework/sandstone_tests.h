@@ -6,14 +6,14 @@
 #ifndef INC_SANDSTONE_TESTS_H
 #define INC_SANDSTONE_TESTS_H
 
-#include <cstring>
-#include <iterator>
-#include <map>
 #include <stddef.h>
 #include "sandstone.h"
 
 #ifdef __cplusplus
 #include <span>
+#include <cstring>
+#include <iterator>
+#include <map>
 
 extern "C" {
 #endif
