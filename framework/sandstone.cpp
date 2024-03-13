@@ -2526,6 +2526,7 @@ static struct test *get_next_test(std::vector<struct test*>::iterator &it, int t
     }
 
     auto next_test = it++;
+    while (next_test != test_set->end() && (*next_test)->quality_level < sApp->requested_quality) next_test = it++;
     if (next_test == test_set->end()){
         return get_next_test_iteration();
     }
