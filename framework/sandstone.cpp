@@ -3271,10 +3271,11 @@ int main(int argc, char **argv)
         case 'l':
         case raw_list_tests:
         case raw_list_groups:
-            test_set = new SandstoneTestSet(SandstoneTestSet::REGULAR_TESTS);
+            test_set = new SandstoneTestSet(sApp->shmem->selftest ? SandstoneTestSet::SELF_TESTS : SandstoneTestSet::REGULAR_TESTS);
             list_tests(opt);
             return EXIT_SUCCESS;
         case raw_list_group_members:
+            test_set = new SandstoneTestSet(sApp->shmem->selftest ? SandstoneTestSet::SELF_TESTS : SandstoneTestSet::REGULAR_TESTS);
             list_group_members(optarg);
             return EXIT_SUCCESS;
         case 'n':
