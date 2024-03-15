@@ -2,30 +2,22 @@
 #include "sandstone_p.h"
 #include "sandstone_tests.h"
 
-static std::map<const char *, struct test *, SandstoneTestSet::cstr_cmp> all_test_map; /* maps test name to test */
+static std::vector<struct test *> all_tests;
 static std::map<const char *, std::vector <struct test *>, SandstoneTestSet::cstr_cmp> all_group_map; /* maps group name to a vector of tests it contains */
 static bool initialized = false;
 
 static void init(bool is_selftest)
 {
-    std::span<struct test> known_tests;
-    if (!is_selftest)
-        known_tests = regular_tests;
-    else
-        known_tests = selftests;
+    std::span<struct test> known_tests = is_selftest ? selftests : regular_tests;
 
     for (struct test &t : known_tests) {
-        all_test_map[t.id] = &t;
+        all_tests.push_back(&t);
         for (auto ptr = t.groups; ptr && *ptr; ++ptr) {
-            if (!all_group_map.contains((*ptr)->id)) {
-                std::vector<struct test *> group_tests;
-                all_group_map[(*ptr)->id] = group_tests;
-            }
             all_group_map[(*ptr)->id].push_back(&t);
         }
     }
     /* add "special" mce_check as well */
-    all_test_map[mce_test.id] = &mce_test;
+    all_tests.push_back(&mce_test);
     initialized = true;
 }
 
@@ -36,9 +28,9 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     std::vector<struct test*> res;
     if (!name || !strlen(name)) return res;
     if (strchr(name, '*')) { /* if it has an asterisk, it's a glob, so expand it. */
-        for (auto pair : all_test_map) {
-            if (!fnmatch(name, pair.first, 0))
-                res.push_back(pair.second);
+        for (struct test *t : all_tests) {
+            if (!fnmatch(name, t->id, 0))
+                res.push_back(t);
         }
     } else if (name[0] == '@') { /* it's a group name */
         const char *group_name = name + 1;
@@ -46,10 +38,11 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
             res = all_group_map[group_name];
         }
     } else {
-        try {
-            struct test *t = all_test_map.at(name);
-            res.push_back(t);
-        } catch(const std::out_of_range &e) {
+        for (struct test *t : all_tests) {
+            if (!strcmp(t->id, name)) {
+                res.push_back(t);
+                break;
+            }
         }
     }
     return res;
