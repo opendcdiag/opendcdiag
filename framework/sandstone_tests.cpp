@@ -6,20 +6,15 @@ static std::map<const char *, struct test *, SandstoneTestSet::cstr_cmp> all_tes
 static std::map<const char *, std::vector <struct test *>, SandstoneTestSet::cstr_cmp> all_group_map; /* maps group name to a vector of tests it contains */
 static bool initialized = false;
 
-void SandstoneTestSet::init(enum InitSet init_set)
+static void init(bool is_selftest)
 {
     std::span<struct test> known_tests;
-    switch (init_set) {
-        case REGULAR_TESTS:
-            known_tests = regular_tests;
-            break;
-        case SELF_TESTS:
-            known_tests = selftests;
-            break;
-        default:
-            break;
-    }
-    for (struct test &t: known_tests) {
+    if (!is_selftest)
+        known_tests = regular_tests;
+    else
+        known_tests = selftests;
+
+    for (struct test &t : known_tests) {
         all_test_map[t.id] = &t;
         for (auto ptr = t.groups; ptr && *ptr; ++ptr) {
             if (!all_group_map.contains((*ptr)->id)) {
@@ -59,6 +54,19 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     }
     return res;
 }
+
+SandstoneTestSet::SandstoneTestSet(bool all_tests, bool is_selftest) : is_selftest(is_selftest) {
+    if (!initialized) init(is_selftest);
+    if (!all_tests) return;
+    std::span<struct test> source = !is_selftest ? regular_tests : selftests;
+    for (struct test &test : source) {
+        struct test_info *ti = new struct test_info;
+        ti->st = TEST_ENABLED;
+        ti->test = &test;
+        test_map[test.id] = ti;
+        test_set.push_back(&test);
+    }
+};
 
 struct test *SandstoneTestSet::get_by_name(const char *name)
 {

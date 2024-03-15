@@ -2574,7 +2574,7 @@ static int exec_mode_run(int argc, char **argv)
     sApp->thread_count = sApp->shmem->total_cpu_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 
-    SandstoneTestSet::init(sApp->shmem->selftest ? SandstoneTestSet::SELF_TESTS : SandstoneTestSet::REGULAR_TESTS);
+    test_set = new SandstoneTestSet(true, sApp->shmem->selftest);
     std::vector<struct test *> tests_to_run = SandstoneTestSet::lookup(argv[0]);
     if (tests_to_run.size() != 1) return EX_DATAERR;
 
@@ -3271,11 +3271,11 @@ int main(int argc, char **argv)
         case 'l':
         case raw_list_tests:
         case raw_list_groups:
-            test_set = new SandstoneTestSet(sApp->shmem->selftest ? SandstoneTestSet::SELF_TESTS : SandstoneTestSet::REGULAR_TESTS);
+            test_set = new SandstoneTestSet(true, sApp->shmem->selftest);
             list_tests(opt);
             return EXIT_SUCCESS;
         case raw_list_group_members:
-            test_set = new SandstoneTestSet(sApp->shmem->selftest ? SandstoneTestSet::SELF_TESTS : SandstoneTestSet::REGULAR_TESTS);
+            test_set = new SandstoneTestSet(true, sApp->shmem->selftest);
             list_group_members(optarg);
             return EXIT_SUCCESS;
         case 'n':
@@ -3626,18 +3626,14 @@ int main(int argc, char **argv)
         }
     }
 
-    /* initialize global lookup (all known tests) depending on the mode we
-     * started in */
-    SandstoneTestSet::init((sApp->shmem->selftest) ? SandstoneTestSet::SELF_TESTS : SandstoneTestSet::REGULAR_TESTS);
-
     if (enabled_tests.size() || builtin_test_list_name || test_list_file_path) {
         /* if anything other than the "all tests" has been specified, start with
          * an empty list. */
-        test_set = new SandstoneTestSet(SandstoneTestSet::NO_TESTS);
+        test_set = new SandstoneTestSet(false, sApp->shmem->selftest);
     } else {
         /* otherwise, start with all the applicable tests (self tests or
          * regular. */
-        test_set = new SandstoneTestSet((sApp->shmem->selftest) ? SandstoneTestSet::SELF_TESTS : SandstoneTestSet::REGULAR_TESTS);
+        test_set = new SandstoneTestSet(true, sApp->shmem->selftest);
     }
 
     /* Add all the tests we were told to enable. */

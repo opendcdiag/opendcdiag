@@ -51,26 +51,14 @@ class SandstoneTestSet
 {
     using TestSet = std::vector<struct test *>;
 public:
-    enum InitSet {
-        REGULAR_TESTS,
-        SELF_TESTS,
-        NO_TESTS,
+
+    SandstoneTestSet() : SandstoneTestSet(false) {
     };
 
-    SandstoneTestSet() : SandstoneTestSet(REGULAR_TESTS) {
+    SandstoneTestSet(bool all_tests) : SandstoneTestSet(true, false) {
     };
 
-    SandstoneTestSet(enum InitSet init_set) : is_selftest(init_set == SELF_TESTS) {
-        if (init_set == NO_TESTS) return;
-        std::span<struct test> source = !is_selftest ? regular_tests : selftests;
-        for (struct test &test : source) {
-            struct test_info *ti = new struct test_info;
-            ti->st = TEST_ENABLED;
-            ti->test = &test;
-            test_map[test.id] = ti;
-            test_set.push_back(&test);
-        }
-    };
+    SandstoneTestSet(bool all_tests, bool is_selftest);
 
     TestSet::iterator begin() { return test_set.begin(); };
     TestSet::iterator end () { return test_set.end(); };
@@ -83,7 +71,6 @@ public:
     inline bool is_disabled(const char *name) { return test_map.contains(name) ? (test_map[name]->st == TEST_DISABLED) : true; };
     inline bool is_enabled(const char *name) { return !is_disabled(name); };
     
-    static void init(enum InitSet);
     static std::vector<struct test *> lookup(const char *name);
 
     struct cstr_cmp
