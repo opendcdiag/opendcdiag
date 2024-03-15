@@ -3640,6 +3640,10 @@ int main(int argc, char **argv)
     if (enabled_tests.size()) {
         for (char *name : enabled_tests) {
             auto tests = test_set->enable(name);
+            if (!tests.size() && !sApp->ignore_unknown_tests) {
+                fprintf(stderr, "%s: Cannot find matching tests for '%s'\n", program_invocation_name, name);
+                exit(EX_USAGE);
+            }
             for (struct test *t : tests) {
                 prepare_test(t);
             }
