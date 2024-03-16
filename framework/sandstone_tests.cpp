@@ -2,6 +2,23 @@
 #include "sandstone_p.h"
 #include "sandstone_tests.h"
 
+#if defined(__linux__) && defined(__x86_64__)
+extern struct test mce_test;
+#else
+// no MCE test outside Linux
+static_assert(!InterruptMonitor::InterruptMonitorWorks);
+struct test mce_test = {
+#ifdef TEST_ID_mce_check
+    .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
+    .description = nullptr,
+#else
+    .id = "mce_check",
+    .description = "Machine Check Exceptions/Events count",
+#endif
+    .quality_level = TEST_QUALITY_SKIP
+};
+#endif
+
 static std::vector<struct test *> all_tests;
 static std::map<const char *, std::vector <struct test *>, SandstoneTestSet::cstr_cmp> all_group_map; /* maps group name to a vector of tests it contains */
 static bool initialized = false;

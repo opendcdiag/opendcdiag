@@ -21,6 +21,8 @@ extern "C" {
 extern struct test __start_tests;
 extern struct test __stop_tests;
 
+extern struct test mce_test;
+
 #ifdef __cplusplus
 
 __attribute__((weak)) extern const struct test_group __start_test_group;
@@ -28,24 +30,6 @@ __attribute__((weak)) extern const struct test_group __stop_test_group;
 
 inline std::span<struct test> regular_tests = { &__start_tests, &__stop_tests };
 extern const std::span<struct test> selftests;
-
-#if defined(__linux__) && defined(__x86_64__)
-extern struct test mce_test;
-#else
-// no MCE test outside Linux
-static_assert(!InterruptMonitor::InterruptMonitorWorks);
-struct test mce_test = {
-#ifdef TEST_ID_mce_check
-    .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
-    .description = nullptr,
-#else
-    .id = "mce_check",
-    .description = "Machine Check Exceptions/Events count",
-#endif
-    .quality_level = TEST_QUALITY_SKIP
-};
-#endif
-
 
 class SandstoneTestSet
 {
