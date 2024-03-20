@@ -1,4 +1,7 @@
 #include <fnmatch.h>
+#include <iostream>
+#include <vector>
+#include <string>
 #include "sandstone_p.h"
 #include "sandstone_tests.h"
 
@@ -87,7 +90,7 @@ struct test *SandstoneTestSet::get_by_name(const char *name)
     }
 }
 
-std::vector<struct test *> SandstoneTestSet::enable(const char *name) {
+SandstoneTestSet::TestSet SandstoneTestSet::enable(const char *name) {
     std::vector<struct test *> res = lookup(name);
     for (auto t : res) {
         struct test_info *ti;
@@ -105,7 +108,7 @@ std::vector<struct test *> SandstoneTestSet::enable(const char *name) {
     return res;
 }
 
-std::vector<struct test *> SandstoneTestSet::disable(const char *name) {
+SandstoneTestSet::TestSet SandstoneTestSet::disable(const char *name) {
     std::vector<struct test *> res;
     std::vector tests = lookup(name);
     for (auto t : tests) {
@@ -129,3 +132,70 @@ std::vector<struct test *> SandstoneTestSet::disable(const char *name) {
     }
     return res;
 }
+
+struct test_list_entry {
+    struct test *test;
+    std::string attribute; /* both enabled/disable lists can have attributes
+                              associated with the test. this is used to store it
+                              and pass to the corresponding code for
+                              interpretation. */
+};
+
+static inline bool is_ignored(char c) {
+    switch (c) {
+        case ' ':
+        case '\t':
+            return true;
+        default:
+            return false;
+    }
+}
+
+static struct test_list_entry *parse_test_list_line(std::string line)
+{
+    std::vector<std::string_view> tokens;
+    for (auto it = line.begin(); ; ++it) {
+        while (is_ignored(*it)) ++it;
+        if (*it == '#' || it == line.end()) break;
+        auto cit = it;
+        while (cit != line.end() && !is_ignored(*cit)) ++cit;
+        tokens.emplace_back(it, cit);
+        if (cit == line.end()) break;
+        it = cit;
+    }
+    if (!tokens.size()) return nullptr;
+    if (tokens.size() > 2) return nullptr; /* FIXME: need to figure out handling for this, should be user-visible error. */
+    /* FIXME: change lookup and map/list to use string_view */
+    SandstoneTestSet::TestSet set = SandstoneTestSet::lookup(std::string(tokens[0]).c_str());
+    if (set.size() != 1) return nullptr; /* Artificially do not allow specifying wildcards or groups in the list file. */
+    struct test_list_entry *entry = new struct test_list_entry;
+    entry->test = set[0];
+    if (tokens.size() == 2) entry->attribute = tokens[1];
+    return entry;
+}
+
+static std::vector<struct test_list_entry *>load_test_list(std::ifstream &fstream)
+{
+    std::vector<struct test_list_entry *> res;
+    std::string line;
+    while (std::getline(fstream, line)) {
+        struct test_list_entry *t = parse_test_list_line(line);
+        if (!t) continue;
+        res.push_back(t);
+    }
+    return res;
+}
+
+SandstoneTestSet::TestSet SandstoneTestSet::add_test_list(const char *fname)
+{
+    TestSet res;
+    std::ifstream list_file(fname, std::ios_base::in);
+    std::vector<struct test_list_entry *> entries = load_test_list(list_file);
+    for (auto e : entries) {
+        // FIXME: this just to see it working
+        test_set.push_back(e->test);
+    }
+    return res;
+}
+
+

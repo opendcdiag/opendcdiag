@@ -3657,6 +3657,11 @@ int main(int argc, char **argv)
         }
     }
 
+    /* Add the test list file */
+    if (test_list_file_path) {
+        test_set->add_test_list(test_list_file_path);
+    }
+
     if (SandstoneConfig::RestrictedCommandLine) {
         // Default options for the simplified OpenDCDiag cmdline
         static struct option restricted_long_options[] = {

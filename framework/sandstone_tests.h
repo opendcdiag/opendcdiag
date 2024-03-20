@@ -33,8 +33,10 @@ extern const std::span<struct test> selftests;
 
 class SandstoneTestSet
 {
-    using TestSet = std::vector<struct test *>;
 public:
+    using TestSet = std::vector<struct test *>;
+
+    static std::vector<struct test *> lookup(const char *name);
 
     SandstoneTestSet() : SandstoneTestSet(false) {
     };
@@ -48,14 +50,12 @@ public:
     TestSet::iterator end () { return test_set.end(); };
 
     struct test *get_by_name(const char *name);
-    int disable(struct test test);
-    std::vector<struct test *> disable(const char *name);
-    int enable(struct test test);
-    std::vector<struct test *> enable(const char *name);
+    TestSet disable(const char *name);
+    TestSet enable(const char *name);
     inline bool is_disabled(const char *name) { return test_map.contains(name) ? (test_map[name]->st == TEST_DISABLED) : true; };
     inline bool is_enabled(const char *name) { return !is_disabled(name); };
-    
-    static std::vector<struct test *> lookup(const char *name);
+
+    TestSet add_test_list(const char *name);
 
     struct cstr_cmp
     {
