@@ -73,9 +73,9 @@ SandstoneTestSet::SandstoneTestSet(bool all_tests, bool is_selftest) : is_selfte
     if (!all_tests) return;
     std::span<struct test> source = !is_selftest ? regular_tests : selftests;
     for (struct test &test : source) {
-        struct test_info *ti = new struct test_info;
-        ti->st = TEST_ENABLED;
-        ti->test = &test;
+        struct test_rt_info ti;
+        ti.st = TEST_ENABLED;
+        ti.test = &test;
         test_map[test.id] = ti;
         test_set.push_back(&test);
     }
@@ -83,47 +83,43 @@ SandstoneTestSet::SandstoneTestSet(bool all_tests, bool is_selftest) : is_selfte
 
 struct test *SandstoneTestSet::get_by_name(const char *name)
 {
-    try {
-        return test_map.at(name)->test;
-    } catch (const std::out_of_range &e) {
-        return nullptr;
-    }
+    return test_map.contains(name) ? test_map[name].test : nullptr;
 }
 
-SandstoneTestSet::TestSet SandstoneTestSet::enable(const char *name) {
-    std::vector<struct test *> res = lookup(name);
-    for (auto t : res) {
-        struct test_info *ti;
+std::vector<struct test_rt_info> SandstoneTestSet::enable(const char *name) {
+    std::vector<struct test_rt_info> res;
+    std::vector<struct test *> tests = lookup(name);
+    for (auto t : tests ) {
+        struct test_rt_info ti;
         if (!test_map.contains(t->id)) {
-            ti = new struct test_info;
-            ti->st = TEST_ENABLED;
-            ti->test = t;
+            ti.st = TEST_ENABLED;
+            ti.test = t;
             test_map[t->id] = ti;
         } else {
             ti = test_map[t->id];
-            ti->st = TEST_ENABLED;
+            ti.st = TEST_ENABLED;
         }
+        res.push_back(ti);
         test_set.push_back(t);
     }
     return res;
 }
 
-SandstoneTestSet::TestSet SandstoneTestSet::disable(const char *name) {
-    std::vector<struct test *> res;
+std::vector<struct test_rt_info> SandstoneTestSet::disable(const char *name) {
+    std::vector<struct test_rt_info> res;
     std::vector tests = lookup(name);
     for (auto t : tests) {
-        struct test_info *ti;
+        struct test_rt_info ti;
         if (test_map.contains(t->id)) {
-            test_map[t->id]->st = TEST_DISABLED;
+            test_map[t->id].st = TEST_DISABLED;
         } else {
-            ti = new struct test_info;
-            ti->st = TEST_DISABLED;
-            ti->test = t;
+            ti.st = TEST_DISABLED;
+            ti.test = t;
             test_map[t->id] = ti;
         }
         for (auto it = test_set.begin(); it != test_set.end(); ) {
             if (*it == t) {
-                res.push_back(t);
+                res.push_back(ti);
                 test_set.erase(it);
             } else {
                 ++it;
