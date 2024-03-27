@@ -605,9 +605,11 @@ void logging_init_global(void)
         exit(EXIT_MEMORY);
     }
 
+#ifdef NDEBUG
     // replace stdout with /dev/null
     int devnull = open(_PATH_DEVNULL, O_RDWR | O_CLOEXEC);
     dup2(devnull, STDOUT_FILENO);
+#endif
 
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output) {
         file_log_fd = STDOUT_FILENO;
@@ -653,7 +655,9 @@ void logging_init_global(void)
 #endif
     }
 
+#ifdef NDEBUG
     close(devnull);
+#endif
 
     /* open some place to store stderr in the child processes */
 #if !defined(__SANITIZE_ADDRESS__)
