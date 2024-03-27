@@ -147,16 +147,32 @@ static inline bool is_ignored(char c) {
     }
 }
 
+static inline bool is_terminator(char c) {
+    switch (c) {
+        case '#':
+        case ':':
+            return true;
+        default:
+            return false;
+    }
+}
+
 static struct test_list_entry *parse_test_list_line(std::string line)
 {
     std::vector<std::string_view> tokens;
-    for (auto it = line.begin(); ; ++it) {
-        while (is_ignored(*it)) ++it;
-        if (*it == '#' || it == line.end()) break;
+    auto it = line.begin();
+    while (is_ignored(*it)) ++it;
+    if (*it == '#' || it == line.end()) return nullptr;
+    for (; ; ++it) {
         auto cit = it;
-        while (cit != line.end() && !is_ignored(*cit)) ++cit;
-        tokens.emplace_back(it, cit);
-        if (cit == line.end()) break;
+        /* scroll while it's valid token contents: till end of line, a
+         * terminator, or a space. */
+        while (cit != line.end() && !is_terminator(*cit) && !is_ignored(*cit)) ++cit;
+        auto tend = cit;
+        while (cit != line.end() && is_ignored(*cit)) ++cit;
+        if (cit != line.end() && !is_terminator(*cit)) return nullptr;
+        tokens.emplace_back(it, tend);
+        if (cit == line.end() || *cit == '#') break;
         it = cit;
     }
     if (!tokens.size()) return nullptr;
