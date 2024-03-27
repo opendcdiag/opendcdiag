@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iterator>
 #include <new>
 #include <map>
 #include <numeric>
@@ -62,8 +63,6 @@
 #include "sandstone_kvm.h"
 #include "sandstone_system.h"
 #include "sandstone_thread.h"
-#include "test_selectors/SelectorFactory.h"
-
 #include "sandstone_tests.h"
 #include "sandstone_utils.h"
 #include "topology.h"
@@ -187,29 +186,7 @@ thread_local int thread_num __attribute__((tls_model("initial-exec")));
 thread_local int thread_num = 0;
 #endif
 
-
-static std::span<struct test> test_set = regular_tests;
-
-#if defined(__linux__) && defined(__x86_64__)
-extern struct test mce_test;
-#else
-// no MCE test outside Linux
-static_assert(!InterruptMonitor::InterruptMonitorWorks);
-struct test mce_test = {
-#ifdef TEST_ID_mce_check
-    .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
-    .description = nullptr,
-#else
-    .id = "mce_check",
-    .description = "Machine Check Exceptions/Events count",
-#endif
-    .quality_level = TEST_QUALITY_SKIP
-};
-#endif
-
-// this needs to be a global, raw pointer because we leak memory (nothing here
-// ever gets freed and we don't care -- the application is exiting anyway)
-static TestrunSelector *test_selector;
+static SandstoneTestSet *test_set;
 
 static void find_thyself(char *argv0)
 {
@@ -796,6 +773,67 @@ static void print_temperature_and_throttle()
     logging_printf(LOG_LEVEL_VERBOSE(1),
                    "# CPU temperatures: %s\n", format_socket_temperature_string(temperatures).c_str());
 }
+
+static void apply_group_inits(/*nonconst*/ struct test *test)
+{
+    // Create an array with the replacement functions per group and cache.
+    // If the group_init function decides that the group cannot run at all, it
+    // will return a pointer to a replacement function that will in turn cause
+    // the test to fail or skip during test_init().
+
+    std::span<const struct test_group> groups = { &__start_test_group, &__stop_test_group };
+    static auto replacements = [=]() {
+        struct Result {
+            decltype(test_group::group_init) group_init;
+            decltype(test_group::group_init()) replacement;
+        };
+
+        std::vector<Result> replacements(groups.size());
+        size_t i = 0;
+        for ( ; i < replacements.size(); ++i) {
+            replacements[i].group_init = groups[i].group_init;
+            replacements[i].replacement = nullptr;
+        }
+        return replacements;
+    }();
+
+    for (auto ptr = test->groups; *ptr; ++ptr) {
+        for (size_t i = 0; i < groups.size(); ++i) {
+            if (*ptr != &groups.begin()[i])
+                continue;
+            if (replacements[i].group_init && !replacements[i].replacement) {
+                // call the group_init function, only once
+                replacements[i].replacement = replacements[i].group_init();
+                replacements[i].group_init = nullptr;
+            }
+            if (replacements[i].replacement) {
+                test->test_init = replacements[i].replacement;
+                return;
+            }
+        }
+    }
+}
+
+static void prepare_test(/*nonconst*/ struct test *test)
+{
+    if (test->test_preinit) {
+        test->test_preinit(test);
+        test->test_preinit = nullptr;   // don't rerun in case the test is re-added
+    }
+    if (test->groups)
+        apply_group_inits(test);
+
+#ifdef SANDSTONE
+    if (test->flags & test_type_kvm) {
+        if (!test->test_init) {
+            test->test_init = kvm_generic_init;
+            test->test_run = kvm_generic_run;
+            test->test_cleanup = kvm_generic_cleanup;
+        }
+    }
+#endif
+}
+
 
 static void init_internal(const struct test *test)
 {
@@ -2379,11 +2417,11 @@ static auto collate_test_groups()
         std::vector<const struct test *> entries;
     };
     std::map<std::string_view, Group> groups;
-    for (struct test &test : test_set) {
-        for (auto ptr = test.groups; ptr && *ptr; ++ptr) {
+    for (struct test *t : *test_set) {
+        for (auto ptr = t->groups; ptr && *ptr; ++ptr) {
             Group &g = groups[(*ptr)->id];
             g.definition = *ptr;
-            g.entries.push_back(&test);
+            g.entries.push_back(t);
         }
     }
 
@@ -2399,7 +2437,8 @@ static void list_tests(int opt)
     auto groups = collate_test_groups();
     int i = 0;
 
-    for (auto test = test_set.begin(); test != test_set.end(); ++test) {
+    for (auto it = test_set->begin(); it != test_set->end(); ++it) {
+        struct test *test = *it;
         if (test->quality_level >= sApp->requested_quality) {
             if (include_tests) {
                 if (include_descriptions) {
@@ -2475,25 +2514,24 @@ static struct test *get_next_test_iteration(void)
     return RESTART_OF_TESTS;
 }
 
-static struct test *get_next_test(int tc)
+static struct test *get_next_test(std::vector<struct test*>::iterator &it, int tc)
 {
     if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
         return nullptr;
 
     if constexpr (InterruptMonitor::InterruptMonitorWorks) {
         if (sApp->mce_check_period && tc % sApp->mce_check_period == sApp->mce_check_period - 1
-                && mce_test.quality_level != TEST_QUALITY_SKIP)
+                && test_set->is_disabled(mce_test.id))
             return &mce_test;
     }
 
-    auto next_test = test_selector->get_next_test();
-
-    if (next_test == nullptr){
+    auto next_test = it++;
+    while (next_test != test_set->end() && (*next_test)->quality_level < sApp->requested_quality) next_test = it++;
+    if (next_test == test_set->end()){
         return get_next_test_iteration();
     }
 
-
-    struct test *test = next_test;
+    struct test *test = *next_test;
     assert(test->id);
     assert(test->description);
     assert(strlen(test->id));
@@ -2509,13 +2547,6 @@ static bool wait_delay_between_tests()
 
 static int exec_mode_run(int argc, char **argv)
 {
-    auto find_test_by_name = [](string_view id) -> struct test * {
-        for (struct test &test : test_set) {
-            if (id == test.id)
-                return &test;
-        }
-        return nullptr;
-    };
     if (argc < 4)
         return EX_DATAERR;
 
@@ -2543,20 +2574,14 @@ static int exec_mode_run(int argc, char **argv)
     sApp->thread_count = sApp->shmem->total_cpu_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 
-#ifndef NO_SELF_TESTS
-    if (sApp->shmem->selftest && !SandstoneConfig::RestrictedCommandLine)
-        test_set = selftests;
-#endif
-
-    struct test *test_to_run = find_test_by_name(argv[0]);
-    if (!test_to_run) return EX_DATAERR;
+    test_set = new SandstoneTestSet(true, sApp->shmem->selftest);
+    std::vector<struct test *> tests_to_run = SandstoneTestSet::lookup(argv[0]);
+    if (tests_to_run.size() != 1) return EX_DATAERR;
 
     logging_init_global_child();
     random_init_global(argv[1]);
 
-    std::vector<struct test *> test_list;
-    add_test(test_list, test_to_run);
-    return test_result_to_exit_code(child_run(test_to_run, child_number));
+    return test_result_to_exit_code(child_run(tests_to_run.at(0), child_number));
 }
 
 // Triage run attempts to figure out which socket(s) are causing test failures.
@@ -3181,14 +3206,13 @@ int main(int argc, char **argv)
     const char *on_crash_arg = nullptr;
 
     // test selection
+    std::vector<char *> enabled_tests;
+    std::vector<char *> disabled_tests;
     const char *test_list_file_path = nullptr;
     bool test_list_randomize = false;
     const char *builtin_test_list_name = nullptr;
     int starting_test_number = 1;  // One based count for user interface, not zero based
     int ending_test_number = INT_MAX;
-    WeightedTestScheme test_selection_strategy = Alphabetical;
-    WeightedTestLength weighted_testrunner_runtimes = NormalTestrunTimes;
-    std::vector<struct test *> test_list;
 
     thread_num = -1;            /* indicate main thread */
     find_thyself(argv[0]);
@@ -3216,11 +3240,12 @@ int main(int argc, char **argv)
            (opt = simple_getopt(argc, argv, long_options)) != -1) {
         switch (opt) {
         case disable_option:
-            disable_tests(test_set, optarg);
+            disabled_tests.push_back(optarg);
             break;
         case 'e':
-            add_tests(test_set, test_list, optarg);
-            test_selection_strategy = Ordered;
+            enabled_tests.push_back(optarg);
+            // FIXME:
+            // test_selection_strategy = Ordered;
             break;
         case 'f':
             if (strcmp(optarg, "no") == 0 || strcmp(optarg, "no-fork") == 0) {
@@ -3246,9 +3271,11 @@ int main(int argc, char **argv)
         case 'l':
         case raw_list_tests:
         case raw_list_groups:
+            test_set = new SandstoneTestSet(true, sApp->shmem->selftest);
             list_tests(opt);
             return EXIT_SUCCESS;
         case raw_list_group_members:
+            test_set = new SandstoneTestSet(true, sApp->shmem->selftest);
             list_group_members(optarg);
             return EXIT_SUCCESS;
         case 'n':
@@ -3329,7 +3356,8 @@ int main(int argc, char **argv)
             // corresponding functionality is active
             return EXIT_SUCCESS;
         case longer_runtime_option:
-            weighted_testrunner_runtimes = LongerTestrunTimes;
+            // FIXME:
+            // weighted_testrunner_runtimes = LongerTestrunTimes;
             break;
         case max_cores_per_slice_option:
             max_cores_per_slice = ParseIntArgument<>{
@@ -3393,7 +3421,8 @@ int main(int argc, char **argv)
             }();
             break;
         case shortened_runtime_option:
-            weighted_testrunner_runtimes = ShortenedTestrunTimes;
+            // FIXME:
+            // weighted_testrunner_runtimes = ShortenedTestrunTimes;
             break;
         case strict_runtime_option:
             sApp->shmem->use_strict_runtime = true;
@@ -3409,7 +3438,6 @@ int main(int argc, char **argv)
             }
             sApp->requested_quality = 0;
             sApp->shmem->selftest = true;
-            test_set = selftests;
             break;
 #endif
         case service_option:
@@ -3427,7 +3455,8 @@ int main(int argc, char **argv)
                                 "have a built-in test list.\n", argv[0]);
                 return EX_USAGE;
             }
-            test_selection_strategy = Ordered;
+            // FIXME:
+            // test_selection_strategy = Ordered;
             builtin_test_list_name = optarg ? optarg : "auto";
             break;
         case temperature_threshold_option:
@@ -3470,16 +3499,20 @@ int main(int argc, char **argv)
         case weighted_testrun_option:
             // Warning: Only looking at first 3 characters of each of these
             if (strncasecmp(optarg, "repeat", 3) == 0) {
-                test_selection_strategy = Repeating;
+                // FIXME:
+                // test_selection_strategy = Repeating;
             } else if (strncasecmp(optarg, "non-repeat", 3) == 0) {
-                test_selection_strategy = NonRepeating;
+                // FIXME:
+                // test_selection_strategy = NonRepeating;
             } else if (strncasecmp(optarg, "priority", 3) == 0) {
-                test_selection_strategy = Prioritized;
+                // FIXME:
+                // test_selection_strategy = Prioritized;
             } else {
                 fprintf(stderr, "Cannot determine weighted testrunner type (%s is invalid - use repeat/non-repeat)", optarg);
                 return EX_USAGE;
             }
-            weighted_testrunner_runtimes = NormalTestrunTimes;
+            // FIXME:
+            // weighted_testrunner_runtimes = NormalTestrunTimes;
             break;
 
         case test_list_file_option:
@@ -3538,25 +3571,29 @@ int main(int argc, char **argv)
             return EXIT_SUCCESS;
         case one_sec_option:
             test_list_randomize = true;
-            test_selection_strategy = Repeating;
+            // FIXME:
+            // test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
             sApp->endtime = sApp->starttime + 1s;
             break;
         case thirty_sec_option:
             test_list_randomize = true;
-            test_selection_strategy = Repeating;
+            // FIXME:
+            // test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
             sApp->endtime = sApp->starttime + 30s;
             break;
         case two_min_option:
             test_list_randomize = true;
-            test_selection_strategy = Repeating;
+            // FIXME:
+            // test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
             sApp->endtime = sApp->starttime + 2min;
             break;
         case five_min_option:
             test_list_randomize = true;
-            test_selection_strategy = Repeating;
+            // FIXME:
+            // test_selection_strategy = Repeating;
             sApp->shmem->use_strict_runtime = true;
             sApp->endtime = sApp->starttime + 5min;
             break;
@@ -3589,12 +3626,41 @@ int main(int argc, char **argv)
         }
     }
 
-    if (test_list_randomize) {
-        if ((test_selection_strategy == Ordered) || (test_selection_strategy == Alphabetical)) {
-            test_selection_strategy = NonRepeating;
+    if (enabled_tests.size() || builtin_test_list_name || test_list_file_path) {
+        /* if anything other than the "all tests" has been specified, start with
+         * an empty list. */
+        test_set = new SandstoneTestSet(false, sApp->shmem->selftest);
+    } else {
+        /* otherwise, start with all the applicable tests (self tests or
+         * regular. */
+        test_set = new SandstoneTestSet(true, sApp->shmem->selftest);
+    }
+
+    /* Add all the tests we were told to enable. */
+    if (enabled_tests.size()) {
+        for (char *name : enabled_tests) {
+            auto tis = test_set->enable(name);
+            if (!tis.size() && !sApp->ignore_unknown_tests) {
+                fprintf(stderr, "%s: Cannot find matching tests for '%s'\n", program_invocation_name, name);
+                exit(EX_USAGE);
+            }
+            for (auto ti : tis) {
+                prepare_test(ti.test);
+            }
         }
     }
 
+    /* Remove all the tests we were told to disable */
+    if (disabled_tests.size()) {
+        for (char *name : disabled_tests) {
+            test_set->disable(name);
+        }
+    }
+
+    /* Add the test list file */
+    if (test_list_file_path) {
+        test_set->add_test_list(test_list_file_path);
+    }
 
     if (SandstoneConfig::RestrictedCommandLine) {
         // Default options for the simplified OpenDCDiag cmdline
@@ -3640,7 +3706,8 @@ int main(int argc, char **argv)
         sApp->thermal_throttle_temp = INT_MIN;
         do_not_triage = SandstoneConfig::NoTriage;
         fatal_errors = true;
-        test_selection_strategy = Ordered;
+        // FIXME: 
+        // test_selection_strategy = Ordered;
         builtin_test_list_name = "auto";
 
         static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,
@@ -3679,15 +3746,15 @@ int main(int argc, char **argv)
     if (sApp->shmem->verbosity == -1)
         sApp->shmem->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
 
-    if (InterruptMonitor::InterruptMonitorWorks && mce_test.quality_level != TEST_QUALITY_SKIP) {
+    if (InterruptMonitor::InterruptMonitorWorks && test_set->is_enabled(mce_test.id)) {
         sApp->last_thermal_event_count = sApp->count_thermal_events();
         sApp->mce_counts_start = sApp->get_mce_interrupt_counts();
 
         if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-            disable_test(&mce_test);
+            test_set->disable(mce_test.id);
         } else if (sApp->mce_counts_start.empty()) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: Cannot detect MCE events - you may be running in a VM - MCE checking disabled\n");
-            disable_test(&mce_test);
+            test_set->disable(mce_test.id);
         }
 
         sApp->mce_count_last = std::accumulate(sApp->mce_counts_start.begin(), sApp->mce_counts_start.end(), uint64_t(0));
@@ -3704,58 +3771,6 @@ int main(int argc, char **argv)
 #ifndef __OPTIMIZE__
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
 #endif
-
-    // If we want to use the weighted testrunner we need to initialize it
-    if (test_list_file_path) {
-        if (builtin_test_list_name)
-            logging_printf(LOG_LEVEL_QUIET,
-                           "# WARNING: both --test-list-file and --use-builtin-test-list "
-                           "specified, using test file \"%s\".\n", test_list_file_path);
-        if (test_list.size()) {
-            logging_printf(LOG_LEVEL_QUIET,
-                           "# WARNING: both --test-list-file and --enable specified, using only "
-                           "the test list file \"%s\".\n", test_list_file_path);
-            test_list = {};
-        }
-
-        // include ALL tests in this test list, including TEST_QUALITY_SKIP;
-        // the test selector will filter those out
-        generate_test_list(test_list, test_set, INT_MIN);
-        test_selector = create_list_file_test_selector(std::move(test_list), test_list_file_path,
-                                                       starting_test_number, ending_test_number,
-                                                       test_list_randomize);
-    } else {
-        if (builtin_test_list_name) {
-            if (test_list.size()) {
-                if (!SandstoneConfig::RestrictedCommandLine) {
-                    logging_printf(LOG_LEVEL_QUIET,
-                               "# WARNING: both --enable and --use-builtin-test-list specified, "
-                               "the built-in test list.\n");
-                } else {
-                    logging_printf(LOG_LEVEL_QUIET, "# WARNING: test list is not empty while built-in test list provided.\n");
-                }
-            }
-
-            TestList builtin_test_list = select_test_list(builtin_test_list_name);
-
-            if (!builtin_test_list.tests) {
-                logging_printf(LOG_LEVEL_QUIET,
-                        "# ERROR: the list '%s' specified with --use-builtin-test-list does not exist.\n", builtin_test_list_name);
-                exit(EX_USAGE);
-            }
-            logging_printf(LOG_LEVEL_VERBOSE(1), "# Using test list '%s'\n", builtin_test_list.name);
-            for (auto &test : *builtin_test_list.tests) {
-                add_test(test_list, test);
-            }
-        } else {
-            generate_test_list(test_list, test_set);
-        }
-        if (!test_selector) {
-            weighted_run_info weights[] = { { nullptr } };
-            test_selector = setup_test_selector(test_selection_strategy, weighted_testrunner_runtimes,
-                                                std::move(test_list), weights);
-        }
-    }
 
 #if SANDSTONE_SSL_BUILD
     if (SANDSTONE_SSL_LINKED || sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
@@ -3775,8 +3790,9 @@ int main(int argc, char **argv)
     bool restarting = true;
     int total_tests_run = 0;
     TestResult lastTestResult = TestResult::Skipped;
+    auto it = test_set->begin();
 
-    for (struct test *test = get_next_test(tc); test; test = get_next_test(tc)) {
+    for (struct test *test = get_next_test(it, tc); test; test = get_next_test(it, tc)) {
         if (restarting){
             tc = 0;
             logging_print_iteration_start();
@@ -3800,7 +3816,7 @@ int main(int argc, char **argv)
         restarting = (test == RESTART_OF_TESTS);
         if (restarting) {
             if constexpr (InterruptMonitor::InterruptMonitorWorks) {
-                if (mce_test.quality_level != TEST_QUALITY_SKIP)
+                if (!test_set->is_disabled(mce_test.id))
                     test = &mce_test;
             }
             if (test == RESTART_OF_TESTS)
@@ -3829,7 +3845,7 @@ int main(int argc, char **argv)
 
     // Run the mce_test at the end of all tests to make sure no MCE errors fired
     if constexpr (InterruptMonitor::InterruptMonitorWorks) {
-        if (total_failures == 0 && mce_test.quality_level != TEST_QUALITY_SKIP) {
+        if (total_failures == 0 && !test_set->is_disabled(mce_test.id)) {
             if (run_one_test(&tc, &mce_test, per_cpu_failures) == TestResult::Failed)
                 ++total_failures;
             else
