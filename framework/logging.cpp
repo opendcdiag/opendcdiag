@@ -1410,8 +1410,15 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
         return;         // we couldn't find a difference
 
     // log the data that failed
+    auto &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
+    size_t len = size;
+    if (size_t old_total = data_bytes_logged.fetch_add(2 * size, std::memory_order_relaxed);
+            sApp->shmem->max_logdata_per_thread - old_total < 2 * size) {
+        // trim how much data we'll print so we don't overflow
+        len = (sApp->shmem->max_logdata_per_thread - old_total) / 2;
+    }
+
     ptrdiff_t start;
-    size_t len = 64;
     if (offset < len) {
         start = 0;
         if (len > size)
