@@ -1301,10 +1301,10 @@ void log_data(const char *message, const void *data, size_t size)
 
     std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
     std::atomic<unsigned> &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
-    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread ||
-            (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->shmem->max_logdata_per_thread))
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread)
         return;
-
+    if (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->shmem->max_logdata_per_thread)
+        return;
 
     log_data_common(message, static_cast<const uint8_t *>(data), size, false);
 }
@@ -1409,9 +1409,20 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     if (offset < 0)
         return;         // we couldn't find a difference
 
-    // log the data that failed
+    // Log the data that failed. We have two buffers of size bytes to log, but
+    // we'll obey the max_logdata_per_thread limit (shared with log_data()).
+    // Note: this didn't need to be atomic...
+    //   size_t avail = sApp->shmem->max_logdata_per_thread - bytes_logged;
+    //   size_t len = std::min(size, avail / 2);
+    auto &bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
+    size_t len = size;
+    if (size_t old_total = bytes_logged.fetch_add(2 * size, std::memory_order_relaxed);
+            sApp->shmem->max_logdata_per_thread - old_total < 2 * size) {
+        // trim how much data we'll print so we stick to the limit
+        len = (sApp->shmem->max_logdata_per_thread - old_total) / 2;
+    }
+
     ptrdiff_t start;
-    size_t len = 64;
     if (offset < len) {
         start = 0;
         if (len > size)
