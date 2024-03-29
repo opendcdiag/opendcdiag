@@ -1701,6 +1701,40 @@ selftest_cpuset_unsorted() {
     selftest_cpuset_unsorted "odd" "${cpuinfo[@]}"
 }
 
+selftest_cpuset_negated() {
+    local arg=$1
+    local not=$2
+
+    # get all the CPUs, except $not
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info |
+            awk -v "not=$not" '/^[0-9]/ && $1 != not { print $1; }'`)
+    selftest_cpuset_unsorted "$arg" "${cpuinfo[@]}"
+}
+
+@test "cpuset=number (not first)" {
+    # Get the first logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
+    selftest_cpuset_negated \!${cpuinfo[0]} ${cpuinfo[0]}
+}
+
+@test "cpuset=topology (not first)" {
+    # Get the first logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
+    selftest_cpuset_negated \!p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]} ${cpuinfo[0]}
+}
+
+@test "cpuset=number (not last)" {
+    # Get the last logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '$p'`)
+    selftest_cpuset_negated \!${cpuinfo[0]} ${cpuinfo[0]}
+}
+
+@test "cpuset=topology (not last)" {
+    # Get the last logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '$p'`)
+    selftest_cpuset_negated \!p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]} ${cpuinfo[0]}
+}
+
 # Confirm that we are roughly using the threads we said we would
 @test "thread usage" {
     local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)

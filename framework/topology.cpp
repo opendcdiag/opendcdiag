@@ -764,6 +764,12 @@ static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
 
 void apply_cpuset_param(char *param)
 {
+    struct MatchCpuInfoByCpuNumber {
+        int cpu_number;
+        bool operator()(const struct cpu_info &cpu)
+        { return cpu.cpu_number == cpu_number; }
+    };
+
     if (SandstoneConfig::RestrictedCommandLine)
         return;
 
@@ -773,6 +779,14 @@ void apply_cpuset_param(char *param)
 
     LogicalProcessorSet result = {};
     new_cpu_info.reserve(old_cpu_info.size());
+
+    bool add = true;
+    if (*param == '!') {
+        // we're removing from the existing set
+        new_cpu_info = { old_cpu_info.begin(), old_cpu_info.end() };
+        add = false;
+        ++param;
+    }
 
     std::string p = param;
     for (char *arg = strtok(p.data(), ","); arg; arg = strtok(nullptr, ",")) {
@@ -794,14 +808,23 @@ void apply_cpuset_param(char *param)
             arg = endptr;       // advance
             return int(n);
         };
-        auto add_to_set = [&](const struct cpu_info &cpu) {
+        auto apply_to_set = [&](const struct cpu_info &cpu) {
             LogicalProcessor lp = LogicalProcessor(cpu.cpu_number);
-            if (!result.is_set(lp)) {
-                result.set(lp);
+            if (result.is_set(lp))
+                return;
+
+            if (add) {
                 auto it = std::lower_bound(new_cpu_info.begin(), new_cpu_info.end(), cpu, cpu_compare);
                 new_cpu_info.insert(it, cpu);
-                ++total_matches;
+            } else {
+                auto it = std::find_if(new_cpu_info.begin(), new_cpu_info.end(),
+                                       MatchCpuInfoByCpuNumber(cpu.cpu_number));
+                if (it == new_cpu_info.end())
+                    return;
+                new_cpu_info.erase(it);
             }
+            result.set(lp);
+            ++total_matches;
         };
 
         char c = *arg;
@@ -815,19 +838,19 @@ void apply_cpuset_param(char *param)
             }
 
             auto cpu = std::find_if(old_cpu_info.begin(), old_cpu_info.end(),
-                                    [=](const struct cpu_info &cpu) { return cpu.cpu_number == cpu_number; });
+                                    MatchCpuInfoByCpuNumber(cpu_number));
             if (cpu == old_cpu_info.end()) {
                 fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (no such logical processor)\n",
                         program_invocation_name, orig_arg);
                 exit(EX_USAGE);
             }
-            add_to_set(*cpu);
+            apply_to_set(*cpu);
         } else if ( strcmp( p.data(), "odd") == 0 || strcmp( p.data(), "even") == 0){
             int desired_remainder = strcmp(p.data(), "odd") == 0 ? 1 : 0;
             for (struct cpu_info &cpu : old_cpu_info)
             {
                 if (cpu.cpu_number % 2 == desired_remainder)
-                    add_to_set(cpu);
+                    apply_to_set(cpu);
             } 
         } else if (c >= 'a' && c <= 'z') {
             // topology search
@@ -870,7 +893,7 @@ void apply_cpuset_param(char *param)
                     continue;
                 if (thread != -1 && cpu.thread_id != thread)
                     continue;
-                add_to_set(cpu);
+                apply_to_set(cpu);
                 ++match_count;
             }
 
@@ -885,9 +908,17 @@ void apply_cpuset_param(char *param)
                 program_invocation_name);
         exit(EX_USAGE);
     }
+    if (!add && new_cpu_info.size() == 0) {
+        fprintf(stderr, "%s: error: negated --cpuset matched everything, this is probably not "
+                        "what you wanted.\n", program_invocation_name);
+        exit(EX_USAGE);
+    }
 
     assert(total_matches == result.count());
-    assert(total_matches == new_cpu_info.size());
+    if (add)
+        assert(total_matches == new_cpu_info.size());
+    else
+        assert(total_matches == old_cpu_info.size() - new_cpu_info.size());
     update_topology(new_cpu_info);
 }
 
