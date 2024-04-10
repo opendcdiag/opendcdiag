@@ -3212,8 +3212,10 @@ int main(int argc, char **argv)
         init_topology(std::move(enabled_cpus));
     }
 
+    int coptind = -1;
+
     while (!SandstoneConfig::RestrictedCommandLine &&
-           (opt = simple_getopt(argc, argv, long_options)) != -1) {
+           (opt = simple_getopt(argc, argv, long_options, &coptind)) != -1) {
         switch (opt) {
         case disable_option:
             disable_tests(test_set, optarg);
@@ -3577,7 +3579,7 @@ int main(int argc, char **argv)
         case mem_samples_per_log_option:
         case no_mem_sampling_option:
         case schedule_by_option:
-            warn_deprecated_opt(argv[optind]);
+            warn_deprecated_opt(long_options[coptind].name);
             break;
 
         case 0:
