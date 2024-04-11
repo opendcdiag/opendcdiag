@@ -1428,17 +1428,6 @@ Common command-line options are:
      Randomizes the order in which tests are executed.
  --test-delay <time in ms>
      Delay between individual test executions in milliseconds.
- --schedule-by <selection>
-     Valid options for <selection> are [core, thread]. Default is thread.
-     This selection comes into play when Sandstone has to limit the number
-     of concurrent logical cpus on which a test can run (which is the case
-     when --max-concurrent-threads is specified or if the test has an
-     implicit maximum concurrent threads limit). If the selection is to
-     schedule by thread, Sandstone groups the specified set of logical cpus
-     numerically according to thread number. This means that typically both
-     logical cpus on a core will not be running the test concurrently. On
-     the other hand, if the selection is to schedule by core, Sandstone will
-     try to pick logical cpus belonging to the same core to run concurrently.
   -Y, --yaml [<indentation>]
      Use YAML for logging. The optional argument is the number of spaces to
      indent each line by (defaults to 0).
