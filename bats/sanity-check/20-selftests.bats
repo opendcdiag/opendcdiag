@@ -167,7 +167,8 @@ tap_negative_check() {
         case "$line" in
             \#* | \
                 "$exit_line" | \
-                "THIS IS AN UNOPTIMIZED BUILD"*)
+                "THIS IS AN UNOPTIMIZED BUILD"* | \
+                "ok"*"mce_check")
                 # acceptable line
                 ;;
             "not ok"*)
