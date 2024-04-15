@@ -27,6 +27,15 @@
 
 #define BUF_MAX (size_t)(1024 * 1024 * 4)
 
+extern void x86_check_features(void);
+static int zfuzz_init(struct test *test)
+{
+#ifdef __x86_64__
+    x86_check_features();
+#endif
+    return EXIT_SUCCESS;
+}
+
 static uint32_t zfuzz_gen_buffer(uint8_t *buf, size_t bufsz)
 {
     uint32_t crc;
@@ -159,5 +168,6 @@ done:
 DECLARE_TEST(zfuzz, "Zlib fuzz test")
         .groups = DECLARE_TEST_GROUPS(&group_compression),
         .quality_level = TEST_QUALITY_PROD,
+        .test_init = zfuzz_init,
         .test_run = zfuzz_run,
 END_DECLARE_TEST
