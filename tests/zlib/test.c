@@ -35,8 +35,6 @@ struct zlib_parameters
     unsigned maxbuffersize;
 };
 
-extern void x86_check_features(void);
-
 static void __attribute__((cold, noreturn)) print_zlib_error(const char *func, int status)
 {
     const char *err_str = zError(status);
@@ -121,10 +119,6 @@ static void zcheck(size_t bufsz, uint8_t * buf, int level)
 
 static int zlib_init_common(struct test *test, int level)
 {
-#ifdef __x86_64__
-    x86_check_features();
-#endif
-
     // negative value from caller implies they want to add an option
     if (level < 0)
         level = get_testspecific_knob_value_int(test, "level", -level);
