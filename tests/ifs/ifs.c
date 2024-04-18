@@ -29,7 +29,8 @@
 #define _GNU_SOURCE 1
 #include <sandstone.h>
 
-#if defined(__x86_64__) && defined(__linux__)
+#if defined(__x86_64__)
+#if defined(__linux__)
 
 #include <assert.h>
 #include <dirent.h>
@@ -304,6 +305,32 @@ static int scan_array_init(struct test *test)
     return scan_common_init(test);
 }
 
+#else // !__linux__
+
+static int scan_preinit(struct test *test)
+{
+    return EXIT_SUCCESS;
+}
+
+static int scan_saf_init(struct test *test)
+{
+    log_skip(OsNotSupportedSkipCategory, "Not supported on this OS");
+    return EXIT_SKIP;
+}
+
+static int scan_run(struct test *test, int cpu)
+{
+    __builtin_unreachable();
+}
+
+static int scan_array_init(struct test *test)
+{
+    log_skip(OsNotSupportedSkipCategory, "Not supported on this OS");
+    return EXIT_SKIP;
+}
+
+#endif // __linux__
+
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
     .test_preinit = scan_preinit,
     .test_init = scan_saf_init,
@@ -324,4 +351,4 @@ DECLARE_TEST(ifs_array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware sel
     .flags = test_schedule_sequential,
 END_DECLARE_TEST
 
-#endif // __x86_64__ && __linux__
+#endif // __x86_64__
