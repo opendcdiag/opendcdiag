@@ -26,6 +26,7 @@ private:
     std::vector<int> core_frequency_levels;
     int core_frequency_level_idx = 0;
     int total_core_frequency_levels = 0;
+    std::string pstate_driver_initial_status = ""; //if framework itself is enabling userspace save the initial state to restore after everything is done
 
     // uncore-frequency variables
     std::vector<std::pair<int, int>> initial_uncore_frequency;  // initial (min, max) un-core pair for each socket
@@ -47,7 +48,6 @@ private:
         fscanf(file, "%s", line);
         fclose(file);
         return std::string(line);
-        return "";
     }
 
     void write_file(const std::string &file_path, const std::string &line)
@@ -100,7 +100,7 @@ private:
             uncore_frequency_levels.push_back(std::move(tmp_frequency_levels));
     }
 
-    void check_if_userspace_present()
+    bool check_if_userspace_present()
     {
         const char *scaling_governor_path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors";
         char read_file[100];
@@ -114,12 +114,11 @@ private:
         while (fscanf(file, "%s", read_file) != EOF) {
             if (strcmp(read_file, "userspace") == 0) {
                 fclose(file);
-                return;
+                return true;
             }
         }
 
-        fprintf(stderr, "%s: Cannot find \"userspace\" scaling governor from the file: %s\n", program_invocation_name, scaling_governor_path);
-        exit(EX_DATAERR);
+        return false;
     }
 
     void check_uncore_frequency_support()
@@ -147,6 +146,18 @@ private:
         }
     }
 
+    void enable_disable_userspace(bool should_enable_userspace)
+    {
+        const char *pstate_driver_file = "/sys/devices/system/cpu/intel_pstate/status";
+        if (should_enable_userspace) {
+            // enable "userspace"
+            pstate_driver_initial_status = read_file(pstate_driver_file);
+            write_file(pstate_driver_file, "passive");
+        } else {
+            // disable "userspace"
+            write_file(pstate_driver_file, pstate_driver_initial_status);
+        }
+    }
 
 #endif
 
@@ -157,7 +168,8 @@ public:
     {
 #ifdef __linux__
         /* check if "userspace" frequency governor is available. Not all distributions have it*/
-        check_if_userspace_present();    
+        if (!check_if_userspace_present())
+            enable_disable_userspace(true); // if "userspace" not present enable it
 
         /* record supported max and min frequencies */
         std::string cpuinfo_max_freq_path{"/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"};
@@ -266,6 +278,10 @@ public:
             scaling_setspeed_path += SCALING_SETSPEED;
             write_file(scaling_setspeed_path, per_cpu_initial_scaling_setspeed[cpu]);
         }
+
+        // Check if "userspace" was enabled by framework. If it was, restore to it's initial state.
+        if (pstate_driver_initial_status.size() > 0)
+            enable_disable_userspace(false);
 #endif
     }
 
