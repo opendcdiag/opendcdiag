@@ -9,6 +9,7 @@
 #ifndef signature_INTEL_ebx
 #include <cpuid.h>
 #endif
+#include <immintrin.h>
 #include <stdint.h>
 
 #if __clang_major__ > 10 || defined(_tile_loadd)
