@@ -1084,10 +1084,11 @@ void restrict_topology(CpuRange range)
     assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
     auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_cpu);
     int old_thread_count = std::exchange(sApp->thread_count, range.cpu_count);
-    if (old_cpu_info == cpu_info && old_thread_count == sApp->thread_count)
-        return;
 
-    cached_topology() = build_topology();
+    Topology &topo = cached_topology();
+    if (old_cpu_info != cpu_info || old_thread_count != sApp->thread_count ||
+            topo.packages.size() == 0)
+        topo = build_topology();
 }
 
 static char character_for_mask(uint32_t mask)

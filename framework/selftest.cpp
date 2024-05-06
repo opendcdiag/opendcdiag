@@ -204,6 +204,7 @@ static int selftest_cxxthrowcatch_run(struct test *test, int cpu)
 
 static int selftest_skip_init(struct test *test)
 {
+    log_info("{\"packages\": %d, \"cpus\": %d}", num_packages(), num_cpus());
     log_info("Requesting skip (this message should be visible)");
     return EXIT_SKIP;
 }

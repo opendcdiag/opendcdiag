@@ -1735,6 +1735,39 @@ selftest_cpuset_negated() {
     selftest_cpuset_negated \!p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]} ${cpuinfo[0]}
 }
 
+@test "num_cpus" {
+    declare -A yamldump
+
+    sandstone_selftest -e selftest_skip
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*"cpus":\s*'$MAX_PROC'\b.*'
+}
+
+@test "num_packages" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_skip --cpuset=p0
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*"packages":\s*1\b.*'
+
+    # attempt to run on two sockets
+    export SANDSTONE_MOCK_TOPOLOGY='0 1 0:1 1:1'
+    run $SANDSTONE --cpuset=p1 --dump-cpu-info
+    if [[ $status -ne 0 ]]; then
+        skip "Test only works with Debug builds (to mock the topology) or multi-socket systems"
+    fi
+
+    sandstone_selftest -e selftest_skip --cpuset=p0c0,p1c0 --no-slicing
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*"packages":\s*2\b.*'
+
+    # now let's try 4 sockets
+    export SANDSTONE_MOCK_TOPOLOGY='0 1 2 3'
+    run $SANDSTONE --cpuset=p3 --dump-cpu-info
+    if [[ $status -eq 0 ]]; then
+        sandstone_selftest -e selftest_skip --cpuset=p0c0,p1c0,p2c0,p3c0 --no-slicing
+        test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*"packages":\s*4\b.*'
+    fi
+}
+
 # Confirm that we are roughly using the threads we said we would
 @test "thread usage" {
     local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
