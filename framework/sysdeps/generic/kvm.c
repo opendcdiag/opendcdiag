@@ -8,6 +8,7 @@
 
 #include "sandstone_kvm.h"
 
+#ifdef __linux__
 
 int kvm_generic_run(struct test *test, int cpu)
 {
@@ -24,3 +25,23 @@ int kvm_generic_cleanup(struct test *t)
 {
     return EXIT_SUCCESS;
 }
+
+#else // !__linux__
+
+int kvm_generic_init(struct test *)
+{
+    log_skip(OsNotSupportedSkipCategory, "Not supported on this OS");
+    return EXIT_SKIP;
+}
+
+int kvm_generic_run(struct test *test, int cpu)
+{
+    __builtin_unreachable();
+}
+
+int kvm_generic_cleanup(struct test *)
+{
+    return EXIT_SUCCESS;
+}
+
+#endif
