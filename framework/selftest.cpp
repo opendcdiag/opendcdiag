@@ -537,6 +537,39 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     return EXIT_SUCCESS;
 }
 
+template <typename Ratio, typename T = uint32_t>
+static int selftest_datacomparefailrare_run(struct test *, int cpu)
+{
+    constexpr size_t Count = 16;
+    static_assert(Count * CHAR_BIT < std::numeric_limits<std::intmax_t>::max() / Ratio::den,
+            "Ratio will overflow");
+    static_assert(Ratio::num < RAND_MAX, "Ratio will underflow");
+
+    std::array<T, Count> expected;
+    if constexpr (std::is_floating_point_v<T>) {
+        for (T &value : expected)
+            value = frandom_scale(1);
+    } else {
+        memset_random(expected.data(), sizeof(expected));
+    }
+
+    std::array actual = expected;
+
+    // Maybe make a perturbation. We want to have a Ratio chance of making a
+    // 1-bit flip in Count*CHAR_BIT bits, so create random number between 0 and
+    // Count * CHAR_BIT * Ratio::den / Ratio::num.
+    int r = rand();
+    int bitoffset = r * Ratio::den * CHAR_BIT * Count /
+            ((unsigned(RAND_MAX) + 1) / Ratio::num);
+    if (bitoffset < Count * CHAR_BIT) {
+        auto ptr = reinterpret_cast<uint8_t *>(actual.data());
+        ptr[bitoffset / CHAR_BIT] ^= 1 << (bitoffset % CHAR_BIT);
+    }
+
+    memcmp_or_fail(actual.data(), expected.data(), Count);
+    return EXIT_SUCCESS;
+}
+
 static int selftest_datacompare_nodifference_run(struct test *, int cpu)
 {
     uint8_t actual[16], expected[16];
@@ -1137,7 +1170,7 @@ static struct test selftests_array[] = {
 },
 {
     .id = "selftest_cxxthrowcatch",
-.description = "Throws and catches a C++ exception",
+    .description = "Throws and catches a C++ exception",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_cxxthrowcatch_run,
     .desired_duration = -1,
@@ -1391,6 +1424,38 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_random),
     .test_run = selftest_timed_randomfail_run<10'000, std::ratio<1, 1024>>,
     .fracture_loop_count = 4,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_datacomparefail_int_50pct",
+    .description = "Fakes a memcmp_or_fail that finds a difference that isn't there, 50% of the time",
+    .groups = DECLARE_TEST_GROUPS(&group_random),
+            .test_run = selftest_datacomparefailrare_run<std::ratio<1, 2>>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_datacomparefail_int_rare",
+    .description = "Fakes a memcmp_or_fail that finds a difference that isn't there, less than 0.1% of the time",
+    .groups = DECLARE_TEST_GROUPS(&group_random),
+            .test_run = selftest_datacomparefailrare_run<std::ratio<1, 1024>>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_datacomparefail_double_50pct",
+    .description = "Fakes a memcmp_or_fail that finds a difference that isn't there, 50% of the time",
+    .groups = DECLARE_TEST_GROUPS(&group_random),
+            .test_run = selftest_datacomparefailrare_run<std::ratio<1, 2>, double>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_datacomparefail_double_rare",
+    .description = "Fakes a memcmp_or_fail that finds a difference that isn't there, less than 0.1% of the time",
+    .groups = DECLARE_TEST_GROUPS(&group_random),
+            .test_run = selftest_datacomparefailrare_run<std::ratio<1, 1024>, double>,
+    .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
 
