@@ -142,9 +142,9 @@ static int ssl_sha_run(struct test* test, int cpu)
         /* Check result against golden values */
         memcmp_or_fail(&our_elem->sha256sum[0], &golden_elem->sha256sum[0], SHA256_DIGEST_LENGTH,
                 "sha256sum values does not match.");
-        memcmp_or_fail(&our_elem->sha384sum[0], &golden_elem->sha384sum[0], SHA256_DIGEST_LENGTH,
+        memcmp_or_fail(&our_elem->sha384sum[0], &golden_elem->sha384sum[0], SHA384_DIGEST_LENGTH,
                 "sha384sum values does not match.");
-        memcmp_or_fail(&our_elem->sha512sum[0], &golden_elem->sha512sum[0], SHA256_DIGEST_LENGTH,
+        memcmp_or_fail(&our_elem->sha512sum[0], &golden_elem->sha512sum[0], SHA512_DIGEST_LENGTH,
                 "sha512sum values does not match.");
     }
     return EXIT_SUCCESS;
