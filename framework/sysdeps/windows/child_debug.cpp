@@ -11,6 +11,13 @@
 
 #include <windows.h>
 
+enum HangAction {
+    kill_on_hang,
+    context_on_hang,
+    attach_gdb_on_hang
+};
+static uint8_t on_hang_action = kill_on_hang;
+
 #if defined(__x86_64__) && !defined(CONTEXT_XSTATE)
 #  define CONTEXT_XSTATE        (CONTEXT_AMD64 | 0x00000040L)
 #endif
@@ -244,7 +251,12 @@ void debug_init_child()
 
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
 {
-    (void) on_hang_arg;
+    if (SandstoneConfig::ChildDebugHangs && on_hang_arg) {
+        std::string_view arg = on_hang_arg;
+        if (SandstoneConfig::ChildBacktrace && (arg == "gdb" || arg == "attach-gdb")) {
+            on_hang_action = attach_gdb_on_hang;
+        }
+    }
     if (SandstoneConfig::ChildDebugCrashes) {
         std::string_view arg = on_crash_arg ? on_crash_arg : "context";
         if (arg == "context" || arg == "context+core" || arg == "core+context") {
@@ -254,6 +266,31 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
             exit(EX_USAGE);
         }
     }
+}
+
+static void attach_gdb(HANDLE child)
+{
+    DWORD pid = GetProcessId(HANDLE(child));
+    if (pid == 0)
+        return;
+
+    char pidstr[std::numeric_limits<DWORD>::digits10 + 2];
+    sprintf(pidstr, "%lu", pid);
+    const char *argv[] = {
+        "gdb.exe",
+        program_invocation_name,
+        pidstr,
+        nullptr
+    };
+
+    // restore our regular stdout, so the user can interact with gdb
+    int saved_stdout = _dup(STDOUT_FILENO);
+    _dup2(logging_stdout_fd(), STDOUT_FILENO);
+
+    _spawnvp(_P_WAIT, argv[0], const_cast<char **>(argv));
+
+    _dup2(saved_stdout, STDOUT_FILENO);
+    close(saved_stdout);
 }
 
 void debug_crashed_child()
@@ -318,5 +355,10 @@ void debug_crashed_child()
 
 void debug_hung_child(pid_t child)
 {
-    (void) child;
+    if (!SandstoneConfig::ChildDebugHangs || on_hang_action == kill_on_hang)
+        return;
+
+    // pid_t is actually a HANDLE in disguise (using _spawnv)
+    if (on_hang_action == attach_gdb_on_hang)
+        attach_gdb(HANDLE(child));
 }
