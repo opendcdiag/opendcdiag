@@ -1503,15 +1503,18 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
         }
         bool bWaitAll = false;
         DWORD result = WaitForMultipleObjects(nCount, handles, bWaitAll, timeout.count());
-        if (__builtin_expect(result == WAIT_FAILED, false)) {
-            fprintf(stderr, "%s: WaitForMultipleObjects() failed: %lx; children left = %d\n",
-                    program_invocation_name, GetLastError(), children_left);
-            abort();
-        }
         if (result == WAIT_TIMEOUT)
             return 0;
 
-        int idx = result - WAIT_OBJECT_0;
+        DWORD idx = result - WAIT_OBJECT_0;
+        if (__builtin_expect(idx >= nCount, false)) {
+            DWORD err = GetLastError();
+            fprintf(stderr, "%s: WaitForMultipleObjects() failed: %lx; children left = %d: ",
+                    program_invocation_name, result, children_left);
+            SetLastError(err);
+            win32_perror(nullptr);
+            abort();
+        }
         if (idx == 0 && sApp->shmem->debug_event) {
             // one child (or more than one) is crashing
             debug_crashed_child(children.handles);
@@ -1551,11 +1554,14 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
                 CloseHandle(hExited);
                 children.handles[idx] = intptr_t(INVALID_HANDLE_VALUE);
                 children.results[idx] = childResult;
-                break;
+                --children_left;
+                return 0;
             }
         }
-        --children_left;
-        return 0;
+
+        fprintf(stderr, "%s: INTERNAL ERROR: somehow got unknown handle 0x%p\n",
+                program_invocation_name, hExited);
+        abort();
     };
 #else
 #  error "What platform is this?"
