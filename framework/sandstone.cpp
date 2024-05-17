@@ -1684,7 +1684,8 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
             if (children.results[i].endtime == MonotonicTimePoint{}) {
                 debug_hung_child(child);
 #ifdef _WIN32
-                log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %td did not exit, using TerminateProcess()", child);
+                log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %ld did not exit, using TerminateProcess()",
+                            GetProcessId(HANDLE(child)));
                 TerminateProcess(HANDLE(child), EXIT_TIMEOUT);
 #else
                 log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %d did not exit, sending signal SIGQUIT", child);
