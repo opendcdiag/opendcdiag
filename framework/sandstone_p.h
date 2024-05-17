@@ -41,7 +41,14 @@
 #include "thermal_monitor.hpp"
 #include "frequency_manager.hpp"
 
-#ifndef _WIN32
+#ifdef _WIN32
+struct rusage
+{
+    struct timeval ru_utime, ru_stime;
+    long long ru_maxrss;
+    int ru_majflt;
+};
+#else
 #  include <sys/resource.h>     // for struct rusage
 #endif
 
@@ -143,9 +150,7 @@ struct ChildExitStatus
     unsigned extra = 0;
 
     MonotonicTimePoint endtime = {};
-#ifndef _WIN32
     struct rusage usage = {};
-#endif
 };
 
 struct test_group

@@ -77,6 +77,7 @@
 #  include <ntstatus.h>
 #  include <shlwapi.h>
 #  include <windows.h>
+#  include <psapi.h>
 #  include <pdh.h>
 
 #  ifdef ftruncate
@@ -1663,6 +1664,24 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
 
         auto childResult = test_result_from_exit_code(result);
         childResult.endtime = MonotonicTimePoint::clock::now();
+        if (FILETIME dummy, stime, utime; GetProcessTimes(hExited, &dummy, &dummy, &stime, &utime)) {
+            auto cvt = [](FILETIME f) {
+                // FILETIME stores tenths of microseconds (100 ns) granularity
+                uint64_t time = f.dwHighDateTime;
+                time = (time << 32) | f.dwLowDateTime;
+                struct timeval tv;
+                tv.tv_sec = time / 1000 / 1000 / 10;
+                tv.tv_usec = time % (1000 * 1000) / 10;
+                return tv;
+            };
+            childResult.usage.ru_stime = cvt(stime);
+            childResult.usage.ru_utime = cvt(utime);
+        }
+        if (PROCESS_MEMORY_COUNTERS mi; GetProcessMemoryInfo(hExited, &mi, sizeof(mi))) {
+            childResult.usage.ru_maxrss = mi.PeakWorkingSetSize;
+            childResult.usage.ru_majflt = mi.PageFaultCount;
+        }
+
         // close the handle and store result
         for (idx = 0; idx < int(children.handles.size()); ++idx) {
             if (hExited == HANDLE(children.handles[idx])) {
