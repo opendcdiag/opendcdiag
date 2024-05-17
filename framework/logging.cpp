@@ -2247,20 +2247,24 @@ void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
     auto runtime = slices[slice].endtime - sApp->current_test_starttime;
     writeln(fd, indent_spaces(), "    runtime: ", format_duration(runtime, FormatDurationOptions::WithoutUnit));
 
-#ifndef _WIN32
     using namespace std::chrono;
     const struct rusage &usage = slices[slice].usage;
     auto utime = seconds(usage.ru_utime.tv_sec) + microseconds(usage.ru_utime.tv_usec);
     auto stime = seconds(usage.ru_stime.tv_sec) + microseconds(usage.ru_stime.tv_usec);
-    dprintf(fd, "%s    resource-usage: { utime: %s, stime: %s, cpuavg: %.1f, maxrss: %lld, majflt: %lld, "
-                "minflt: %lld, voluntary-cs: %lld, involutary-cs: %lld }\n",
+    dprintf(fd, "%s    resource-usage: { utime: %s, stime: %s, cpuavg: %.1f, maxrss: %lld, majflt: %lld"
+#ifndef _WIN32
+                ", minflt: %lld, voluntary-cs: %lld, involutary-cs: %lld"
+#endif
+                " }\n",
             indent_spaces().data(),
             format_duration(utime, FormatDurationOptions::WithoutUnit).c_str(),
             format_duration(stime, FormatDurationOptions::WithoutUnit).c_str(),
             (utime + stime) * 100.0 / runtime,
-            (long long)usage.ru_maxrss, (long long)usage.ru_majflt, (long long)usage.ru_minflt,
-            (long long)usage.ru_nvcsw, (long long)usage.ru_nivcsw);
-#endif // !_WIN32
+            (long long)usage.ru_maxrss, (long long)usage.ru_majflt
+#ifndef _WIN32
+            , (long long)usage.ru_minflt, (long long)usage.ru_nvcsw, (long long)usage.ru_nivcsw
+#endif
+            );
 }
 
 int YamlLogger::print_test_knobs(int fd, mmap_region r)
