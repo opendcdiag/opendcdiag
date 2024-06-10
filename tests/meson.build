@@ -54,6 +54,13 @@ if framework_config.get('SANDSTONE_SSL_BUILD') == 1
             'openssl/openssl_sha.cpp',
         )
     )
+elif target_machine.system() == 'windows'
+    tests_set_base.add(
+        files(
+            # Print skip in windows
+            'openssl/openssl_sha.cpp',
+        )
+    )
 endif
 
 eigen3_dep = dependency('eigen3', static : dep_static)
