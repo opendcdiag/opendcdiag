@@ -12,14 +12,17 @@
  *
  */
 
+#include "sandstone.h"
+
+#if defined(__linux__)
+
+#include "sandstone_ssl.h"
+
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <sys/mman.h>
-
-#include "sandstone.h"
-#include "sandstone_ssl.h"
 
 #define PLAINTEXT_SIZE              (512UL)
 #define SHA_GOLDEN_ELEMS            (1024UL)
@@ -150,7 +153,22 @@ static int ssl_sha_run(struct test* test, int cpu)
     return EXIT_SUCCESS;
 }
 
-DECLARE_TEST(openssl_sha, "Test calculating differnt sha checksums")
+#else // !__linux__
+
+static int ssl_sha_init(struct test *test)
+{
+    log_skip(OsNotSupportedSkipCategory, "Not supported on this OS");
+    return EXIT_SKIP;
+}
+
+static int ssl_sha_run(struct test *test, int cpu)
+{
+    __builtin_unreachable();
+}
+
+#endif
+
+DECLARE_TEST(openssl_sha, "Test calculating different sha checksums")
     .test_init = ssl_sha_init,
     .test_run = ssl_sha_run,
     .quality_level = TEST_QUALITY_PROD,
