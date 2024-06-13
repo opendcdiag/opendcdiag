@@ -100,6 +100,7 @@ add_project_arguments([
     '-D__USE_MINGW_ANSI_STDIO',
     '-D_POSIX',
     '-D_WIN32_WINNT=0x0A00',
+    '-D_NO_SYS_GUID_OPERATOR_EQ_',
     '-Wa,-mbig-obj',
     '-include',
     meson.current_source_dir() + '/framework/sysdeps/windows/win32_stdlib.h',

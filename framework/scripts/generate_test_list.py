@@ -85,9 +85,9 @@ def main():
 
     # generate the .cpp file
     with open(cpp_file, 'w') as f:
-        f.write("// **This is generated file, do not edit**\n\n")
+        f.write('// THIS IS GENERATED FILE, DO NOT EDIT\n\n')
         f.write(f'#include "{h_file_basename}"\n')
-        f.write(f'#include "sandstone_p.h"\n\n')
+        f.write(f'#include <sandstone_p.h>\n\n')
 
         # list of tests (all from files, in alphabetical order)
         if len(all_tests) != 0:
@@ -100,7 +100,7 @@ def main():
                 file_id = files[path]
                 num_tests = len(tests)
                 f.write(f'// content of {path}\n')
-                f.write(f'static const std::array<struct test*, {num_tests}> test_list_{file_id}{{')
+                f.write(f'static const std::vector<struct test *> test_set_{file_id}{{')
                 test_list = [ f'\n    &_test_{test}' for test in tests ]
                 f.write(','.join(test_list))
                 f.write('\n};\n')
@@ -109,54 +109,58 @@ def main():
         # build all defined lists
         for name, path in test_list_files.items():
             file_id = files[path]
-            f.write(f'static const struct TestList {name}_test_list{{ {"cpu_" + name if name != "default" else 0}, "{name}", test_list_{file_id} }};\n')
+            # this uses cpu_<code name> defined via simd.conf
+            f.write(f'static const BuiltinTestSet {name}_test_set{{ {"cpu_" + name if name != "default" else 0}, "{name}", test_set_{file_id} }};\n')
         # create default "null" list if not defined
         if default_name is None:
-            f.write(f'static const struct TestList default_test_list{{ 0, "default", std::nullopt }};\n')
+            f.write(f'static const BuiltinTestSet default_test_set{{ 0, "default", std::nullopt }};\n')
         f.write('\n')
 
         # function to check if the list is selected, applied to non-default lists only
         if other_names:
-            f.write('static bool test_list_matches(const TestList* test_list, const char* name)\n')
+            f.write('static bool test_list_matches(const BuiltinTestSet* test_set, const char* name)\n')
             f.write('{\n')
             f.write('#ifdef SANDSTONE\n')
             f.write('    if ((name == nullptr) || (strcmp(name, "auto") == 0)) {\n')
-            f.write('        return (test_list->features & cpu_features) == test_list->features;\n')
+            f.write('        return (test_set->features & cpu_features) == test_set->features;\n')
             f.write('    }\n')
             f.write('#endif\n')
-            f.write('    return (name != nullptr) && (strcmp(name, test_list->name) == 0);\n')
+            f.write('    return (name != nullptr) && (strcmp(name, test_set->name) == 0);\n')
             f.write('}\n\n')
 
         # selector function
-        f.write('const TestList& select_test_list(const char *name)\n')
+        f.write('const BuiltinTestSet& get_builtin_test_set(const char *name)\n')
         f.write('{\n')
         for name in test_list_files.keys():
             if default_name is None or name != default_name:
-                f.write(f'    if (test_list_matches(&{name}_test_list, name)) return {name}_test_list;\n')
+                f.write(f'    if (test_list_matches(&{name}_test_set, name)) return {name}_test_set;\n')
 
         # emit warning if neither list matches
         if default_name is not None:
             f.write('    if (name && (strcmp(name, "default") != 0)) {\n')
             f.write('        logging_printf(LOG_LEVEL_QUIET, "# ERROR: list for %s not found. Using default\\n", name);\n')
             f.write('    }\n')
-        f.write('    return default_test_list;\n')
+        f.write('    return default_test_set;\n')
         f.write('}\n')
 
     # generate .h file
     with open(h_file, 'w') as f:
-        f.write("// **This is generated file, do not edit**\n\n")
-        f.write('#include "sandstone.h"\n')
+        f.write('// THIS IS GENERATED FILE, DO NOT EDIT\n\n')
+        f.write('#ifndef INC_SANDSTONE_TEST_LISTS_H\n');
+        f.write('#define INC_SANDSTONE_TEST_LISTS_H\n');
+        f.write('#include <sandstone.h>\n')
         f.write('#include <optional>\n')
-        f.write('#include <span>\n\n')
+        f.write('#include <vector>\n\n')
 
         # per-gen list definition
-        f.write('typedef struct TestList {\n')
+        f.write('typedef struct BuiltinTestSet {\n')
         f.write('    uint64_t features;\n')
         f.write('    const char* name;\n')
-        f.write('    const std::optional<std::span<struct test* const>> tests;\n')
-        f.write('} TestList;\n\n')
+        f.write('    const std::optional<std::vector<struct test *>> tests;\n')
+        f.write('} BuiltinTestSet ;\n\n')
 
-        f.write('const TestList& select_test_list(const char *);\n')
+        f.write('const BuiltinTestSet& get_builtin_test_set(const char *);\n')
+        f.write('#endif /* INC_SANDSTONE_TEST_LISTS_H */\n')
 
     exit(0)
 

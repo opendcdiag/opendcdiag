@@ -2603,19 +2603,18 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
 
 /// prints the results from running the test \c{test} (test number \c{tc})
 /// and returns the effective test result
-TestResult logging_print_results(std::span<const ChildExitStatus> status, int *tc, const struct test *test)
+TestResult logging_print_results(std::span<const ChildExitStatus> status, const struct test *test)
 {
-    int n = ++*tc;
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value: {
         KeyValuePairLogger l(test, status);
-        l.print(n);
+        l.print(sApp->current_test_count);
         return l.testResult;
     }
 
     case SandstoneApplication::OutputFormat::tap: {
         TapFormatLogger l(test, status);
-        l.print(n);
+        l.print(sApp->current_test_count);
         return l.testResult;
     }
 

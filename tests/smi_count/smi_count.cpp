@@ -11,7 +11,6 @@
  * either the beginning of the sandstone run or the last time this test itself has run
  */
 
-#ifdef __unix__
 #include "sandstone_p.h"
 #include <vector>
 #include <numeric>
@@ -19,6 +18,8 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <map>
+
+extern void initialize_smi_counts();
 
 static int smi_count_run(struct test *test, int cpu)
 {
@@ -40,11 +41,11 @@ static int smi_count_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
-
 DECLARE_TEST(smi_count, "Counts SMI events")
+    .test_init = [](struct test *t) { return InterruptMonitor::InterruptMonitorWorks ? EXIT_SUCCESS : EXIT_SKIP; },
     .test_run = smi_count_run,
+    .test_cleanup = [](struct test * t) { initialize_smi_counts(); return EXIT_SUCCESS; },
     .desired_duration = -1,
     .fracture_loop_count = -1,
     .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
-#endif /* __unix__ */
