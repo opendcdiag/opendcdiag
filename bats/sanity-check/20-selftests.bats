@@ -1301,6 +1301,37 @@ function selftest_logerror_common() {
     done
 }
 
+@test "selftest_freeze_fork" {
+    if $is_windows; then
+        skip "Unix-only test"
+    fi
+    declare -A yamldump
+    sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_fork --timeout=1s
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result" 'timed out'
+    test_yaml_numeric "/tests/0/test-runtime" 'value >= 1000'
+    test_yaml_numeric "/tests/0/threads/0/runtime" 'value >= 1000'
+    if ! $is_windows; then
+        test_yaml_regexp "/tests/0/threads/0/resource-usage" '\{.*\}'
+    fi
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        test_yaml_regexp "/tests/0/threads/$i/state" failed
+        n=$((-1 + yamldump[/tests/0/threads/$i/messages@len]))
+        test_yaml_regexp "/tests/0/threads/$i/messages/$n/text" '.*Thread is stuck'
+
+        # check that this child PID is *not* running
+        local msg=/tests/0/threads/$i/messages/0/text
+        test_yaml_regexp "$msg" '.*Child pid:.*'
+        local pid=${yamldump[$msg]#I> Child pid: }
+        if status=`ps ho s $pid`; then
+            # PID still exists, but it might be a Zombie if we have no init at PID 1
+            ps j "$pid"
+            [[ $status = "Z" ]]
+        fi
+    done
+}
+
 @test "selftest_freeze --ignore-timeout" {
     declare -A yamldump
     sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze --timeout=500 --ignore-timeout
@@ -1799,7 +1830,7 @@ selftest_interrupt_common() {
 
     # We can't use sandstone_selftest or run_sandstone_yaml here - must run directly
     local yamlfile=`mktempfile output-XXXXXX.yaml`
-    $SANDSTONE -Y -o - -n1 --max-test-loop-count=0 --selftests -e selftest_timedpass -t $timeout > $yamlfile &
+    $SANDSTONE -Y -o - -n1 --max-test-loop-count=0 --selftests -e selftest_timedpass_fork -t $timeout > $yamlfile &
     local pid=$!
 
     # let's wait for the test to actually start
@@ -1821,6 +1852,16 @@ selftest_interrupt_common() {
     if (( exitcode != (128 | signum) )); then
         echo >&2 'Incorrect exit code:' $exitcode
         false
+    fi
+
+    # Confirm the grandchild died too
+    local msg=/tests/0/threads/0/messages/0/text
+    test_yaml_regexp "$msg" '.*Child pid:.*'
+    pid=${yamldump[$msg]#I> Child pid: }
+    if status=`ps ho s $pid`; then
+        # PID still exists, but it might be a Zombie if we have no init at PID 1
+        ps j "$pid"
+        [[ $status = "Z" ]]
     fi
 
     test_yaml_regexp "/exit" interrupted
