@@ -1592,10 +1592,12 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
     auto remove_debug_socket = scopeExit([&] { children.pollfds.pop_back(); });
 
     static constexpr int TimeoutSignal = SIGQUIT;
-    auto kill_children = [&](int sig = SIGKILL) {
+    auto kill_children = [&](int sig = SIGKILL) {        
+        // Send the signal to the child's process group, so all its children
+        // get the signal too.
         for (pid_t child : children.handles) {
             if (child)
-                kill(child, sig);
+                kill(-child, sig);
         }
     };
     auto single_wait = [&, caughtSignal = 0](milliseconds timeout) mutable {
@@ -1665,6 +1667,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
 #elif defined(_WIN32)
     static constexpr DWORD TimeoutSignal = EXIT_TIMEOUT;
     auto kill_children = [&](DWORD exitCode = DWORD(-1)) {
+        // Note: Windows code cannot kill grand-children processes!
         for (intptr_t child : children.handles) {
             HANDLE hnd = HANDLE(child);
             if (hnd == INVALID_HANDLE_VALUE)

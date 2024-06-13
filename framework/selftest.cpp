@@ -19,6 +19,9 @@
 #include <linux/kvm.h>
 #include <sys/ioctl.h>
 #endif
+#ifdef __unix__
+#include <sys/wait.h>
+#endif
 
 #include "sandstone.h"
 #ifndef _WIN32
@@ -701,6 +704,24 @@ static int selftest_oserror_run(struct test *test, int cpu)
     _exit(EX_CONFIG);
 }
 
+#ifdef __unix__
+template <runfunc ParentFunc, runfunc ChildFunc = ParentFunc>
+static int selftest_fork_run(struct test *test, int cpu)
+{
+    int pid = fork();
+    if (pid < 0)
+        report_fail_msg("Failed to fork(): %m");
+
+    if (pid > 0) {
+        // ParentProcess
+        log_info("Child pid: %d", pid);
+        return ParentFunc(test, cpu);
+    } else {
+        return ChildFunc(test, cpu);
+    }
+}
+#endif
+
 #if defined(STATIC) && defined(__GLIBC__)
 extern "C" {
 [[noreturn]] void __libc_fatal (const char *message);
@@ -898,6 +919,14 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_timedpass_run<10'000>,
 },
+#ifdef __unix__
+{
+    .id = "selftest_timedpass_fork",
+    .description = "Forks, then loops around usleep() for the regular test time",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_fork_run<selftest_timedpass_run<10'000>>,
+},
+#endif
 {
     .id = "selftest_logs",
     .description = "Adds some debug, info and warning messages",
@@ -1440,6 +1469,15 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .test_run = selftest_noreturn_run,
     .desired_duration = -1,
 },
+#ifdef __unix__
+{
+    .id = "selftest_freeze_fork",
+    .description = "Freezes after forking",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_fork_run<selftest_noreturn_run>,
+    .desired_duration = -1,
+},
+#endif
 {
     .id = "selftest_50pct_freeze_fail",
     .description = "Freezes 50% of the time",
