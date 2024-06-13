@@ -1553,6 +1553,7 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
     children.pollfds.emplace_back(pollfd{ .fd = sApp->shmem->server_debug_socket, .events = POLLIN });
     auto remove_debug_socket = scopeExit([&] { children.pollfds.pop_back(); });
 
+    static constexpr int TimeoutSignal = SIGQUIT;
     auto kill_children = [&](int sig = SIGKILL) {
         for (pid_t child : children.handles) {
             if (child)
@@ -1624,7 +1625,15 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
         return caughtSignal;
     };
 #elif defined(_WIN32)
-    auto kill_children = [] { };
+    static constexpr DWORD TimeoutSignal = EXIT_TIMEOUT;
+    auto kill_children = [&](DWORD exitCode = DWORD(-1)) {
+        for (intptr_t child : children.handles) {
+            HANDLE hnd = HANDLE(child);
+            if (hnd == INVALID_HANDLE_VALUE)
+                continue;
+            TerminateProcess(hnd, exitCode);
+        }
+    };
     auto single_wait = [&](milliseconds timeout) {
         HANDLE handles[MAXIMUM_WAIT_OBJECTS];
         DWORD nCount = 0;
@@ -1686,13 +1695,12 @@ static void wait_for_children(ChildrenList &children, int *tc, const struct test
 #ifdef _WIN32
                 log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %ld did not exit, using TerminateProcess()",
                             GetProcessId(HANDLE(child)));
-                TerminateProcess(HANDLE(child), EXIT_TIMEOUT);
 #else
                 log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %d did not exit, sending signal SIGQUIT", child);
-                kill(child, SIGQUIT);
 #endif
             }
         }
+        kill_children(TimeoutSignal);
     };
     auto wait_for_all_children = [&](Duration remaining) {
         MonotonicTimePoint deadline = steady_clock::now() + remaining;
