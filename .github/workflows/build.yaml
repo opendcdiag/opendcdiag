@@ -9,6 +9,9 @@ on:
 env:
   GIT_CONFIG_SYSTEM: /tmp/gitconfig
 
+permissions:
+  contents: read
+
 jobs:
   Linux:
     runs-on: ubuntu-latest
