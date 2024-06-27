@@ -2,7 +2,7 @@
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-export ASAN_OPTIONS=malloc_fill_byte=0:detect_leaks=0
+export ASAN_OPTIONS=malloc_fill_byte=0:detect_leaks=0:${ASAN_OPTIONS:+:$ASAN_OPTIONS}
 BATS_TEST_COMMONDIR=${BASH_SOURCE[0]%/*}
 is_asan=false
 is_debug=false
