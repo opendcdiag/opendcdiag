@@ -66,7 +66,8 @@ Project maintainers who do not follow or enforce the Code of Conduct in good
 faith may face temporary or permanent repercussions as determined by other
 members of the project's leadership.
 
-[enforce]: mailto:kent.helm@intel.com?subject=OpenDCDiag%20CoC%20Enforcement%20Report
+[enforce]: mailto:thiago.macieira@intel.com?subject=OpenDCDiag%20CoC%20Enforcement%20Report
+[enforce]: mailto:arzhan.i.kinzhalin@intel.com@intel.com?subject=OpenDCDiag%20CoC%20Enforcement%20Report
 
 ## Attribution
 
