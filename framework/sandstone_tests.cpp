@@ -7,6 +7,7 @@
 
 #include <charconv>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
