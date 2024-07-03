@@ -66,46 +66,6 @@ class SandstoneTestSet
 public:
     using TestSet = std::vector<struct test *>;
 
-    /* A custom iterator is needed to be able to wrap around (cycle through)
-     * the test set when needed. If end, a pointer to test_set.end(), is
-     * specified, then it will wrap when *end is reached. Otherwise, it would
-     * behave as a normal forward iterator. */
-    struct TestSetIterator
-    {
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = ptrdiff_t;
-        using value_type = struct test *;
-        using pointer = struct test **;
-        using reference = struct test *&;
-
-        TestSetIterator(TestSet::iterator it, TestSet::iterator *end) noexcept : it(it), start(it), end(end) {};
-
-        reference operator*() const noexcept { return *it; };
-        pointer operator->() noexcept { return &(*it); };
-
-        TestSetIterator& operator++() noexcept { next(); return *this; };
-        TestSetIterator operator++(int) noexcept { TestSetIterator ret = *this; ++(*this); return ret; };
-
-        friend bool operator== (const TestSetIterator &a, const TestSetIterator &b) noexcept { return a.it == b.it; };
-        friend bool operator!= (const TestSetIterator &a, const TestSetIterator &b) noexcept { return a.it != b.it; };
-
-    private:
-        TestSet::iterator it;
-        TestSet::iterator start; /* the state the iterator would wrap around to. */
-        TestSet::iterator *end; /* if not a nullptr, indicates an infinite iterator. */
-
-        void next() noexcept {
-            if (end && it + 1 == *end) {
-                it = start;
-                /* whenever we're restarting, print the header for the next
-                 * iteration. */
-                logging_print_iteration_start();
-            }
-            else
-                it++;
-        }
-    };
-
     enum Flag {
         enable_all_tests    = 1 << 0,
     };
@@ -115,19 +75,19 @@ public:
 
     SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags);
 
-    TestSetIterator begin() {
-        TestSet::iterator end = test_set.end();
+    // note: not idempotent, we may shuffle every time! */
+    TestSet::iterator begin() noexcept
+    {
         if (cfg.randomize) {
             /* Do not shuffle mce_check if present. */
+            TestSet::iterator end = test_set.end();
             auto last = *(end - 1) == &mce_test ? end - 1 : end;
             std::shuffle(test_set.begin(), last, SandstoneURBG());
         }
-        return TestSetIterator(test_set.begin(), cfg.cycle_through ? &end : nullptr);
+        return test_set.begin();
     };
 
-    TestSetIterator end() {
-        return TestSetIterator(test_set.end(), nullptr);
-    };
+    TestSet::iterator end() noexcept { return test_set.end(); }
 
     std::vector<struct test_cfg_info> disable(const char *name);
     struct test_cfg_info disable(struct test *t);

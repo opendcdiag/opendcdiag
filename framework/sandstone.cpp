@@ -2537,15 +2537,20 @@ static bool should_start_next_iteration(void)
     return true;
 }
 
-static SandstoneTestSet::TestSetIterator get_next_test(SandstoneTestSet::TestSetIterator &it)
+static SandstoneTestSet::TestSet::iterator
+get_next_test(SandstoneTestSet::TestSet::iterator next_test)
 {
     if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
         return test_set->end();
 
-    auto next_test = it++;
-    while (next_test != test_set->end() && (*next_test)->quality_level < sApp->requested_quality) next_test = it++;
+    ++next_test;
+    while (next_test != test_set->end() && (*next_test)->quality_level < sApp->requested_quality)
+        ++next_test;
     if (next_test == test_set->end()) {
         if (should_start_next_iteration()) {
+            /* whenever we're restarting, print the header for the next
+             * iteration. */
+            logging_print_iteration_start();
             next_test = test_set->begin();
         } else {
             return test_set->end();
@@ -2556,6 +2561,15 @@ static SandstoneTestSet::TestSetIterator get_next_test(SandstoneTestSet::TestSet
     assert((*next_test)->description);
     assert(strlen((*next_test)->id));
     return next_test;
+}
+
+static SandstoneTestSet::TestSet::iterator get_first_test()
+{
+    logging_print_iteration_start();
+    auto it = test_set->begin();
+    while (it != test_set->end() && (*it)->quality_level < sApp->requested_quality)
+        ++it;
+    return it;
 }
 
 static bool wait_delay_between_tests()
@@ -3806,12 +3820,10 @@ int main(int argc, char **argv)
     sApp->current_test_count = 0;
     int total_tests_run = 0;
     TestResult lastTestResult = TestResult::Skipped;
-    auto it = test_set->begin();
 
     initialize_smi_counts();  // used by smi_count test
-    logging_print_iteration_start();
 
-    for (auto test = get_next_test(it); test != test_set->end(); test = get_next_test(it)) {
+    for (auto test = get_first_test(); test != test_set->end(); test = get_next_test(test)) {
         if (lastTestResult != TestResult::Skipped) {
             if (sApp->service_background_scan) {
                 if (!background_scan_wait()) {
