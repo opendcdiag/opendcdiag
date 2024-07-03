@@ -584,6 +584,20 @@ selftest_log_skip_init_socket_common() {
     test_yaml_numeric "/tests/0/test-runtime" 'value >= 250'
 }
 
+@test "selftest_timedpass -t 25 -T 250" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_timedpass -t 25 -T 250
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    local test_count=${yamldump[/tests@len]}
+    local i
+    for ((i = 0; i < test_count; ++i)); do
+        test_yaml_regexp "/tests/$i/result" pass
+        test_yaml_numeric "/tests/$i/test-runtime" 'value >= 25'
+    done
+    test_yaml_numeric "/tests/$((i-1))/time-at-end/elapsed" 'value >= 250'
+}
+
 @test "selftest_timedpass -t 1150" {
     # With over 800 ms, we should see fracturing
     declare -A yamldump
