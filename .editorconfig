@@ -11,7 +11,8 @@ indent_style = space
 tab_width = 4
 
 [{meson.build,meson_options.txt}]
-indent_style = tab
+indent_style = space
+indent_size = 4
 
 [simd*.conf]
 indent_style = tab
