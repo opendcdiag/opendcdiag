@@ -3339,7 +3339,6 @@ int main(int argc, char **argv)
             } else {
                 sApp->endtime = sApp->starttime + string_to_millisecs(optarg);
             }
-            sApp->shmem->use_strict_runtime = true;
             test_set_config.cycle_through = true; /* Time controls when the execution stops as
                                                      opposed to the number of tests. */
             break;
