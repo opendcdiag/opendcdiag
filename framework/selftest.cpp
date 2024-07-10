@@ -449,6 +449,14 @@ static int selftest_logerror_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
+static int selftest_reportfail_init_cleanup(struct test *test)
+{
+    report_fail(test);
+    log_error("We should not reach here");
+    abort();
+    return EXIT_SUCCESS;
+}
+
 static int selftest_reportfail_run(struct test *test, int cpu)
 {
     report_fail(test);
@@ -504,6 +512,8 @@ static int selftest_cxxthrow_run(struct test *, int cpu) noexcept(false)
 template <auto F> static void run_crashing_function()
 {
     F();
+    // allow OS to propagate the signal
+    usleep(10000);
     const char *f = strstr(__PRETTY_FUNCTION__, "[with auto F = ");
     log_warning("Crashing function %s did return", f);
 }
@@ -685,7 +695,10 @@ static void raise_fastfail()
 static void raise_sigkill()
 {
     raise(SIGKILL);
-
+}
+static void raise_sigfpe()
+{
+    raise(SIGFPE);
 }
 #endif
 
@@ -1302,6 +1315,22 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
 },
 {
+    .id = "selftest_reportfail_init",
+    .description = "Fails by calling report_fail() in init()",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_reportfail_init_cleanup,
+    .test_run = selftest_failinit_run,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_reportfail_cleanup",
+    .description = "Fails by calling report_fail() in cleanup()",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_pass_run,
+    .test_cleanup = selftest_reportfail_init_cleanup,
+    .desired_duration = -1,
+},
+{
     .id = "selftest_reportfailmsg",
     .description = "Fails by calling report_fail_msg()",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
@@ -1445,6 +1474,13 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .description = "Raises SIGKILL",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<raise_sigkill>,
+    .desired_duration = -1,
+},
+{
+    .id = "selftest_sigfpe_user",
+    .description = "SIGFPE from user",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crash_run<raise_sigfpe>,
     .desired_duration = -1,
 },
 #endif

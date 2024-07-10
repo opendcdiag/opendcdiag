@@ -187,7 +187,7 @@ print("..Done..")
 end
 )gdb";
 
-static void child_crash_handler(int, siginfo_t *si, void *ucontext)
+static void child_crash_handler(int sig, siginfo_t *si, void *ucontext)
 {
     // mark thread as failed
     logging_mark_thread_failed(thread_num);
@@ -210,14 +210,18 @@ static void child_crash_handler(int, siginfo_t *si, void *ucontext)
                 futex_wait(&thread_state, int(thread_failed));
         }
 
-        // restore the signal handler so we can be killed
-        signal(si->si_signo, SIG_DFL);
-        if (si->si_signo != SIGABRT) {
+        // restore the signal handler so the process can be killed
+        signal(sig, SIG_DFL);
+
+        // non-ABORT FROMKERNEL only
+        if ((sig != SIGABRT) && si && (si->si_code > 0)) {
             // if we return, we'll execute the same instruction and crash again
             // but the core dump should point to the exact locus now
             return;
         }
-        raise(si->si_signo);
+        // force the app to kill all threads (not only current one)
+        // a few additional lines might be seen in the resulting coredump
+        kill(getpid(), sig);
     }
 
     // wait forever

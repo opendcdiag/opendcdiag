@@ -1113,6 +1113,18 @@ test_list_file_ignores_beta() {
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> Error logged in init.*'
 }
 
+@test "selftest_reportfail_init" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_reportfail_init
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    i=$((0 + yamldump[/tests/0/threads@len]))
+    [[ "$i" -eq 1 ]]
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> Failed at .*selftest\.cpp:[0-9]+'
+}
+
 @test "selftest_errormsg_cleanup" {
     declare -A yamldump
     sandstone_selftest -e selftest_errormsg_cleanup
@@ -1135,6 +1147,18 @@ test_list_file_ignores_beta() {
     test_yaml_regexp "/tests/0/threads/0/thread" 'main'
     test_yaml_regexp "/tests/0/threads/0/messages/1/level" info
     test_yaml_regexp "/tests/0/threads/0/messages/1/text" 'I> cleanup returns FAIL'
+}
+
+@test "selftest_reportfail_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_reportfail_cleanup
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    i=$((0 + yamldump[/tests/0/threads@len]))
+    [[ "$i" -eq 1 ]]
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> Failed at .*selftest\.cpp:[0-9]+'
 }
 
 @test "selftest_failinit_socket1 --max-cores-per-slice" {
@@ -1251,7 +1275,6 @@ function selftest_logerror_common() {
 @test "selftest_reportfailmsg" {
     selftest_logerror_common selftest_reportfailmsg 'Failed at .*selftest\.cpp:[0-9]+: Failure message from thread @CPU@'
 }
-
 @test "selftest_cxxthrow" {
     selftest_logerror_common selftest_cxxthrow 'Caught C\+\+ exception: .*'
 }
@@ -1503,6 +1526,20 @@ selftest_crash_common() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result-details/crashed" True
     test_yaml_regexp "/tests/0/result-details/reason" Killed
+}
+
+@test "selftest_sigfpe_user" {
+    if $is_windows; then
+        skip "Unix-only test"
+    fi
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_sigfpe_user
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result-details/crashed" True
+    test_yaml_regexp "/tests/0/result-details/core-dump" True
+    test_yaml_numeric "/tests/0/result-details/code" 'value == 8'
+    test_yaml_regexp "/tests/0/result-details/reason" 'Floating point exception'
 }
 
 @test "selftest_malloc_fail" {
