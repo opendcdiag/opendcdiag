@@ -94,6 +94,7 @@ struct test_cfg_info SandstoneTestSet::enable(struct test *t) {
 std::vector<struct test_cfg_info> SandstoneTestSet::enable(const char *name) {
     std::vector<struct test_cfg_info> res;
     std::vector<struct test *> tests = lookup(name);
+
     for (auto t : tests) {
         struct test_cfg_info ti = enable(t);
         res.push_back(ti);
@@ -125,6 +126,39 @@ std::vector<struct test_cfg_info> SandstoneTestSet::disable(const char *name) {
     }
     return res;
 }
+
+std::vector<struct test_cfg_info> SandstoneTestSet::enable_by_feature(uint64_t enabled_features_mask) {
+    std::vector<struct test_cfg_info> res;
+
+    for (auto t = test_set.begin(); t != test_set.end();) {
+        uint64_t t_f_req = ((*t)->minimum_cpu | (*t)->compiler_minimum_cpu);
+
+        if (!(t_f_req & enabled_features_mask)) {
+            res.push_back(disable(*t));
+            test_set.erase(t);
+        } else {
+            t++;
+        }
+    }
+    return res;
+}
+
+std::vector<struct test_cfg_info> SandstoneTestSet::disable_by_feature(uint64_t disabled_features_mask) {
+    std::vector<struct test_cfg_info> res;
+
+    for (auto t = test_set.begin(); t != test_set.end();) {
+        uint64_t t_f_req = ((*t)->minimum_cpu | (*t)->compiler_minimum_cpu);
+
+        if (t_f_req & disabled_features_mask) {
+            res.push_back(disable(*t));
+            test_set.erase(t);
+        } else {
+            t++;
+        }
+    }
+    return res;
+}
+
 
 static inline bool is_ignored(char c) {
     switch (c) {
