@@ -595,7 +595,7 @@ selftest_log_skip_init_socket_common() {
         test_yaml_regexp "/tests/$i/result" pass
         test_yaml_numeric "/tests/$i/test-runtime" 'value >= 25'
     done
-    test_yaml_numeric "/tests/$((i-1))/time-at-end/elapsed" 'value >= 250'
+    test_yaml_numeric "/tests/$((i-1))/time-at-start/elapsed" 'value < 250'
 }
 
 @test "selftest_timedpass -t 1150" {
