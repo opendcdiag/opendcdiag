@@ -236,14 +236,14 @@ tap_negative_check() {
 }
 
 @test "TAP silent output" {
-    opts="--output-format=tap --quick --selftests --quiet --disable=mce_check -e @positive"
-    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.tap
+    local -a opts=(--output-format=tap --quick --selftests --quiet --disable=mce_check --disable="*fork" -e @positive)
+    $SANDSTONE "${opts[@]}" > $BATS_TEST_TMPDIR/output.tap
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.tap
     {
         read line
         echo line 1: $line
-        [[ "$line" = "# ${SANDSTONE##*/} $opts" ]]
+        [[ "$line" = "# ${SANDSTONE##*/} ${opts[@]}" ]]
 
         read line
         echo line 2: $line
@@ -259,14 +259,14 @@ tap_negative_check() {
 }
 
 @test "YAML silent output" {
-    opts="-Y --quick --selftests --quiet --disable=mce_check -e @positive"
-    $SANDSTONE $opts > $BATS_TEST_TMPDIR/output.yaml
+    local -a opts=(-Y --quick --selftests --quiet --disable=mce_check --disable="*fork" -e @positive)
+    $SANDSTONE "${opts[@]}" > $BATS_TEST_TMPDIR/output.yaml
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.yaml
     {
         read line
         echo line 1: $line
-        [[ "$line" = "command-line: '${SANDSTONE##*/} $opts'" ]]
+        [[ "$line" = "command-line: '${SANDSTONE##*/} ${opts[@]}'" ]]
 
         read line
         echo line 2: $line
