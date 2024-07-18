@@ -2618,84 +2618,6 @@ static int exec_mode_run(int argc, char **argv)
     return test_result_to_exit_code(child_run(tests_to_run.at(0), child_number));
 }
 
-// Triage run attempts to figure out which socket(s) are causing test failures.
-// It simply removes sockets from the cpu_set_t one by one until the failures no
-// longer observed.
-// Returns the list of faulty sockets. Memory is allocated, caller must free.
-// TODO: Current implementation only returns 1 socket. However, the signature is
-// generic vector<int> for the future improvements.
-static vector<int> run_triage(vector<const struct test *> &triage_tests)
-{
-    const Topology &orig_topo = Topology::topology();
-    vector<int> result; // faulty sockets
-
-    if (orig_topo.packages.empty())
-        return result;                  // shouldn't happen!
-
-    if (orig_topo.packages.size() == 1) {
-        result.push_back(orig_topo.packages.front().id());
-        return result;
-    }
-
-    // backup the original CPU info
-    Topology::Data topo = orig_topo.clone();
-    auto run_tests_with_retest = [&](std::span<const Topology::Package> set) {
-        SandstoneApplication::PerCpuFailures per_cpu_failures;
-        int k = 0;
-        int ret = EXIT_SUCCESS;
-
-        // all the shady stuff needed to set up to run a test smoothly
-        update_topology(topo.all_threads, set);
-        slice_plan_init(INT_MAX);   // full sockets
-
-        do {
-            int test_count = 1;
-            for (auto &t: triage_tests) {
-                ret = test_result_to_exit_code(run_one_test(t, per_cpu_failures));
-                if (ret > EXIT_SUCCESS) break; // EXIT_SKIP is OK
-                test_count++;
-            }
-        } while (!ret && ++k < sApp->retest_count);
-
-        return (ret > EXIT_SUCCESS) ? ret : EXIT_SUCCESS; // do not return SKIP from here
-    };
-
-    // backup the original verbosity
-    int orig_verbosity = sApp->shmem->verbosity;
-    sApp->shmem->verbosity = -1;
-
-    int ret = EXIT_SUCCESS;
-    bool ever_failed = false;
-    vector<int> disabled_sockets;
-    for (auto it = topo.packages.begin(); it != topo.packages.end(); ++it) {
-        ret = run_tests_with_retest({ it, topo.packages.end() });
-        if (ret) ever_failed = true; /* we've seen a failure */
-
-        if (!ret && ever_failed) {
-            // the last socket removed is the main suspect
-            result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
-            break;
-        }
-        disabled_sockets.push_back(it->id());
-    }
-
-    if (ret) { // failed on the last socket as well, so it's the main suspect
-        // re-run on the first to make sure the last one is faulty
-        ret = run_tests_with_retest({ topo.packages.begin(), 1 });
-        if (!ret && ever_failed) {
-            result.push_back(disabled_sockets.at(disabled_sockets.size() - 1));
-        }
-    }
-
-    // restore the original verbosity
-    sApp->shmem->verbosity = orig_verbosity;
-
-    // restore original topology
-    update_topology(topo.all_threads);
-
-    return result;
-}
-
 namespace {
 enum class OutOfRangeMode { Exit, Saturate };
 template <typename Integer = int> struct ParseIntArgument
@@ -3810,11 +3732,7 @@ int main(int argc, char **argv)
 
     logging_print_header(argc, argv, test_duration(), test_timeout(test_duration()));
 
-    // triage process is the best effort to figure out which socket is faulty on
-    // a multi-socket system, it's done after the main run and only using the
-    // failing tests.
     SandstoneApplication::PerCpuFailures per_cpu_failures;
-    vector<const struct test *> triage_tests;
 
     sApp->current_test_count = 0;
     int total_tests_run = 0;
@@ -3842,8 +3760,6 @@ int main(int argc, char **argv)
         total_tests_run++;
         if (lastTestResult == TestResult::Failed) {
             ++total_failures;
-            // keep the record of failures to triage later
-            triage_tests.push_back(*test);
             if (fatal_errors)
                 break;
         } else if (lastTestResult == TestResult::Passed) {
@@ -3858,10 +3774,6 @@ int main(int argc, char **argv)
     }
 
     if (total_failures) {
-        if (!do_not_triage) {
-            vector<int> sockets = run_triage(triage_tests);
-            logging_print_triage_results(sockets);
-        }
         logging_print_footer();
     } else if (sApp->shmem->verbosity == 0 && sApp->shmem->output_format == SandstoneApplication::OutputFormat::tap) {
         logging_printf(LOG_LEVEL_QUIET, "Ran %d tests without error (%d skipped)\n",

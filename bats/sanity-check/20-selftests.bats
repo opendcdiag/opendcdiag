@@ -1624,37 +1624,6 @@ crash_context_socket1_common() {
     test_yaml_regexp "/tests/0/result-details/reason" "Operating system error: configuration error"
 }
 
-@test "triage" {
-    if ! $is_debug; then
-        skip "Test only works with Debug builds (to mock the topology)"
-    fi
-    if (( MAX_PROC < 4 )); then
-        skip "Need at least 4 logical processors to run this test"
-    fi
-    declare -A yamldump
-    export SANDSTONE_MOCK_TOPOLOGY='0 1 2 3'
-
-    # can't use sandstone_selftest because of --no-triage
-    VALIDATION=dump
-    run_sandstone_yaml -n$MAX_PROC --disable=mce_check --selftests --timeout=20s --retest-on-failure=0 -Y -e selftest_fail_socket1 --triage
-
-    # confirm the topology took effect
-    for ((i = 0; i < 4; ++i)); do
-        test_yaml_numeric "/cpu-info/$i/logical" "value == $i"
-        test_yaml_numeric "/cpu-info/$i/package" "value == $i"
-        test_yaml_numeric "/cpu-info/$i/core" 'value == 0'
-        test_yaml_numeric "/cpu-info/$i/thread" 'value == 0'
-    done
-
-    # now confirm it exited properly
-    [[ "$status" -eq 1 ]]
-    test_yaml_regexp "/exit" fail
-
-    # and test it did triage properly
-    test_yaml_numeric "/triage-results@len" 'value == 1'
-    test_yaml_numeric "/triage-results/0" 'value == 1'
-}
-
 function selftest_cpuset() {
     local expected_logical=$1
     local expected_package=$2
