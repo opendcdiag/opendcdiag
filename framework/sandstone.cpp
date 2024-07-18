@@ -3156,7 +3156,6 @@ int main(int argc, char **argv)
     int total_skips = 0;
     int thread_count = -1;
     bool fatal_errors = false;
-    bool do_not_triage = true;
     const char *on_hang_arg = nullptr;
     const char *on_crash_arg = nullptr;
 
@@ -3328,12 +3327,6 @@ int main(int argc, char **argv)
             break;
         case no_slicing_option:
             max_cores_per_slice = -1;
-            break;
-        case triage_option:
-            do_not_triage = false;
-            break;
-        case no_triage_option:
-            do_not_triage = true;
             break;
         case on_crash_option:
             on_crash_arg = optarg;
@@ -3544,8 +3537,10 @@ int main(int argc, char **argv)
         case mem_sample_time_option:
         case mem_samples_per_log_option:
         case no_mem_sampling_option:
+        case no_triage_option:
         case schedule_by_option:
         case shortened_runtime_option:
+        case triage_option:
         case weighted_testrun_option:
             warn_deprecated_opt(long_options[coptind].name);
             break;
@@ -3601,7 +3596,6 @@ int main(int argc, char **argv)
 
         sApp->delay_between_tests = 50ms;
         sApp->thermal_throttle_temp = INT_MIN;
-        do_not_triage = SandstoneConfig::NoTriage;
         fatal_errors = true;
         builtin_test_list_name = "auto";
 
