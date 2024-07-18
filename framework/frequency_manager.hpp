@@ -83,7 +83,7 @@ private:
         std::vector<int> tmp_frequency_levels;
         tmp_frequency_levels.push_back(min_max_frequency.second);
         tmp_frequency_levels.push_back(min_max_frequency.first);
-        
+
         std::vector<int> tmp = tmp_frequency_levels;
 
         while (tmp_frequency_levels.size() < total_frequency_levels)
@@ -188,7 +188,7 @@ public:
             //change scaling_governor to userspace in order to set the cores to different frequencies
             write_file(scaling_governor_path, "userspace");
         }
-#endif 
+#endif
     }
 
     void initial_uncore_frequency_setup()
@@ -236,7 +236,7 @@ public:
     {
 #ifdef __linux__
         current_set_frequency = core_frequency_levels[core_frequency_level_idx++ % total_core_frequency_levels];
-        
+
         for (int cpu = 0; cpu < num_cpus(); cpu++) {
             std::string scaling_setspeed = BASE_CORE_FREQ_PATH;
             scaling_setspeed += std::to_string(cpu_info[cpu].cpu_number);

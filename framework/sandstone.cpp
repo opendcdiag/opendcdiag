@@ -1592,7 +1592,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
     auto remove_debug_socket = scopeExit([&] { children.pollfds.pop_back(); });
 
     static constexpr int TimeoutSignal = SIGQUIT;
-    auto kill_children = [&](int sig = SIGKILL) {        
+    auto kill_children = [&](int sig = SIGKILL) {
         // Send the signal to the child's process group, so all its children
         // get the signal too.
         for (pid_t child : children.handles) {
@@ -2347,7 +2347,7 @@ TestResult run_one_test(const struct test *test, SandstoneApplication::PerCpuFai
         //change frequency per fracture
         if (sApp->vary_frequency_mode == true)
             sApp->frequency_manager.change_core_frequency();
-        
+
         //change uncore frequency per fracture
         if (sApp->vary_uncore_frequency_mode == true)
             sApp->frequency_manager.change_uncore_frequency();
@@ -2427,7 +2427,7 @@ out:
     //reset frequency level idx for the next test
     if (sApp->vary_frequency_mode || sApp->vary_uncore_frequency_mode)
         sApp->frequency_manager.reset_frequency_level_idx();
-    
+
     random_advance_seed();      // advance seed for the next test
     logging_flush();
     return state;
@@ -3569,7 +3569,7 @@ int main(int argc, char **argv)
             }
             sApp->vary_frequency_mode = true;
             break;
-        
+
         case vary_uncore_frequency:
             if (!FrequencyManager::FrequencyManagerWorks) {
                 fprintf(stderr, "%s: --vary-uncore-frequency works only on Linux\n", program_invocation_name);

@@ -651,7 +651,7 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
     HKEY hKey = (HKEY)-1;
     LONG lResult = ERROR_SUCCESS;
     bool ok = false;
-    
+
     // Reads from CentralProcessor\0 - this is the documented way to get the uCode version generically
     // We can read the value all the time or read once and cache it and return it - we choose the latter here
     lResult = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", 0, KEY_READ, &hKey);
@@ -678,14 +678,14 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
                 //
                 // See C:\>reg query HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\CentralProcessor\0
                 memcpy(&update_revision, (unsigned char*)keybuf + 4, sizeof(uint32_t));
-                
+
                 info->microcode = (uint32_t)update_revision;
-                
+
                 ok = true;
             }
         }
     }
-    
+
     if (hKey)
     {
         RegCloseKey(hKey);
@@ -851,7 +851,7 @@ void apply_cpuset_param(char *param)
             {
                 if (cpu.cpu_number % 2 == desired_remainder)
                     apply_to_set(cpu);
-            } 
+            }
         } else if (c >= 'a' && c <= 'z') {
             // topology search
             auto set_if_unset = [orig_arg](int n, int &where, const char *what) {

@@ -199,7 +199,7 @@ static int scan_run(struct test *test, int cpu)
          * DON'T use report_fail_msg() */
         int thread_num = cpu;
 
-        if (cpu_info[cpu].thread_id != 0) 
+        if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
 
         snprintf(my_cpu, sizeof(my_cpu), "%d\n", cpu_info[cpu].cpu_number);

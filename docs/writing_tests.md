@@ -50,7 +50,7 @@ static int simple_add_run(struct test *test, int cpu)
                                         golden_sum, sum);
                 }
         }
-        
+
         return EXIT_SUCCESS;
 }
 
@@ -375,7 +375,7 @@ tests_set_skx.add(
 
 Note this addition to the meson.build file is slightly different from the addition
 we made for the first test; we use tests_base_skx_set.add instead of
-tests_base_set.add.  This is required as our new test makes use of 
+tests_base_set.add.  This is required as our new test makes use of
 Intel® Advanced Vector Extensions 512 (Intel® AVX-512)
 intrinsics and will only build if our test source file is compiled with the
 correct compiler options, in this case -march=skylake-avx512. This command line
@@ -748,9 +748,9 @@ given machine. For example, the test may make use of an OS feature that is not
 present on all platforms or it may require root or administrator access to run.
 The framework doesn't provide any support for detecting
 these conditions so it is up to individual tests to 'self skip' if they detect
-conditions that will prevent them from running. This is done by performing a test 
-in *test_init* function and then using *log_skip* to specify a category and message 
-for the skip and finally returning *EXIT_SKIP* if the test fails. Pre-defined set 
+conditions that will prevent them from running. This is done by performing a test
+in *test_init* function and then using *log_skip* to specify a category and message
+for the skip and finally returning *EXIT_SKIP* if the test fails. Pre-defined set
 of categories are defined using enum *SkipCategory* in sandstone.h file.
 For example, suppose we write a test that will work fine on Linux\* but will not run
 on Windows\*.  In this case we might write an *test_init* function that looks like

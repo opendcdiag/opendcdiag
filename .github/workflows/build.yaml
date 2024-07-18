@@ -11,7 +11,7 @@ env:
 
 permissions:
   contents: read
-  
+
 jobs:
   Linux:
     runs-on: ubuntu-latest
