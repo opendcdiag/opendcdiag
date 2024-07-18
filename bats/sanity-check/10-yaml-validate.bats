@@ -15,7 +15,7 @@ load ../testenv
 
 @test "Verify that the python yaml module can import failure output" {
     for test in selftest_failinit selftest_fail selftest_freeze selftest_sigill; do
-        run $SANDSTONE --no-triage --retest-on-failure=1 --on-crash=kill --on-hang=kill --timeout=2s --selftest -o output-${test}.yaml -Y2 -e $test
+        run $SANDSTONE --retest-on-failure=1 --on-crash=kill --on-hang=kill --timeout=2s --selftest -o output-${test}.yaml -Y2 -e $test
         if [[ "$status" = 0 ]]; then
             printf "%s: status is 0\n" $test
             exit 1

@@ -6,7 +6,7 @@ load ../testenv
 
 sandstone_selftest() {
     VALIDATION=dump
-    run_sandstone_yaml -n$MAX_PROC --disable=mce_check --no-triage --selftests --timeout=20s --retest-on-failure=0 -Y2 "$@"
+    run_sandstone_yaml -n$MAX_PROC --disable=mce_check --selftests --timeout=20s --retest-on-failure=0 -Y2 "$@"
 }
 
 extract_from_yaml() {
@@ -200,7 +200,7 @@ tap_negative_check() {
     # not all tests
     for test in selftest_failinit selftest_fail; do
         local notok
-        run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=4 --on-crash=kill -e $test -o /dev/null -v
+        run $SANDSTONE --output-format=tap --selftests --retest-on-failure=4 --on-crash=kill -e $test -o /dev/null -v
         [[ $status -eq 1 ]]
         sed 's/\r$//' <<<"$output" | {
             tap_negative_check "$test" ''
@@ -221,7 +221,7 @@ tap_negative_check() {
     fi
     ulimit -Sc 0                # disable core dumps
     for test in ${crashtests[@]}; do
-        run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=0 --on-crash=kill -e $test -o /dev/null -v
+        run $SANDSTONE --output-format=tap --selftests --retest-on-failure=0 --on-crash=kill -e $test -o /dev/null -v
         [[ $status -eq 1 ]]
         sed 's/\r$//; /^wine: Unhandled/d' <<<"$output" | \
             tap_negative_check "$test" ' (Killed|Core Dumped):.*'
@@ -229,7 +229,7 @@ tap_negative_check() {
 }
 
 @test "TAP output OS error" {
-    run $SANDSTONE --output-format=tap --no-triage --selftests --retest-on-failure=0 --on-crash=kill -e selftest_oserror -o /dev/null -v
+    run $SANDSTONE --output-format=tap --selftests --retest-on-failure=0 --on-crash=kill -e selftest_oserror -o /dev/null -v
     [[ $status -eq 2 ]]
     sed 's/\r$//' <<<"$output" | \
         tap_negative_check selftest_oserror ' Operating system error:.*' "exit: invalid"
@@ -1791,7 +1791,7 @@ selftest_cpuset_negated() {
     # Don't use sandstone_selftest to avoid -n$MAX_PROC
     VALIDATION=dump
     declare -A yamldump
-    run_sandstone_yaml --disable=mce_check --no-triage --selftests --timeout=20s --retest-on-failure=0 -e selftest_logs_getcpu
+    run_sandstone_yaml --disable=mce_check --selftests --timeout=20s --retest-on-failure=0 -e selftest_logs_getcpu
 
     # Did we get anything?
     if [[ ${yamldump[/tests/0/result]} = skip ]]; then
