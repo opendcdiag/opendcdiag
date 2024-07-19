@@ -71,19 +71,6 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     return res;
 }
 
-SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) : cfg(cfg), flags(flags) {
-    load_all_tests(); /* initialize the catalog */
-    if (!(flags & enable_all_tests)) return;
-    std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
-    for (struct test &test : source) {
-        struct test_cfg_info ti;
-        ti.status = test_cfg_info::enabled;
-        ti.test = &test;
-        test_map[test.id] = ti;
-        test_set.push_back(&test);
-    }
-};
-
 struct test_cfg_info SandstoneTestSet::enable(struct test *t) {
     struct test_cfg_info &ti = test_map[t->id];
     ti.status = test_cfg_info::enabled;
@@ -96,8 +83,12 @@ std::vector<struct test_cfg_info> SandstoneTestSet::enable(const char *name) {
     std::vector<struct test *> tests = lookup(name);
     for (auto t : tests) {
         struct test_cfg_info ti = enable(t);
+        // only add to the test_set if the test is enabled
+        if (is_enabled(ti.test->id)) {
+            test_set.push_back(t);
+        }
+
         res.push_back(ti);
-        test_set.push_back(t);
     }
     return res;
 }
@@ -116,8 +107,11 @@ std::vector<struct test_cfg_info> SandstoneTestSet::disable(const char *name) {
         struct test_cfg_info ti = disable(t);
         for (auto it = test_set.begin(); it != test_set.end(); ) {
             if (*it == t) {
+                // only remove from the test_set if the test is disabled
+                if (is_disabled(ti.test->id)) {
+                    test_set.erase(it);
+                }
                 res.push_back(ti);
-                test_set.erase(it);
             } else {
                 ++it;
             }
@@ -125,6 +119,21 @@ std::vector<struct test_cfg_info> SandstoneTestSet::disable(const char *name) {
     }
     return res;
 }
+
+SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) : cfg(cfg), flags(flags) {
+    load_all_tests(); /* initialize the catalog */
+    if (!(flags & enable_all_tests)) return;
+    std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
+    for (struct test &test : source) {
+        struct test_cfg_info ti = enable(&test);
+        // only add to the test_set if the test is enabled
+        if (is_enabled(ti.test->id)) {
+            test_set.push_back(&test);
+        }
+
+        test_map[test.id] = ti;
+    }
+};
 
 static inline bool is_ignored(char c) {
     switch (c) {
@@ -234,7 +243,11 @@ std::vector<struct test_cfg_info> SandstoneTestSet::add_test_list(const char *fn
     }
     if (!errors.size()) {
         for (auto e : entries) {
-            test_set.push_back(e.test);
+            e = enable(e.test);
+            // only add to the test_set if the test is enabled
+            if (is_enabled(e.test->id)) {
+                test_set.push_back(e.test);
+            }
         }
     }
     return entries;
@@ -250,8 +263,13 @@ std::vector<struct test_cfg_info> SandstoneTestSet::add_builtin_test_list(const 
         return res;
     }
     for (auto t : *builtin.tests) {
-        res.push_back(enable(t));
-        test_set.push_back(t);
+        struct test_cfg_info ti = enable(t);
+        // only add to the test_set if the test is enabled
+        if (is_enabled(ti.test->id)) {
+            test_set.push_back(t);
+        }
+
+        res.push_back(ti);
     }
     return res;
 }
