@@ -1,4 +1,4 @@
-# OpenDCDiag Coding Style Guidelines 
+# OpenDCDiag Coding Style Guidelines
 
 ## General Guidelines
 
@@ -22,7 +22,7 @@
 ## Test Coding Style Guidelines
 
 Tests should adhere to the following requirements in addition to those listed above.
-* All test sources and headers should be encapsulated in a directory tree at  
+* All test sources and headers should be encapsulated in a directory tree at
   `REPO_ROOT/tests/<testname>/<test files and directories>`
 * Primary source file should be names <testname>.c or <testname>.cpp and contain:
   * The DECLARE_TEST(...)  macro at bottom of primary source file
@@ -30,8 +30,8 @@ Tests should adhere to the following requirements in addition to those listed ab
 ```
       /**
        ...
-       * @test <testname>  <-- must match test name in DECLARE_TEST 
-       *                   <-- blank line  
+       * @test <testname>  <-- must match test name in DECLARE_TEST
+       *                   <-- blank line
        * description ...   <-- Use @parblock/@endparblock for multi-paragraph descriptions
        ...
        */

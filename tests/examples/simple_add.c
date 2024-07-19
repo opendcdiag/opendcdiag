@@ -36,7 +36,7 @@ static int simple_add_run(struct test *test, int cpu)
                                         golden_sum, sum);
                 }
         }
-        
+
         return EXIT_SUCCESS;
 }
 
