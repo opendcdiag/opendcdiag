@@ -27,14 +27,21 @@ extern struct test __stop_tests;
 extern struct test mce_test;
 
 struct test_set_cfg {
-    bool ignore_unknown_tests;  /* whether an error should be reported if
-                                   there's no test matching the specified name,
-                                   either on command-line or in a test list. */
-    bool randomize;             /* iterate through the tests in random order. */
-    bool cycle_through;         /* start over when an iteration through the test
-                                   set has finished. */
-    bool is_selftest;           /* whether to use regular or selftests as the
-                                   source of the tests. */
+    bool ignore_unknown_tests;          /* whether an error should be reported if
+                                           there's no test matching the specified name,
+                                           either on command-line or in a test list. */
+    bool randomize;                     /* iterate through the tests in random order. */
+    bool cycle_through;                 /* start over when an iteration through the test
+                                           set has finished. */
+    bool is_selftest;                   /* whether to use regular or selftests as the
+                                           source of the tests. */
+    bool enable_by_feature_req;         /* whether to enable tests by the requested
+                                           features. Other tests are disabled. */
+    uint64_t enabled_features_mask;     /* features requested by the user. */
+
+    bool disable_by_feature_req;        /* whether to disable tests by the requested
+                                           features. Other tests are enabled. */
+    uint64_t disabled_features_mask;    /* features requested by the user. */
 };
 
 struct test_cfg_info {
@@ -94,6 +101,9 @@ public:
 
     std::vector<struct test_cfg_info> enable(const char *name);
     struct test_cfg_info enable(struct test *t);
+
+    std::vector<struct test_cfg_info> enable_by_feature(uint64_t enabled_features_mask);
+    std::vector<struct test_cfg_info> disable_by_feature(uint64_t disabled_features_mask);
 
     bool is_disabled(const char *name) { auto it = test_map.find(name); return (it != test_map.end() ? (it->second).status == test_cfg_info::disabled : true); };
     bool is_enabled(const char *name) { return !is_disabled(name); };

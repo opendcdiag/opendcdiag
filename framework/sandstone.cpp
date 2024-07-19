@@ -112,11 +112,12 @@ enum {
     thirty_sec_option,
     two_min_option,
     five_min_option,
-
     cpuset_option,
     disable_option,
+    disable_by_feature_option,
     dump_cpu_info_option,
     fatal_skips_option,
+    enable_by_feature_option,
     gdb_server_option,
     ignore_os_errors_option,
     ignore_unknown_tests_option,
@@ -1326,6 +1327,45 @@ static std::string cpu_features_to_string(uint64_t f)
             comma = ",";
         }
     }
+    return result;
+}
+
+static uint64_t cpu_features_to_cpuid(std::string f_str)
+{
+    uint64_t result = 0;
+    uint32_t substrings_num = 0;
+    uint32_t substrings_found_num = 0;
+
+    // Split the input string by commas
+    std::vector<std::string_view> substrings;
+    size_t start = 0;
+    size_t end = f_str.find(',');
+
+    while (end != std::string_view::npos) {
+        substrings.push_back(f_str.substr(start, end - start));
+        substrings_num++;
+        start = end + 1;
+        end = f_str.find(',', start);
+    }
+    substrings.push_back(f_str.substr(start)); // Add the last substring
+    substrings_num++;
+
+    for (const auto& sub : substrings) {
+        for (size_t i = 0; i < std::size(x86_locators); i++) {
+            std::string_view checked_feature = std::string_view(features_string + features_indices[i] + 1);
+
+            if (checked_feature == sub) {
+                substrings_found_num++;
+                result |= UINT64_C(1) << i;
+                break;
+            }
+        }
+    }
+
+    if(substrings_found_num != substrings_num) {
+        return 0x00;
+    }
+
     return result;
 }
 
@@ -3148,8 +3188,10 @@ int main(int argc, char **argv)
         { "beta", no_argument, &sApp->requested_quality, 0 },
         { "cpuset", required_argument, nullptr, cpuset_option },
         { "disable", required_argument, nullptr, disable_option },
+        { "disable-by-feature", required_argument, nullptr, disable_by_feature_option },
         { "dump-cpu-info", no_argument, nullptr, dump_cpu_info_option },
         { "enable", required_argument, nullptr, 'e' },
+        { "enable-by-feature", required_argument, nullptr, enable_by_feature_option },
         { "fatal-errors", no_argument, nullptr, 'F'},
         { "fatal-skips", no_argument, nullptr, fatal_skips_option },
         { "fork-mode", required_argument, nullptr, 'f' },
@@ -3247,6 +3289,10 @@ int main(int argc, char **argv)
         .ignore_unknown_tests = false,
         .randomize = false,
         .cycle_through = false,
+        .enable_by_feature_req = false,
+        .enabled_features_mask = UINT64_MAX, // we set all bits during initialization, so we permit all features
+        .disable_by_feature_req = false,
+        .disabled_features_mask = 0x00, //  we set no bits during initialization, so we disable no features
     };
     const char *builtin_test_list_name = nullptr;
     int starting_test_number = 1;  // One based count for user interface, not zero based
@@ -3373,9 +3419,37 @@ int main(int argc, char **argv)
         case cpuset_option:
             apply_cpuset_param(optarg);
             break;
+        case disable_by_feature_option:
+            if(optarg == nullptr || *optarg == '\0') {
+                fprintf(stderr, "%s: --disable-by-feature requires a non-empty argument\n", argv[0]);
+                return EX_USAGE;
+            }
+
+            test_set_config.disable_by_feature_req = true;
+            test_set_config.disabled_features_mask = cpu_features_to_cpuid(optarg);
+
+            if(test_set_config.disabled_features_mask == 0x00) {
+                fprintf(stderr, "%s: --disable-by-feature: unknown CPU feature(s) requested: %s\n", argv[0], optarg);
+                return EX_USAGE;
+            }
+            break;
         case dump_cpu_info_option:
             dump_cpu_info();
             return EXIT_SUCCESS;
+        case enable_by_feature_option:
+            if(optarg == nullptr || *optarg == '\0') {
+                fprintf(stderr, "%s: --enable-by-feature requires a non-empty argument\n", argv[0]);
+                return EX_USAGE;
+            }
+
+            test_set_config.enable_by_feature_req = true;
+            test_set_config.enabled_features_mask = cpu_features_to_cpuid(optarg);
+
+            if(test_set_config.enabled_features_mask == 0x00) {
+                fprintf(stderr, "%s: --enable-by-feature: unknown CPU feature(s) requested: %s\n", argv[0], optarg);
+                return EX_USAGE;
+            }
+            break;
         case fatal_skips_option:
             sApp->fatal_skips = true;
             break;
@@ -3760,6 +3834,11 @@ int main(int argc, char **argv)
         }
     }
 
+    /* Leave only the tests that require enabled feature. */
+    if(test_set_config.enable_by_feature_req) {
+        test_set->enable_by_feature(test_set_config.enabled_features_mask);
+    }
+
 
     /* Add mce_check as the last test to the set. It will be kept last by
      * SandstoneTestSet in case randomization is requested. */
@@ -3770,6 +3849,11 @@ int main(int argc, char **argv)
         for (auto name : disabled_tests) {
             test_set->disable(name);
         }
+    }
+
+    /* Remove all the tests that require disabled feature. */
+    if(test_set_config.disable_by_feature_req) {
+        test_set->disable_by_feature(test_set_config.disabled_features_mask);
     }
 
     if (sApp->shmem->verbosity == -1)
