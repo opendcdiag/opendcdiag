@@ -2441,11 +2441,11 @@ static auto collate_test_groups()
         std::vector<const struct test *> entries;
     };
     std::map<std::string_view, Group> groups;
-    for (struct test *t : *test_set) {
-        for (auto ptr = t->groups; ptr && *ptr; ++ptr) {
+    for (const auto &ti : *test_set) {
+        for (auto ptr = ti.test->groups; ptr && *ptr; ++ptr) {
             Group &g = groups[(*ptr)->id];
             g.definition = *ptr;
-            g.entries.push_back(t);
+            g.entries.push_back(ti.test);
         }
     }
 
@@ -2461,8 +2461,8 @@ static void list_tests(int opt)
     auto groups = collate_test_groups();
     int i = 0;
 
-    for (auto it = test_set->begin(); it != test_set->end(); ++it) {
-        struct test *test = *it;
+    for (const auto &ti : *test_set) {
+        struct test *test = ti.test;
         if (test->quality_level >= sApp->requested_quality) {
             if (include_tests) {
                 if (include_descriptions) {
@@ -2538,14 +2538,14 @@ static bool should_start_next_iteration(void)
     return true;
 }
 
-static SandstoneTestSet::TestSet::iterator
-get_next_test(SandstoneTestSet::TestSet::iterator next_test)
+static SandstoneTestSet::EnabledTestList::iterator
+get_next_test(SandstoneTestSet::EnabledTestList::iterator next_test)
 {
     if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
         return test_set->end();
 
     ++next_test;
-    while (next_test != test_set->end() && (*next_test)->quality_level < sApp->requested_quality)
+    while (next_test != test_set->end() && next_test->test->quality_level < sApp->requested_quality)
         ++next_test;
     if (next_test == test_set->end()) {
         if (should_start_next_iteration()) {
@@ -2558,17 +2558,17 @@ get_next_test(SandstoneTestSet::TestSet::iterator next_test)
         }
     }
 
-    assert((*next_test)->id);
-    assert((*next_test)->description);
-    assert(strlen((*next_test)->id));
+    assert(next_test->test->id);
+    assert(next_test->test->description);
+    assert(strlen(next_test->test->id));
     return next_test;
 }
 
-static SandstoneTestSet::TestSet::iterator get_first_test()
+static SandstoneTestSet::EnabledTestList::iterator get_first_test()
 {
     logging_print_iteration_start();
     auto it = test_set->begin();
-    while (it != test_set->end() && (*it)->quality_level < sApp->requested_quality)
+    while (it != test_set->end() && it->test->quality_level < sApp->requested_quality)
         ++it;
     return it;
 }
@@ -3735,7 +3735,8 @@ int main(int argc, char **argv)
 
     initialize_smi_counts();  // used by smi_count test
 
-    for (auto test = get_first_test(); test != test_set->end(); test = get_next_test(test)) {
+    for (auto it = get_first_test(); it != test_set->end(); it = get_next_test(it)) {
+        struct test *const *test = &it->test;
         if (lastTestResult != TestResult::Skipped) {
             if (sApp->service_background_scan) {
                 if (!background_scan_wait()) {

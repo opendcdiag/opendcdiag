@@ -46,6 +46,8 @@ struct test_cfg_info {
     struct test *test = nullptr;
     std::string attribute;
     test_status status = not_found;
+
+    /* implicit */ test_cfg_info(struct test *test = nullptr) : test(test) {}
 };
 
 #ifdef __cplusplus
@@ -62,9 +64,9 @@ extern const std::span<struct test> selftests;
 
 class SandstoneTestSet
 {
-
 public:
     using TestSet = std::vector<struct test *>;
+    using EnabledTestList = std::vector<test_cfg_info>;
 
     enum Flag {
         enable_all_tests    = 1 << 0,
@@ -76,30 +78,29 @@ public:
     SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags);
 
     // note: not idempotent, we may shuffle every time! */
-    TestSet::iterator begin() noexcept
+    EnabledTestList::iterator begin() noexcept
     {
         if (cfg.randomize) {
             /* Do not shuffle mce_check if present. */
-            TestSet::iterator end = test_set.end();
-            auto last = *(end - 1) == &mce_test ? end - 1 : end;
+            auto end = test_set.end();
+            auto last = end[-1].test == &mce_test ? end - 1 : end;
             std::shuffle(test_set.begin(), last, SandstoneURBG());
         }
         return test_set.begin();
     };
 
-    TestSet::iterator end() noexcept { return test_set.end(); }
+    EnabledTestList::iterator end() noexcept { return test_set.end(); }
 
     int disable(const char *name);
-    struct test_cfg_info disable(struct test *t);
+    int disable(const struct test *t);
 
     std::vector<struct test_cfg_info> enable(const char *name);
-    struct test_cfg_info enable(struct test *t);
     struct test_cfg_info enable(test_cfg_info t);
 
     bool is_enabled(struct test *test) const
     {
-        return std::any_of(test_set.begin(), test_set.end(), [&](const struct test *t) {
-            return t == test;
+        return std::any_of(test_set.begin(), test_set.end(), [&](const test_cfg_info &ti) {
+            return ti.test == test;
         });
     }
 
@@ -120,12 +121,10 @@ private:
     /* list of all available tests. */
     TestSet all_tests;
     /* maps group name to a vector of tests it contains. */
-    std::map<std::string_view, TestSet> all_group_map;
-    /* maps test name to current instance configuration. */
-    std::map<std::string_view, struct test_cfg_info> test_map;
+    std::map<std::string_view, std::vector<struct test *>> all_group_map;
 
     /* actual set of tests that is included in this instance. */
-    TestSet test_set;
+    EnabledTestList test_set;
 
     test_set_cfg cfg;
     unsigned int flags;
