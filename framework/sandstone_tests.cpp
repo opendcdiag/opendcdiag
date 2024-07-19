@@ -79,15 +79,15 @@ SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) 
         struct test_cfg_info ti;
         ti.status = test_cfg_info::enabled;
         ti.test = &test;
-        test_map[test.id] = ti;
         test_set.push_back(&test);
     }
 };
 
-struct test_cfg_info SandstoneTestSet::enable(struct test *t) {
-    struct test_cfg_info &ti = test_map[t->id];
+struct test_cfg_info SandstoneTestSet::enable(test_cfg_info t)
+{
+    struct test_cfg_info &ti = test_set.emplace_back(t);
+    // ensure it's enabled
     ti.status = test_cfg_info::enabled;
-    ti.test = t;
     return ti;
 }
 
@@ -97,16 +97,20 @@ std::vector<struct test_cfg_info> SandstoneTestSet::enable(const char *name) {
     for (auto t : tests) {
         struct test_cfg_info ti = enable(t);
         res.push_back(ti);
-        test_set.push_back(t);
     }
     return res;
 }
 
-struct test_cfg_info SandstoneTestSet::disable(struct test *t) {
-    struct test_cfg_info &ti = test_map[t->id];
-    ti.status = test_cfg_info::disabled;
-    ti.test = t;
-    return ti;
+/// Returns the number of tests that were removed from the test list, which may
+/// be zero.
+int SandstoneTestSet::disable(const struct test *test)
+{
+    auto it = std::remove_if(test_set.begin(), test_set.end(), [&](const test_cfg_info &ti) {
+        return ti.test == test;
+    });
+    int count = test_set.end() - it;
+    test_set.erase(it, test_set.end());
+    return count;
 }
 
 /// Returns the number of tests that were removed from the test list, which may
@@ -120,15 +124,7 @@ int SandstoneTestSet::disable(const char *name)
 
     int res = 0;
     for (auto t : tests) {
-        struct test_cfg_info ti = disable(t);
-        for (auto it = test_set.begin(); it != test_set.end(); ) {
-            if (*it == t) {
-                ++res;
-                test_set.erase(it);
-            } else {
-                ++it;
-            }
-        }
+        res += disable(t);
     }
     return res;
 }
