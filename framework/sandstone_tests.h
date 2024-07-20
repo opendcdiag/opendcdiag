@@ -45,7 +45,6 @@ struct test_cfg_info {
         not_found = -1,
     };
     struct test *test = nullptr;
-    std::string attribute;
     test_status status = not_found;
     ShortDuration duration = ShortDuration::zero();
 
