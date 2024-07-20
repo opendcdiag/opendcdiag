@@ -180,7 +180,10 @@ static line_type parse_test_list_line(std::string line, SandstoneTestSet *test_s
     if (!set.size()) return LT_TEST_NOT_FOUND;
     if (set.size() != 1) return LT_SYNTAX_ERROR; /* Artificially do not allow specifying wildcards or groups in the list file. */
     ti.test = set[0];
-    if (tokens.size() == 2) ti.attribute = tokens[1];
+    if (tokens.size() == 2) {
+        if (tokens[1].size() && strcasecmp(tokens[1].c_str(), "default") != 0)
+            ti.duration = string_to_millisecs(tokens[1]);
+    }
     return LT_VALID_TEST;
 }
 
@@ -228,13 +231,9 @@ std::vector<struct test_cfg_info> SandstoneTestSet::add_test_list(const char *fn
     std::ifstream list_file(fname, std::ios_base::in);
     std::vector<struct test_cfg_info> entries = load_test_list(list_file, this, cfg.ignore_unknown_tests, errors);
     if (!errors.empty()) return {};
-    for (auto &e : entries) {
-        if (!e.attribute.empty()
-                && strcasecmp(e.attribute.c_str(), "default")) {
-            e.duration = string_to_millisecs(e.attribute);
-        }
-    }
-    if (!errors.size()) {
+    if (test_set.empty()) {
+        test_set = entries;
+    } else {
         test_set.reserve(test_set.capacity() + entries.size());
         for (auto e : entries) {
             test_set.push_back(e);
