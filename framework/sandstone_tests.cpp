@@ -228,16 +228,16 @@ std::vector<struct test_cfg_info> SandstoneTestSet::add_test_list(const char *fn
     std::ifstream list_file(fname, std::ios_base::in);
     std::vector<struct test_cfg_info> entries = load_test_list(list_file, this, cfg.ignore_unknown_tests, errors);
     if (!errors.empty()) return {};
-    for (auto e : entries) {
-        if (e.test->desired_duration != -1 /* never reset a -1 specified by the test definition. */
-                && !e.attribute.empty()
+    for (auto &e : entries) {
+        if (!e.attribute.empty()
                 && strcasecmp(e.attribute.c_str(), "default")) {
-            e.test->desired_duration = string_to_millisecs(e.attribute).count();
+            e.duration = string_to_millisecs(e.attribute);
         }
     }
     if (!errors.size()) {
+        test_set.reserve(test_set.capacity() + entries.size());
         for (auto e : entries) {
-            test_set.push_back(e.test);
+            test_set.push_back(e);
         }
     }
     return entries;

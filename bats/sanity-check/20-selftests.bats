@@ -957,7 +957,7 @@ test_list_file() {
 }
 
 @test "--test-list-file with duration" {
-    test_list_file selftest_pass:default selftest_timedpass:50
+    test_list_file selftest_pass:default selftest_timedpass:250 selftest_timedpass:10
 }
 
 @test "--test-list-file with comments and empty lines" {

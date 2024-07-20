@@ -634,8 +634,10 @@ static ShortDuration test_duration()
     return SandstoneApplication::DefaultTestDuration;
 }
 
-static ShortDuration test_duration(const struct test *test)
+static ShortDuration test_duration(const test_cfg_info &test_cfg)
 {
+    const struct test *test = test_cfg.test;
+
     /* Start with the test prefered default time */
     ShortDuration target_duration(test->desired_duration);
     ShortDuration min_duration(test->minimum_duration);
@@ -644,6 +646,10 @@ static ShortDuration test_duration(const struct test *test)
     /* apply the global (-t) override */
     if (sApp->test_time.count())
         target_duration = sApp->test_time;
+
+    /* apply the per-test time from the test list (overrides global -t) */
+    if (test_cfg.duration.count())
+        target_duration = test_cfg.duration;
 
     /* fallback to the default if test preference is zero */
     if (target_duration <= 0s)
@@ -2295,8 +2301,10 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
     }
 }
 
-TestResult run_one_test(const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails)
+static TestResult
+run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures &per_cpu_fails)
 {
+    const struct test *test = test_cfg.test;
     TestResult state = TestResult::Skipped;
     int fail_count = 0;
     std::unique_ptr<char[]> random_allocation;
@@ -2322,7 +2330,7 @@ TestResult run_one_test(const struct test *test, SandstoneApplication::PerCpuFai
         });
     };
 
-    sApp->current_test_duration = test_duration(test);
+    sApp->current_test_duration = test_duration(test_cfg);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
 
     if (sApp->max_test_loop_count) {
@@ -3736,7 +3744,6 @@ int main(int argc, char **argv)
     initialize_smi_counts();  // used by smi_count test
 
     for (auto it = get_first_test(); it != test_set->end(); it = get_next_test(it)) {
-        struct test *const *test = &it->test;
         if (lastTestResult != TestResult::Skipped) {
             if (sApp->service_background_scan) {
                 if (!background_scan_wait()) {
@@ -3751,7 +3758,7 @@ int main(int argc, char **argv)
             }
         }
 
-        lastTestResult = run_one_test(*test, per_cpu_failures);
+        lastTestResult = run_one_test(*it, per_cpu_failures);
 
         total_tests_run++;
         if (lastTestResult == TestResult::Failed) {

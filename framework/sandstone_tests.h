@@ -9,6 +9,7 @@
 #include <stddef.h>
 
 #include "sandstone.h"
+#include "sandstone_chrono.h"
 #include "sandstone_p.h"
 #include <sandstone_test_lists.h>
 
@@ -46,6 +47,7 @@ struct test_cfg_info {
     struct test *test = nullptr;
     std::string attribute;
     test_status status = not_found;
+    ShortDuration duration = ShortDuration::zero();
 
     /* implicit */ test_cfg_info(struct test *test = nullptr) : test(test) {}
 };
