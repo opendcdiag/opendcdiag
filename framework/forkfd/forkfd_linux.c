@@ -220,11 +220,17 @@ int system_forkfd_wait(int ffd, struct forkfd_info *info, int ffdoptions, struct
             options |= WNOHANG;
     }
 
-    si.si_status = si.si_code = 0;
+    si.si_signo = si.si_status = si.si_code = 0;
     ret = sys_waitid(P_PIDFD, ffd, &si, options, rusage);
     if (info) {
         info->code = si.si_code;
         info->status = si.si_status;
+    }
+    if (ret == 0 && si.si_signo != SIGCHLD) {
+        /* waitid() succeeded but not from a SIGCHLD, so the child process has
+         * not actually exited. */
+        errno = EBADFD;     /* not EBADF */
+        return -1;
     }
     return ret;
 }
