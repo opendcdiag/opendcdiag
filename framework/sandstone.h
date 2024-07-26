@@ -500,7 +500,8 @@ extern void test_loop_end(void) noexcept;
 /// may be called inside a test's test_run function.  It returns a
 /// non-zero value if time remains in the test's time slot and the
 /// test should continue to execute.
-extern int test_time_condition(const struct test *test) noexcept;
+extern bool test_time_condition() noexcept;
+#define test_time_condition(test)       test_time_condition()
 
 /// outputs msg to the logs, prefixing it with the string "Platform issue:"
 /// This function is usually used to log a warning when an error is detected
