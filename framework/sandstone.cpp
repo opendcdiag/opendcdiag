@@ -713,13 +713,14 @@ static bool max_loop_count_exceeded(const struct test *the_test)
 extern "C" void test_loop_iterate() noexcept;    // see below
 
 /* returns 1 if the test should keep running, useful for a while () loop */
-int test_time_condition(const struct test *the_test) noexcept
+#undef test_time_condition
+bool test_time_condition() noexcept
 {
     test_loop_iterate();
-    sApp->test_tests_iteration(the_test);
+    sApp->test_tests_iteration(current_test);
     sApp->test_thread_data(thread_num)->inner_loop_count++;
 
-    if (max_loop_count_exceeded(the_test))
+    if (max_loop_count_exceeded(current_test))
         return 0;  // end the test if max loop count exceeded
 
     return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
