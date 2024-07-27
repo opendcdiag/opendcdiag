@@ -222,7 +222,7 @@ static int selftest_skip_run(struct test *test, int cpu)
 static int selftest_log_skip_init(struct test *test)
 {
     log_skip(SelftestSkipCategory, "This is a skip in init");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_logerror_init(struct test *test)
@@ -1002,7 +1002,7 @@ static struct test selftests_array[] = {
     .description = "Skips by returning EXIT_SKIP from the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_skip_init,
-    .test_run = selftest_skip_run,
+    .test_run = selftest_noreturn_run,
     .desired_duration = -1,
 },
 {
@@ -1010,7 +1010,7 @@ static struct test selftests_array[] = {
     .description = "Skips using log_skip() in the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_log_skip_init,
-    .test_run = selftest_skip_run,
+    .test_run = selftest_noreturn_run,
     .desired_duration = -1,
 },
 {
