@@ -1641,22 +1641,17 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 
         run_threads(test);
 
-        if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime)){
-            // skip cleanup on the last test when using strict runtime
-        } else {
-            if (test->test_cleanup) {
-                ret = test->test_cleanup(test);
-                if (state == TestResult::Passed) {
-                    if (ret == EXIT_SKIP) {
-                        log_skip(RuntimeSkipCategory, "SKIP requested in cleanup");
-                        state = TestResult::Skipped;
-                    } else if (ret < EXIT_SUCCESS) {
-                        log_skip(RuntimeSkipCategory, "Unexpected OS error in cleanup: %s", strerror(-ret));
-                        state = TestResult::Skipped;
-                    } else if (ret > EXIT_SUCCESS) {
-                        state = TestResult::Failed;
-                    }
-                }
+        if (test->test_cleanup) {
+            ret = test->test_cleanup(test);
+            PerThreadData::Main *thr = sApp->main_thread_data();
+            if (ret > EXIT_SUCCESS || thr->has_failed()) {
+                state = TestResult::Failed;
+            } else if (ret == EXIT_SKIP || thr->has_skipped()) {
+                log_skip(RuntimeSkipCategory, "SKIP requested in cleanup");
+                state = TestResult::Skipped;
+            } else if (ret < EXIT_SUCCESS) {
+                log_skip(RuntimeSkipCategory, "Unexpected OS error in cleanup: %s", strerror(-ret));
+                state = TestResult::Skipped;
             }
         }
 

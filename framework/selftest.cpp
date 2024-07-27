@@ -282,7 +282,7 @@ static int selftest_log_skip_init(struct test *test)
 static int selftest_skipmsg_success_cleanup(struct test *test)
 {
     log_skip(SelftestSkipCategory, "SUCCESS after skipmsg from cleanup");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_skipmsg_skip_cleanup(struct test *test)
@@ -314,6 +314,12 @@ static int selftest_fail_cleanup(struct test *test)
 {
     log_info("cleanup returns FAIL");
     return EXIT_FAILURE;
+}
+
+static int selftest_logerror_cleanup(struct test *test)
+{
+    log_error("cleanup failure");
+    return EXIT_SUCCESS;
 }
 
 template <int PackageId> static int selftest_log_skip_socket_init(struct test *test)
@@ -1599,9 +1605,35 @@ static struct test selftests_array[] = {
     .id = "selftest_fail_cleanup",
     .description = "Fails in the cleanup function",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
-    .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_fail_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_logerror_cleanup",
+    .description = "Fails in the cleanup function with log_error()",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_pass_run,
+    .test_cleanup = selftest_logerror_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_fail_cleanup_after_skip",
+    .description = "Fails in the cleanup function after having skipped",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_log_skip_run_all_threads,
+    .test_cleanup = selftest_fail_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_logerror_cleanup_after_skip",
+    .description = "Fails in the cleanup function with log_error() after having skipped",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_log_skip_run_all_threads,
+    .test_cleanup = selftest_logerror_cleanup,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
