@@ -779,6 +779,16 @@ void logging_mark_thread_failed(int thread_num)
     }
 }
 
+static void logging_mark_thread_skipped(int thread_num)
+{
+    PerThreadData::Common *thr = sApp->thread_data(thread_num);
+    if (thr->has_failed())
+        return;
+
+    // we set to a negative monotonic time to indicate a skip
+    thr->fail_time = MonotonicTimePoint(Duration(-1));
+}
+
 static void log_message_preformatted(int thread_num, std::string_view msg)
 {
     int level = status_level(msg[0]);
@@ -1146,6 +1156,7 @@ void log_platform_message(const char *fmt, ...)
 #undef log_message_skip
 void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ...)
 {
+    logging_mark_thread_skipped(thread_num);
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
 
@@ -1631,7 +1642,7 @@ static void print_child_stderr_common(std::function<void(int)> header)
 static std::string
 format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
 {
-    if (tp == MonotonicTimePoint() || tp == MonotonicTimePoint::max())
+    if (tp <= MonotonicTimePoint() || tp == MonotonicTimePoint::max())
         return {};
 
     return format_duration(tp - sApp->current_test_starttime, opts);

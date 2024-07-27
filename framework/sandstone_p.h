@@ -196,13 +196,17 @@ struct Common
     MonotonicTimePoint fail_time;
     bool has_failed() const
     {
-        return fail_time < MonotonicTimePoint::max();
+        return fail_time > MonotonicTimePoint{};
+    }
+    bool has_skipped() const
+    {
+        return fail_time < MonotonicTimePoint{};
     }
 
     void init()
     {
         thread_state.store(thread_not_started, std::memory_order_relaxed);
-        fail_time = MonotonicTimePoint::max();
+        fail_time = MonotonicTimePoint{};
         messages_logged.store(0, std::memory_order_relaxed);
         data_bytes_logged.store(0, std::memory_order_relaxed);
     }

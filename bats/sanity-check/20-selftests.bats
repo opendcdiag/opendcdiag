@@ -770,7 +770,7 @@ test_random() {
     [[ ${#tests[@]} -gt 0 ]]
 
     declare -A yamldump
-    sandstone_selftest -e 'selftest_logs*'
+    sandstone_selftest "--disable=@negative" -e 'selftest_logs*'
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
 
@@ -1034,6 +1034,21 @@ test_list_file_ignores_beta() {
     test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
 }
 
+@test "selftest_failinit_and_logskip" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_failinit_and_logskip
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" fail
+    test_yaml_regexp "/tests/0/fail/cpu-mask" None
+    test_yaml_regexp "/tests/0/fail/time-to-fail" None
+    test_yaml_absent "/tests/0/skip-category"
+    test_yaml_absent "/tests/0/skip-reason"
+    i=$((-1 + yamldump[/tests/0/threads/0/messages@len]))
+    test_yaml_regexp "/tests/0/threads/0/messages/$i/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
+}
+
 @test "selftest_logerror_init" {
     declare -A yamldump
     sandstone_selftest -e selftest_logerror_init
@@ -1044,6 +1059,29 @@ test_list_file_ignores_beta() {
     test_yaml_regexp "/tests/0/threads/0/thread" 'main'
     test_yaml_regexp "/tests/0/threads/0/messages/0/level" error
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> Error logged in init.*'
+}
+
+@test "selftest_logerror_logskip_init" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logskip_and_logerror -e selftest_logerror_and_logskip \
+            -e selftest_logerror_and_logskip_exitskip
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    for ((i = 0; i < yamldump[/tests@len]; ++i)); do
+        test_yaml_numeric "/tests/$i/threads@len" 'value == 1'
+        test_yaml_regexp "/tests/$i/threads/0/thread" 'main'
+        test_yaml_absent "/tests/$i/skip-category"
+        test_yaml_absent "/tests/$i/skip-reason"
+
+        # Let the message order be arbitrary
+        local has_error=0
+        for ((j = 0; !has_error && j < yamldump[/tests/$i/threads/0/messages@len]; ++j)); do
+            if [[ ${yamldump[/tests/$i/threads/0/messages/0/level]} = "error" ]]; then
+                test_yaml_regexp "/tests/$i/threads/0/messages/$j/text" 'E> This is an error message from init'
+                has_error=1
+            fi
+        done
+    done
 }
 
 @test "selftest_errormsg_cleanup" {

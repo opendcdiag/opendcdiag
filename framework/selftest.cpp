@@ -276,12 +276,6 @@ static int selftest_skip_run(struct test *test, int cpu)
 static int selftest_log_skip_init(struct test *test)
 {
     log_skip(SelftestSkipCategory, "This is a skip in init");
-    return EXIT_SKIP;
-}
-
-static int selftest_logerror_init(struct test *test)
-{
-    log_error("Error logged in init, test is not expected to run any threads");
     return EXIT_SUCCESS;
 }
 
@@ -494,6 +488,40 @@ static int selftest_failinit_run(struct test *test, int cpu)
 {
     log_error("We should not reach here");
     abort();
+    return EXIT_SUCCESS;
+}
+
+static int selftest_failinit_and_logskip_init(struct test *test)
+{
+    selftest_randomprint_init(test);
+    log_skip(SelftestSkipCategory, "This is a skip in init");
+    return EXIT_FAILURE;
+}
+
+static int selftest_logerror_init(struct test *test)
+{
+    log_error("Error logged in init, test is not expected to run any threads");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_logerror_and_logskip_init(struct test *test)
+{
+    log_error("This is an error message from init");
+    log_skip(SelftestSkipCategory, "This is a skip in init");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_logerror_and_logskip_exitskip_init(struct test *test)
+{
+    log_error("This is an error message from init");
+    log_skip(SelftestSkipCategory, "This is a skip in init");
+    return EXIT_SKIP;
+}
+
+static int selftest_logskip_and_logerror_init(struct test *test)
+{
+    log_skip(SelftestSkipCategory, "This is a skip in init");
+    log_error("This is an error message from init");
     return EXIT_SUCCESS;
 }
 
@@ -1192,7 +1220,7 @@ static struct test selftests_array[] = {
     .description = "Skips by returning EXIT_SKIP from the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_skip_init,
-    .test_run = selftest_skip_run,
+    .test_run = selftest_noreturn_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
@@ -1201,7 +1229,7 @@ static struct test selftests_array[] = {
     .description = "Skips using log_skip() in the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_log_skip_init,
-    .test_run = selftest_skip_run,
+    .test_run = selftest_noreturn_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
@@ -1505,6 +1533,24 @@ static struct test selftests_array[] = {
     /* Negative tests */
 
 {
+    .id = "selftest_failinit",
+    .description = "Fails in the init function",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_failinit_init,
+    .test_run = selftest_failinit_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_failinit_and_logskip",
+    .description = "Fails by returning EXIT_FAILURE after log_skip() in init",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_failinit_and_logskip_init,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_logerror_init",
     .description = "Fails on error logged in init",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
@@ -1514,20 +1560,38 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_logerror_and_logskip",
+    .description = "Fails by with log_error() and log_skip() in init",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logerror_and_logskip_init,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_logerror_and_logskip_exitskip",
+    .description = "Fails by with log_error(), log_skip(), return EXIT_SKIP in init",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logerror_and_logskip_exitskip_init,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_logskip_and_logerror",
+    .description = "Fails by with log_skip() and log_error() in init",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logskip_and_logerror_init,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_fail",
     .description = "Fails by way of returning",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_randomprint_init,
     .test_run = selftest_fail_run,
-    .desired_duration = -1,
-    .quality_level = TEST_QUALITY_PROD,
-},
-{
-    .id = "selftest_failinit",
-    .description = "Fails in the init function",
-    .groups = DECLARE_TEST_GROUPS(&group_negative),
-    .test_init = selftest_failinit_init,
-    .test_run = selftest_failinit_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },

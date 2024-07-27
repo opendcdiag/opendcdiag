@@ -1672,16 +1672,29 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
             pthread_create(&init_thread, nullptr, init_thread_runner, test);
             pthread_join(init_thread, &retptr);
             ret = intptr_t(retptr);
+            if (ret > 0) {
+                state = TestResult::Failed;
+            } else if (ret < 0) {
+                state = TestResult::Skipped;
+            } else {
+                // check if the thread has failed with log_error() or skipped
+                // with log_skip()
+                PerThreadData::Main *thr = sApp->main_thread_data();
+                if (thr->has_skipped())
+                    state = TestResult::Skipped;
+                else if (thr->has_failed())
+                    state = TestResult::Failed;
+            }
         }
 
-        if (ret > 0 || sApp->main_thread_data()->has_failed()) {
+        if (state == TestResult::Failed) {
             logging_mark_thread_failed(-1);
             if (ret > 0)
                 log_error("Init function failed with code %i", ret);
             state = TestResult::Failed;
             break;
-        } else if (ret < 0) {
-            if (ret != EXIT_SKIP)
+        } else if (state == TestResult::Skipped) {
+            if (ret != 0 && ret != EXIT_SKIP)
                 log_skip(RuntimeSkipCategory, "Unexpected OS error: %s", strerror(-ret));
             state = TestResult::Skipped;
             break;
