@@ -333,7 +333,7 @@ template <int PackageId> static int selftest_log_skip_socket_run(struct test *te
 static int selftest_log_skip_run_all_threads(struct test *test, int cpu)
 {
     log_skip(SelftestSkipCategory, "Skipping on all threads");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_log_skip_run_even_threads(struct test *test, int cpu)
