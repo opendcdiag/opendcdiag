@@ -234,13 +234,13 @@ static int selftest_logerror_init(struct test *test)
 static int selftest_skipmsg_success_cleanup(struct test *test)
 {
     log_skip(SelftestSkipCategory, "SUCCESS after skipmsg from cleanup");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_skipmsg_skip_cleanup(struct test *test)
 {
     log_skip(SelftestSkipCategory, "SKIP after skipmsg from cleanup");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_skip_cleanup(struct test *test)
