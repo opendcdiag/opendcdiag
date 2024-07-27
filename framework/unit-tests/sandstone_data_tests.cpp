@@ -7,6 +7,7 @@
 #include "sandstone_data.h"
 
 #include <string.h>
+#include <iomanip>
 
 static constexpr bool UseF16C = false
 #ifdef __F16C__
