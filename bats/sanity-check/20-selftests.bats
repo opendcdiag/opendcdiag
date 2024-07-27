@@ -1104,8 +1104,38 @@ test_list_file_ignores_beta() {
     i=$((0 + yamldump[/tests/0/threads@len]))
     [[ "$i" -eq 1 ]]
     test_yaml_regexp "/tests/0/threads/0/thread" 'main'
-    test_yaml_regexp "/tests/0/threads/0/messages/1/level" info
-    test_yaml_regexp "/tests/0/threads/0/messages/1/text" 'I> cleanup returns FAIL'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" info
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'I> cleanup returns FAIL'
+}
+
+@test "selftest_logerror_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logerror_cleanup
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> cleanup failure'
+}
+
+@test "selftest_fail_cleanup_after_skip" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_cleanup_after_skip
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" info
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'I> cleanup returns FAIL'
+}
+
+@test "selftest_logerror_cleanup_after_skip" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logerror_cleanup_after_skip
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" error
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> cleanup failure'
 }
 
 fail_common() {
