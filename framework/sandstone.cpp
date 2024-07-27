@@ -927,10 +927,10 @@ static uintptr_t thread_runner(int thread_number)
         // let SIGQUIT handler know we're done
         ThreadState new_state = thread_failed;
         if (!this_thread->has_failed()) {
-            if (ret == EXIT_SUCCESS)
-                new_state = thread_succeeded;
-            else if (ret < EXIT_SUCCESS)
+            if (this_thread->has_skipped() || ret < EXIT_SUCCESS)
                 new_state = thread_skipped;
+            else if (ret == EXIT_SUCCESS)
+                new_state = thread_succeeded;
         }
         this_thread->thread_state.store(new_state, std::memory_order_relaxed);
 
