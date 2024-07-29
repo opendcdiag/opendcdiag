@@ -3654,7 +3654,7 @@ int main(int argc, char **argv)
     /* Add all the tests we were told to enable. */
     if (enabled_tests.size()) {
         for (auto name : enabled_tests) {
-            auto tis = test_set->enable(name);
+            auto tis = test_set->add(name);
             if (!tis.size() && !test_set_config.ignore_unknown_tests) {
                 fprintf(stderr, "%s: Cannot find matching tests for '%s'\n", program_invocation_name, name);
                 exit(EX_USAGE);
@@ -3688,27 +3688,27 @@ int main(int argc, char **argv)
 
     /* Add mce_check as the last test to the set. It will be kept last by
      * SandstoneTestSet in case randomization is requested. */
-    test_set->enable(&mce_test);
+    test_set->add(&mce_test);
 
     /* Remove all the tests we were told to disable */
     if (disabled_tests.size()) {
         for (auto name : disabled_tests) {
-            test_set->disable(name);
+            test_set->remove(name);
         }
     }
 
     if (sApp->shmem->verbosity == -1)
         sApp->shmem->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
 
-    if (InterruptMonitor::InterruptMonitorWorks && test_set->is_enabled(&mce_test)) {
+    if (InterruptMonitor::InterruptMonitorWorks && test_set->contains(&mce_test)) {
         sApp->last_thermal_event_count = sApp->count_thermal_events();
         sApp->mce_counts_start = sApp->get_mce_interrupt_counts();
 
         if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-            test_set->disable(&mce_test);
+            test_set->remove(&mce_test);
         } else if (sApp->mce_counts_start.empty()) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: Cannot detect MCE events - you may be running in a VM - MCE checking disabled\n");
-            test_set->disable(&mce_test);
+            test_set->remove(&mce_test);
         }
 
         sApp->mce_count_last = std::accumulate(sApp->mce_counts_start.begin(), sApp->mce_counts_start.end(), uint64_t(0));
