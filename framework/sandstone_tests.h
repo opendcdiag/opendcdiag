@@ -94,9 +94,14 @@ public:
 
     std::vector<struct test_cfg_info> enable(const char *name);
     struct test_cfg_info enable(struct test *t);
+    struct test_cfg_info enable(test_cfg_info t);
 
-    bool is_disabled(const char *name) { auto it = test_map.find(name); return (it != test_map.end() ? (it->second).status == test_cfg_info::disabled : true); };
-    bool is_enabled(const char *name) { return !is_disabled(name); };
+    bool is_enabled(struct test *test) const
+    {
+        return std::any_of(test_set.begin(), test_set.end(), [&](const struct test *t) {
+            return t == test;
+        });
+    }
 
     std::vector<struct test_cfg_info> add_test_list(const char *name, std::vector<std::string> &errors);
 
