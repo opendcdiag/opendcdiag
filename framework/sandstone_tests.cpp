@@ -109,14 +109,21 @@ struct test_cfg_info SandstoneTestSet::disable(struct test *t) {
     return ti;
 }
 
-std::vector<struct test_cfg_info> SandstoneTestSet::disable(const char *name) {
-    std::vector<struct test_cfg_info> res;
+/// Returns the number of tests that were removed from the test list, which may
+/// be zero if the test is valid but did not match. If it matched nothing, this
+/// function returns -1.
+int SandstoneTestSet::disable(const char *name)
+{
     std::vector tests = lookup(name);
+    if (tests.size() == 0)
+        return -1;
+
+    int res = 0;
     for (auto t : tests) {
         struct test_cfg_info ti = disable(t);
         for (auto it = test_set.begin(); it != test_set.end(); ) {
             if (*it == t) {
-                res.push_back(ti);
+                ++res;
                 test_set.erase(it);
             } else {
                 ++it;
