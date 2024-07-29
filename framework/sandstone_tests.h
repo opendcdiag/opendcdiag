@@ -89,7 +89,7 @@ public:
 
     TestSet::iterator end() noexcept { return test_set.end(); }
 
-    std::vector<struct test_cfg_info> disable(const char *name);
+    int disable(const char *name);
     struct test_cfg_info disable(struct test *t);
 
     std::vector<struct test_cfg_info> enable(const char *name);
