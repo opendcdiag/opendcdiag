@@ -83,7 +83,7 @@ SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) 
     }
 };
 
-struct test_cfg_info SandstoneTestSet::enable(test_cfg_info t)
+struct test_cfg_info SandstoneTestSet::add(test_cfg_info t)
 {
     struct test_cfg_info &ti = test_set.emplace_back(t);
     // ensure it's enabled
@@ -91,11 +91,11 @@ struct test_cfg_info SandstoneTestSet::enable(test_cfg_info t)
     return ti;
 }
 
-std::vector<struct test_cfg_info> SandstoneTestSet::enable(const char *name) {
+std::vector<struct test_cfg_info> SandstoneTestSet::add(const char *name) {
     std::vector<struct test_cfg_info> res;
     std::vector<struct test *> tests = lookup(name);
     for (auto t : tests) {
-        struct test_cfg_info ti = enable(t);
+        struct test_cfg_info ti = add(t);
         res.push_back(ti);
     }
     return res;
@@ -103,7 +103,7 @@ std::vector<struct test_cfg_info> SandstoneTestSet::enable(const char *name) {
 
 /// Returns the number of tests that were removed from the test list, which may
 /// be zero.
-int SandstoneTestSet::disable(const struct test *test)
+int SandstoneTestSet::remove(const struct test *test)
 {
     auto it = std::remove_if(test_set.begin(), test_set.end(), [&](const test_cfg_info &ti) {
         return ti.test == test;
@@ -116,7 +116,7 @@ int SandstoneTestSet::disable(const struct test *test)
 /// Returns the number of tests that were removed from the test list, which may
 /// be zero if the test is valid but did not match. If it matched nothing, this
 /// function returns -1.
-int SandstoneTestSet::disable(const char *name)
+int SandstoneTestSet::remove(const char *name)
 {
     std::vector tests = lookup(name);
     if (tests.size() == 0)
@@ -124,7 +124,7 @@ int SandstoneTestSet::disable(const char *name)
 
     int res = 0;
     for (auto t : tests) {
-        res += disable(t);
+        res += remove(t);
     }
     return res;
 }
@@ -252,7 +252,7 @@ std::vector<struct test_cfg_info> SandstoneTestSet::add_builtin_test_list(const 
         return res;
     }
     for (auto t : *builtin.tests) {
-        res.push_back(enable(t));
+        res.push_back(add(t));
         test_set.push_back(t);
     }
     return res;

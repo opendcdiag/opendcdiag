@@ -92,13 +92,13 @@ public:
 
     EnabledTestList::iterator end() noexcept { return test_set.end(); }
 
-    int disable(const char *name);
-    int disable(const struct test *t);
+    int remove(const char *name);
+    int remove(const struct test *t);
 
-    std::vector<struct test_cfg_info> enable(const char *name);
-    struct test_cfg_info enable(test_cfg_info t);
+    std::vector<struct test_cfg_info> add(const char *name);
+    struct test_cfg_info add(test_cfg_info t);
 
-    bool is_enabled(struct test *test) const
+    bool contains(struct test *test) const
     {
         return std::any_of(test_set.begin(), test_set.end(), [&](const test_cfg_info &ti) {
             return ti.test == test;
