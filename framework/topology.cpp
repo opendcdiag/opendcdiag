@@ -1045,9 +1045,6 @@ Topology::Data Topology::clone() const
 void update_topology(std::span<const struct cpu_info> new_cpu_info,
                      std::span<const Topology::Package> packages)
 {
-    if (SandstoneConfig::RestrictedCommandLine && SandstoneConfig::NoTriage)
-        __builtin_unreachable();
-
     struct cpu_info *end;
     if (packages.empty()) {
         // copy all

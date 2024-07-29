@@ -29,7 +29,6 @@
 #mesondefine SANDSTONE_DEFAULT_LOGGING
 #mesondefine SANDSTONE_NO_LOGGING
 #mesondefine SANDSTONE_RESTRICTED_CMDLINE
-#mesondefine SANDSTONE_NO_TRIAGE
 #mesondefine SANDSTONE_CHILD_BACKTRACE
 #mesondefine SANDSTONE_CHILD_DEBUG_CRASHES
 #mesondefine SANDSTONE_CHILD_DEBUG_HANGS
@@ -48,7 +47,6 @@ static constexpr bool ChildDebug = SANDSTONE_CHILD_DEBUG;
 static constexpr bool ChildDebugCrashes = SANDSTONE_CHILD_DEBUG_CRASHES;
 static constexpr bool ChildDebugHangs = SANDSTONE_CHILD_DEBUG_HANGS;
 static constexpr bool NoLogging = SANDSTONE_NO_LOGGING;
-static constexpr bool NoTriage = SANDSTONE_NO_TRIAGE;
 static constexpr bool RestrictedCommandLine = SANDSTONE_RESTRICTED_CMDLINE;
 static constexpr bool HasBuiltinTestList = SANDSTONE_BUILTIN_TEST_LIST;
 } // namespace SandstoneConfig
