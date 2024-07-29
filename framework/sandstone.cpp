@@ -3697,10 +3697,10 @@ int main(int argc, char **argv)
         sApp->mce_counts_start = sApp->get_mce_interrupt_counts();
 
         if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-            test_set->disable(mce_test.id);
+            test_set->disable(&mce_test);
         } else if (sApp->mce_counts_start.empty()) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: Cannot detect MCE events - you may be running in a VM - MCE checking disabled\n");
-            test_set->disable(mce_test.id);
+            test_set->disable(&mce_test);
         }
 
         sApp->mce_count_last = std::accumulate(sApp->mce_counts_start.begin(), sApp->mce_counts_start.end(), uint64_t(0));
