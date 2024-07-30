@@ -213,6 +213,7 @@ static int kvm_real16_setup_sregs(struct kvm_sregs *sregs, kvm_ctx_t *ctx)
 {
     sregs->cs.base = 0;
     sregs->cs.selector = 0;
+    sregs->ss = sregs->ds;  // sometimes sregs->ss has invalid content
     IOCTL_OR_RET(ctx->cpu_fd, KVM_SET_SREGS, sregs);
 
     return 0;
