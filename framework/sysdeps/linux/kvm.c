@@ -20,6 +20,9 @@
 #include <asm/kvm.h>
 #include <asm/processor-flags.h>
 #include <linux/kvm.h>
+#ifdef __x86_64__
+#  include <asm/vmx.h>
+#endif
 
 #include "sandstone_kvm.h"
 
@@ -179,6 +182,29 @@ static int kvm_generic_add_vcpu(kvm_ctx_t *ctx)
     }
 
     return cpu_fd;
+}
+
+static bool kvm_generic_workaround_kernel_cache_bug(struct kvm_ctx *ctx)
+{
+#ifdef __x86_64__
+    // See https://lore.kernel.org/kvm/20240725175232.337266-1-mlevitsk@redhat.com/
+    if (ctx->runs->exit_reason != KVM_EXIT_FAIL_ENTRY)
+        return false;
+    if (ctx->runs->fail_entry.hardware_entry_failure_reason !=
+            (VMX_EXIT_REASONS_FAILED_VMENTRY | EXIT_REASON_INVALID_STATE))
+        return false;
+
+    struct kvm_sregs sregs;
+    if (ioctl(ctx->cpu_fd, KVM_GET_SREGS, &sregs) == 0) {
+        if (sregs.ss.s == 0) {
+            log_debug("Working around KVM/VMX bug in caching VMCS");
+            return true;
+        }
+    }
+#else
+    (void) ctx;
+#endif
+    return false;
 }
 
 static int kvm_real16_setup_ram(kvm_ctx_t *ctx)
@@ -634,6 +660,7 @@ int kvm_generic_run(struct test *test, int cpu)
     }
 
     int count = 0;
+    bool retry = false;
     do {
         /* Every 16 loops reset the A bit for the memory */
         if (count && (count % 16 == 0)) {
@@ -684,16 +711,24 @@ int kvm_generic_run(struct test *test, int cpu)
             goto epilogue;
         }
 
-        if (ctx.config->setup_handler != NULL) {
+        if (!retry && ctx.config->setup_handler != NULL) {
                 result = ctx.config->setup_handler(&ctx, test, cpu);
                 if (result != EXIT_SUCCESS)
                         goto epilogue;
         }
+        retry = false;
 
         do {
             if (ioctl(ctx.cpu_fd, KVM_RUN, 0) == -1) {
                 result = EXIT_FAILURE;
                 goto epilogue;
+            }
+            if (kvm_generic_workaround_kernel_cache_bug(&ctx)) {
+                /* try again, resetting the CPU, but don't call the test's
+                 * setup handler again */
+                result = EXIT_SUCCESS;
+                retry = true;
+                break;
             }
 
             if (ctx.config->exit_handler != NULL) {
@@ -924,6 +959,9 @@ int kvm_generic_run(struct test *test, int cpu)
             if (result != EXIT_SUCCESS)
                 kvm_log_registers(&ctx, &cregs);
         } while (!stop);
+
+        if (retry)
+            continue;
 
         if ((result == EXIT_SUCCESS) && (ctx.config->check_handler != NULL))
                 result = ctx.config->check_handler(&ctx, test, cpu);
