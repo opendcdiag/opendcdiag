@@ -71,34 +71,48 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     return res;
 }
 
-SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) : cfg(cfg), flags(flags) {
-    load_all_tests(); /* initialize the catalog */
-    if (!(flags & enable_all_tests)) return;
-    std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
-    for (struct test &test : source) {
-        struct test_cfg_info ti;
-        ti.status = test_cfg_info::enabled;
-        ti.test = &test;
-        test_set.push_back(&test);
-    }
-};
-
-struct test_cfg_info SandstoneTestSet::add(test_cfg_info t)
+int SandstoneTestSet::add(test_cfg_info t)
 {
     struct test_cfg_info &ti = test_set.emplace_back(t);
+
+    auto it = std::find_if(test_set.begin(), test_set.end(), [&](const test_cfg_info &ti) {
+        return ti.test == t.test;
+    });
+
+    // enable_by_feature() is "disable unless feature": if the test does not require
+    // at least one of the features in the mask, we disable it
+    // disable_by_feature() disables all tests that requires listed features.
+    auto t_f_req = (t.test->minimum_cpu | t.test->compiler_minimum_cpu);
+    bool disable_by_feature = t_f_req & cfg.disabled_features_mask;
+    bool enable_by_feature = t_f_req & cfg.enabled_features_mask;
+
+    if ((disable_by_feature || !enable_by_feature) && (cfg.disable_by_feature_req || cfg.enable_by_feature_req)) {
+        ti.status = test_cfg_info::disabled;
+        test_set.erase(it, test_set.end());
+        return 0;
+    }
+
     // ensure it's enabled
     ti.status = test_cfg_info::enabled;
-    return ti;
+
+    return 1;
 }
 
-std::vector<struct test_cfg_info> SandstoneTestSet::add(const char *name) {
-    std::vector<struct test_cfg_info> res;
+int SandstoneTestSet::add(const char *name) {
+    int count = 0;
     std::vector<struct test *> tests = lookup(name);
-    for (auto t : tests) {
-        struct test_cfg_info ti = add(t);
-        res.push_back(ti);
+
+    // check if the tests were found
+    if (tests.size() == 0) {
+        return -1;
     }
-    return res;
+
+    // try to add tests to the test_set.
+    for (auto t : tests) {
+        count += add(t);
+    }
+
+    return count;
 }
 
 /// Returns the number of tests that were removed from the test list, which may
@@ -128,6 +142,18 @@ int SandstoneTestSet::remove(const char *name)
     }
     return res;
 }
+
+SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) : cfg(cfg), flags(flags) {
+    load_all_tests(); /* initialize the catalog */
+    if (!(flags & enable_all_tests)) return;
+    std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
+    for (struct test &test : source) {
+        struct test_cfg_info ti;
+        ti.status = test_cfg_info::enabled;
+        ti.test = &test;
+        add(ti);
+    }
+};
 
 static inline bool is_ignored(char c) {
     switch (c) {
@@ -226,34 +252,38 @@ static std::vector<struct test_cfg_info> load_test_list(std::ifstream &fstream, 
     return res;
 }
 
-std::vector<struct test_cfg_info> SandstoneTestSet::add_test_list(const char *fname, std::vector<std::string> &errors)
+int SandstoneTestSet::add_test_list(const char *fname, std::vector<std::string> &errors)
 {
+    int count = 0;
     std::ifstream list_file(fname, std::ios_base::in);
     std::vector<struct test_cfg_info> entries = load_test_list(list_file, this, cfg.ignore_unknown_tests, errors);
-    if (!errors.empty()) return {};
-    if (test_set.empty()) {
-        test_set = entries;
-    } else {
-        test_set.reserve(test_set.capacity() + entries.size());
-        for (auto e : entries) {
-            test_set.push_back(e);
-        }
+
+    if (!errors.empty()) {
+        return -1;
     }
-    return entries;
+
+    if (!test_set.empty()) {
+        test_set.reserve(test_set.capacity() + entries.size());
+    }
+
+    for (auto e : entries) {
+        count += add(e);
+    }
+
+    return count;
 }
 
-std::vector<struct test_cfg_info> SandstoneTestSet::add_builtin_test_list(const char *name, std::vector<std::string> &errors) {
-    std::vector<struct test_cfg_info> res;
+int SandstoneTestSet::add_builtin_test_list(const char *name, std::vector<std::string> &errors) {
+    int count = 0;
     BuiltinTestSet builtin = get_builtin_test_set(name);
     if (!builtin.tests) {
         std::stringstream msg_strm;
         msg_strm << "Builtin test list '" << name << "' does not contain any tests.";
         errors.push_back(msg_strm.str());
-        return res;
+        return -1;
     }
     for (auto t : *builtin.tests) {
-        res.push_back(add(t));
-        test_set.push_back(t);
+        count += add(t);
     }
-    return res;
+    return count;
 }
