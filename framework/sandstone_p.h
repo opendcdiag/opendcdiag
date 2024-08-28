@@ -673,7 +673,6 @@ void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, c
 void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout);
 void logging_print_iteration_start();
 void logging_print_footer();
-void logging_print_triage_results(const std::vector<int> &sockets);
 void logging_print_version(void);
 void logging_flush(void);
 void logging_init(const struct test *test);
