@@ -1048,34 +1048,6 @@ void logging_print_footer()
     }
 }
 
-void logging_print_triage_results(const std::vector<int> &sockets)
-{
-    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
-        return;                 // short-circuit
-    if (sockets.empty())
-        return;
-
-    // join the socket list
-    std::string_view comma;
-    std::string list;
-    for (int no : sockets) {
-        list += comma;
-        list += std::to_string(no);
-        comma = ", ";
-    }
-
-    switch (current_output_format()) {
-    case SandstoneApplication::OutputFormat::key_value:
-        return logging_printf(LOG_LEVEL_QUIET, "triage_results = %s\n", list.c_str());
-    case SandstoneApplication::OutputFormat::tap:
-        return logging_printf(LOG_LEVEL_QUIET, "# The failure was isolated to sockets: %s\n", list.c_str());
-    case SandstoneApplication::OutputFormat::yaml:
-        return logging_printf(LOG_LEVEL_QUIET, "triage-results: [ %s ]\n", list.c_str());
-    case SandstoneApplication::OutputFormat::no_output:
-        break;
-    }
-}
-
 void logging_flush(void)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
