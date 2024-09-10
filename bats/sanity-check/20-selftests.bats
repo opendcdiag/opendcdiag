@@ -1085,6 +1085,121 @@ test_list_file_ignores_beta() {
     test_list_randomize -e
 }
 
+find_enabled_test() {
+    # we expect to find only $all_feature_test in the log
+    # we do not care about the test result, we are looking for an attempt to run it.
+
+    test_yaml_regexp "/exit" pass
+    local test_count=${yamldump[/tests@len]}
+    echo "Test count: $test_count"
+    local i
+
+    for ((i = 0; i < test_count; ++i)); do
+        test_yaml_regexp "/tests/$i/test" $all_feature_test
+    done
+
+    if [[ "$i" != "$test_count" ]]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+find_disabled_test() {
+    # we expect not to find any tests as they are supposed to be filtered out.
+
+    test_yaml_regexp "/exit" pass
+    local test_count=${yamldump[/tests@len]}
+    echo "Test count: $test_count"
+
+    if [[ -z "$test_count" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+test_by_feature() {
+    declare -A yamldump
+
+    # This test needs all feature bits so it should match if any cpu feature is passed.
+    local -a all_feature_test=selftest_skip_minimum_cpu
+
+    local testmode=$1
+    shift
+    echo "Test mode: $testmode"
+
+    local cmdopt=$1
+    shift
+    echo "Command line option: $cmdopt"
+
+    local features=$1
+    shift
+    echo "Features: $features"
+
+    if [[ "$testmode" = "use_test_list" ]]; then
+        local -a list=(
+            $all_feature_test
+        )
+
+        local testlistfile=`mktempfile list.XXXXXX`
+
+        echo "=== test list ==="
+            printf '%s\n' ${list[@]} | tee "$testlistfile"
+        echo "=== ==="
+
+        sandstone_selftest --test-list-file "$testlistfile" "$cmdopt" "$features"
+        rm -f -- "$testlistfile"
+
+    elif [[ "$testmode" = "use_enable_cmd" ]]; then
+        sandstone_selftest -e "$all_feature_test" "$cmdopt" "$features"
+    else
+        echo >&2 "Don't know what to do with test mode: $testmode"
+        false
+    fi
+
+    if [[ "$cmdopt" = "--enable-by-feature" ]]; then
+        find_enabled_test
+    elif [[ "$cmdopt" = "--disable-by-feature" ]]; then
+        find_disabled_test
+    else
+        echo >&2 "Don't know what to do with argument: $cmdopt"
+        false
+    fi
+}
+
+@test "--enable-by-feature with one feature using --test-list-file" {
+    test_by_feature use_test_list --enable-by-feature avx
+}
+
+@test "--enable-by-feature with two features using --test-list-file" {
+    test_by_feature use_test_list --enable-by-feature avx,avx512f
+}
+
+@test "--disable-by-feature with one feature using --test-list-file" {
+    test_by_feature use_test_list --disable-by-feature avx
+}
+
+@test "--disable-by-feature with two features using --test-list-file" {
+    test_by_feature use_test_list --disable-by-feature avx,avx512f
+}
+
+@test "--enable-by-feature with one feature using -e" {
+    test_by_feature use_enable_cmd --enable-by-feature avx
+}
+
+@test "--enable-by-feature with two features using -e" {
+    test_by_feature use_enable_cmd --enable-by-feature avx,avx512f
+}
+
+@test "--disable-by-feature with one feature using -e" {
+    test_by_feature use_enable_cmd --disable-by-feature avx
+}
+
+@test "--disable-by-feature with two features using -e" {
+    test_by_feature use_enable_cmd --disable-by-feature avx,avx512f
+}
+
 # -- negative tests --
 
 @test "selftest_failinit" {
