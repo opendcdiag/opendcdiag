@@ -531,7 +531,7 @@ static void kvm_log_registers(const kvm_ctx_t *ctx, const struct kvm_regs *gprs)
     for (unsigned i = 0; i < sizeof(mapping) / sizeof(mapping[0]); ++i) {
         if ((gprs->rflags & mapping[i].bit) == 0)
             continue;
-        memcpy(ptr, mapping->name, 3);
+        memcpy(ptr, mapping[i].name, 3);
         ptr += 3;
     }
     if (ptr != flags)
