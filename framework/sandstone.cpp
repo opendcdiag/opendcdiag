@@ -2546,6 +2546,16 @@ static bool should_start_next_iteration(void)
     return true;
 }
 
+static SandstoneTestSet::EnabledTestList::iterator get_first_test()
+{
+    logging_print_iteration_start();
+    auto it = test_set->begin();
+    while (it != test_set->end() && it->test->quality_level < sApp->requested_quality)
+        ++it;
+    return it;
+}
+
+
 static SandstoneTestSet::EnabledTestList::iterator
 get_next_test(SandstoneTestSet::EnabledTestList::iterator next_test)
 {
@@ -2557,10 +2567,7 @@ get_next_test(SandstoneTestSet::EnabledTestList::iterator next_test)
         ++next_test;
     if (next_test == test_set->end()) {
         if (should_start_next_iteration()) {
-            /* whenever we're restarting, print the header for the next
-             * iteration. */
-            logging_print_iteration_start();
-            next_test = test_set->begin();
+            return get_first_test();
         } else {
             return test_set->end();
         }
@@ -2570,15 +2577,6 @@ get_next_test(SandstoneTestSet::EnabledTestList::iterator next_test)
     assert(next_test->test->description);
     assert(strlen(next_test->test->id));
     return next_test;
-}
-
-static SandstoneTestSet::EnabledTestList::iterator get_first_test()
-{
-    logging_print_iteration_start();
-    auto it = test_set->begin();
-    while (it != test_set->end() && it->test->quality_level < sApp->requested_quality)
-        ++it;
-    return it;
 }
 
 static bool wait_delay_between_tests()
