@@ -201,6 +201,11 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
         struct cpu_info *info = &mock_cpu_info.emplace_back(proto_cpu);
         info->cpu_number = mock_cpu_info.size() - 1;
 
+        // mock cache too (8 kB L1, 32 kB L2, 256 kB L3)
+        info->cache[0] = { 0x2000, 0x2000 };
+        info->cache[1] = { 0x8000, 0x8000 };
+        info->cache[2] = { 0x40000, 0x40000 };
+
         if (!parse_int_and_advance(&info->package_id))
             continue;
         if (!parse_int_and_advance(&info->core_id))
