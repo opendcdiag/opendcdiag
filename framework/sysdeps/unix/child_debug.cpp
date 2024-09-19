@@ -1015,6 +1015,12 @@ void debug_init_child()
         // we're in the child side of an execve()
         xsave_size = get_xsave_size();
     }
+
+#ifdef __linux__
+    // Allow the parent process to debug us (this also grants permission to a
+    // process the parent may launch).
+    (void) prctl(PR_SET_PTRACER, getppid());
+#endif
 }
 
 void debug_crashed_child()
