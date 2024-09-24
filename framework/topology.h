@@ -184,7 +184,7 @@ private:
 };
 
 LogicalProcessorSet ambient_logical_processor_set();
-bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullptr);
+bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullptr, pid_t thread_id=0);
 bool pin_to_logical_processors(CpuRange, const char *thread_name);
 
 void apply_cpuset_param(char *param);
