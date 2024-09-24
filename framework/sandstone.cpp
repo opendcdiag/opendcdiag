@@ -120,6 +120,9 @@ enum {
     gdb_server_option,
     ignore_os_errors_option,
     ignore_unknown_tests_option,
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+    ignore_test_failure,
+#endif
     is_asan_option,
     is_debug_option,
     force_test_time_option,
@@ -378,9 +381,28 @@ static inline __attribute__((always_inline, noreturn)) void ud2()
     __builtin_unreachable();
 }
 
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+
+bool check_if_test_failure_ignored()
+{
+    return sApp->ignore_test_failure;
+}
+#endif //SANDSTONE_IGNORE_TEST_FAILS
+
+
+#ifndef SANDSTONE_IGNORE_TEST_FAILS
 static void __attribute__((noreturn)) report_fail_common()
+#else
+static void report_fail_common()
+#endif //SANDSTONE_IGNORE_TEST_FAILS
 {
     logging_mark_thread_failed(thread_num);
+
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+    if (check_if_test_failure_ignored())
+        return;
+#endif //SANDSTONE_IGNORE_TEST_FAILS
+
 #ifdef _WIN32
     /* does not call the cleanup handlers */
     _endthread();
@@ -389,29 +411,55 @@ static void __attribute__((noreturn)) report_fail_common()
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, nullptr);
     pthread_cancel(pthread_self());
-#endif
+#endif //_WIN32
     __builtin_unreachable();
 }
 
 void _report_fail(const struct test *test, const char *file, int line)
 {
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+    /* No additional actions if the failure is ignored*/
+    if (check_if_test_failure_ignored()) {
+        /* Keep this very early */
+        if (sApp->shmem->ud_on_failure)
+            ud2();
+
+        if (!SandstoneConfig::NoLogging)
+            log_error("Failed at %s:%d", file, line);
+    }
+#else
     /* Keep this very early */
     if (sApp->shmem->ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging)
         log_error("Failed at %s:%d", file, line);
+#endif //SANDSTONE_IGNORE_TEST_FAILS
+
     report_fail_common();
 }
 
 void _report_fail_msg(const char *file, int line, const char *fmt, ...)
 {
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+    /* No additional actions if the failure is ignored*/
+    if (check_if_test_failure_ignored()) {
+        /* Keep this very early */
+        if (sApp->shmem->ud_on_failure)
+            ud2();
+
+        if (!SandstoneConfig::NoLogging)
+            log_error("Failed at %s:%d: %s", file, line, va_start_and_stdprintf(fmt).c_str());
+    }
+#else
     /* Keep this very early */
     if (sApp->shmem->ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging)
         log_error("Failed at %s:%d: %s", file, line, va_start_and_stdprintf(fmt).c_str());
+
+#endif //SANDSTONE_IGNORE_TEST_FAILS
     report_fail_common();
 }
 
@@ -429,6 +477,28 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
 
 void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, DataType type, const char *fmt, ...)
 {
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+    /* No additional actions if the failure is ignored*/
+    if (check_if_test_failure_ignored()) {
+        // Execute UD2 early if we've failed
+        if (sApp->shmem->ud_on_failure)
+            ud2();
+
+        if (!SandstoneConfig::NoLogging) {
+            if (fmt)
+                assert(strchr(fmt, '\n') == nullptr && "Data descriptions should not include a newline");
+
+            auto actual = static_cast<const uint8_t *>(_actual);
+            auto expected = static_cast<const uint8_t *>(_expected);
+            ptrdiff_t offset = memcmp_offset(actual, expected, size);
+
+            va_list va;
+            va_start(va, fmt);
+            logging_report_mismatched_data(type, actual, expected, size, offset, fmt, va);
+            va_end(va);
+        }
+    }
+#else
     // Execute UD2 early if we've failed
     if (sApp->shmem->ud_on_failure)
         ud2();
@@ -446,7 +516,7 @@ void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size
         logging_report_mismatched_data(type, actual, expected, size, offset, fmt, va);
         va_end(va);
     }
-
+#endif //SANDSTONE_IGNORE_TEST_FAILS
     report_fail_common();
 }
 
@@ -1002,6 +1072,19 @@ static uintptr_t thread_runner(int thread_number)
 
     try {
         ret = test_run_wrapper_function(current_test, thread_number);
+
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+        if(check_if_test_failure_ignored()) {
+            PerThreadData::Common *thr = sApp->thread_data(thread_number);
+
+            if(thr->get_ignored_fails() > 0) {
+                log_message(thread_number,
+                    SANDSTONE_LOG_INFO "Found ignored failures. Number of ignored failures %" PRIu64 "\n",
+                    thr->get_ignored_fails());
+            }
+        }
+#endif //SANDSTONE_IGNORE_TEST_FAILS
+
     } catch (std::exception &e) {
         log_error("Caught C++ exception: \"%s\" (type '%s')", e.what(), typeid(e).name());
         // no rethrow
@@ -1415,7 +1498,7 @@ Common command-line options are:
  -e <test>, --enable=<test>, --disable=<test>
      Selectively enable/disable a given test. Can be given multiple times.
      <test> is a test's ID (see the -l option), a wildcard matching test IDs.
-     or a test group (starting with @).
+     or a test group (starting with @)."
  --ignore-os-error, --ignore-timeout
      Continue execution of Sandstone even if a test encounters an operating
      system error (this includes tests timing out).
@@ -3083,6 +3166,9 @@ int main(int argc, char **argv)
         { "fatal-skips", no_argument, nullptr, fatal_skips_option },
         { "fork-mode", required_argument, nullptr, 'f' },
         { "help", no_argument, nullptr, 'h' },
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+        { "ignore-test-failure", no_argument, nullptr, ignore_test_failure},
+#endif
         { "ignore-os-errors", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-unknown-tests", no_argument, nullptr, ignore_unknown_tests_option },
@@ -3310,6 +3396,11 @@ int main(int argc, char **argv)
 #ifndef NDEBUG
         case gdb_server_option:
             sApp->gdb_server_comm = optarg;
+            break;
+#endif
+#ifdef SANDSTONE_IGNORE_TEST_FAILS
+        case ignore_test_failure:
+            sApp->ignore_test_failure = true;
             break;
 #endif
         case ignore_os_errors_option:

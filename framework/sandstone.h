@@ -476,8 +476,14 @@ struct test {
 };
 
 /* internal function; see C macro and C++ templates at the end of this file */
+#ifndef SANDSTONE_IGNORE_TEST_FAILS
 extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, enum DataType, const char *fmt, ...)
     ATTRIBUTE_PRINTF(5, 6) __attribute__((cold, noreturn));
+#else
+/// should be no return when compiled to ignore test failures.
+extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, enum DataType, const char *fmt, ...)
+    ATTRIBUTE_PRINTF(5, 6) __attribute__((cold));
+#endif //SANDSTONE_IGNORE_TEST_FAILS
 
 /// can be called from a test's test_run function to fail the test.
 /// This macro will kill the calling thread and cause the test to
@@ -488,9 +494,20 @@ extern void _memcmp_fail_report(const void *actual, const void *expected, size_t
 /// This macro will kill the calling thread and cause the test to
 /// exit.
 #define report_fail_msg(...)    _report_fail_msg(__FILE__, __LINE__, __VA_ARGS__)
+
+#ifndef SANDSTONE_IGNORE_TEST_FAILS
 extern void _report_fail(const struct test *test, const char *file, int line) __attribute__((noreturn));
 extern void _report_fail_msg(const char *file, int line, const char *msg, ...)
     ATTRIBUTE_PRINTF(3, 4) __attribute__((noreturn));
+#else
+extern void _report_fail(const struct test *test, const char *file, int line);
+extern void _report_fail_msg(const char *file, int line, const char *msg, ...)
+    ATTRIBUTE_PRINTF(3, 4);
+
+/// @internal check if a test failure should be ignored.
+extern bool check_if_test_failure_ignored(void);
+
+#endif //SANDSTONE_IGNORE_TEST_FAILS
 
 /// @internal function called by TEST_LOOP
 extern void test_loop_start(void) noexcept;
@@ -634,7 +651,12 @@ constexpr inline test_flags operator|(test_flag f1, test_flag f2)
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
+
+#ifndef SANDSTONE_IGNORE_TEST_FAILS
 template <typename T, typename... FmtArgs> [[noreturn, gnu::cold]] static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
+#else
+template <typename T, typename... FmtArgs> [[gnu::cold]] static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
+#endif //SANDSTONE_IGNORE_TEST_FAILS
 memcmp_fail_report(const T *actual, const T *expected, size_t count, const char *fmt, FmtArgs &&... args)
 {
     DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;

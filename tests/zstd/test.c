@@ -46,7 +46,11 @@ static void zstd_gen_buffer(size_t *bufsz, uint8_t ** buf, unsigned max)
     memset_random(*buf, *bufsz);
 }
 
+#ifndef SANDSTONE_IGNORE_TEST_FAILS
 static void __attribute__((cold, noreturn)) zstd_report_fail(const char *name, size_t errc)
+#else
+static void __attribute__((cold)) zstd_report_fail(const char *name, size_t errc)
+#endif //SANDSTONE_IGNORE_TEST_FAILS
 {
     ZSTD_ErrorCode code = ZSTD_getErrorCode(errc);
     if (code == ZSTD_error_memory_allocation)

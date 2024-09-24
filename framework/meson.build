@@ -75,6 +75,11 @@ framework_config.set10('SANDSTONE_SSL_BUILD', get_option('ssl_link_type') != 'no
 framework_config.set10('SANDSTONE_SSL_LINKED',
   get_option('ssl_link_type') == 'static' or get_option('ssl_link_type') == 'dynamic')
 
+if get_option('ignore_test_fails') == true
+    default_c_flags += [ '-DSANDSTONE_IGNORE_TEST_FAILS', ]
+    default_cpp_flags += [ '-DSANDSTONE_IGNORE_TEST_FAILS', ]
+endif
+
 framework_files = files(
     'Floats.cpp',
     'generated_vectors.c',
