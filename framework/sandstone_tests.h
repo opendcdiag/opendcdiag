@@ -28,14 +28,25 @@ extern struct test __stop_tests;
 extern struct test mce_test;
 
 struct test_set_cfg {
-    bool ignore_unknown_tests;  /* whether an error should be reported if
-                                   there's no test matching the specified name,
-                                   either on command-line or in a test list. */
-    bool randomize;             /* iterate through the tests in random order. */
-    bool cycle_through;         /* start over when an iteration through the test
-                                   set has finished. */
-    bool is_selftest;           /* whether to use regular or selftests as the
-                                   source of the tests. */
+    /* whether an error should be reported if there's no test matching
+       the specified name, either on command-line or in a test list. */
+    bool ignore_unknown_tests;
+    /* iterate through the tests in random order. */
+    bool randomize;
+    /* start over when an iteration through the test set has finished. */
+    bool cycle_through;
+    /* whether to use regular or selftests as the source of the tests. */
+    bool is_selftest;
+    /* whether to enable tests by the requested features */
+    bool enable_by_feature_req;
+    /* enabled features requested by the user. We need to be the same
+       type as the compiler's CPU features.*/
+    CpuFeatures_t enabled_features_mask;
+    /* whether to enable tests by the requested features */
+    bool disable_by_feature_req;
+    /* disabled features requested by the user. We need to be the same
+       type as the compiler's CPU features.*/
+    CpuFeatures_t disabled_features_mask;
 };
 
 struct test_cfg_info {
@@ -95,8 +106,8 @@ public:
     int remove(const char *name);
     int remove(const struct test *t);
 
-    std::vector<struct test_cfg_info> add(const char *name);
-    struct test_cfg_info add(test_cfg_info t);
+    int add(const char *name);
+    int add(test_cfg_info t);
 
     bool contains(struct test *test) const
     {
@@ -105,9 +116,9 @@ public:
         });
     }
 
-    std::vector<struct test_cfg_info> add_test_list(const char *name, std::vector<std::string> &errors);
+    int add_test_list(const char *name, std::vector<std::string> &errors);
 
-    std::vector<struct test_cfg_info> add_builtin_test_list(const char *name, std::vector<std::string> &errors);
+    int add_builtin_test_list(const char *name, std::vector<std::string> &errors);
 
 private:
     /* Make a Uniform Random Bit Generator to use our own random as opposed to
