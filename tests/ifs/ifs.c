@@ -43,38 +43,41 @@
 
 #include "sandstone_ifs.h"
 
-
 static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info,
                            const char *status_buf)
 {
-    char current_buf[BUFLEN] = {};
     int next_test, current_test;
 
     /* read current_batch */
-    read_file_fd(batch_fd, current_buf);
+    read_file_fd(batch_fd, ifs_info->image_id);
+    if (test_is_retry()) {
+        /* We're retesting, keep the current image whichever it is */
+        log_debug("IFS retesting with same image: %s", ifs_info->image_id);
+        return true;
+    }
 
     /* get interactive test file if provided by user */
     next_test = get_testspecific_knob_value_int(test, "test_file", -1);
     if (next_test == -1)
     {
-        if (memcmp(current_buf, "none", strlen("none")) == 0)
+        if (memcmp(ifs_info->image_id, "none", strlen("none")) == 0)
             next_test = DEFAULT_TEST_ID;
         else
         {
             /* parse current test */
             char *end_ptr;
-            current_test = (int) strtoul(current_buf, &end_ptr, 16);
+            current_test = (int) strtoul(ifs_info->image_id, &end_ptr, 16);
             int saved_errno = errno;
             /* assure the buffer was completely parsed and we have no errors */
             if (strcmp(end_ptr, "\0") != 0 || saved_errno == ERANGE)
             {
-                log_info("Cannot parse current_batch value: %s", current_buf);
+                log_info("Cannot parse current_batch value: %s", ifs_info->image_id);
                 return false;
             }
 
             if (memcmp(status_buf, "untested", strlen("untested")) == 0)
             {
-                log_info("Test file %s remains untested, so try again", current_buf);
+                log_info("Test file %s remains untested, so try again", ifs_info->image_id);
                 next_test = current_test;
             }
             else
@@ -132,7 +135,7 @@ static int scan_common_init(struct test *test)
         /* when previous run has a status of fail, skip test */
         char status_buf[BUFLEN] = {};
         read_file(ifs_fd, "status", status_buf);
-        int enforce_run = get_testspecific_knob_value_int(test, "enforce_run", -1);
+        int enforce_run = get_testspecific_knob_value_int(test, "enforce_run", test_is_retry());
         if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
         {
             log_skip(TestResourceIssueSkipCategory, "Previous run failure found! This test will skip until enforced adding flag: "

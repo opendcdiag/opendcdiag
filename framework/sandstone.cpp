@@ -732,6 +732,12 @@ bool test_time_condition() noexcept
     return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
 }
 
+bool test_is_retry() noexcept
+{
+    // negative values indicate a retry
+    return sApp->current_iteration_count < 0;
+}
+
 // Creates a string containing all socket temperatures like: "P0:30oC P2:45oC"
 static string format_socket_temperature_string(const vector<int> & temps)
 {

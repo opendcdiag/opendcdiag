@@ -503,6 +503,9 @@ extern void test_loop_end(void) noexcept;
 extern bool test_time_condition() noexcept;
 #define test_time_condition(test)       test_time_condition()
 
+/// Returns true if this is a retry.
+bool test_is_retry() noexcept __attribute__((pure));
+
 /// outputs msg to the logs, prefixing it with the string "Platform issue:"
 /// This function is usually used to log a warning when an error is detected
 /// in a test's test_init or test_run functions that is due to a platform issue
