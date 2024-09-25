@@ -9,12 +9,12 @@
 
 /* Define empty log_* macros not useful for unittests */
 #undef  log_warning
-#define log_warning
+#define log_warning(...)
 #undef  log_error
-#define log_error
+#define log_error(...)
 #undef  log_info
-#define log_info
+#define log_info(...)
 #undef  log_debug
-#define log_debug
+#define log_debug(...)
 #undef log_skip
-#define log_skip
+#define log_skip(...)
