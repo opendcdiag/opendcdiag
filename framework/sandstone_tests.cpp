@@ -71,7 +71,7 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     return res;
 }
 
-SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) : cfg(cfg), flags(flags) {
+SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) : cfg(std::move(cfg)), flags(flags) {
     load_all_tests(); /* initialize the catalog */
     if (!(flags & enable_all_tests)) return;
     std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;

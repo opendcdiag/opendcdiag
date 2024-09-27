@@ -122,6 +122,7 @@ framework_files = files(
     'sandstone_test_groups.cpp',
     'sandstone_tests.cpp',
     'sandstone_thread.cpp',
+    'sandstone_opts.cpp',
     'sandstone_utils.cpp',
     'static_vectors.c',
     'test_knobs.cpp',
@@ -137,7 +138,10 @@ if framework_config.get('SANDSTONE_SSL_BUILD') == 1
         static: get_option('ssl_link_type') == 'static',
     )
     if crypto_dep.found()
-        framework_files += ['sandstone_ssl.cpp', 'sandstone_ssl_rand.cpp']
+        framework_files += files(
+            'sandstone_ssl.cpp',
+            'sandstone_ssl_rand.cpp'
+        )
 
         if framework_config.get('SANDSTONE_SSL_LINKED') == 0
             # If we're trying to dlopen() only, we need to be more careful
@@ -166,14 +170,14 @@ else
 endif
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
-    framework_files += [
-        'forkfd/forkfd.c',
-    ]
+framework_files += files(
+    'forkfd/forkfd.c',
+)
 endif
 if target_machine.system() == 'darwin'
-    framework_files += [
-        'sandstone_sections.S',
-    ]
+framework_files += files(
+    'sandstone_sections.S',
+)
 endif
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
@@ -239,12 +243,13 @@ unittests_sources += files(
     'unit-tests/sandstone_data_tests.cpp',
     'unit-tests/sandstone_test_utils_tests.cpp',
     'unit-tests/sandstone_utils_tests.cpp',
-    'unit-tests/test_knob_tests.cpp',
+    'unit-tests/sandstone_opts_tests.cpp',
     'unit-tests/tests_dummy.cpp',
+    'unit-tests/test_knob_tests.cpp',
     'unit-tests/thermal_monitor_tests.cpp',
     'unit-tests/topology_tests.cpp',
-    'sandstone_chrono.cpp',
-    'sandstone_data.cpp',
-    'sandstone_utils.cpp',
-    'test_knobs.cpp',
-)
+) + [
+    framework_files,
+    generated_builtin_test_list,
+    generated_cpu_features_h,
+]

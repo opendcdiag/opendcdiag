@@ -45,6 +45,7 @@
 std::string format_single_type(DataType type, int typeSize, const uint8_t *data, bool detailed);
 std::string stdprintf(const char *fmt, ...) ATTRIBUTE_PRINTF(1, 2);
 std::string vstdprintf(const char *fmt, va_list va);
+std::string cpu_features_to_string(uint64_t f);
 
 #ifdef _WIN32
 inline int dprintf(int fd, const char *fmt, ...)

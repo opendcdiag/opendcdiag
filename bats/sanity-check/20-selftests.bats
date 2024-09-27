@@ -168,8 +168,9 @@ tap_negative_check() {
             \#* | \
                 "$exit_line" | \
                 "THIS IS AN UNOPTIMIZED BUILD"* | \
+                "Warning: multiple occurences of"*"picking the last one" | \
                 "ok"*"mce_check")
-                # acceptable line
+                # acceptable line (Hyrum's law...)
                 ;;
             "not ok"*)
                 # inspect a little more

@@ -160,25 +160,6 @@ struct test_group
    initfunc (*group_init)() noexcept;       // returns a replacement init function (or not)
 };
 
-inline int simple_getopt(int argc, char **argv, struct option *options, int *optind = nullptr)
-{
-    // cache the result
-    static std::string cached_short_opts = [=]() {
-        std::string result;
-        for (struct option *o = options; o->name; ++o) {
-            if (o->flag || o->val < ' ' || o->val > '\x7f')
-                continue;
-            result += char(o->val);
-            if (o->has_arg != no_argument)
-                result += ':';
-            if (o->has_arg == optional_argument)
-                result += ':';
-        }
-        return result;
-    }();
-    return getopt_long(argc, argv, cached_short_opts.c_str(), options, optind);
-}
-
 namespace PerThreadData {
 struct Common
 {
@@ -447,8 +428,9 @@ private:
     SandstoneApplication(const SandstoneApplication &) = delete;
     SandstoneApplication &operator=(const SandstoneApplication &) = delete;
     friend int internal_main(int argc, char **argv);
-    friend int main(int argc, char **argv);
+    friend int sandstone_main(int argc, char **argv);
     friend SandstoneApplication *_sApp() noexcept;
+    friend SandstoneApplication* new_sApp();
 };
 
 struct SandstoneApplication::SharedMemory
@@ -505,6 +487,11 @@ inline SandstoneApplication *_sApp() noexcept
 }
 
 #define sApp    _sApp()
+
+// for unittests, where we do not want a singleton, nor custom alignment
+inline SandstoneApplication* new_sApp() {
+    return new SandstoneApplication{};
+}
 
 inline bool SandstoneApplication::is_main_process()
 {

@@ -713,8 +713,10 @@ void srand48(long)
     abort();
 }
 
+#ifdef SANDSTONE
 // override the libc random functions with ours
 // ISO C-defined to return from 0 to RAND_MAX
+// do not override in unittests
 [[gnu::noinline]] int rand()
 {
     int result = random();
@@ -724,6 +726,7 @@ void srand48(long)
     }
     return result;
 }
+#endif
 
 #ifdef _WIN32
 int rand_r(unsigned int *)
@@ -732,11 +735,13 @@ int rand_r(unsigned int *)
 }
 #endif
 
+#ifdef SANDSTONE
 // POSIX-defined to return in the interval [0, 2^31).
 long int random()
 {
     return sApp->random_engine->generateInt(thread_local_rng());
 }
+#endif
 
 // POSIX-defined to return in the interval [0.0, 1.0)
 double drand48()

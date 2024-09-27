@@ -1424,6 +1424,7 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     do_log_data("expected", expected);
 }
 
+#ifdef SANDSTONE
 void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigin origin)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
@@ -1484,6 +1485,7 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
     log_message_for_thread(-1, UsedKnobValue, UsedKnobValueLoggingLevel,
                            key, ": ", formatted);
 }
+#endif
 
 static void print_content_indented(int fd, std::string_view indent, std::string_view content)
 {
