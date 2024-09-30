@@ -5,7 +5,6 @@ framework_files += \
     files(
         'aligned_alloc.cpp',
         'child_debug.cpp',
-        'cpu_affinity.cpp',
         'fcntl.c',
         'fnmatch.c',
         'mman.c',
@@ -18,6 +17,4 @@ framework_files += \
         'win32_perror.c',
         '../generic/kvm.c',
         '../generic/memfpt.c',
-        '../generic/msr.c',
-        '../generic/physicaladdress.c',
     )
