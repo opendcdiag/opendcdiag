@@ -24,6 +24,14 @@
  * compared to the parts tested by Scan at Field (SAF).
  *
  * Requires `ifs.ko` to be loaded in the Linux kernel, supported since 6.4
+ *
+ * @test ifs_sbaf
+ *
+ * Run Structural Based Functional Test at Field 'SBAF' test provided by the
+ * Linux kernel on compatible hardware.
+ *
+ * Requires `ifs.ko` to be loaded in the Linux kernel, supported since 6.12
+ *
  */
 
 #define _GNU_SOURCE 1
@@ -305,6 +313,15 @@ static int scan_array_init(struct test *test)
     return scan_common_init(test);
 }
 
+static int scan_sbaf_init(struct test *test)
+{
+    ifs_test_t *data = (ifs_test_t *) malloc(sizeof(ifs_test_t));
+    data->sys_dir = "intel_ifs_2";
+    test->data = data;
+
+    return scan_common_init(test);
+}
+
 #else // !__linux__
 
 static int scan_preinit(struct test *test)
@@ -329,6 +346,12 @@ static int scan_array_init(struct test *test)
     return EXIT_SKIP;
 }
 
+static int scan_sbaf_init(struct test *test)
+{
+    log_skip(OsNotSupportedSkipCategory, "Not supported on this OS");
+    return EXIT_SKIP;
+}
+
 #endif // __linux__
 
 DECLARE_TEST(ifs, "Intel In-Field Scan (IFS) hardware selftest")
@@ -348,6 +371,15 @@ DECLARE_TEST(ifs_array_bist, "Array BIST: Intel In-Field Scan (IFS) hardware sel
     .desired_duration = -1,
     .fracture_loop_count = -1,
     .quality_level = TEST_QUALITY_PROD,
+    .flags = test_schedule_sequential,
+END_DECLARE_TEST
+
+DECLARE_TEST(ifs_sbaf, "SBAF: Intel In-Field Scan (IFS) hardware functional selftest")
+    .test_init = scan_sbaf_init,
+    .test_run = scan_run,
+    .desired_duration = -1,
+    .fracture_loop_count = -1,
+    .quality_level = TEST_QUALITY_BETA,
     .flags = test_schedule_sequential,
 END_DECLARE_TEST
 
