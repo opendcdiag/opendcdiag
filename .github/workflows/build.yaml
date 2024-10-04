@@ -34,7 +34,7 @@ jobs:
             elfutils \
             file \
             git \
-            libboost-dev \
+            libboost-all-dev \
             libeigen3-dev \
             libgtest-dev \
             libssl-dev \
