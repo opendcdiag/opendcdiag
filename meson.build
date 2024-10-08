@@ -211,6 +211,19 @@ if target_machine.system() != 'windows'
     gtest_dep = dependency('gtest_main')
 endif
 
+if get_option('coverage') == true
+    gcov_dep = cc.find_library('gcov')
+    target_deps += [gcov_dep]
+    default_c_flags += [
+        '-fprofile-arcs',
+        '-ftest-coverage',
+    ]
+    default_cpp_flags += [
+        '-fprofile-arcs',
+        '-ftest-coverage',
+    ]
+endif
+
 target_deps += [
     boost_dep,
     dl_dep,

@@ -165,6 +165,24 @@ else
     ]
 endif
 
+if get_option('fuzzing') == true
+    framework_files += files('fuzzing.c')
+    
+    afl_dir = get_option('afl_inc')
+    lookup_dirs = []
+    if afl_dir != ''
+        lookup_dirs += afl_dir
+    endif
+    find_program('afl-fuzz', required: true, dirs: lookup_dirs)
+    cc = meson.get_compiler('c')
+    afl_header = cc.check_header(
+        'afl-fuzz.h',
+        include_directories: include_directories(lookup_dirs),
+        required: true
+    )
+    framework_incdir += include_directories(afl_dir)
+endif
+
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
     framework_files += [
         'forkfd/forkfd.c',

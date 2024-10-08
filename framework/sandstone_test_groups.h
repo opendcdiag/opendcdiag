@@ -13,8 +13,8 @@ extern "C" {
 struct test_group;
 extern const struct test_group
         group_compression,
-        group_math;
-
+        group_math,
+        group_fuzzing;
 #ifdef __cplusplus
 }
 #endif
