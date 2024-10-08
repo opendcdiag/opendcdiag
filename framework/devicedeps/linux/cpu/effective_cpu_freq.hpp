@@ -7,7 +7,7 @@
 #define LINUX_EFFECTIVE_FREQ_HPP
 
 #ifndef __x86_64__
-#  include "../generic/effective_cpu_freq.hpp"
+#  include "../../generic/cpu/effective_cpu_freq.hpp"
 #else
 
 #include "sandstone_p.h"
