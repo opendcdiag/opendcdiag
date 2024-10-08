@@ -41,32 +41,32 @@ endif
 
 tests_set_base.add(
     files(
-        'ifs/ifs.c',
         'ifs/sandstone_ifs.c',
-    ),
+        'ifs/ifs.c',
+    )
 )
 
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     tests_set_base.add(
-        when: crypto_dep,
+        when : crypto_dep,
         if_true: files(
             # Tests that depends on openssl
             'openssl/openssl_sha.cpp',
-        ),
+        )
     )
 elif target_machine.system() == 'windows'
     tests_set_base.add(
         files(
             # Print skip in windows
             'openssl/openssl_sha.cpp',
-        ),
+        )
     )
 endif
 
-eigen3_dep = dependency('eigen3', static: dep_static)
+eigen3_dep = dependency('eigen3', static : dep_static)
 tests_set_base.add(
-    when: eigen3_dep,
-    if_true: files(
+    when : eigen3_dep,
+    if_true : files(
         'eigen_gemm/double14.cpp',
         'eigen_gemm/gemm_cdouble_dynamic_square.cpp',
         'eigen_gemm/gemm_double_dynamic_square.cpp',
@@ -80,50 +80,50 @@ tests_set_base.add(
         'eigen_svd_jacobi/svd_cdouble.cpp',
         'eigen_svd_jacobi/svd_double.cpp',
         'eigen_svd_jacobi/svd_fvectors.cpp',
-    ),
+    )
 )
 
 tests_set_skx.add(
-    when: eigen3_dep,
-    if_true: files(
+    when : eigen3_dep,
+    if_true : files(
         'eigen_svd/svd_cdouble.cpp',
-    ),
+    )
 )
 
-zstd_dep = dependency('libzstd', static: dep_static)
+zstd_dep = dependency('libzstd', static : dep_static)
 tests_set_base.add(
-    when: zstd_dep,
-    if_true: files(
+    when : zstd_dep,
+    if_true : files(
         'zstd/test.c',
-    ),
+    )
 )
 
-zlib_dep = dependency('zlib', static: dep_static)
+zlib_dep = dependency('zlib', static : dep_static)
 tests_set_base.add(
-    when: zlib_dep,
-    if_true: files(
+    when : zlib_dep,
+    if_true : files(
         'zlib/fuzz.c',
         'zlib/test.c',
-    ),
+    )
 )
 
 tests_config_base = tests_set_base.apply(tests_config)
 
 tests_base_a = static_library(
     'tests_base',
-    sources: tests_config_base.sources(),
+    sources : tests_config_base.sources(),
     build_by_default: false,
-    include_directories: [
+    include_directories : [
         tests_common_incdirs,
     ],
     dependencies: [
         tests_config_base.dependencies(),
         boost_dep,
     ],
-    c_args: [
+    c_args : [
         tests_common_c_args,
     ],
-    cpp_args: [
+    cpp_args : [
         tests_common_cpp_args,
     ],
 )
@@ -137,19 +137,19 @@ if host_machine.cpu_family() == 'x86_64'
 
     tests_hsw_a = static_library(
         'tests_hsw',
-        sources: tests_config_hsw.sources(),
-        dependencies: tests_config_hsw.dependencies(),
+        sources : tests_config_hsw.sources(),
+        dependencies : tests_config_hsw.dependencies(),
         build_by_default: false,
-        include_directories: [
+        include_directories : [
             tests_common_incdirs,
         ],
-        c_args: [
+        c_args : [
             tests_common_c_args,
             '-march=haswell',
             '-mtune=skylake',
             '-mrtm',
         ],
-        cpp_args: [
+        cpp_args : [
             tests_common_cpp_args,
             '-march=haswell',
             '-mtune=skylake',
@@ -162,55 +162,27 @@ if host_machine.cpu_family() == 'x86_64'
 
     tests_skx_a = static_library(
         'tests_skx',
-        sources: tests_config_skx.sources(),
+        sources : tests_config_skx.sources(),
         build_by_default: false,
-        include_directories: [
+        include_directories : [
             tests_common_incdirs,
         ],
         dependencies: [
             tests_config_skx.dependencies(),
             boost_dep,
         ],
-        c_args: [
+        c_args : [
             tests_common_c_args,
             '-march=skylake-avx512',
             '-mtune=skylake-avx512',
         ],
-        cpp_args: [
+        cpp_args : [
             tests_common_cpp_args,
             '-march=skylake-avx512',
             '-mtune=skylake-avx512',
             '-DEigen=EigenAVX512',
         ],
     )
-    if get_option('fuzzing') == true
-        fuzzing_sources += files('fuzzer/fuzzer.c')
-        
-        afl_dir = get_option('afl_inc')
-        lookup_dirs = []
-        if afl_dir != ''
-            lookup_dirs += afl_dir
-        endif
-        find_program('afl-fuzz', required: true, dirs: lookup_dirs)
-        cc = meson.get_compiler('c')
-        afl_header = cc.check_header(
-            'afl-fuzz.h',
-            include_directories: include_directories(lookup_dirs),
-            required: true
-        )
-        fuzzing_tests_afl = static_library(
-            'fuzzing_tests_afl',
-            sources: fuzzing_sources,
-            build_by_default: false,
-            include_directories: [
-                tests_common_incdirs,
-                lookup_dirs
-            ],
-        )
-        fuzzing_tests += [
-            fuzzing_tests_afl,
-        ]
-    endif
 
     sandstone_tests += [
         tests_hsw_a,
@@ -220,5 +192,5 @@ if host_machine.cpu_family() == 'x86_64'
     unittests_sources += files(
         'ifs/unit/ifs_unit_utils.cpp',
         'ifs/unit/ifs_unittests.cpp',
-    )
+        )
 endif

@@ -24,7 +24,6 @@ static int fuzzer_init(struct test *test) {
 }
 
 static int fuzzer_memset_random(struct test *test, int cpu) {
-    unsigned char* buf = (unsigned char*)test->data;
     ssize_t len = __AFL_FUZZ_TESTCASE_LEN;
 
     while(__AFL_LOOP(AFL_LOOP_COUNT)) {
@@ -38,7 +37,6 @@ static int fuzzer_memset_random(struct test *test, int cpu) {
 static int fuzzer_memcmp_or_fail(struct test *test, int cpu) {
     unsigned char *buf = (unsigned char*)test->data;
     ssize_t len = __AFL_FUZZ_TESTCASE_LEN;
-    log_info("Fuzzer memcmp_or_fail: %i\n", len);
 
     while(__AFL_LOOP(AFL_LOOP_COUNT)) {
         memcmp_or_fail(buf, buf, len);

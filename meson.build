@@ -4,12 +4,12 @@
 project(
     'OpenDCDiag',
     ['c', 'cpp'],
-    default_options: [
+    default_options : [
         'b_ndebug=if-release',
         'c_std=gnu17',
         'cpp_std=gnu++20',
     ],
-    meson_version: '>=0.57',
+    meson_version : '>=0.57',
 )
 
 cc = meson.get_compiler('c')
@@ -21,15 +21,11 @@ python = find_program('python3')
 shell = find_program('sh')
 
 if cpp.get_id() != 'gcc' or cc.get_id() != 'gcc'
-    warning(
-        'We recommend building OpenDCDiag with the GNU Compiler Collection (gcc). Your build may fail or your executable may not behave as expected.',
-    )
+    warning('We recommend building OpenDCDiag with the GNU Compiler Collection (gcc). Your build may fail or your executable may not behave as expected.')
 endif
 
 if cpp.get_linker_id() != 'ld.bfd' or cc.get_linker_id() != 'ld.bfd'
-    warning(
-        'We recommend linking OpenDCDiag with the binutils linker (ld). Your build may fail or your executable may not behave as expected.',
-    )
+    warning('We recommend linking OpenDCDiag with the binutils linker (ld). Your build may fail or your executable may not behave as expected.')
 endif
 
 march_generic_flags = []
@@ -40,7 +36,7 @@ if march_base != ''
 endif
 if host_machine.cpu_family() == 'x86_64'
     if march_base == ''
-        march_base = 'haswell'
+        march_base='haswell'
     endif
     march_generic_flags = [
         '-march=core2',
@@ -55,32 +51,38 @@ if host_machine.cpu_family() == 'x86_64'
         '-falign-loops=32',
     ]
     if cc.has_argument('-Wa,-muse-unaligned-vector-move')
-        march_flags += ['-Wa,-muse-unaligned-vector-move']
+        march_flags += [ '-Wa,-muse-unaligned-vector-move' ]
     elif target_machine.system() == 'windows' and cpp.get_id() == 'gcc'
-        warning(
-            'GCC for Windows is unable to generate 32-byte-aligned stacks necessary for AVX content. '
-            + 'Please upgrade to a version of binutils that supports the option -muse-unaligned-vector-move (2.38 or later). '
-            + 'The application will randomly crash at runtime otherwise.',
-        )
+        warning('GCC for Windows is unable to generate 32-byte-aligned stacks necessary for AVX content. ' +
+                'Please upgrade to a version of binutils that supports the option -muse-unaligned-vector-move (2.38 or later). ' +
+                'The application will randomly crash at runtime otherwise.')
     endif
 endif
 
 debug_nasm_flags = ''
 if get_option('buildtype') == 'debug'
-    debug_c_flags = ['-ggdb3', '-O0', '-U_FORTIFY_SOURCE']
+    debug_c_flags = [
+        '-ggdb3',
+        '-O0',
+        '-U_FORTIFY_SOURCE'
+    ]
 elif get_option('buildtype') == 'debugoptimized'
-    debug_c_flags = ['-ggdb3', '-O3', '-U_FORTIFY_SOURCE']
+    debug_c_flags = [
+        '-ggdb3',
+        '-O3',
+        '-U_FORTIFY_SOURCE'
+    ]
 else
-    debug_c_flags = ['-O3', '-g']
+    debug_c_flags = [
+        '-O3',
+        '-g'
+    ]
 endif
 
 if get_option('static_libstdcpp') == true
-    add_project_link_arguments(
-        [
-            '-static-libstdc++',
-        ],
-        language: 'cpp',
-    )
+add_project_link_arguments([
+    '-static-libstdc++',
+], language : 'cpp')
 endif
 
 nasm_system_flags = [
@@ -93,52 +95,49 @@ default_c_flags = []
 default_cpp_flags = []
 
 if target_machine.system() == 'windows'
-    add_project_arguments(
-        [
-            '-D__STDC_FORMAT_MACROS',
-            '-D__USE_MINGW_ANSI_STDIO',
-            '-D_POSIX',
-            '-D_WIN32_WINNT=0x0A00',
-            '-D_NO_SYS_GUID_OPERATOR_EQ_',
-            '-Wa,-mbig-obj',
-            '-include', meson.current_source_dir()
-            + '/framework/sysdeps/windows/win32_stdlib.h',
-        ],
-        language: ['c', 'cpp'],
-    )
-    add_project_link_arguments(
-        [
-            '-mconsole',
-            '-Wl,--stack,8388608',
-            '-static-libgcc',
-            '-Wl,-static',
-            '-lpthread',
-            '-lm',
-            '-lssp',
-            '-Wl,-Bdynamic',
-            '-lshlwapi',
-            '-lntdll',
-        ],
-        language: ['c', 'cpp'],
-    )
-    nasm_system_flags = [
-        '-fwin64',
-        '-Xgnu',
-        '-DWIN_ABI',
-    ]
+add_project_arguments([
+    '-D__STDC_FORMAT_MACROS',
+    '-D__USE_MINGW_ANSI_STDIO',
+    '-D_POSIX',
+    '-D_WIN32_WINNT=0x0A00',
+    '-D_NO_SYS_GUID_OPERATOR_EQ_',
+    '-Wa,-mbig-obj',
+    '-include',
+    meson.current_source_dir() + '/framework/sysdeps/windows/win32_stdlib.h',
+], language: [ 'c', 'cpp' ])
+add_project_link_arguments([
+    '-mconsole',
+    '-Wl,--stack,8388608',
+    '-static-libgcc',
+    '-Wl,-static',
+    '-lpthread',
+    '-lm',
+    '-lssp',
+    '-Wl,-Bdynamic',
+    '-lshlwapi',
+    '-lntdll',
+], language : [ 'c', 'cpp' ])
+nasm_system_flags = [
+    '-fwin64',
+    '-Xgnu',
+    '-DWIN_ABI',
+]
 elif target_machine.system() == 'darwin'
-    add_project_arguments(
-        [
-            '-D__unix__', # Why doesn't Apple think their OS is Unix?
-            '-D_DARWIN_C_SOURCE',
-        ],
-        language: ['c', 'cpp'],
-    )
-    nasm_system_flags = ['-fmacho64', '-Xgnu', '-DAPPLE', '-D__APPLE__', '--prefix=_']
+add_project_arguments([
+    '-D__unix__',        # Why doesn't Apple think their OS is Unix?
+    '-D_DARWIN_C_SOURCE',
+], language: [ 'c', 'cpp' ])
+nasm_system_flags = [
+    '-fmacho64',
+    '-Xgnu',
+    '-DAPPLE',
+    '-D__APPLE__',
+    '--prefix=_'
+]
 else
-    if get_option('buildtype') == 'debug'
-        debug_nasm_flags = '-gdwarf'
-    endif
+if get_option('buildtype') == 'debug'
+    debug_nasm_flags = '-gdwarf'
+endif
 endif
 
 default_c_flags += [
@@ -189,10 +188,12 @@ default_cpp_warn = [
 # Subdirs can add target dependencies if they wish
 target_deps = []
 
-boost_dep = dependency('boost', version: '>=1.69', required: false)
+boost_dep = dependency('boost', version : '>=1.69', required : false)
 # Check for required headers
 # (Also accomodates distributions which do not package a pkg-config file for boost)
-boost_has_hdrs = cpp.check_header('boost/algorithm/string.hpp') and cpp.check_header('boost/type_traits/is_complex.hpp')
+boost_has_hdrs = \
+    cpp.check_header('boost/algorithm/string.hpp') and \
+    cpp.check_header('boost/type_traits/is_complex.hpp')
 has_boost = boost_dep.found() or boost_has_hdrs
 
 if not has_boost
@@ -230,17 +231,13 @@ target_deps += [
 ]
 
 generated_gitid_h = configure_file(
-    input: [
+    input : [
         'framework/scripts/make-gitid.pl',
     ],
-    output: 'gitid.h',
-    encoding: 'ascii',
-    command: [
-        perl,
-        '@INPUT0@',
-        '@OUTPUT@',
-        'opendcdiag',
-        get_option('version_suffix'),
+    output : 'gitid.h',
+    encoding : 'ascii',
+    command : [
+        perl, '@INPUT0@', '@OUTPUT@', 'opendcdiag', get_option('version_suffix')
     ],
 )
 top_incdir = include_directories('.')
@@ -249,31 +246,29 @@ top_incdir = include_directories('.')
 sandstone_tests = []
 sandstone_tests_link = []
 sandstone_tests_link_whole = []
-fuzzing_tests = []
 
 unittests_sources = []
-fuzzing_sources = []
 
 subdir('framework')
 subdir('tests')
 
-sandstone_tests_link_whole += [sandstone_tests]
+sandstone_tests_link_whole += [ sandstone_tests ]
 
 executable(
     get_option('executable_name'),
-    install: true,
-    dependencies: target_deps,
-    link_with: [
+    install : true,
+    dependencies : target_deps,
+    link_with : [
         sandstone_tests_link,
     ],
-    link_whole: [
+    link_whole : [
         framework_a,
         sandstone_tests_link_whole,
     ],
-    include_directories: [
+    include_directories : [
         framework_incdir,
     ],
-    cpp_args: [
+    cpp_args : [
         default_cpp_warn,
         default_cpp_flags,
     ],
@@ -282,47 +277,28 @@ executable(
 executable(
     'unittests',
     files(
-        'framework/sandstone_unittests_utils.cpp',
         'framework/sysdeps/linux/malloc.cpp',
+        'framework/sandstone_unittests_utils.cpp',
     ),
     unittests_sources,
-    dependencies: [gtest_dep, pthread_dep],
-    include_directories: [
+    dependencies: [
+        gtest_dep,
+        pthread_dep
+    ],
+    include_directories : [
         framework_incdir,
     ],
-    cpp_args: [
+    cpp_args : [
         '-march=haswell',
         debug_c_flags,
         default_cpp_warn,
-        '-USANDSTONE',
+	'-USANDSTONE',
     ],
-    build_by_default: false,
-    native: true,
+    build_by_default : false,
+    native : true,
 )
 
-if get_option('fuzzing') == true
-    executable(
-        'fuzzing',
-        install: false,
-        dependencies: target_deps,
-        link_with: [
-            fuzzing_tests,
-        ],
-        link_whole: [
-            framework_a,
-            fuzzing_tests,
-        ],
-        include_directories: [
-            framework_incdir,
-        ],
-        cpp_args: [
-            default_cpp_warn,
-            default_cpp_flags,
-        ],
-    )
-endif
-summary(
-    {
+summary({
         'Logging format': get_option('logging_format'),
         'Using -march': march_base,
         'Static libstdc++': get_option('static_libstdcpp'),
@@ -330,5 +306,4 @@ summary(
         'Fallback executable name': get_option('fallback_exec'),
     },
     section: 'Configuration',
-    bool_yn: true,
-)
+    bool_yn: true)

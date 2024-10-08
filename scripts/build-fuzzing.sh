@@ -23,4 +23,4 @@ target_dir=$1
 shift
 
 CC=afl-gcc CXX=afl-g++ meson setup $target_dir -Dfuzzing=true $@
-CC=afl-gcc CXX=afl-g++ ninja -C $target_dir fuzzing
+CC=afl-gcc CXX=afl-g++ ninja -C $target_dir
