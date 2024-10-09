@@ -2556,8 +2556,6 @@ static SandstoneTestSet::EnabledTestList::iterator get_first_test()
 {
     logging_print_iteration_start();
     auto it = test_set->begin();
-    while (it != test_set->end() && it->test->quality_level < sApp->requested_quality)
-        ++it;
     return it;
 }
 
@@ -2569,8 +2567,6 @@ get_next_test(SandstoneTestSet::EnabledTestList::iterator next_test)
         return test_set->end();
 
     ++next_test;
-    while (next_test != test_set->end() && next_test->test->quality_level < sApp->requested_quality)
-        ++next_test;
     if (next_test == test_set->end()) {
         if (should_start_next_iteration()) {
             return get_first_test();
@@ -3762,7 +3758,10 @@ int main(int argc, char **argv)
             }
         }
 
-        lastTestResult = run_one_test(*it, per_cpu_failures);
+        if (it->test->quality_level >= sApp->requested_quality)
+            lastTestResult = run_one_test(*it, per_cpu_failures);
+        else
+            logging_printf(LOG_LEVEL_QUIET, "Test %s is in BETA quality. Try again with --beta option.\n", it->test->id);
 
         total_tests_run++;
         if (lastTestResult == TestResult::Failed) {
