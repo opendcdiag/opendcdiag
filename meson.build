@@ -188,7 +188,7 @@ default_cpp_warn = [
 # Subdirs can add target dependencies if they wish
 target_deps = []
 
-boost_dep = dependency('boost', version : '>=1.69', required : false)
+boost_dep = dependency('boost', version : '>=1.69', required : false, modules: ['program_options'])
 # Check for required headers
 # (Also accomodates distributions which do not package a pkg-config file for boost)
 boost_has_hdrs = \
@@ -261,25 +261,35 @@ executable(
     ],
 )
 
+unittests_deps = [
+    gtest_dep,
+    pthread_dep,
+    boost_dep,
+]
+
+if framework_config.get('SANDSTONE_SSL_BUILD') == 1
+    if crypto_dep.found()
+        unittests_deps += [
+            crypto_dep
+        ]
+    endif
+endif
+
 executable(
     'unittests',
-    files(
-        'framework/sysdeps/linux/malloc.cpp',
-        'framework/sandstone_unittests_utils.cpp',
-    ),
     unittests_sources,
     dependencies: [
-        gtest_dep,
-        pthread_dep
+        unittests_deps
     ],
     include_directories : [
         framework_incdir,
     ],
     cpp_args : [
         '-march=haswell',
+        '-maes',
         debug_c_flags,
         default_cpp_warn,
-	'-USANDSTONE',
+        '-USANDSTONE',
     ],
     build_by_default : false,
     native : true,

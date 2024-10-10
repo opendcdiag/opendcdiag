@@ -29,10 +29,12 @@ class KnobTestSuite : public ::testing::Test {
     }
 };
 
+#ifndef SANDSTONE
 void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigin origin)
 {
     used_key_values.emplace_back(UsedKeyValues{std::string(key), value, origin});
 }
+#endif
 
 // ------------------------------
 // Helper Methods

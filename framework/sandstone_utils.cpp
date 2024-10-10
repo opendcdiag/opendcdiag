@@ -187,3 +187,17 @@ std::string stdprintf(const char *fmt, ...)
 {
     return va_start_and_stdprintf(fmt);
 }
+
+std::string cpu_features_to_string(uint64_t f)
+{
+    std::string result;
+    const char *comma = "";
+    for (size_t i = 0; i < std::size(x86_locators); ++i) {
+        if (f & (UINT64_C(1) << i)) {
+            result += comma;
+            result += features_string + features_indices[i] + 1;
+            comma = ",";
+        }
+    }
+    return result;
+}

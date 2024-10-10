@@ -672,6 +672,8 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 {
     return memcmp_or_fail(actual, expected, count, nullptr);
 }
+
+int sandstone_main(int argc, char **argv);
 #pragma GCC diagnostic pop
 
 #else

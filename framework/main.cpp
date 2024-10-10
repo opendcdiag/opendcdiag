@@ -122,3 +122,8 @@ static void premain(int argc, char **argv, char **envp)
     check_missing_features(cpu_features, minimum_cpu_features);
 }
 }
+
+int main(int argc, char **argv)
+{
+    return sandstone_main(argc, argv);
+}

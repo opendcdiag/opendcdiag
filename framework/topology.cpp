@@ -767,7 +767,7 @@ static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr 
 /* prefer CPUID, fallback to sysfs. */
 static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
 
-void apply_cpuset_param(char *param)
+void apply_cpuset_param(SandstoneApplication* app, char *param)
 {
     struct MatchCpuInfoByCpuNumber {
         int cpu_number;
@@ -778,7 +778,7 @@ void apply_cpuset_param(char *param)
     if (SandstoneConfig::RestrictedCommandLine)
         return;
 
-    std::span<struct cpu_info> old_cpu_info(cpu_info, sApp->thread_count);
+    std::span<struct cpu_info> old_cpu_info(cpu_info, app->thread_count);
     std::vector<struct cpu_info> new_cpu_info;
     int total_matches = 0;
 
@@ -823,7 +823,7 @@ void apply_cpuset_param(char *param)
                 new_cpu_info.insert(it, cpu);
             } else {
                 auto it = std::find_if(new_cpu_info.begin(), new_cpu_info.end(),
-                                       MatchCpuInfoByCpuNumber(cpu.cpu_number));
+                                       MatchCpuInfoByCpuNumber{cpu.cpu_number});
                 if (it == new_cpu_info.end())
                     return;
                 new_cpu_info.erase(it);
@@ -843,7 +843,7 @@ void apply_cpuset_param(char *param)
             }
 
             auto cpu = std::find_if(old_cpu_info.begin(), old_cpu_info.end(),
-                                    MatchCpuInfoByCpuNumber(cpu_number));
+                                    MatchCpuInfoByCpuNumber{cpu_number});
             if (cpu == old_cpu_info.end()) {
                 fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (no such logical processor)\n",
                         program_invocation_name, orig_arg);
