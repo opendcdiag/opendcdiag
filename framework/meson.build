@@ -9,12 +9,12 @@ if device_type == ''
     device_type = 'cpu'
 endif
 
-sysdeps_dir = 'sysdeps/' / target_machine.system()
-devicedeps_dir = 'devicedeps/' / target_machine.system() / device_type
+sysdeps_dir = 'sysdeps' / target_machine.system()
+devicedeps_dir = 'devicedeps' / device_type / target_machine.system()
 
 if target_machine.system() == 'cygwin'
     sysdeps_dir = 'sysdeps/windows'
-    devicedeps_dir = 'devicedeps' / 'windows' / device_type
+    devicedeps_dir = 'devicedeps' / device_type / 'windows'
 endif
 
 framework_incdir = [
@@ -28,22 +28,11 @@ framework_incdir = [
     ),
 ]
 
-# Must be a configure_file, not custom_target, so it's created at
-# meson time and thus before everything
-generated_cpu_features_h = configure_file(
-    output: 'cpu_features.h',
-    encoding: 'ascii',
-    input: files(
-        'simd.conf',
-    ),
-    capture: true,
-    command: [
-        perl,
-        files('scripts/x86simd_generate.pl'),
-        '@INPUT@',
-        '@OUTPUT@',
-    ],
-)
+framework_files = files()
+
+# Run device-specific build steps early to ensure that any auto-generated
+# file is available before anything else.
+subdir('devicedeps' / device_type)
 
 generated_builtin_test_list = []
 builtin_test_list_inputs = get_option('builtin_test_list')
@@ -109,7 +98,7 @@ framework_config.set10(
     or get_option('ssl_link_type') == 'dynamic',
 )
 
-framework_files = files(
+framework_files += [
     'Floats.cpp',
     'generated_vectors.c',
     'logging.cpp',
@@ -125,8 +114,7 @@ framework_files = files(
     'sandstone_utils.cpp',
     'static_vectors.c',
     'test_knobs.cpp',
-    'topology.cpp',
-)
+]
 
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     # Look for libcrypto
@@ -178,7 +166,7 @@ endif
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
     subdir('sysdeps/unix')
-    subdir('devicedeps/unix/' + device_type)
+    subdir('devicedeps' / device_type / 'unix')
 endif
 subdir(sysdeps_dir)
 subdir(devicedeps_dir)
