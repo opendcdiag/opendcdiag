@@ -15,7 +15,10 @@
 #  include "sandstone_ssl.h"
 #endif
 #include "test_knobs.h"
-#include "topology.h"
+
+#ifdef SANDSTONE_DEVICE_CPU
+#include "devicedeps/cpu/topology.h"
+#endif
 
 #include <array>
 #include <charconv>
@@ -1788,7 +1791,7 @@ void KeyValuePairLogger::print(int tc)
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_random_generator_state = %s\n", test->id,
                        random_format_seed().c_str());
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_mask = %s\n", test->id,
-                       Topology::topology().build_falure_mask(test).c_str());
+                       CpuTopology::topology().build_falure_mask(test).c_str());
         if (std::string time = format_duration(earliest_fail); time.size())
             logging_printf(LOG_LEVEL_VERBOSE(1), "%s_earliest_fail_time = %s\n", test->id, time.c_str());
     }
@@ -1966,7 +1969,7 @@ std::string TapFormatLogger::fail_info_details()
 
     std::string seed = random_format_seed();
     std::string time = format_duration(earliest_fail, FormatDurationOptions::WithoutUnit);
-    std::string fail_mask = Topology::topology().build_falure_mask(test);
+    std::string fail_mask = CpuTopology::topology().build_falure_mask(test);
 
     result.reserve(strlen("  fail: { cpu-mask: '', time-to-fail: , seed: '' }\n") +
                    seed.size() + time.size() + fail_mask.size());
@@ -2528,21 +2531,21 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                        thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str());
     }
 
-    auto make_plan_string = [](const std::vector<CpuRange> &plan) {
+    auto make_plan_string = [](const std::vector<DeviceRange> &plan) {
         std::string result;
-        for (CpuRange r : plan) {
+        for (DeviceRange r : plan) {
             if (result.size())
                 result += ", ";
             result += "{ starting_cpu: ";
-            result += std::to_string(r.starting_cpu);
+            result += std::to_string(r.starting_device);
             result += ", count: ";
-            result += std::to_string(r.cpu_count);
+            result += std::to_string(r.device_count);
             result += " }";
         }
         return result;
     };
-    const std::vector<CpuRange> &fullsocket = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::IsolateSockets];
-    const std::vector<CpuRange> &heuristic = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::Heuristic];
+    const std::vector<DeviceRange> &fullsocket = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::IsolateSockets];
+    const std::vector<DeviceRange> &heuristic = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::Heuristic];
     logging_printf(LOG_LEVEL_VERBOSE(1), "test-plans:\n");
     logging_printf(LOG_LEVEL_VERBOSE(1), "  fullsocket: [ %s ]\n",
                    make_plan_string(fullsocket).c_str());

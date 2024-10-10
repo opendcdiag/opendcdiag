@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "topology.h"
+#include "devicedeps/cpu/topology.h"
 
 #include <stdio.h>
 #include <unistd.h>

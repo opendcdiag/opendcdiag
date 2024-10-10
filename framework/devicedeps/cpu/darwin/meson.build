@@ -4,6 +4,6 @@
 framework_files += \
     files(
         'cpu_affinity.cpp',
-        '../../generic' / device_type / 'msr.c',
-        '../../generic' / device_type / 'physicaladdress.c',
+        '../generic' / 'msr.c',
+        '../generic' / 'physicaladdress.c',
     )
