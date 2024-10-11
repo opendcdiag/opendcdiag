@@ -84,6 +84,97 @@ enum {
     vary_uncore_frequency,
     version_option,
     weighted_testrun_option,
+    alpha_option,
+    beta_option,
+};
+
+static struct option long_options[]  = {
+    { "1sec", no_argument, nullptr, one_sec_option },
+    { "30sec", no_argument, nullptr, thirty_sec_option },
+    { "2min", no_argument, nullptr, two_min_option },
+    { "5min", no_argument, nullptr, five_min_option },
+    { "alpha", no_argument, nullptr, alpha_option },
+    { "beta", no_argument, nullptr, beta_option},
+    { "cpuset", required_argument, nullptr, cpuset_option },
+    { "disable", required_argument, nullptr, disable_option },
+    { "dump-cpu-info", no_argument, nullptr, dump_cpu_info_option },
+    { "enable", required_argument, nullptr, 'e' },
+    { "fatal-errors", no_argument, nullptr, 'F'},
+    { "fatal-skips", no_argument, nullptr, fatal_skips_option },
+    { "fork-mode", required_argument, nullptr, 'f' },
+    { "help", no_argument, nullptr, 'h' },
+    { "ignore-mce-errors", no_argument, nullptr, ignore_mce_errors_option },
+    { "ignore-os-errors", no_argument, nullptr, ignore_os_errors_option },
+    { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
+    { "ignore-unknown-tests", no_argument, nullptr, ignore_unknown_tests_option },
+    { "inject-idle", required_argument, nullptr, inject_idle_option },
+    { "list", no_argument, nullptr, 'l' },
+    { "list-tests", no_argument, nullptr, raw_list_tests },
+    { "list-group-members", required_argument, nullptr, raw_list_group_members },
+    { "list-groups", no_argument, nullptr, raw_list_groups },
+    { "longer-runtime", required_argument, nullptr, longer_runtime_option },
+    { "max-concurrent-threads", required_argument, nullptr, max_concurrent_threads_option },
+    { "max-cores-per-slice", required_argument, nullptr, max_cores_per_slice_option },
+    { "max-logdata", required_argument, nullptr, max_logdata_option },
+    { "max-messages", required_argument, nullptr, max_messages_option },
+    { "max-test-count", required_argument, nullptr, max_test_count_option },
+    { "max-test-loop-count", required_argument, nullptr, max_test_loop_count_option },
+    { "mce-check-every", required_argument, nullptr, mce_check_period_option },
+    { "mem-sample-time", required_argument, nullptr, mem_sample_time_option },
+    { "mem-samples-per-log", required_argument, nullptr, mem_samples_per_log_option},
+    { "no-memory-sampling", no_argument, nullptr, no_mem_sampling_option },
+    { "no-slicing", no_argument, nullptr, no_slicing_option },
+    { "triage", no_argument, nullptr, triage_option },
+    { "no-triage", no_argument, nullptr, no_triage_option },
+    { "on-crash", required_argument, nullptr, on_crash_option },
+    { "on-hang", required_argument, nullptr, on_hang_option },
+    { "output-format", required_argument, nullptr, output_format_option},
+    { "output-log", required_argument, nullptr, 'o' },
+    { "quality", required_argument, nullptr, quality_option },
+    { "quick", no_argument, nullptr, quick_run_option },
+    { "quiet", no_argument, nullptr, 'q' },
+    { "retest-on-failure", required_argument, nullptr, retest_on_failure_option },
+    { "reschedule", required_argument, nullptr, reschedule_option },
+    { "rng-state", required_argument, nullptr, 's' },
+    { "schedule-by", required_argument, nullptr, schedule_by_option },
+#ifndef NO_SELF_TESTS
+    { "selftests", no_argument, nullptr, selftest_option },
+#endif
+    { "service", no_argument, nullptr, service_option },
+    { "shorten-runtime", required_argument, nullptr, shortened_runtime_option },
+    { "strict-runtime", no_argument, nullptr, strict_runtime_option },
+    { "syslog", no_argument, nullptr, syslog_runtime_option },
+    { "temperature-threshold", required_argument, nullptr, temperature_threshold_option },
+    { "test-delay", required_argument, nullptr, test_delay_option },
+    { "test-list-file", required_argument, nullptr, test_list_file_option },
+    { "test-list-randomize", no_argument, nullptr, test_list_randomize_option },
+    { "test-time", required_argument, nullptr, 't' },   // repeated below
+    { "force-test-time", no_argument, nullptr, force_test_time_option },
+    { "test-option", required_argument, nullptr, 'O'},
+    { "threads", required_argument, nullptr, 'n' },
+    { "time", required_argument, nullptr, 't' },        // repeated above
+    { "timeout", required_argument, nullptr, timeout_option },
+    { "total-retest-on-failure", required_argument, nullptr, total_retest_on_failure },
+    { "total-time", required_argument, nullptr, 'T' },
+    { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
+    { "use-builtin-test-list", optional_argument, nullptr, use_builtin_test_list_option },
+    { "vary-frequency", no_argument, nullptr, vary_frequency},
+    { "vary-uncore-frequency", no_argument, nullptr, vary_uncore_frequency},
+    { "verbose", no_argument, nullptr, 'v' },
+    { "version", no_argument, nullptr, version_option },
+    { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
+    { "yaml", optional_argument, nullptr, 'Y' },
+
+#if defined(__SANITIZE_ADDRESS__)
+    { "is-asan-build", no_argument, nullptr, is_asan_option },
+#endif
+#ifndef NDEBUG
+    // debug-mode only options:
+    { "gdb-server", required_argument, nullptr, gdb_server_option },
+    { "is-debug-build", no_argument, nullptr, is_debug_option },
+    { "test-tests", no_argument, nullptr, test_tests_option },
+#endif
+    { nullptr, 0, nullptr, 0 }
 };
 
 void suggest_help(char **argv) {
@@ -242,15 +333,15 @@ template <typename Integer = int> struct ParseIntArgument
         print_explanation();
     }
 
-    // non-const because this usually comes from optarg anyway
-    Integer operator()(char *arg = optarg) const
+    Integer operator()(std::string str) const
     {
         assert(name);
-        assert(arg);
         assert(min <= max);
         assert(Integer(min) == min);
         assert(Integer(max) == max);
 
+        char* arg = &str[0];
+        assert(arg);
         char *end = arg;
         errno = 0;
         MaxInteger parsed;
@@ -334,340 +425,187 @@ public:
         return random32() % num_cpus();
     }
 };
-} /* anonymous namespace */
 
-int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLineOpts& opts) {
-    static struct option long_options[]  = {
-        { "1sec", no_argument, nullptr, one_sec_option },
-        { "30sec", no_argument, nullptr, thirty_sec_option },
-        { "2min", no_argument, nullptr, two_min_option },
-        { "5min", no_argument, nullptr, five_min_option },
-        { "alpha", no_argument, &app->requested_quality, INT_MIN },
-        { "beta", no_argument, &app->requested_quality, 0 },
-        { "cpuset", required_argument, nullptr, cpuset_option },
-        { "disable", required_argument, nullptr, disable_option },
-        { "dump-cpu-info", no_argument, nullptr, dump_cpu_info_option },
-        { "enable", required_argument, nullptr, 'e' },
-        { "fatal-errors", no_argument, nullptr, 'F'},
-        { "fatal-skips", no_argument, nullptr, fatal_skips_option },
-        { "fork-mode", required_argument, nullptr, 'f' },
-        { "help", no_argument, nullptr, 'h' },
-        { "ignore-mce-errors", no_argument, nullptr, ignore_mce_errors_option },
-        { "ignore-os-errors", no_argument, nullptr, ignore_os_errors_option },
-        { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
-        { "ignore-unknown-tests", no_argument, nullptr, ignore_unknown_tests_option },
-        { "inject-idle", required_argument, nullptr, inject_idle_option },
-        { "list", no_argument, nullptr, 'l' },
-        { "list-tests", no_argument, nullptr, raw_list_tests },
-        { "list-group-members", required_argument, nullptr, raw_list_group_members },
-        { "list-groups", no_argument, nullptr, raw_list_groups },
-        { "longer-runtime", required_argument, nullptr, longer_runtime_option },
-        { "max-concurrent-threads", required_argument, nullptr, max_concurrent_threads_option },
-        { "max-cores-per-slice", required_argument, nullptr, max_cores_per_slice_option },
-        { "max-logdata", required_argument, nullptr, max_logdata_option },
-        { "max-messages", required_argument, nullptr, max_messages_option },
-        { "max-test-count", required_argument, nullptr, max_test_count_option },
-        { "max-test-loop-count", required_argument, nullptr, max_test_loop_count_option },
-        { "mce-check-every", required_argument, nullptr, mce_check_period_option },
-        { "mem-sample-time", required_argument, nullptr, mem_sample_time_option },
-        { "mem-samples-per-log", required_argument, nullptr, mem_samples_per_log_option},
-        { "no-memory-sampling", no_argument, nullptr, no_mem_sampling_option },
-        { "no-slicing", no_argument, nullptr, no_slicing_option },
-        { "triage", no_argument, nullptr, triage_option },
-        { "no-triage", no_argument, nullptr, no_triage_option },
-        { "on-crash", required_argument, nullptr, on_crash_option },
-        { "on-hang", required_argument, nullptr, on_hang_option },
-        { "output-format", required_argument, nullptr, output_format_option},
-        { "output-log", required_argument, nullptr, 'o' },
-        { "quality", required_argument, nullptr, quality_option },
-        { "quick", no_argument, nullptr, quick_run_option },
-        { "quiet", no_argument, nullptr, 'q' },
-        { "retest-on-failure", required_argument, nullptr, retest_on_failure_option },
-        { "reschedule", required_argument, nullptr, reschedule_option },
-        { "rng-state", required_argument, nullptr, 's' },
-        { "schedule-by", required_argument, nullptr, schedule_by_option },
-#ifndef NO_SELF_TESTS
-        { "selftests", no_argument, nullptr, selftest_option },
-#endif
-        { "service", no_argument, nullptr, service_option },
-        { "shorten-runtime", required_argument, nullptr, shortened_runtime_option },
-        { "strict-runtime", no_argument, nullptr, strict_runtime_option },
-        { "syslog", no_argument, nullptr, syslog_runtime_option },
-        { "temperature-threshold", required_argument, nullptr, temperature_threshold_option },
-        { "test-delay", required_argument, nullptr, test_delay_option },
-        { "test-list-file", required_argument, nullptr, test_list_file_option },
-        { "test-list-randomize", no_argument, nullptr, test_list_randomize_option },
-        { "test-time", required_argument, nullptr, 't' },   // repeated below
-        { "force-test-time", no_argument, nullptr, force_test_time_option },
-        { "test-option", required_argument, nullptr, 'O'},
-        { "threads", required_argument, nullptr, 'n' },
-        { "time", required_argument, nullptr, 't' },        // repeated above
-        { "timeout", required_argument, nullptr, timeout_option },
-        { "total-retest-on-failure", required_argument, nullptr, total_retest_on_failure },
-        { "total-time", required_argument, nullptr, 'T' },
-        { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
-        { "use-builtin-test-list", optional_argument, nullptr, use_builtin_test_list_option },
-        { "vary-frequency", no_argument, nullptr, vary_frequency},
-        { "vary-uncore-frequency", no_argument, nullptr, vary_uncore_frequency},
-        { "verbose", no_argument, nullptr, 'v' },
-        { "version", no_argument, nullptr, version_option },
-        { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
-        { "yaml", optional_argument, nullptr, 'Y' },
+struct ProgramOptionsParser {
 
-#if defined(__SANITIZE_ADDRESS__)
-        { "is-asan-build", no_argument, nullptr, is_asan_option },
-#endif
-#ifndef NDEBUG
-        // debug-mode only options:
-        { "gdb-server", required_argument, nullptr, gdb_server_option },
-        { "is-debug-build", no_argument, nullptr, is_debug_option },
-        { "test-tests", no_argument, nullptr, test_tests_option },
-#endif
-        { nullptr, 0, nullptr, 0 }
-    };
+    std::map<int, std::variant<bool, int, const char*, std::vector<const char*>, ShortDuration>> opts_map;
 
-    int opt;
-    int coptind = -1;
+    // collect args in cmdline, validate only static conditions, perform trivial parsing only, like string_to_millisecs
+    int collect_args(int argc, char** argv)
+    {
+        int opt;
+        int coptind = -1;
 
-    if constexpr (!SandstoneConfig::RestrictedCommandLine) {
         while ((opt = simple_getopt(argc, argv, long_options, &coptind)) != -1) {
             switch (opt) {
+            case 'h':
+                opts_map.emplace('h', true);
+                break;
             case disable_option:
-                opts.disabled_tests.push_back(optarg);
+                if (!opts_map.count(disable_option)) {
+                    opts_map.emplace(disable_option, std::vector<const char*>());
+                }
+                std::get<std::vector<const char*>>(opts_map.at(disable_option)).emplace_back(optarg);
                 break;
             case 'e':
-                opts.enabled_tests.push_back(optarg);
+                if (!opts_map.count('e')) {
+                    opts_map.emplace('e', std::vector<const char*>());
+                }
+                std::get<std::vector<const char*>>(opts_map.at('e')).emplace_back(optarg);
                 break;
             case 'f':
-                if (strcmp(optarg, "no") == 0 || strcmp(optarg, "no-fork") == 0) {
-                    app->fork_mode = SandstoneApplication::no_fork;
-                } else if (!strcmp(optarg, "exec")) {
-                    app->fork_mode = SandstoneApplication::exec_each_test;
-#ifndef _WIN32
-                } else if (strcmp(optarg, "yes") == 0 || strcmp(optarg, "each-test") == 0) {
-                    app->fork_mode = SandstoneApplication::fork_each_test;
-#endif
-                } else {
-                    fprintf(stderr, "%s: unknown option to -f: %s\n", argv[0], optarg);
-                    usage(argv);
-                    return EX_USAGE;
-                }
+                opts_map.insert_or_assign('f', optarg);
                 break;
             case 'F':
-                opts.fatal_errors = true;
+                opts_map.emplace('F', true);
                 break;
-            case 'h':
-                usage(argv);
-                opts.action = Action::exit;
-                return EXIT_SUCCESS;
             case 'l':
-            {
-                opts.list_tests_include_descriptions = true;
-                opts.list_tests_include_tests = true;
-                opts.list_tests_include_groups = true;
-                opts.action = Action::list_tests;
-                return EXIT_SUCCESS;
-            }
+                opts_map.emplace('l', true);
+                break;
             case raw_list_tests:
-            {
-                opts.list_tests_include_tests = true;
-                opts.action = Action::list_tests;
-                return EXIT_SUCCESS;
-            }
+                opts_map.emplace(raw_list_tests, true);
+                break;
             case raw_list_groups:
-            {
-                opts.list_tests_include_groups = true;
-                opts.action = Action::list_tests;
-                return EXIT_SUCCESS;
-            }
+                opts_map.emplace(raw_list_groups, true);
+                break;
             case raw_list_group_members:
-            {
-                opts.action = Action::list_group;
-                opts.list_group_name = optarg;
-                return EXIT_SUCCESS;
-            }
+                opts_map.insert_or_assign(raw_list_group_members, optarg);
+                break;
             case 'n':
-                opts.thread_count_ = ParseIntArgument<>{
-                        .name = "-n / --threads",
-                        .min = 1,
-                        .max = app->thread_count,
-                        .range_mode = OutOfRangeMode::Saturate
-                }();
+                opts_map.insert_or_assign('n', optarg);
                 break;
             case 'o':
-                app->file_log_path = optarg;
+                opts_map.insert_or_assign('o', optarg);
                 break;
             case 'O':
-                app->shmem->log_test_knobs = true;
-                if ( ! set_knob_from_key_value_string(optarg)){
-                    fprintf(stderr, "Malformed test knob: %s (should be in the form KNOB=VALUE)\n", optarg);
+                if (!opts_map.count('O')) {
+                    opts_map.emplace('O', std::vector<const char*>());
+                }
+                std::get<std::vector<const char*>>(opts_map.at('O')).emplace_back(optarg);
+                break;
+            case 'q':
+                opts_map.emplace('q', true);
+                break;
+            case 's':
+                opts_map.insert_or_assign('s', optarg);
+                break;
+            case alpha_option:
+                opts_map.emplace(alpha_option, true);
+                break;
+            case beta_option:
+                opts_map.emplace(beta_option, true);
+                break;
+            case 't':
+                opts_map.insert_or_assign('t', string_to_millisecs(optarg));
+                break;
+            case force_test_time_option: /* overrides max and min duration specified by the test */
+                opts_map.emplace(force_test_time_option, true);
+                break;
+            case 'T':
+                opts_map.emplace('T', optarg);
+                break;
+            case 'v':
+                if (!opts_map.count('v')) {
+                    opts_map.emplace('v', (int)1);
+                } else {
+                    std::get<int>(opts_map.at('v'))++;
+                }
+                break;
+            case 'Y':
+                if (opts_map.count('Y')) {
+                    if (optarg) // do not allow '-Y' to reset previously set indent
+                        opts_map.at('Y') = optarg;
+                } else {
+                    opts_map.emplace('Y', optarg);
+                }
+                break;
+            case cpuset_option:
+                if (!opts_map.try_emplace(cpuset_option, optarg).second) {
+                    fprintf(stderr, "cpuset defined more than once\n");
                     return EX_USAGE;
                 }
                 break;
-            case 'q':
-                app->shmem->verbosity = 0;
-                break;
-            case 's':
-                opts.seed = optarg;
-                break;
-            case 't':
-                app->test_time = string_to_millisecs(optarg);
-                break;
-            case force_test_time_option: /* overrides max and min duration specified by the test */
-                app->force_test_time = true;
-                break;
-            case 'T':
-                if (strcmp(optarg, "forever") == 0) {
-                    app->endtime = MonotonicTimePoint::max();
-                } else {
-                    app->endtime = app->starttime + string_to_millisecs(optarg);
-                }
-                opts.test_set_config.cycle_through = true; /* Time controls when the execution stops as
-                                                            opposed to the number of tests. */
-                break;
-            case 'v':
-                if (app->shmem->verbosity < 0)
-                    app->shmem->verbosity = 1;
-                else
-                    ++app->shmem->verbosity;
-                break;
-            case 'Y':
-                app->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
-                if (optarg)
-                    app->shmem->output_yaml_indent = ParseIntArgument<>{
-                            .name = "-Y / --yaml",
-                            .max = 160,     // arbitrary
-                    }();
-                break;
-            case cpuset_option:
-                opts.cpuset = optarg;
-                break;
             case dump_cpu_info_option:
-                opts.action = Action::dump_cpu_info;
-                return EXIT_SUCCESS;
+                opts_map.emplace(dump_cpu_info_option, true);
+                break;
             case fatal_skips_option:
-                app->fatal_skips = true;
+                opts_map.emplace(fatal_skips_option, true);
                 break;
 #ifndef NDEBUG
             case gdb_server_option:
-                app->gdb_server_comm = optarg;
+                opts_map.insert_or_assign(gdb_server_option, optarg);
                 break;
 #endif
             case ignore_mce_errors_option:
-                app->ignore_mce_errors = true;
+                opts_map.emplace(ignore_mce_errors_option, true);
                 break;
             case ignore_os_errors_option:
-                app->ignore_os_errors = true;
+                opts_map.emplace(ignore_os_errors_option, true);
                 break;
             case ignore_unknown_tests_option:
-                opts.test_set_config.ignore_unknown_tests = true;
+                opts_map.emplace(ignore_unknown_tests_option, true);
                 break;
             case inject_idle_option:
-                app->inject_idle = ParseIntArgument<>{
-                    .name = "--inject-idle",
-                    .min = 0,
-                    .max = 50,
-                    .range_mode = OutOfRangeMode::Saturate
-                }();
+                opts_map.emplace(inject_idle_option, optarg);
                 break;
             case is_asan_option:
+                // these options are only accessible in the command-line if the
+                // corresponding functionality is active
+                opts_map.emplace(is_asan_option, true);
+                break;
             case is_debug_option:
                 // these options are only accessible in the command-line if the
                 // corresponding functionality is active
-                opts.action = Action::exit;
-                return EXIT_SUCCESS;
+                opts_map.emplace(is_debug_option, true);
+                break;
             case max_cores_per_slice_option:
-                opts.max_cores_per_slice_ = ParseIntArgument<>{
-                        .name = "--max-cores-per-slice",
-                        .min = -1,
-                    }();
+                opts_map.insert_or_assign(max_cores_per_slice_option, optarg);
                 break;
             case mce_check_period_option:
-                app->mce_check_period = ParseIntArgument<>{"--mce-check-every"}();
+                opts_map.insert_or_assign(mce_check_period_option, optarg);
                 break;
             case no_slicing_option:
-                opts.max_cores_per_slice_ = -1;
+                opts_map.emplace(no_slicing_option, true);
                 break;
             case on_crash_option:
-                opts.on_crash_arg = optarg;
+                opts_map.insert_or_assign(on_crash_option, optarg);
                 break;
             case on_hang_option:
-                opts.on_hang_arg = optarg;
+                opts_map.insert_or_assign(on_hang_option, optarg);
                 break;
             case output_format_option:
-                if (strcmp(optarg, "key-value") == 0) {
-                    app->shmem->output_format = SandstoneApplication::OutputFormat::key_value;
-                } else if (strcmp(optarg, "tap") == 0) {
-                    app->shmem->output_format = SandstoneApplication::OutputFormat::tap;
-                } else if (strcmp(optarg, "yaml") == 0) {
-                    app->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
-                } else if (SandstoneConfig::Debug && strcmp(optarg, "none") == 0) {
-                    // for testing only
-                    app->shmem->output_format = SandstoneApplication::OutputFormat::no_output;
-                    app->shmem->verbosity = -1;
-                } else {
-                    fprintf(stderr, "%s: unknown output format: %s\n", argv[0], optarg);
-                    return EX_USAGE;
-                }
+                opts_map.insert_or_assign(output_format_option, optarg);
                 break;
 
             case quality_option:
-                app->requested_quality = ParseIntArgument<>{
-                        .name = "--quality",
-                        .min = int(TEST_QUALITY_SKIP),
-                        .max = int(TEST_QUALITY_PROD),
-                        .range_mode = OutOfRangeMode::Saturate
-                }();
+                opts_map.insert_or_assign(quality_option, optarg);
                 break;
 
             case quick_run_option:
-                app->max_test_loop_count = 1;
-                app->delay_between_tests = 0ms;
+                opts_map.emplace(quick_run_option, true);
                 break;
             case retest_on_failure_option:
-                app->retest_count = ParseIntArgument<>{
-                        .name = "--retest-on-failure",
-                        .max = SandstoneApplication::MaxRetestCount,
-                        .range_mode = OutOfRangeMode::Saturate
-                }();
+                opts_map.insert_or_assign(retest_on_failure_option, optarg);
                 break;
             case reschedule_option:
-                if (app->thread_count < 2) {
-                    fprintf(stderr, "%s: --reschedule is only useful with at least 2 threads\n", argv[0]);
-                    return EX_USAGE;
-                }
-
-                if (strcmp(optarg, "none") == 0 ) {
-                    // Default option, so do nothing
-                } else if (strcmp(optarg, "queue") == 0) {
-                    app->device_schedule = std::make_unique<QueueDeviceSchedule>();
-                } else if (strcmp(optarg, "random") == 0) {
-                    app->device_schedule = std::make_unique<RandomDeviceSchedule>();
-                } else {
-                    fprintf(stderr, "%s: unknown reschedule option: %s. Available options: queue, random and none(default)\n", argv[0], optarg);
-                    return EX_USAGE;
-                }
+                opts_map.insert_or_assign(reschedule_option, optarg);
                 break;
             case strict_runtime_option:
-                app->shmem->use_strict_runtime = true;
+                opts_map.emplace(strict_runtime_option, true);
                 break;
             case syslog_runtime_option:
-                app->syslog_ident = program_invocation_name;
+                opts_map.insert_or_assign(syslog_runtime_option, program_invocation_name);
                 break;
 #ifndef NO_SELF_TESTS
             case selftest_option:
-                app->shmem->selftest = true;
-                opts.test_set_config.is_selftest = true;
+                opts_map.emplace(selftest_option, true);
                 break;
 #endif
             case service_option:
-                // keep in sync with RestrictedCommandLine below
-                opts.fatal_errors = true;
-                app->endtime = MonotonicTimePoint::max();
-                app->service_background_scan = true;
+                opts_map.emplace(service_option, true);
                 break;
             case ud_on_failure_option:
-                app->shmem->ud_on_failure = true;
+                opts_map.emplace(ud_on_failure_option, true);
                 break;
             case use_builtin_test_list_option:
                 if (!SandstoneConfig::HasBuiltinTestList) {
@@ -675,73 +613,42 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
                                     "have a built-in test list.\n", argv[0]);
                     return EX_USAGE;
                 }
-                opts.builtin_test_list_name = optarg ? optarg : "auto";
+                opts_map.insert_or_assign(use_builtin_test_list_option, optarg ? optarg : "auto");
                 break;
             case temperature_threshold_option:
-                if (strcmp(optarg, "disable") == 0)
-                    app->thermal_throttle_temp = -1;
-                else
-                    app->thermal_throttle_temp = ParseIntArgument<>{
-                            .name = "--temperature-threshold",
-                            .explanation = "value should be specified in thousandths of degrees Celsius "
-                                            "(for example, 85000 is 85 degrees Celsius), or \"disable\" "
-                                            "to disable monitoring",
-                            .max = 160000,      // 160 C is WAAAY too high anyway
-                            .range_mode = OutOfRangeMode::Saturate
-                    }();
+                opts_map.insert_or_assign(temperature_threshold_option, optarg);
                 break;
 
             case test_delay_option:
-                app->delay_between_tests = string_to_millisecs(optarg);
+                opts_map.insert_or_assign(test_delay_option, string_to_millisecs(optarg));
                 break;
 
             case test_tests_option:
-                app->enable_test_tests();
-                if (app->test_tests_enabled()) {
-                    // disable other options that don't make sense in this mode
-                    app->retest_count = 0;
-                }
+                opts_map.emplace(test_tests_option, true);
                 break;
 
             case timeout_option:
-                app->max_test_time = string_to_millisecs(optarg);
+                opts_map.insert_or_assign(timeout_option, string_to_millisecs(optarg));
                 break;
 
             case total_retest_on_failure:
-                app->total_retest_count = ParseIntArgument<>{
-                        .name = "--total-retest-on-failure",
-                        .min = -1
-                }();
+                opts_map.insert_or_assign(total_retest_on_failure, optarg);
                 break;
 
             case test_list_file_option:
-                opts.test_list_file_path = optarg;
+                opts_map.insert_or_assign(test_list_file_option, optarg);
                 break;
 
             case test_list_randomize_option:
-                opts.test_set_config.randomize = true;
+                opts_map.emplace(test_list_randomize_option, true);
                 break;
 
             case max_logdata_option: {
-                app->shmem->max_logdata_per_thread = ParseIntArgument<unsigned>{
-                        .name = "--max-logdata",
-                        .explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))",
-                        .base = 0,      // accept hex
-                        .range_mode = OutOfRangeMode::Saturate
-                }();
-                if (app->shmem->max_logdata_per_thread == 0)
-                    app->shmem->max_logdata_per_thread = UINT_MAX;
+                opts_map.insert_or_assign(max_logdata_option, optarg);
                 break;
             }
             case max_messages_option:
-                app->shmem->max_messages_per_thread = ParseIntArgument<>{
-                        .name = "--max-messages",
-                        .explanation = "maximum number of messages (per thread) to log in each test (0 is unlimited)",
-                        .min = -1,
-                        .range_mode = OutOfRangeMode::Saturate
-                }();
-                if (app->shmem->max_messages_per_thread <= 0)
-                    app->shmem->max_messages_per_thread = INT_MAX;
+                opts_map.insert_or_assign(max_messages_option, optarg);
                 break;
 
             case vary_frequency:
@@ -749,7 +656,7 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
                     fprintf(stderr, "%s: --vary-frequency works only on Linux\n", program_invocation_name);
                     return EX_USAGE;
                 }
-                app->vary_frequency_mode = true;
+                opts_map.emplace(vary_frequency, true);
                 break;
 
             case vary_uncore_frequency:
@@ -757,45 +664,31 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
                     fprintf(stderr, "%s: --vary-uncore-frequency works only on Linux\n", program_invocation_name);
                     return EX_USAGE;
                 }
-                app->vary_uncore_frequency_mode = true;
+                opts_map.emplace(vary_uncore_frequency, true);
                 break;
 
             case version_option:
-                opts.action = Action::version;
-                return EXIT_SUCCESS;
+                opts_map.emplace(version_option, true);
+                break;
             case one_sec_option:
-                opts.test_set_config.randomize = true;
-                opts.test_set_config.cycle_through = true;
-                app->shmem->use_strict_runtime = true;
-                app->endtime = app->starttime + 1s;
+                opts_map.emplace(one_sec_option, true);
                 break;
             case thirty_sec_option:
-                opts.test_set_config.randomize = true;
-                opts.test_set_config.cycle_through = true;
-                app->shmem->use_strict_runtime = true;
-                app->endtime = app->starttime + 30s;
+                opts_map.emplace(thirty_sec_option, true);
                 break;
             case two_min_option:
-                opts.test_set_config.randomize = true;
-                opts.test_set_config.cycle_through = true;
-                app->shmem->use_strict_runtime = true;
-                app->endtime = app->starttime + 2min;
+                opts_map.emplace(two_min_option, true);
                 break;
             case five_min_option:
-                opts.test_set_config.randomize = true;
-                opts.test_set_config.cycle_through = true;
-                app->shmem->use_strict_runtime = true;
-                app->endtime = app->starttime + 5min;
+                opts_map.emplace(five_min_option, true);
                 break;
 
             case max_test_count_option:
-                app->max_test_count = ParseIntArgument<>{"--max-test-count"}();
+                opts_map.insert_or_assign(max_test_count_option, optarg);
                 break;
 
             case max_test_loop_count_option:
-                app->max_test_loop_count = ParseIntArgument<>{"--max-test-loop-count"}();
-                if (app->max_test_loop_count == 0)
-                        app->max_test_loop_count = std::numeric_limits<int>::max();
+                opts_map.insert_or_assign(max_test_loop_count_option, optarg);
                 break;
 
                 /* deprecated options */
@@ -820,7 +713,425 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
                 return EX_USAGE;
             }
         }
-    } else {
+        return EXIT_SUCCESS;
+    }
+
+    // validate dynamic conditions, like other conflicting arguments' presence
+    int validate_args() const
+    {
+        if (opts_map.count(one_sec_option) + opts_map.count(thirty_sec_option) + opts_map.count(five_min_option) + opts_map.count('T') >= 2) {
+            fprintf(stderr, "Options 1sec, 30sec, 2min, 5min, total-time are mutually exclusive\n");
+            return EX_USAGE;
+        }
+
+        if (opts_map.count(raw_list_tests) + opts_map.count(raw_list_groups) + opts_map.count(raw_list_group_members) + opts_map.count(dump_cpu_info_option) + opts_map.count(version_option) >= 2) {
+            fprintf(stderr, "Options list-tests, list-groups, list-group-members, dump-cpu-info, version are mutually exclusive\n");
+            return EX_USAGE;
+        }
+
+#ifndef NO_SELF_TESTS
+        if (opts_map.count(alpha_option) + opts_map.count(beta_option) + opts_map.count(quality_option) + opts_map.count(selftest_option) >= 2) {
+            fprintf(stderr, "Options alpha, beta, quality, selftests are mutually exclusive\n");
+            return EX_USAGE;
+        }
+#else
+        if (opts_map.count(alpha_option) + opts_map.count(beta_option) + opts_map.count(quality_option) >= 2) {
+            fprintf(stderr, "Options alpha, beta, quality are mutually exclusive\n");
+            return EX_USAGE;
+        }
+#endif
+
+        if (opts_map.count(max_cores_per_slice_option) && opts_map.count(no_slicing_option)) {
+            fprintf(stderr, "Options no-slicing, max-cores-per-slice are mutually exclusive\n");
+            return EX_USAGE;
+        }
+
+        if (opts_map.count(output_format_option) && opts_map.count('Y')) {
+            if (strcmp(std::get<const char*>(opts_map.at(output_format_option)), "yaml")) {
+                fprintf(stderr, "Options yaml, output-format are mutually exclusive\n");
+                return EX_USAGE;
+            }
+        }
+
+        if (opts_map.count('q') && opts_map.count('v')) {
+            fprintf(stderr, "Options quiet, verbose are mutually exclusive\n");
+            return EX_USAGE;
+        }
+
+        if (opts_map.count('T') && opts_map.count(service_option)) {
+            fprintf(stderr, "Options total-time, service are mutually exclusive\n");
+            return EX_USAGE;
+        }
+
+        if (opts_map.count(quick_run_option) && opts_map.count(max_test_loop_count_option)) {
+            fprintf(stderr, "Options quick, max-test-loop-count are mutually exclusive\n");
+            return EX_USAGE;
+        }
+
+        if (opts_map.count(quick_run_option) && opts_map.count(test_delay_option)) {
+            fprintf(stderr, "Options quick, test-delay are mutually exclusive\n");
+            return EX_USAGE;
+        }
+
+        return EXIT_SUCCESS;
+    }
+
+    // assign values to app and opts, perform more complicated parsing, parse in correct order
+    int parse_args(SandstoneApplication* app, ProgramOptions& opts, char** argv)
+    {
+        // verbosity (before endpoints)
+        auto verbosity = opts_map.count('v') ? std::get<int>(opts_map.at('v')) : -1;
+        if (opts_map.count('q')) {
+            verbosity = 0;
+        }
+        app->shmem->verbosity = verbosity;
+
+        // quality (before tests listing)
+        if (opts_map.count(alpha_option)) {
+            app->requested_quality = INT_MIN;
+        }
+        if (opts_map.count(beta_option)) {
+            app->requested_quality = 0;
+        }
+        if (opts_map.count(quality_option)) {
+            app->requested_quality = ParseIntArgument<>{
+                    .name = "--quality",
+                    .min = int(TEST_QUALITY_SKIP),
+                    .max = int(TEST_QUALITY_PROD),
+                    .range_mode = OutOfRangeMode::Saturate
+            }(std::get<const char*>(opts_map.at(quality_option)));
+        }
+
+        // cpuset (before dump_cpu_info)
+        if (opts_map.count(cpuset_option)) {
+            opts.cpuset = std::get<const char*>(opts_map.at(cpuset_option));
+        }
+
+        // selftest (before test listing)
+#ifndef NO_SELF_TESTS
+        if (opts_map.count(selftest_option)) {
+            app->shmem->selftest = true;
+            opts.test_set_config.is_selftest = true;
+        }
+#endif
+
+        // endpoints
+        if (opts_map.count(is_asan_option) || opts_map.count(is_debug_option)) {
+            opts.action = Action::exit;
+            return EXIT_SUCCESS;
+        }
+        if (opts_map.count('l')) {
+            opts.list_tests_include_descriptions = true;
+            opts.list_tests_include_tests = true;
+            opts.list_tests_include_groups = true;
+            opts.action = Action::list_tests;
+            return EXIT_SUCCESS;
+        }
+        if (opts_map.count(raw_list_tests)) {
+            opts.list_tests_include_tests = true;
+            opts.action = Action::list_tests;
+            return EXIT_SUCCESS;
+        }
+        if (opts_map.count(raw_list_groups)) {
+            opts.list_tests_include_groups = true;
+            opts.action = Action::list_tests;
+            return EXIT_SUCCESS;
+        }
+        if (opts_map.count(raw_list_group_members)) {
+            opts.action = Action::list_group;
+            auto name = std::get<const char*>(opts_map.at(raw_list_group_members));
+            assert(name); // TODO fail instead of assert
+            opts.list_group_name = name;
+            return EXIT_SUCCESS;
+        }
+        if (opts_map.count(dump_cpu_info_option)) {
+            opts.action = Action::dump_cpu_info;
+            return EXIT_SUCCESS;
+        }
+        if (opts_map.count(version_option)) {
+            opts.action = Action::version;
+            return EXIT_SUCCESS;
+        }
+        if (opts_map.count('h')) {
+            usage(argv);
+            opts.action = Action::exit;
+            return EXIT_SUCCESS;
+        }
+
+        // test selection
+        if (opts_map.count('e')) {
+            opts.enabled_tests = std::move(std::get<std::vector<const char*>>(opts_map.at('e')));
+        }
+        if (opts_map.count(disable_option)) {
+            opts.disabled_tests = std::move(std::get<std::vector<const char*>>(opts_map.at(disable_option)));
+        }
+
+        // times
+        if (opts_map.count('t')) {
+            app->test_time = std::get<ShortDuration>(opts_map.at('t'));
+        }
+        if (opts_map.count(test_delay_option)) {
+            app->delay_between_tests = std::get<ShortDuration>(opts_map.at(test_delay_option));
+        }
+        if (opts_map.count(timeout_option)) {
+            app->max_test_time = std::get<ShortDuration>(opts_map.at(timeout_option));
+        }
+        if (opts_map.count('T')) {
+            auto endtime = std::get<const char*>(opts_map.at('T'));
+            if (strcmp(endtime, "forever") == 0) {
+                app->endtime = MonotonicTimePoint::max();
+            } else {
+                app->endtime = app->starttime + string_to_millisecs(endtime);
+            }
+            opts.test_set_config.cycle_through = true; /* Time controls when the execution stops as
+                                                        opposed to the number of tests. */
+        }
+        if (opts_map.count(one_sec_option)) {
+            opts.test_set_config.randomize = true;
+            opts.test_set_config.cycle_through = true;
+            app->shmem->use_strict_runtime = true;
+            app->endtime = app->starttime + 1s;
+        }
+        if (opts_map.count(thirty_sec_option)) {
+            opts.test_set_config.randomize = true;
+            opts.test_set_config.cycle_through = true;
+            app->shmem->use_strict_runtime = true;
+            app->endtime = app->starttime + 30s;
+        }
+        if (opts_map.count(two_min_option)) {
+            opts.test_set_config.randomize = true;
+            opts.test_set_config.cycle_through = true;
+            app->shmem->use_strict_runtime = true;
+            app->endtime = app->starttime + 2min;
+        }
+        if (opts_map.count(five_min_option)) {
+            opts.test_set_config.randomize = true;
+            opts.test_set_config.cycle_through = true;
+            app->shmem->use_strict_runtime = true;
+            app->endtime = app->starttime + 5min;
+        }
+
+        // boolean flags
+        opts.fatal_errors = opts_map.count('F');
+
+        opts.test_set_config.ignore_unknown_tests = opts_map.count(ignore_unknown_tests_option);
+        opts.test_set_config.randomize = opts_map.count(test_list_randomize_option);
+
+        app->force_test_time = opts_map.count(force_test_time_option);
+        app->fatal_skips = opts_map.count(fatal_skips_option);
+        app->ignore_mce_errors = opts_map.count(ignore_mce_errors_option);
+        app->ignore_os_errors = opts_map.count(ignore_os_errors_option);
+        app->vary_frequency_mode = opts_map.count(vary_frequency);
+        app->vary_uncore_frequency_mode = opts_map.count(vary_uncore_frequency);
+
+        app->shmem->use_strict_runtime = opts_map.count(strict_runtime_option);
+        app->shmem->ud_on_failure = opts_map.count(ud_on_failure_option);
+
+        // assign 1:1
+        if (opts_map.count('s')) {
+            opts.seed = std::get<const char*>(opts_map.at('s'));
+        }
+#ifndef NDEBUG
+        if (opts_map.count(gdb_server_option)) {
+            app->gdb_server_comm = std::get<const char*>(opts_map.at(gdb_server_option));
+        }
+#endif
+        if (opts_map.count(on_crash_option)) {
+            opts.on_crash_arg = std::get<const char*>(opts_map.at(on_crash_option));
+        }
+        if (opts_map.count(on_hang_option)) {
+            opts.on_hang_arg = std::get<const char*>(opts_map.at(on_hang_option));
+        }
+        if (opts_map.count(test_list_file_option)) {
+            opts.test_list_file_path = std::get<const char*>(opts_map.at(test_list_file_option));
+        }
+        if (opts_map.count('o')) {
+            app->file_log_path = std::get<const char*>(opts_map.at('o'));
+        }
+        if (opts_map.count(syslog_runtime_option)) {
+            app->syslog_ident = std::get<const char*>(opts_map.at(syslog_runtime_option));
+        }
+        if (opts_map.count(use_builtin_test_list_option)) {
+            opts.builtin_test_list_name = std::get<const char*>(opts_map.at(use_builtin_test_list_option));
+        }
+
+        // the rest
+        if (opts_map.count('f')) {
+            auto value = std::get<const char*>(opts_map.at('f'));
+            if (strcmp(value, "no") == 0 || strcmp(value, "no-fork") == 0) {
+                app->fork_mode = SandstoneApplication::no_fork;
+            } else if (!strcmp(value, "exec")) {
+                app->fork_mode = SandstoneApplication::exec_each_test;
+#ifndef _WIN32
+            } else if (strcmp(value, "yes") == 0 || strcmp(value, "each-test") == 0) {
+                app->fork_mode = SandstoneApplication::fork_each_test;
+#endif
+            } else {
+                fprintf(stderr, "unknown value to -f\n");
+                return EX_USAGE;
+            }
+        }
+        if (opts_map.count(service_option)) {
+            // keep in sync with RestrictedCommandLine below
+            opts.fatal_errors = true;
+            app->endtime = MonotonicTimePoint::max();
+            app->service_background_scan = true;
+        }
+        if (opts_map.count('n')) {
+            opts.thread_count = ParseIntArgument<>{
+                    .name = "-n / --threads",
+                    .min = 1,
+                    .max = app->thread_count,
+                    .range_mode = OutOfRangeMode::Saturate
+            }(std::get<const char*>(opts_map.at('n')));
+        }
+        if (opts_map.count(reschedule_option)) {
+            if (opts.thread_count < 2) {
+                fprintf(stderr, "%s: --reschedule is only useful with at least 2 threads\n", argv[0]);
+                return EX_USAGE;
+            }
+
+            auto value = std::get<const char*>(opts_map.at(reschedule_option));
+            if (strcmp(value, "none") == 0 ) {
+                // Default option, so do nothing
+            } else if (strcmp(value, "queue") == 0) {
+                app->device_schedule = std::make_unique<QueueDeviceSchedule>();
+            } else if (strcmp(value, "random") == 0) {
+                app->device_schedule = std::make_unique<RandomDeviceSchedule>();
+            } else {
+                fprintf(stderr, "%s: unknown reschedule option: %s. Available options: queue, random and none(default)\n", argv[0], value);
+                return EX_USAGE;
+            }
+        }
+        if (opts_map.count('O')) {
+            app->shmem->log_test_knobs = true;
+            for (auto knob : std::get<std::vector<const char*>>(opts_map.at('O'))) {
+                if (!set_knob_from_key_value_string(knob)) {
+                    fprintf(stderr, "Malformed test knob: %s (should be in the form KNOB=VALUE)\n", optarg);
+                    return EX_USAGE;
+                }
+            }
+        }
+        if (opts_map.count('Y')) {
+            app->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
+            auto value = std::get<const char*>(opts_map.at('Y'));
+            if (value) {
+                app->shmem->output_yaml_indent = ParseIntArgument<>{
+                        .name = "-Y / --yaml",
+                        .max = 160,     // arbitrary
+                }(value);
+            }
+        }
+        if (opts_map.count(max_cores_per_slice_option)) {
+            opts.max_cores_per_slice = ParseIntArgument<>{
+                .name = "--max-cores-per-slice",
+                .min = -1,
+            }(std::get<const char*>(opts_map.at(max_cores_per_slice_option)));
+        }
+        if (opts_map.count(no_slicing_option)) {
+            opts.max_cores_per_slice = -1;
+        }
+        if (opts_map.count(mce_check_period_option)) {
+            app->mce_check_period = ParseIntArgument<>{"--mce-check-every"}(std::get<const char*>(opts_map.at(mce_check_period_option)));
+        }
+        if (opts_map.count(output_format_option)) {
+            auto value = std::get<const char*>(opts_map.at(output_format_option));
+            if (strcmp(value, "key-value") == 0) {
+                app->shmem->output_format = SandstoneApplication::OutputFormat::key_value;
+            } else if (strcmp(value, "tap") == 0) {
+                app->shmem->output_format = SandstoneApplication::OutputFormat::tap;
+            } else if (strcmp(value, "yaml") == 0) {
+                app->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
+            } else if (SandstoneConfig::Debug && strcmp(value, "none") == 0) {
+                // for testing only
+                app->shmem->output_format = SandstoneApplication::OutputFormat::no_output;
+                app->shmem->verbosity = -1;
+            } else {
+                fprintf(stderr, "%s: unknown output format: %s\n", argv[0], value);
+                return EX_USAGE;
+            }
+        }
+        if (opts_map.count(quick_run_option)) {
+            app->max_test_loop_count = 1;
+            app->delay_between_tests = 0ms;
+        }
+        if (opts_map.count(retest_on_failure_option)) {
+            app->retest_count = ParseIntArgument<>{
+                    .name = "--retest-on-failure",
+                    .max = SandstoneApplication::MaxRetestCount,
+                    .range_mode = OutOfRangeMode::Saturate
+            }(std::get<const char*>(opts_map.at(retest_on_failure_option)));
+        }
+        if (opts_map.count(temperature_threshold_option)) {
+            auto value = std::get<const char*>(opts_map.at(temperature_threshold_option));
+            if (strcmp(value, "disable") == 0) {
+                app->thermal_throttle_temp = -1;
+            } else {
+                app->thermal_throttle_temp = ParseIntArgument<>{
+                        .name = "--temperature-threshold",
+                        .explanation = "value should be specified in thousandths of degrees Celsius "
+                                        "(for example, 85000 is 85 degrees Celsius), or \"disable\" "
+                                        "to disable monitoring",
+                        .max = 160000,      // 160 C is WAAAY too high anyway
+                        .range_mode = OutOfRangeMode::Saturate
+                }(value);
+            }
+        }
+        if (opts_map.count(test_tests_option)) {
+            app->enable_test_tests();
+            if (app->test_tests_enabled()) {
+                // disable other options that don't make sense in this mode
+                app->retest_count = 0;
+            }
+        }
+        if (opts_map.count(total_retest_on_failure)) {
+            app->total_retest_count = ParseIntArgument<>{
+                    .name = "--total-retest-on-failure",
+                    .min = -1
+            }(std::get<const char*>(opts_map.at(total_retest_on_failure)));
+        }
+        if (opts_map.count(max_logdata_option)) {
+            app->shmem->max_logdata_per_thread = ParseIntArgument<unsigned>{
+                    .name = "--max-logdata",
+                    .explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))",
+                    .base = 0,      // accept hex
+                    .range_mode = OutOfRangeMode::Saturate
+            }(std::get<const char*>(opts_map.at(max_logdata_option)));
+            if (app->shmem->max_logdata_per_thread == 0)
+                app->shmem->max_logdata_per_thread = UINT_MAX;
+        }
+        if (opts_map.count(max_messages_option)) {
+            app->shmem->max_messages_per_thread = ParseIntArgument<>{
+                    .name = "--max-messages",
+                    .explanation = "maximum number of messages (per thread) to log in each test (0 is unlimited)",
+                    .min = -1,
+                    .range_mode = OutOfRangeMode::Saturate
+            }(std::get<const char*>(opts_map.at(max_messages_option)));
+            if (app->shmem->max_messages_per_thread <= 0)
+                app->shmem->max_messages_per_thread = INT_MAX;
+        }
+        if (opts_map.count(max_test_count_option)) {
+            app->max_test_count = ParseIntArgument<>{"--max-test-count"}(std::get<const char*>(opts_map.at(max_test_count_option)));
+        }
+        if (opts_map.count(max_test_loop_count_option)) {
+            app->max_test_loop_count = ParseIntArgument<>{"--max-test-loop-count"}(std::get<const char*>(opts_map.at(max_test_loop_count_option)));
+            if (app->max_test_loop_count == 0)
+                app->max_test_loop_count = std::numeric_limits<int>::max();
+        }
+        if (opts_map.count(inject_idle_option)) {
+            app->inject_idle = ParseIntArgument<>{
+                .name = "--inject-idle",
+                .min = 0,
+                .max = 50,
+                .range_mode = OutOfRangeMode::Saturate
+            }(std::get<const char*>(opts_map.at(inject_idle_option)));
+        }
+
+        return EXIT_SUCCESS;
+    }
+
+    // here we play it simple
+    int parse_restricted_command_line(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts) {
         // Default options for the simplified OpenDCDiag cmdline
         static struct option restricted_long_options[] = {
             { "help", no_argument, nullptr, 'h' },
@@ -829,6 +1140,8 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
             { "version", no_argument, nullptr, version_option },
             { nullptr, 0, nullptr, 0 }
         };
+
+        int opt;
 
         while ((opt = simple_getopt(argc, argv, restricted_long_options)) != -1) {
             switch (opt) {
@@ -863,17 +1176,26 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
 
         app->delay_between_tests = 50ms;
         app->thermal_throttle_temp = INT_MIN;
-        opts.fatal_errors = true;
-        opts.builtin_test_list_name = "auto";
 
         static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,
                 "Restricted command-line build must have a built-in test list");
+        return EXIT_SUCCESS;
     }
+};
+} /* anonymous namespace */
 
-    if (optind < argc) {
-        usage(argv);
-        return EX_USAGE;
+int ProgramOptions::parse(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts) {
+    ProgramOptionsParser parser;
+    if constexpr (SandstoneConfig::RestrictedCommandLine) {
+        return parser.parse_restricted_command_line(argc, argv, app, opts);
     }
-
-    return EXIT_SUCCESS;
+    auto ret = parser.collect_args(argc, argv);
+    if (ret != EXIT_SUCCESS) {
+        return ret;
+    }
+    ret = parser.validate_args();
+    if (ret != EXIT_SUCCESS) {
+        return ret;
+    }
+    return parser.parse_args(app, opts, argv);
 }
