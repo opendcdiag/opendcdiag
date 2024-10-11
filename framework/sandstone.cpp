@@ -2286,7 +2286,7 @@ static auto collate_test_groups()
     return groups;
 }
 
-static void list_tests(const ParsedCmdLineOpts& opts)
+static void list_tests(const ProgramOptions& opts)
 {
     auto groups = collate_test_groups();
     int i = 0;
@@ -2802,14 +2802,13 @@ int main(int argc, char **argv)
         init_topology(std::move(enabled_cpus));
     }
 
-    ParsedCmdLineOpts opts;
-    auto ret = parse_cmdline(argc, argv, sApp, opts);
-    if (ret != EXIT_SUCCESS) {
+    ProgramOptions opts;
+    if (int ret = parse_cmdline(argc, argv, sApp, opts); ret != EXIT_SUCCESS) {
         return ret;
     }
 
-    if (opts.cpuset) {
-        apply_cpuset_param(opts.cpuset);
+    if (!opts.cpuset.empty()) {
+        apply_cpuset_param(&opts.cpuset[0]);
     }
 
     switch (opts.action) {
@@ -2822,7 +2821,7 @@ int main(int argc, char **argv)
         return EXIT_SUCCESS;
     case Action::list_group:
         test_set = new SandstoneTestSet(opts.test_set_config, SandstoneTestSet::enable_all_tests);
-        list_group_members(opts.list_group_name);
+        list_group_members(opts.list_group_name.c_str());
         return EXIT_SUCCESS;
     case Action::version:
         logging_print_version();
@@ -2848,9 +2847,9 @@ int main(int argc, char **argv)
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
-    if (unsigned(opts.thread_count()) < unsigned(sApp->thread_count))
-        restrict_topology({ 0, opts.thread_count() });
-    slice_plan_init(opts.max_cores_per_slice());
+    if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
+        restrict_topology({ 0, opts.thread_count });
+    slice_plan_init(opts.max_cores_per_slice);
     commit_shmem();
 
     signals_init_global();
