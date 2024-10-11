@@ -5,3 +5,4 @@
 /build*/
 # ctags
 tags
+/.vscode/

@@ -28,3 +28,9 @@ option('ssl_link_type', type: 'combo', choices : ['none', 'dynamic', 'loaded', '
     description : 'Link with openssl library if available (default none).')
 option('device_type', type: 'string', value: 'cpu',
     description : 'Device type to run tests on (default cpu).')
+option('fuzzing', type : 'boolean', value : false,
+    description : 'Build in fuzzing (default false)')
+option('afl_inc', type : 'string', value : '',
+    description : '(Optional) Directory with AFL header files (absolute path).')
+option('coverage', type : 'boolean', value : false,
+    description : 'Enable code coverage (default false)')
