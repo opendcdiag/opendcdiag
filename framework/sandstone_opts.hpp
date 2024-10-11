@@ -26,9 +26,9 @@ struct ParsedCmdLineOpts {
     bool fatal_errors = false;
     const char* on_hang_arg = nullptr;
     const char* on_crash_arg = nullptr;
-    char* cpuset = nullptr;
+    std::string cpuset;
 
-    const char* list_group_name = nullptr; // for list_group
+    std::string list_group_name; // for list_group
     bool list_tests_include_descriptions = false; // for list_tests
     bool list_tests_include_tests = false; // for list_tests
     bool list_tests_include_groups = false; // for list_tests

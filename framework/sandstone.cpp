@@ -2791,13 +2791,18 @@ int main(int argc, char **argv)
     }
 
     ParsedCmdLineOpts opts;
-    auto ret = parse_cmdline(argc, argv, sApp, opts);
-    if (ret != EXIT_SUCCESS) {
-        return ret;
+    try {
+        auto ret = parse_cmdline(argc, argv, sApp, opts);
+        if (ret != EXIT_SUCCESS) {
+            return ret;
+        }
+    } catch (std::invalid_argument& e) {
+        fprintf(stderr, "Error while parsing opts: %s\n", e.what());
+        return EX_USAGE;
     }
 
-    if (opts.cpuset) {
-        apply_cpuset_param(opts.cpuset);
+    if (!opts.cpuset.empty()) {
+        apply_cpuset_param(&opts.cpuset[0]);
     }
 
     switch (opts.action) {
@@ -2810,7 +2815,7 @@ int main(int argc, char **argv)
         return EXIT_SUCCESS;
     case Action::list_group:
         test_set = new SandstoneTestSet(opts.test_set_config, SandstoneTestSet::enable_all_tests);
-        list_group_members(opts.list_group_name);
+        list_group_members(opts.list_group_name.c_str());
         return EXIT_SUCCESS;
     case Action::version:
         logging_print_version();
