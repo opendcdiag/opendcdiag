@@ -17,29 +17,18 @@ enum class Action {
     run,
 };
 
-struct ParsedCmdLineOpts {
+struct ProgramOptions {
     Action action = Action::run; // action to be taken after cmdline parsing is done, default: run tests
 
     const char* seed = nullptr;
-    int max_cores_per_slice_ = 0;
-    int max_cores_per_slice() const {
-        // in RestrictedCommandLine mode, allow compiler to optimize the variable to a static value
-        if constexpr (SandstoneConfig::RestrictedCommandLine)
-            return 0;
-        return max_cores_per_slice_;
-    }
-    int thread_count_ = -1;
-    int thread_count() const {
-        if constexpr (SandstoneConfig::RestrictedCommandLine)
-            return -1;
-        return thread_count_;
-    }
+    int max_cores_per_slice = 0;
+    int thread_count = -1;
     bool fatal_errors = false;
     const char* on_hang_arg = nullptr;
     const char* on_crash_arg = nullptr;
-    char* cpuset = nullptr;
+    std::string cpuset; // not sure about those strings...
 
-    const char* list_group_name = nullptr; // for list_group
+    std::string list_group_name; // for list_group
     bool list_tests_include_descriptions = false; // for list_tests
     bool list_tests_include_tests = false; // for list_tests
     bool list_tests_include_groups = false; // for list_tests
@@ -55,8 +44,27 @@ struct ParsedCmdLineOpts {
         .cycle_through = false,
     };
     const char *builtin_test_list_name = nullptr;
+
+    int parse(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts);
+
+    // for RestrictedCommandLine put it here to enable code elimination
+    void apply_restrictions() {
+        seed = nullptr;
+        max_cores_per_slice = 0;
+        thread_count = -1;
+        fatal_errors = true;
+        on_hang_arg = nullptr;
+        on_crash_arg = nullptr;
+        builtin_test_list_name = "auto";
+    }
 };
 
-int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLineOpts& opts);
+inline int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts) {
+    auto ret = opts.parse(argc, argv, app, opts);
+    if constexpr (SandstoneConfig::RestrictedCommandLine) {
+        opts.apply_restrictions(); // enable code elimination
+    }
+    return ret;
+}
 
 #endif /* INC_SANDSTONE_OPTS_H */
