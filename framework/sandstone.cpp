@@ -2339,19 +2339,20 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures
     sApp->current_test_duration = test_duration(test_cfg);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
 
-    if (sApp->max_test_loop_count) {
-        sApp->shmem->current_max_loop_count = sApp->max_test_loop_count;
+    if (test->fracture_loop_count) {
+        // handled first, not overridable by --max-test-loop-count
+        sApp->shmem->current_max_loop_count = test->fracture_loop_count;
     } else if (test->desired_duration == -1) {
         sApp->shmem->current_max_loop_count = -1;
     } else if (sApp->test_tests_enabled()) {
         // don't fracture in the test-the-test mode
         sApp->shmem->current_max_loop_count = -1;
-    } else if (test->fracture_loop_count == 0) {
+    } else if (sApp->max_test_loop_count) {
+        sApp->shmem->current_max_loop_count = sApp->max_test_loop_count;
+    } else {
         /* for automatic fracture mode, do a 40 loop count */
         sApp->shmem->current_max_loop_count = 40;
         auto_fracture = true;
-    } else {
-        sApp->shmem->current_max_loop_count = test->fracture_loop_count;
     }
 
     assert(sApp->retest_count >= 0);
