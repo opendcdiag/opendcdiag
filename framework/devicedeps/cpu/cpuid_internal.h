@@ -14,7 +14,9 @@
 #include <stdlib.h>
 #include <sysexits.h>
 #include <unistd.h>
-#include "cpu_features.h"
+#ifdef SANDSTONE_DEVICE_CPU
+#include "devicedeps/cpu/cpu_features.h"
+#endif
 #include "sandstone_p.h"
 
 #ifdef __x86_64__

@@ -80,10 +80,30 @@ struct linux_cpu_info
 
 struct cpu_info *cpu_info = nullptr;
 
-static Topology &cached_topology()
+static CpuTopology &cached_topology()
 {
-    static Topology cached_topology = Topology({});
+    static CpuTopology cached_topology = CpuTopology({});
     return cached_topology;
+}
+
+LogicalProcessorSet init_cpus()
+{
+    LogicalProcessorSet result = ambient_logical_processor_set();
+    sApp->thread_count = result.count();
+    sApp->user_thread_data.resize(sApp->thread_count);
+#ifdef M_ARENA_MAX
+    mallopt(M_ARENA_MAX, sApp->thread_count * 2);
+#endif
+    return result;
+}
+
+int num_cpus()
+{
+    return sApp->thread_count;
+}
+
+int num_packages() {
+    return CpuTopology::topology().packages.size();
 }
 
 #ifdef __linux__
@@ -978,29 +998,29 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     pthread_join(detection_thread, nullptr);
 }
 
-static Topology build_topology()
+static CpuTopology build_topology()
 {
     struct cpu_info *info = cpu_info;
     const struct cpu_info *const end = cpu_info + num_cpus();
 
-    std::vector<Topology::Package> packages;
+    std::vector<CpuTopology::Package> packages;
     if (int max_package_id = end[-1].package_id; max_package_id >= 0)
         packages.reserve(max_package_id + 1);
     else
-        return Topology({});
+        return CpuTopology({});
 
     while (info != end) {
         if (info->package_id < 0 || info->core_id < 0 || info->thread_id < 0)
-            return Topology({});
+            return CpuTopology({});
 
-        Topology::Package *pkg = &packages.emplace_back();
+        CpuTopology::Package *pkg = &packages.emplace_back();
 
         // scan forward to the end of this package
-        Topology::Thread *first = info;
+        CpuTopology::Thread *first = info;
         int core_count = 0;
         for (int last_core_id = -1; info != end; ++info) {
             if (info->core_id < 0 || info->thread_id < 0)
-                return Topology({});
+                return CpuTopology({});
             if (info->package_id != first->package_id)
                 break;
             if (info->core_id != last_core_id) {
@@ -1012,7 +1032,7 @@ static Topology build_topology()
         pkg->cores.reserve(core_count + 1);
 
         // fill in the threads
-        for (Topology::Thread *last = first; last != info; ++last) {
+        for (CpuTopology::Thread *last = first; last != info; ++last) {
             if (last->core_id == first->core_id)
                 continue;
             pkg->cores.push_back({ { first, last } });
@@ -1021,15 +1041,15 @@ static Topology build_topology()
         pkg->cores.push_back({ { first, info } });
     }
 
-    return Topology(std::move(packages));
+    return CpuTopology(std::move(packages));
 }
 
-const Topology &Topology::topology()
+const CpuTopology &CpuTopology::topology()
 {
     return cached_topology();
 }
 
-Topology::Data Topology::clone() const
+CpuTopology::Data CpuTopology::clone() const
 {
     Data result;
     result.all_threads.assign(cpu_info, cpu_info + num_cpus());
@@ -1048,7 +1068,7 @@ Topology::Data Topology::clone() const
 }
 
 void update_topology(std::span<const struct cpu_info> new_cpu_info,
-                     std::span<const Topology::Package> packages)
+                     std::span<const CpuTopology::Package> packages)
 {
     struct cpu_info *end;
     if (packages.empty()) {
@@ -1057,7 +1077,7 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
     } else {
         // copy only if matching the socket ID
         auto matching = [=](const struct cpu_info &ci) {
-            for (const Topology::Package &p : packages) {
+            for (const CpuTopology::Package &p : packages) {
                 if (p.id() == ci.package_id)
                     return true;
             }
@@ -1081,13 +1101,13 @@ void init_topology(const LogicalProcessorSet &enabled_cpus)
     cached_topology() = build_topology();
 }
 
-void restrict_topology(CpuRange range)
+void restrict_topology(DeviceRange range)
 {
-    assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
-    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_cpu);
-    int old_thread_count = std::exchange(sApp->thread_count, range.cpu_count);
+    assert(range.starting_device + range.device_count <= sApp->thread_count);
+    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_device);
+    int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
 
-    Topology &topo = cached_topology();
+    CpuTopology &topo = cached_topology();
     if (old_cpu_info != cpu_info || old_thread_count != sApp->thread_count ||
             topo.packages.size() == 0)
         topo = build_topology();
@@ -1099,7 +1119,7 @@ static char character_for_mask(uint32_t mask)
     return mask < 0xa ? '0' + mask : 'a' + mask - 0xa;
 }
 
-std::string Topology::build_falure_mask(const struct test *test) const
+std::string CpuTopology::build_falure_mask(const struct test *test) const
 {
     std::string result;
     if (!isValid())
