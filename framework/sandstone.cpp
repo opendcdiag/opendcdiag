@@ -388,6 +388,13 @@ static void __attribute__((noreturn)) report_fail_common()
     /* does call the cleanup handalers */
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, nullptr);
+
+    // <<main>> thread is requested to report failure. We need to exit()
+    // whole process, and all running threads will be unconditionally killed
+    if (getpid() == gettid()) {
+        _exit(EXIT_FAILURE);
+    }
+
     pthread_cancel(pthread_self());
 #endif
     __builtin_unreachable();
