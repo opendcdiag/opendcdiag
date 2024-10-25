@@ -5,8 +5,10 @@
 
 #ifndef INC_TOPOLOGY_H
 #define INC_TOPOLOGY_H
+#ifdef SANDSTONE_DEVICE_CPU
 
-#include <sandstone.h>
+#include "sandstone.h"
+#include "devicedeps/cpu/devices.h"
 
 #include <array>
 #include <bit>
@@ -21,7 +23,7 @@
 
 class LogicalProcessorSet;
 
-class Topology
+class CpuTopology
 {
 public:
     using Thread = struct cpu_info;
@@ -37,7 +39,7 @@ public:
 
     std::vector<Package> packages;
 
-    Topology(std::vector<Package> pkgs)
+    CpuTopology(std::vector<Package> pkgs)
     {
         packages = std::move(pkgs);
     }
@@ -45,11 +47,11 @@ public:
     bool isValid() const        { return !packages.empty(); }
     std::string build_falure_mask(const struct test *test) const;
 
-    static const Topology &topology();
+    static const CpuTopology &topology();
     struct Data;
     Data clone() const;
 };
-struct Topology::Data
+struct CpuTopology::Data
 {
     // this type is move-only (not copyable)
     Data() = default;
@@ -59,17 +61,10 @@ struct Topology::Data
     Data &operator=(Data &&) = default;
 
     std::vector<Package> packages;
-    std::vector<Topology::Thread> all_threads;
+    std::vector<CpuTopology::Thread> all_threads;
 };
 
 enum class LogicalProcessor : int {};
-
-struct CpuRange
-{
-    // a contiguous range
-    int starting_cpu;
-    int cpu_count;
-};
 
 struct LogicalProcessorSetOps
 {
@@ -184,13 +179,15 @@ private:
 };
 
 LogicalProcessorSet ambient_logical_processor_set();
+LogicalProcessorSet init_cpus();
 bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullptr);
-bool pin_to_logical_processors(CpuRange, const char *thread_name);
+bool pin_to_logical_processors(DeviceRange, const char *thread_name);
 
 void apply_cpuset_param(char *param);
 void init_topology(const LogicalProcessorSet &enabled_cpus);
 void update_topology(std::span<const struct cpu_info> new_cpu_info,
-                     std::span<const Topology::Package> sockets = {});
-void restrict_topology(CpuRange range);
+                     std::span<const CpuTopology::Package> sockets = {});
+void restrict_topology(DeviceRange range);
 
+#endif
 #endif /* INC_TOPOLOGY_H */

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <topology.h>
+#include <devicedeps/cpu/topology.h>
 
 #include <limits>
 
@@ -69,11 +69,11 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     return true;
 }
 
-bool pin_to_logical_processors(CpuRange range, const char *thread_name)
+bool pin_to_logical_processors(DeviceRange range, const char *thread_name)
 {
     set_thread_name(thread_name);
-    const struct cpu_info *first_cpu = &cpu_info[range.starting_cpu];
-    const struct cpu_info *last_cpu = &cpu_info[range.starting_cpu + range.cpu_count - 1];
+    const struct cpu_info *first_cpu = &cpu_info[range.starting_device];
+    const struct cpu_info *last_cpu = &cpu_info[range.starting_device + range.device_count - 1];
     PROCESSOR_NUMBER first = to_processor_number(LogicalProcessor(first_cpu->cpu_number));
     PROCESSOR_NUMBER last = to_processor_number(LogicalProcessor(last_cpu->cpu_number));
     if (first.Group != last.Group) {

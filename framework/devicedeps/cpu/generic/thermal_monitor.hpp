@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <vector>
+
 #ifndef SANDSTONE_GENERIC_THERMAL_MONITOR_HPP
 #define SANDSTONE_GENERIC_THERMAL_MONITOR_HPP
 
