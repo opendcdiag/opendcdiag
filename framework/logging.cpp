@@ -193,6 +193,7 @@ private:
     static void print_tests_header(TestHeaderTime mode);
 };
 
+#ifdef SANDSTONE_DEVICE_CPU
 class KeyValuePairLogger : public AbstractLogger
 {
 public:
@@ -212,7 +213,7 @@ private:
     void print_thread_messages();
     void print_child_stderr();
 };
-
+#endif
 } // unnamed namespace
 
 static SandstoneApplication::OutputFormat current_output_format()
@@ -258,6 +259,7 @@ static int level_from_code(uint8_t code)
 
 static auto thread_core_spacing()
 {
+#ifdef SANDSTONE_DEVICE_CPU
     // calculate the spacing so things align
     // Note: this assumes the topology won't change after the first time this
     // function is called.
@@ -284,6 +286,9 @@ static auto thread_core_spacing()
         return result;
     }();
     return spacing;
+#else
+    return 4; /// Default spacing
+#endif
 }
 
 enum class Iso8601Format : unsigned {
@@ -1314,11 +1319,13 @@ static void logging_format_data(DataType type, std::string_view description, con
 
     auto formatAddresses = [&spaces](const uint8_t *ptr) {
         std::string result = stdprintf("%saddress:     '%p'\n", spaces.c_str(), ptr);
+#ifdef SANDSTONE_DEVICE_CPU
         if (uint64_t physaddr = retrieve_physical_address(ptr)) {
             // 2^48-1 requires 12 hex digits
             result += stdprintf("%sphysical:    '%#012" PRIx64 "'\n",
                                  spaces.c_str(), physaddr);
         }
+#endif
         return result;
     };
 
@@ -1783,15 +1790,19 @@ void KeyValuePairLogger::print(int tc)
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_quality = %s\n", test->id, quality_string(test));
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_description = %s\n", test->id, test->description);
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_pass_count = %d\n", test->id, pc);
+#ifdef SANDSTONE_DEVICVE_CPU
     logging_printf(LOG_LEVEL_VERBOSE(2), "%s_virtualized = %s\n", test->id,
                    cpu_has_feature(cpu_feature_hypervisor) ? "yes" : "no");
+#endif
     if (should_print_fail_info()) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_percent = %.1f\n", test->id,
-                       100. * (num_cpus() - pc) / num_cpus());
+                       100. * (num_devices() - pc) / num_devices());
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_random_generator_state = %s\n", test->id,
                        random_format_seed().c_str());
+#ifdef SANDSTONE_DEVICVE_CPU
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_mask = %s\n", test->id,
                        CpuTopology::topology().build_falure_mask(test).c_str());
+#endif
         if (std::string time = format_duration(earliest_fail); time.size())
             logging_printf(LOG_LEVEL_VERBOSE(1), "%s_earliest_fail_time = %s\n", test->id, time.c_str());
     }
@@ -1803,6 +1814,7 @@ void KeyValuePairLogger::print(int tc)
 
 void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix)
 {
+#ifdef SANDSTONE_DEVICE_CPU
     if (cpu < 0) {
         cpu = ~cpu;
         if (cpu == 0)
@@ -1836,6 +1848,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
     if (info->ppin)
         dprintf(fd, " 0x%" PRIx64, info->ppin);
     dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
+#endif
 }
 
 void KeyValuePairLogger::print_thread_messages()
@@ -1969,12 +1982,14 @@ std::string TapFormatLogger::fail_info_details()
 
     std::string seed = random_format_seed();
     std::string time = format_duration(earliest_fail, FormatDurationOptions::WithoutUnit);
+#ifdef SANDSTONE_DEVICE_CPU
     std::string fail_mask = CpuTopology::topology().build_falure_mask(test);
 
     result.reserve(strlen("  fail: { cpu-mask: '', time-to-fail: , seed: '' }\n") +
                    seed.size() + time.size() + fail_mask.size());
     result += "  fail: { cpu-mask: ";
     add_value(fail_mask, '\'');
+#endif
     result += ", time-to-fail: ";
     add_value(time, '\0');
     result += ", seed: ";
@@ -2048,17 +2063,20 @@ void TapFormatLogger::maybe_print_yaml_marker(int fd)
 
     std::string_view nothing;
     terminator = yamlseparator;
+#ifdef SANDSTONE_DEVICE_CPU
     writeln(fd, yamlseparator,
             "\n  info: {version: ", program_version,
             ", timestamp: ", iso8601_time_now(Iso8601Format::WithoutMs),
             cpu_has_feature(cpu_feature_hypervisor) ? ", virtualized: true" : nothing,
             "}");
+#endif
     if (std::string fail_info = fail_info_details(); !fail_info.empty())
         IGNORE_RETVAL(write(fd, fail_info.c_str(), fail_info.size()));
 }
 
 void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
 {
+#ifdef SANDSTONE_DEVICE_CPU
     maybe_print_yaml_marker(fd);
     if (cpu < 0) {
         cpu = ~cpu;
@@ -2095,6 +2113,7 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
         else if (verbosity > 2)
             writeln(fd, "  - loop-count: ", std::to_string(thr->inner_loop_count));
     }
+#endif
 }
 
 void TapFormatLogger::print_thread_messages()
@@ -2138,8 +2157,9 @@ void YamlLogger::maybe_print_messages_header(int fd)
 
 std::string YamlLogger::thread_id_header(int cpu, int verbosity)
 {
+    std::string line = "";
+#ifdef SANDSTONE_DEVICE_CPU
     struct cpu_info *info = cpu_info + cpu;
-    std::string line;
 #ifdef _WIN32
     line = stdprintf("{ logical-group: %2u, logical: %2u, ",
                      // see win32/cpu_affinity.cpp
@@ -2163,6 +2183,7 @@ std::string YamlLogger::thread_id_header(int cpu, int verbosity)
         add_value_or_null("\"%016" PRIx64 "\"", info->ppin);    // string to prevent loss of precision
     }
     line += " }";
+#endif
     return line;
 }
 
@@ -2192,9 +2213,11 @@ void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
                 writeln(fd, indent_spaces(), "    loop-count: ",
                         std::to_string(thr->inner_loop_count));
             }
+#ifdef SANDSTONE_DEVICE_CPU
             const double effective_freq_mhz = thr->effective_freq_mhz;
             if (std::isfinite(effective_freq_mhz))
                 dprintf(fd, "%s    freq_mhz: %.1f\n", indent_spaces().data(), effective_freq_mhz);
+#endif
         }
     }
     writeln(fd, indent_spaces(), "    messages:");
@@ -2461,16 +2484,16 @@ void YamlLogger::print()
     logging_printf(LOG_LEVEL_VERBOSE(1), "  time-at-end:   %s\n", get_current_time().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  test-runtime: %s\n",
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str());
-
+#ifdef SANDSTONE_DEVICE_CPU
     double freqs = 0.0;
     for_each_test_thread([&freqs](const PerThreadData::Test *data, int) {
         freqs += data->effective_freq_mhz;
     });
 
-    const double freq_avg = freqs / num_cpus();
+    const double freq_avg = freqs / num_devices();
     if (std::isfinite(freq_avg) && freq_avg != 0.0)
         logging_printf(LOG_LEVEL_VERBOSE(1), "  avg-freq-mhz: %.1f\n", freq_avg);
-
+#endif
     if (sApp->shmem->log_test_knobs) {
         struct mmap_region main_mmap = maybe_mmap_log(sApp->main_thread_data());
         if (main_mmap.size) {
@@ -2520,13 +2543,13 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
 
     // print the CPU information
     int spacing = 1;
-    if (num_cpus() > 9) {
+    if (num_devices() > 9) {
         ++spacing;
-        if (num_cpus() > 99)
+        if (num_devices() > 99)
             ++spacing;
     }
     logging_printf(LOG_LEVEL_VERBOSE(1), "cpu-info:\n");
-    for (int i = 0; i < num_cpus(); ++i) {
+    for (int i = 0; i < num_devices(); ++i) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "  %-*d: %s\n", spacing, i,
                        thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str());
     }

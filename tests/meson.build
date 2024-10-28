@@ -15,6 +15,7 @@ tests_common_c_args = [
     default_c_warn,
     default_c_flags,
     march_flags,
+    device_flags,
 ]
 
 tests_common_cpp_args = [
@@ -22,6 +23,7 @@ tests_common_cpp_args = [
     default_cpp_warn,
     default_cpp_flags,
     march_flags,
+    device_flags,
 ]
 
 tests_common_incdirs = [

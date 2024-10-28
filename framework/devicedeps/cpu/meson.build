@@ -21,15 +21,9 @@ generated_cpu_features_h = configure_file(
 framework_files += [
     'devicedeps/cpu/cpu_device.cpp',
     'devicedeps/cpu/topology.cpp',
+    generated_cpu_features_h,
 ]
-device_flags = [
+
+device_flags += [
     '-DSANDSTONE_DEVICE_CPU',
-]
-
-default_c_flags += [
-    device_flags
-]
-
-default_cpp_flags += [
-    device_flags
 ]

@@ -35,14 +35,15 @@
 #include <sandstone_iovec.h>
 #include <sandstone_utils.h>
 
+#include "devicedeps/devices.h"
 #ifdef SANDSTONE_DEVICE_CPU
 #include "devicedeps/cpu/cpu_device.h"
 #include "devicedeps/cpu/topology.h"
-#endif
 #include "effective_cpu_freq.hpp"
 #include "interrupt_monitor.hpp"
 #include "thermal_monitor.hpp"
 #include "frequency_manager.hpp"
+#endif
 
 #ifdef _WIN32
 struct rusage
@@ -91,12 +92,6 @@ struct mmap_region
     size_t size;        /* actual size, not rounded up to page */
 };
 
-/*
- * Called from sandstone_main(). The default weak implementation performs no
- * checks, they just return. Feel free to implement a strong version elsewhere
- * if you prefer the framework to check for system or CPU criteria.
- */
-void cpu_specific_init(void);
 
 /* child_debug.cpp */
 void debug_init_child(void);
@@ -213,7 +208,7 @@ struct Common
 
 struct alignas(64) Main : Common
 {
-    DeviceRange cpu_range;
+    DeviceRange device_range;
 };
 
 struct alignas(64) Test : Common
@@ -222,14 +217,19 @@ struct alignas(64) Test : Common
     uint64_t inner_loop_count;
     uint64_t inner_loop_count_at_fail;
 
+    /// TODO: move to CPU-specific code
+#ifdef SANDSTONE_DEVICE_CPU
     /* Thread's effective CPU frequency during execution */
     double effective_freq_mhz;
+#endif
 
     void init()
     {
         Common::init();
         inner_loop_count = inner_loop_count_at_fail = 0;
+#ifdef SANDSTONE_DEVICE_CPU
         effective_freq_mhz = 0.0;
+#endif
     }
 };
 } // namespace PerThreadData
@@ -325,7 +325,11 @@ private:
     friend LoggingStream logging_user_messages_stream(int thread_num, int level);
 };
 
+#ifdef SANDSTONE_DEVICE_CPU
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
+#else
+struct SandstoneApplication : public test_the_test_data<SandstoneConfig::Debug>
+#endif
 {
     enum class OutputFormat : int8_t {
         no_output   = 0,
@@ -343,6 +347,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     };
 
     struct SlicePlans {
+        /// TODO: move to CPU specific code, if at all possible.
+        /// TODO: might need to move entire SlicePlans to CPU specific code.
         static constexpr int MinimumCpusPerSocket = 8;
         static constexpr int DefaultMaxCoresPerSlice = 32;
         static constexpr int SecondaryMaxCoresPerSlice = DefaultMaxCoresPerSlice * 3 / 4;
@@ -381,8 +387,12 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool ignore_os_errors = false;
     bool force_test_time = false;
     bool service_background_scan = false;
+#ifdef SANDSTONE_DEVICE_CPU
+    /// TODO: move to CPU specific code
     bool vary_frequency_mode = false;
     bool vary_uncore_frequency_mode = false;
+    FrequencyManager frequency_manager;
+#endif
     static constexpr int MaxRetestCount = sizeof(PerDeviceFailures::value_type) * 8;
     int retest_count = 10;
     int total_retest_count = -2;
@@ -400,7 +410,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
-    FrequencyManager frequency_manager;
 
 #ifndef __linux__
     std::string path_to_self;
@@ -418,11 +427,13 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     int thermal_throttle_temp = DefaultTemperatureThreshold;
     int threshold_time_remaining = 30000;
     int mce_check_period = 0;
+#ifdef SANDSTONE_DEVICE_CPU
+    /// TODO: move to CPU specific code
     uint64_t last_thermal_event_count;
     uint64_t mce_count_last;
     std::vector<uint32_t> mce_counts_start;
     std::vector<uint64_t> smi_counts_start;
-
+#endif
     int thread_count;
     ForkMode current_fork_mode() const
     {
@@ -437,6 +448,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool is_main_process();
     [[maybe_unused]] bool is_child_process() { return !is_main_process(); }
 
+    /// 'thread' refers to test thread
     PerThreadData::Common *thread_data(int thread);
     PerThreadData::Main *main_thread_data(int slice = 0) noexcept;
     PerThreadData::Test *test_thread_data(int thread);
@@ -486,10 +498,13 @@ struct SandstoneApplication::SharedMemory
     // general parameters
     pid_t main_process_pid = 0;
 
-    // per-thread & variable length
     int main_thread_count = 0;
+    /// TODO: shared per-device data?
+    // per-thread & variable length
+#ifdef SANDSTONE_DEVICE_CPU
     int total_cpu_count = 0;
     alignas(64) struct cpu_info cpu_info[];         // C99 Flexible Array Member
+#endif
 
 #if 0
     // in/out per-thread data allocated dynamically;
@@ -538,7 +553,7 @@ inline void SandstoneApplication::select_main_thread(int slice)
 {
     assert(current_fork_mode() != no_fork || slice == 0);
     main_thread_data_ptr += slice;
-    test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_device;
+    test_thread_data_ptr += main_thread_data_ptr->device_range.starting_device;
 }
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_slices = INT_MAX)
@@ -550,7 +565,7 @@ template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_
 
 template <typename Lambda> static void for_each_test_thread(Lambda &&l)
 {
-    for (int i = 0; i < num_cpus(); i++)
+    for (int i = 0; i < num_devices(); i++)
         l(sApp->test_thread_data(i), i);
 }
 

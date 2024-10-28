@@ -22,8 +22,6 @@
 #include "sandstone.h"
 #ifdef SANDSTONE_DEVICE_CPU
 #include "devicedeps/cpu/cpuid_internal.h"
-
-// from sandstone.cpp
 extern const uint64_t minimum_cpu_features;
 
 #if defined(AT_EXECPATH) && !defined(AT_EXECFN)

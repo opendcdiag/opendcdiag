@@ -10,11 +10,8 @@
 
 #include <stdint.h>
 
-#ifdef __x86_64__
-#ifdef SANDSTONE_DEVICE_CPU
+#if defined(__x86_64__) && defined(SANDSTONE_DEVICE_CPU)
 #  include "devicedeps/cpu/cpu_features.h"
-#endif
-
 #  include <algorithm>
 #  include <cpuid.h>
 
@@ -58,6 +55,6 @@ static int get_xsave_size()
 {
     return 0;
 }
-#endif // x86_64
+#endif // x86_64 && SANDSTONE_DEVICE_CPU
 
 #endif // SANDSTONE_CHILD_DEBUG_COMMON_H

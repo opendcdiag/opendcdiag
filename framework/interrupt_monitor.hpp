@@ -5,6 +5,9 @@
 
 #ifndef SANDSTONE_INTERRUPTS_MONITOR_HPP
 #define SANDSTONE_INTERRUPTS_MONITOR_HPP
+#ifdef SANDSTONE_DEVICE_CPU
+
+#include <devicedeps/cpu/cpu_device.h>
 #include <sandstone.h>
 #include <stdint.h>
 #include <numeric>      // for std::accummulate
@@ -61,4 +64,5 @@ inline std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptTyp
 }
 #endif
 
+#endif
 #endif

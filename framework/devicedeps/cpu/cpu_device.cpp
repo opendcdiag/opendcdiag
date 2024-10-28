@@ -4,14 +4,28 @@
  */
 
 #include "devicedeps/cpu/cpu_features.h"
-#include "devices.h"
-#include "cpu_device.h"
-#include "topology.h"
+#include "devicedeps/devices.h"
+#include "devicedeps/cpu/cpu_device.h"
+#include "devicedeps/cpu/topology.h"
+#ifdef SANDSTONE_DEVICE_CPU
 
 #include <stdio.h>
 #include <inttypes.h>
 
-uint64_t cpu_features = 0;
+uint64_t cpu_features;
+
+/// CPU devices are directly initialized in the framework's main() function.
+/// Once CPU initialization is untied from shmem initialization, this function
+/// will be called from the framework's main() function.
+__attribute__((unused)) void device_init() {
+    return;
+}
+
+#ifdef __llvm__
+thread_local int thread_num __attribute__((tls_model("initial-exec")));
+#else
+thread_local int thread_num = 0;
+#endif
 
 std::string cpu_features_to_string(uint64_t f)
 {
@@ -55,3 +69,4 @@ void dump_cpu_info(int verbosity)
         puts("");
     }
 }
+#endif
