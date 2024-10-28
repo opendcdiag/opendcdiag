@@ -28,6 +28,12 @@ if cpp.get_linker_id() != 'ld.bfd' or cc.get_linker_id() != 'ld.bfd'
     warning('We recommend linking OpenDCDiag with the binutils linker (ld). Your build may fail or your executable may not behave as expected.')
 endif
 
+device_type = get_option('device_type')
+if device_type == ''
+    device_type = 'cpu'
+endif
+device_flags = []
+
 march_generic_flags = []
 march_flags = []
 march_base = get_option('march_base')
@@ -271,6 +277,7 @@ executable(
     cpp_args : [
         default_cpp_warn,
         default_cpp_flags,
+        device_flags,
     ],
 )
 
