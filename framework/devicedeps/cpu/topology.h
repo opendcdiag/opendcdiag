@@ -8,7 +8,7 @@
 #ifdef SANDSTONE_DEVICE_CPU
 
 #include "sandstone.h"
-#include "devicedeps/cpu/devices.h"
+#include "devicedeps/devices.h"
 
 #include <array>
 #include <bit>

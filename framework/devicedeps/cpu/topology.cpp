@@ -2,7 +2,7 @@
  * Copyright 2022 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
-
+#ifdef SANDSTONE_DEVICE_CPU
 #include "topology.h"
 #include "sandstone_p.h"
 
@@ -100,6 +100,10 @@ LogicalProcessorSet init_cpus()
 int num_cpus()
 {
     return sApp->thread_count;
+}
+
+int num_devices() {
+    return num_cpus();
 }
 
 int num_packages() {
@@ -1113,6 +1117,10 @@ void restrict_topology(DeviceRange range)
         topo = build_topology();
 }
 
+void restrict_devices(DeviceRange range) {
+    return restrict_topology(range);
+}
+
 static char character_for_mask(uint32_t mask)
 {
     static_assert((1 << MAX_HWTHREADS_PER_CORE) <= 36, "Cannot represent this many threads");
@@ -1189,3 +1197,4 @@ std::string CpuTopology::build_falure_mask(const struct test *test) const
     result.resize(result.size() - 1);
     return result;
 }
+#endif

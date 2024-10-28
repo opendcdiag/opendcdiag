@@ -37,9 +37,12 @@ DECLSPEC_IMPORT BOOLEAN WINAPI SystemFunction036(PVOID RandomBuffer, ULONG Rando
 }
 #endif
 
-#ifdef __x86_64__
-#  include <immintrin.h>
-#  define RANDOM_HAS_AES        1
+#if defined(SANDSTONE_DEVICE_CPU)
+#  include "devicedeps/cpu/cpu_device.h"
+#  if defined(__x86_64__)
+#    include <immintrin.h>
+#    define RANDOM_HAS_AES        1
+#  endif
 #endif
 
 #ifndef O_CLOEXEC
@@ -92,7 +95,7 @@ struct RandomEngineWrapper
     EngineType engine_type;
 
     RandomEngineWrapper(EngineType type)
-        : per_thread(num_cpus() + 1), engine_type(type)
+        : per_thread(num_devices() + 1), engine_type(type)
     {}
 
     virtual ~RandomEngineWrapper();
@@ -117,7 +120,7 @@ void RandomEngineDeleter::operator()(RandomEngineWrapper *ptr) const
 namespace {
 static thread_rng *rng_for_thread(int thread_num)
 {
-    assert(thread_num < num_cpus());
+    assert(thread_num < num_devices());
     assert(thread_num >= -1);
 
     auto &rngs = sApp->random_engine->per_thread;
@@ -452,7 +455,7 @@ void random_init_global(const char *seed_from_user)
         }
         __builtin_unreachable();
     };
-    assert(num_cpus() > 0);
+    assert(num_devices() > 0);
     assert(thread_num == -1);
 
     // treat the argument as if it were a file, see if it works
@@ -542,6 +545,7 @@ void random_advance_seed()
 
 void random_init_thread(int thread_num)
 {
+#ifdef SANDSTONE_DEVICE_CPU
     // Create a pattern based exclusively on the topology that we'll use
     // to seed the thread's generator. Algorithm very loosely inspired by
     // https://en.wikipedia.org/wiki/MurmurHash version 3.
@@ -565,7 +569,9 @@ void random_init_thread(int thread_num)
         }
         __builtin_unreachable();
     }();
-
+#else
+    uint32_t mixin = 42;
+#endif
     // nothing should be modifying the global engine now
     sApp->random_engine->seedThread(rng_for_thread(thread_num), mixin);
 }

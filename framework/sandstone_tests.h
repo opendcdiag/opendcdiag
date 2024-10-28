@@ -25,7 +25,9 @@ extern "C" {
 extern struct test __start_tests;
 extern struct test __stop_tests;
 
+#ifdef SANDSTONE_DEVICE_CPU
 extern struct test mce_test;
+#endif
 
 struct test_set_cfg {
     bool ignore_unknown_tests;  /* whether an error should be reported if
@@ -84,7 +86,11 @@ public:
         if (cfg.randomize) {
             /* Do not shuffle mce_check if present. */
             auto end = test_set.end();
+#ifdef SANDSTONE_DEVICE_CPU
             auto last = end[-1].test == &mce_test ? end - 1 : end;
+#else
+            auto last = end;
+#endif
             std::shuffle(test_set.begin(), last, SandstoneURBG());
         }
         return test_set.begin();

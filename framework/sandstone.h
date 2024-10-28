@@ -26,12 +26,12 @@
 
 #ifdef SANDSTONE_DEVICE_CPU
 #include "devicedeps/cpu/cpu_device.h"
-#endif
 #include "sandstone_config.h"
 #include "sandstone_data.h"
 #include <sandstone_test_groups.h>
 #include "test_knobs.h"
 #include "sandstone_chrono.h"
+#endif
 
 #ifdef __cplusplus
 #include <atomic>
@@ -386,11 +386,6 @@ extern void log_message_skip(int thread_num, SkipCategory c, const char *msg, ..
 /// The message parameter provides a description of the data which
 /// precedes it in the log file.  The data is output in hexadecimal.
 extern void log_data(const char *message, const void *data, size_t size);
-
-/// retrieves the physical address of a given pointer.  Currently
-/// this function is only supported on Linux and requires root
-/// privileges.
-uint64_t retrieve_physical_address(const volatile void *ptr);
 
 /// Calls aligned_alloc but first checks to see whether size is a multiple
 /// of alignment.  If it is not, the requested size of the allocation is increased

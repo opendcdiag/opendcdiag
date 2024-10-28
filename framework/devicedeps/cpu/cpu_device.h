@@ -119,6 +119,7 @@
 /// that all the K registers have been modified by the assembly code.
 #define KMASKCLOBBEREDLIST "k0","k1","k2","k3","k4","k5","k6","k7"
 
+extern uint64_t cpu_features;
 /// used to determine whether one or more CPU features are available at runtime.  f is a bitmask
 /// of cpu features as defined in the auto-generated cpu_features.h file.  For example, a test
 /// may call cpu_has_feature(cpu_feature_avx512f) to determine whether AVX-512 is available.
@@ -154,6 +155,10 @@ struct cpu_info {
     int cpu() const;        ///! Internal CPU number
 #endif
 };
+
+#ifdef __cplusplus
+using device_info = struct cpu_info;
+#endif
 
 /// cpu_info is an array of cpu_info structures.  Each element of the array
 /// contains information about a logical CPU that will be used to
@@ -198,11 +203,14 @@ int num_cpus() __attribute__((pure));
 /// Returns the number of physical CPU packages (a.k.a. sockets) available to a
 /// test.
 int num_packages() __attribute__((pure));
+
+/// retrieves the physical address of a given pointer.  Currently
+/// this function is only supported on Linux and requires root
+/// privileges.
+uint64_t retrieve_physical_address(const volatile void *ptr);
 #ifdef __cplusplus
 }
 #endif
-
-extern uint64_t cpu_features;
 
 /// thread_num always contains the integer identifier for the executing
 /// thread.  It can be used to index the cpu_info array and is equivalent
@@ -212,6 +220,5 @@ extern thread_local int thread_num;
 #else
 extern __thread int thread_num __attribute__((tls_model("initial-exec")));
 #endif
-
 #endif
 #endif // INC_CPU_DEVICE_H

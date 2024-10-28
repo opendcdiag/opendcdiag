@@ -2,7 +2,6 @@
  * Copyright 2022 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
-
 #include "sandstone_context_dump.h"
 #include "sandstone_utils.h"
 #include "sandstone.h"

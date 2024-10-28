@@ -231,7 +231,7 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     CrashContext::Fixed fixed = {
         .crash_address = si->si_addr,
         .rip = si->si_addr,
-        .thread_num = ::thread_num + sApp->main_thread_data()->cpu_range.starting_device,
+        .thread_num = ::thread_num + sApp->main_thread_data()->device_range.starting_device,
         .signum = si->si_signo,
         .signal_code = si->si_code,
     };
@@ -240,7 +240,7 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
         { &fixed, sizeof(fixed) }
     };
 
-#ifdef __x86_64__
+#if defined(__x86_64__) && defined(SANDSTONE_DEVICE_CPU)
     auto ctx = static_cast<ucontext_t *>(ucontext);
 #  ifdef __linux__
     // On Linux, the XSAVE area is pointed by the mcontext::fpregs pointer
@@ -879,7 +879,7 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
         FILE *log = open_memstream(&buffer, &buflen);
         fprintf(log, "Registers:\n");
 
-#ifdef __x86_64__
+#if defined(__x86_64__) && defined(SANDSTONE_DEVICE_CPU)
         dump_gprs(log, &ctx.mc);
         dump_xsave(log, ctx.xsave_buffer.data(), ctx.xsave_buffer.size(), -1);
 #endif

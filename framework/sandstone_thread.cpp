@@ -38,13 +38,13 @@ struct SandstoneTestThreadAttributes
 #ifndef _WIN32
 unsigned char *SandstoneTestThreadAttributes::allocate_stack_block()
 {
-    size_t size = num_cpus() * (THREAD_STACK_SIZE + GuardSize);
+    size_t size = num_devices() * (THREAD_STACK_SIZE + GuardSize);
     void *map = mmap(nullptr, size, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (map == MAP_FAILED)
         return nullptr;
 
     auto ptr = static_cast<unsigned char *>(map);
-    for (int i = 0; i < num_cpus(); ++i) {
+    for (int i = 0; i < num_devices(); ++i) {
         ptr += GuardSize;
         IGNORE_RETVAL(mprotect(ptr, THREAD_STACK_SIZE, PROT_READ | PROT_WRITE));
         ptr += THREAD_STACK_SIZE;

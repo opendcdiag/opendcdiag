@@ -1,4 +1,4 @@
-# Opendcidag Support for Devices
+# OpenDCDiag Support for Devices
 
 OpenDCDiag's test content is primarily meant for traditional CPUs but the
 framework could very well be used for other compute devices.
@@ -51,10 +51,10 @@ framework
 │  │  ├── unix/
 │  │  ├── windows/
 │  │  ├── cpu_device.h
-│  │  ├── devices.h
 │  │  ├── ...
 │  │  ├── meson.build
 │  │  └── topology.h
+│  └── devices.h
 ├── forkfd/
 ├── fp_vectors/
 ├── scripts/

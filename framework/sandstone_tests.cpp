@@ -15,9 +15,11 @@
 #include "sandstone_tests.h"
 #include "sandstone_chrono.h"
 
-#if !defined(__linux__) || !defined(__x86_64__)
+#if !defined(__linux__) || !defined(__x86_64__) || !defined(SANDSTONE_DEVICE_CPU)
 // no MCE test outside Linux
+#if defined(SANDSTONE_DEVICE_CPU)
 static_assert(!InterruptMonitor::InterruptMonitorWorks);
+#endif
 struct test mce_test = {
 #ifdef TEST_ID_mce_check
     .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),

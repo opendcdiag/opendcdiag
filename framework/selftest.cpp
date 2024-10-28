@@ -16,7 +16,9 @@
 #include <unistd.h>
 
 #ifdef __linux__
+#ifdef SANDSTONE_DEVICE_CPU
 #include <linux/kvm.h>
+#endif
 #include <sys/ioctl.h>
 #endif
 #ifdef __unix__
@@ -26,7 +28,9 @@
 #include "sandstone.h"
 #ifndef _WIN32
 #include "sandstone_asm.h"
+#ifdef SANDSTONE_DEVICE_CPU
 #include "sandstone_kvm.h"
+#endif
 #endif // _WIN32
 #include "sandstone_p.h"
 
@@ -205,12 +209,20 @@ static int selftest_cxxthrowcatch_run(struct test *test, int cpu)
     }
 }
 
+#if defined(SANDSTONE_DEVICE_CPU)
 static int selftest_skip_init(struct test *test)
 {
     log_info("{\"packages\": %d, \"cpus\": %d}", num_packages(), num_cpus());
     log_info("Requesting skip (this message should be visible)");
     return EXIT_SKIP;
 }
+#else
+static int selftest_skip_init(struct test *test)
+{
+    log_info("Requesting skip (this message should be visible)");
+    return EXIT_SKIP;
+}
+#endif
 
 static int selftest_skip_run(struct test *test, int cpu)
 {
@@ -268,6 +280,7 @@ static int selftest_fail_cleanup(struct test *test)
     return EXIT_FAILURE;
 }
 
+#if defined(SANDSTONE_DEVICE_CPU)
 template <int PackageId> static int selftest_log_skip_socket_init(struct test *test)
 {
     if (num_packages() == 1 && cpu_info[0].package_id == PackageId)
@@ -296,6 +309,7 @@ static int selftest_log_skip_run_even_threads(struct test *test, int cpu)
     }
     return EXIT_SUCCESS;
 }
+#endif
 
 static int selftest_log_skip_newline_init(struct test *test)
 {
@@ -350,6 +364,7 @@ static int selftest_noreturn_run(struct test *test, int cpu)
     return EXIT_FAILURE;
 }
 
+#if defined(SANDSTONE_DEVICE_CPU)
 static int adjust_cpu_for_isolate_socket(int cpu)
 {
     // pretend we're running in test_schedule_isolate_socket
@@ -375,6 +390,7 @@ template <auto F> static int selftest_if_socket1_run(struct test *test, int cpu)
         return F(test, adjust_cpu_for_isolate_socket(cpu));
     return EXIT_SUCCESS;
 }
+#endif
 
 static int selftest_50pct_freeze_fail_run(struct test *test, int cpu)
 {
@@ -508,12 +524,6 @@ template <auto F> static void run_crashing_function()
     log_warning("Crashing function %s did return", f);
 }
 
-template <auto F> static int selftest_crash_initcleanup(struct test *)
-{
-    run_crashing_function<F>();
-    return EXIT_SUCCESS;
-}
-
 template <auto F>
 static int selftest_crash_run(struct test *test, int cpu)
 {
@@ -526,6 +536,13 @@ static int selftest_crash_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
+template <auto F> static int selftest_crash_initcleanup(struct test *)
+{
+    run_crashing_function<F>();
+    return EXIT_SUCCESS;
+}
+
+#if defined(SANDSTONE_DEVICE_CPU)
 static void cause_sigill()
 {
     // some values for us to see in the register dump
@@ -688,6 +705,7 @@ static void raise_sigkill()
 
 }
 #endif
+#endif
 
 static int selftest_malloc_fail(struct test *test, int cpu)
 {
@@ -733,7 +751,7 @@ static int selftest_libc_fatal_run(struct test *, int)
 }
 #endif
 
-#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
 BEGIN_ASM_FUNCTION(payload_long_64bit)
     asm("movabs $0x1234deadbeaf5678, %rax\n"
         "mov    $0x12345, %ebx\n"
@@ -870,7 +888,7 @@ static const kvm_config_t *selftest_kvm_config_real_16bit_fail()
 {
     return &kvm_config_real_16bit_fail;
 }
-#endif // __linux__ && x86-64
+#endif // __linux__ && x86-64 && !__clang__ && SANDSTONE_DEVICE_CPU
 
 const static test_group group_positive = {
     .id = "positive",
@@ -892,10 +910,12 @@ const static test_group group_random = {
     .description = "Self-tests that use random input and may or may not fail"
 };
 
+#if defined(SANDSTONE_DEVICE_CPU)
 const static test_group group_kvm = {
     .id = "kvm",
     .description = "Self-tests that launch virtual machines"
 };
+#endif
 
 static struct test selftests_array[] = {
 {
@@ -1013,6 +1033,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_skip_run,
     .desired_duration = -1,
 },
+#if defined(SANDSTONE_DEVICE_CPU)
 {
     .id = "selftest_log_skip_init_socket0",
     .description = "Skips using log_skip() in the init function only in socket 0",
@@ -1043,6 +1064,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_log_skip_run_even_threads,
     .desired_duration = -1,
 },
+#endif
 {
     .id = "selftest_log_skip_newline",
     .description = "Skips using log_skip() in the init function where there are newlines in the message",
@@ -1146,7 +1168,7 @@ static struct test selftests_array[] = {
     .flags = test_schedule_sequential,
 },
 
-#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
 {
     .id = "kvm_long_64bit",
     .description = "Runs simple 64-bit KVM workload successfully",
@@ -1203,7 +1225,8 @@ static struct test selftests_array[] = {
     .fracture_loop_count = 4,
 },
 
-    /* Multi-socket tests */
+#if defined(SANDSTONE_DEVICE_CPU)
+/* Multi-socket tests */
 {
     .id = "selftest_failinit_socket1",
     .description = "Fails on init for socket 1",
@@ -1241,9 +1264,9 @@ static struct test selftests_array[] = {
     .test_run = selftest_if_socket1_run<selftest_crash_run<cause_sigsegv_null>>,
     .desired_duration = -1,
 },
+#endif
 
-    /* Negative tests */
-
+/* Negative tests */
 {
     .id = "selftest_logerror_init",
     .description = "Fails on error logged in init",
@@ -1359,6 +1382,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .test_run = selftest_pass_run,
     .desired_duration = -1,
 },
+#if defined(SANDSTONE_DEVICE_CPU)
 {
     .id = "selftest_sigill",
     .description = "Crashes with SIGILL",
@@ -1448,6 +1472,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .desired_duration = -1,
 },
 #endif
+#endif
 {
     .id = "selftest_malloc_fail",
     .description = "Attempts to malloc a silly amount of memory",
@@ -1486,7 +1511,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .desired_duration = -1,
 },
 
-#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
 {
     .id = "kvm_prot_64bit_fail",
     .description = "Runs simple 64-bit KVM workload that fails",
