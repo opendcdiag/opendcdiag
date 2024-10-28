@@ -125,5 +125,5 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
     return result;
 }
 
-#include "../../../tests/mce_check/mce_check.cpp"
-#include "../../../tests/smi_count/smi_count.cpp"
+#include "../../../tests/cpu/mce_check/mce_check.cpp"
+#include "../../../tests/cpu/smi_count/smi_count.cpp"
