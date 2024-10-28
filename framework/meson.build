@@ -4,18 +4,13 @@
 framework_config = configuration_data()
 framework_config.set10('SANDSTONE_STATIC', false) # sysdeps may override
 
-device_type = get_option('device_type')
-if device_type == ''
-    device_type = 'cpu'
-endif
-
 sysdeps_dir = 'sysdeps' / target_machine.system()
 devicedeps_dir = 'devicedeps' / device_type
 devicedeps_sys_dir = devicedeps_dir / target_machine.system()
 
 if target_machine.system() == 'cygwin'
     sysdeps_dir = 'sysdeps/windows'
-    devicedeps_dir = 'devicedeps' / device_type / 'windows'
+    devicedeps_sys_dir = 'devicedeps' / device_type / 'windows'
 endif
 
 framework_incdir = [
@@ -25,10 +20,14 @@ framework_incdir = [
             '.',
             sysdeps_dir,
             devicedeps_dir,
-            devicedeps_sys_dir,
         ],
     ),
 ]
+
+fs = import('fs')
+if fs.exists(devicedeps_sys_dir)
+    framework_incdir += include_directories(devicedeps_sys_dir)
+endif
 
 framework_files = files()
 
@@ -108,7 +107,6 @@ framework_files += [
     'random.cpp',
     'sandstone.cpp',
     'sandstone_chrono.cpp',
-    'sandstone_context_dump.cpp',
     'sandstone_data.cpp',
     'sandstone_test_groups.cpp',
     'sandstone_tests.cpp',
@@ -117,6 +115,12 @@ framework_files += [
     'static_vectors.c',
     'test_knobs.cpp',
 ]
+
+if device_type == 'cpu'
+    framework_files += [
+        'sandstone_context_dump.cpp',
+    ]
+endif
 
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     # Look for libcrypto
@@ -186,10 +190,14 @@ endif
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
     subdir('sysdeps/unix')
-    subdir('devicedeps' / device_type / 'unix')
 endif
 subdir(sysdeps_dir)
-subdir(devicedeps_sys_dir)
+
+# devicedeps_sys_dir may not exist, e.g. for devices without explicit
+# operating system dependencies.
+if fs.exists(devicedeps_sys_dir)
+    subdir(devicedeps_sys_dir)
+endif
 
 framework_config_h = configure_file(
     input: 'sandstone_config.h.in',
@@ -211,6 +219,7 @@ framework_main_a = static_library(
         march_generic_flags,
         default_cpp_flags,
         default_cpp_warn,
+        device_flags,
     ],
 )
 
@@ -218,7 +227,6 @@ framework_a = static_library(
     'framework',
     framework_files,
     generated_builtin_test_list,
-    generated_cpu_features_h,
     build_by_default: false,
     include_directories: [
         framework_incdir,
@@ -234,12 +242,14 @@ framework_a = static_library(
         march_flags,
         default_c_flags,
         default_c_warn,
+        device_flags,
     ],
     cpp_args: [
         debug_c_flags,
         march_flags,
         default_cpp_flags,
         default_cpp_warn,
+        device_flags,
     ],
 )
 
