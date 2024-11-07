@@ -54,10 +54,6 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     memset(cpu_set, 0, sizeof(cpu_set));
     LogicalProcessorSetOps::setInArray({ cpu_set, size }, n);
 
-    if (sched_setaffinity(0, sizeof(cpu_set), reinterpret_cast<cpu_set_t *>(cpu_set))) {
-        perror("sched_setaffinity");
-        return false;
-    }
     return true;
 }
 
@@ -82,9 +78,5 @@ bool pin_to_logical_processors(CpuRange range, const char *thread_name)
         LogicalProcessorSetOps::setInArray({ cpu_set, size }, lp);
     }
 
-    if (sched_setaffinity(0, sizeof(cpu_set), reinterpret_cast<cpu_set_t *>(cpu_set))) {
-        perror("sched_setaffinity");
-        return false;
-    }
     return true;
 }

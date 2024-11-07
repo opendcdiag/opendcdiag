@@ -57,15 +57,7 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     groupAffinity.Mask = KAFFINITY(1) << processorNumber.Number;
 
     HANDLE hThread = GetCurrentThread();
-    if (!SetThreadGroupAffinity(hThread, &groupAffinity, nullptr)) {
-        win32_perror("SetThreadGroupAffinity");
-        return false;
-    }
 
-    if (SetThreadIdealProcessorEx(hThread, &processorNumber, nullptr) == 0) {
-        win32_perror("SetThreadIdealProcessorEx");
-        return false;
-    }
     return true;
 }
 
@@ -88,9 +80,5 @@ bool pin_to_logical_processors(CpuRange range, const char *thread_name)
         groupAffinity.Mask -= 1;
     }
     groupAffinity.Mask <<= first.Number;
-    if (SetThreadGroupAffinity(GetCurrentThread(), &groupAffinity, nullptr) == 0) {
-        win32_perror("SetThreadGroupAffinity");
-        return false;
-    }
     return true;
 }
