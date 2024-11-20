@@ -1298,6 +1298,10 @@ static void slice_plan_init(int max_cores_per_slice)
     }
 }
 
+__attribute__((weak, noclone, noinline)) void device_specific_init()
+{
+}
+
 __attribute__((weak, noclone, noinline)) void print_application_banner()
 {
 }
