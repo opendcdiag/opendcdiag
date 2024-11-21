@@ -94,6 +94,15 @@ nasm_system_flags = [
 default_c_flags = []
 default_cpp_flags = []
 
+add_project_arguments([
+    '-Wl,-z,relro',
+    '-Wl,-z,noexecstack',
+    '-pie',
+    '-fstack-protector-strong',
+    '-fcf-protection=full',
+], language: [ 'c', 'cpp' ])
+
+
 if target_machine.system() == 'windows'
 add_project_arguments([
     '-D__STDC_FORMAT_MACROS',
@@ -138,16 +147,26 @@ else
 if get_option('buildtype') == 'debug'
     debug_nasm_flags = '-gdwarf'
 endif
+if cc.get_id() == 'gcc'
+    march_flags += [
+        '-mcet-switch',
+    ]
+endif
+march_flags += [
+    '-fstack-clash-protection',
+]
 endif
 
 default_c_flags += [
     '-DSANDSTONE',
+    '-D_FORTIFY_SOURCE=2',
     '-fno-associative-math',
     '-fno-asynchronous-unwind-tables',
 ]
 
 default_cpp_flags += [
     '-DSANDSTONE',
+    '-D_FORTIFY_SOURCE=2',
     '-fno-associative-math',
     '-fvisibility-inlines-hidden',
 ]
@@ -166,6 +185,7 @@ endif
 default_c_warn = [
     '-Wall',
     '-Wextra',
+    '-Werror=format-security',
     '-Werror=incompatible-pointer-types',
     '-Werror=implicit-function-declaration',
     '-Werror=int-conversion',
@@ -179,6 +199,8 @@ endif
 default_cpp_warn = [
     '-Wall',
     '-Wextra',
+    '-Wformat',
+    '-Wformat-security',
     '-Wno-unused-parameter',
     '-Wno-sign-compare',
     '-Wno-missing-field-initializers',
