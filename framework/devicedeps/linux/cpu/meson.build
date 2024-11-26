@@ -8,7 +8,7 @@ if (host_machine.cpu_family() == 'x86_64')
     )
 else
     framework_files += files(
-        '../generic' / 'msr.c',
+        '../../generic' / device_type / 'msr.c',
     )
 endif
 

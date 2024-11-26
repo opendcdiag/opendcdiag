@@ -35,11 +35,8 @@
 #include <sandstone_iovec.h>
 #include <sandstone_utils.h>
 
-#ifdef SANDSTONE_DEVICE_CPU
-#include "devicedeps/cpu/cpu_device.h"
-#include "devicedeps/cpu/topology.h"
-#endif
 #include "effective_cpu_freq.hpp"
+#include "topology.h"
 #include "interrupt_monitor.hpp"
 #include "thermal_monitor.hpp"
 #include "frequency_manager.hpp"
@@ -213,7 +210,7 @@ struct Common
 
 struct alignas(64) Main : Common
 {
-    DeviceRange cpu_range;
+    CpuRange cpu_range;
 };
 
 struct alignas(64) Test : Common
@@ -351,11 +348,11 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
             IsolateSockets,
             Heuristic,
         };
-        using Slices = std::vector<DeviceRange>;
+        using Slices = std::vector<CpuRange>;
         std::array<Slices, 2> plans;
     };
 
-    using PerDeviceFailures = std::vector<__uint128_t>;
+    using PerCpuFailures = std::vector<__uint128_t>;
     struct SharedMemory;
 
     SlicePlans slice_plans;
@@ -383,7 +380,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool service_background_scan = false;
     bool vary_frequency_mode = false;
     bool vary_uncore_frequency_mode = false;
-    static constexpr int MaxRetestCount = sizeof(PerDeviceFailures::value_type) * 8;
+    static constexpr int MaxRetestCount = sizeof(PerCpuFailures::value_type) * 8;
     int retest_count = 10;
     int total_retest_count = -2;
     int max_test_count = INT_MAX;
@@ -538,7 +535,7 @@ inline void SandstoneApplication::select_main_thread(int slice)
 {
     assert(current_fork_mode() != no_fork || slice == 0);
     main_thread_data_ptr += slice;
-    test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_device;
+    test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_cpu;
 }
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_slices = INT_MAX)
@@ -691,7 +688,7 @@ std::string random_format_seed();
 void random_init_thread(int thread_num);
 
 /* sandstone.cpp */
-TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerDeviceFailures &per_dev_failures);
+TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails);
 
 /*
  * Called from sandstone_main() before logging_global_init() and before
@@ -699,7 +696,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
  * careful about corrupting the log output.
  */
 void print_application_banner();
-int print_application_footer(int exit_code, SandstoneApplication::PerDeviceFailures per_dev_failures);
+int print_application_footer(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures);
 
 #endif
 
