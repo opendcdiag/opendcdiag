@@ -634,7 +634,7 @@ void logging_init_global(void)
 #endif
         }
         if (isdir) {
-            file_log_fd = open(time_based_log_path(), O_RDWR | O_CLOEXEC | O_CREAT | O_TRUNC, 0666);
+            file_log_fd = open(time_based_log_path(), O_RDWR | O_CLOEXEC | O_CREAT | O_TRUNC | O_EXCL, 0666);
             delete_log_on_success = true;
         }
         if (file_log_fd == -1) {
