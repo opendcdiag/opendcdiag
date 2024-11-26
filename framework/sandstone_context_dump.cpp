@@ -9,7 +9,7 @@
 
 #ifdef __x86_64__
 #include "amx_common.h"
-#include "devicedeps/cpu/cpu_features.h"
+#include "cpu_features.h"
 #include "fp_vectors/Floats.h"
 
 #include <algorithm>

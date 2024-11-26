@@ -4,9 +4,8 @@
  */
 
 #include "gtest/gtest.h"
-#ifdef SANDSTONE_DEVICE_CPU
-#include <devicedeps/cpu/topology.h>
-#endif
+#include <topology.h>
+
 #include <initializer_list>
 
 static LogicalProcessorSet make_set(std::initializer_list<LogicalProcessorSet::Word> list)

@@ -26,8 +26,6 @@ option('builtin_test_list', type : 'string', value : '',
     description : 'List of name-file pairs that specify the built-in test lists to be embedded into the binary, e.g. default:data/default.txt,skx:data/skx.txt')
 option('ssl_link_type', type: 'combo', choices : ['none', 'dynamic', 'loaded', 'static'], value: 'none',
     description : 'Link with openssl library if available (default none).')
-option('device_type', type: 'string', value: 'cpu',
-    description : 'Device type to run tests on (default cpu).')
 option('fuzzing', type : 'boolean', value : false,
     description : 'Build in fuzzing (default false)')
 option('afl_inc', type : 'string', value : '',

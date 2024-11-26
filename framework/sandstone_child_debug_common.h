@@ -11,9 +11,7 @@
 #include <stdint.h>
 
 #ifdef __x86_64__
-#ifdef SANDSTONE_DEVICE_CPU
-#  include "devicedeps/cpu/cpu_features.h"
-#endif
+#  include "cpu_features.h"
 
 #  include <algorithm>
 #  include <cpuid.h>

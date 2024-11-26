@@ -20,8 +20,7 @@
 #endif
 
 #include "sandstone.h"
-#ifdef SANDSTONE_DEVICE_CPU
-#include "devicedeps/cpu/cpuid_internal.h"
+#include "cpuid_internal.h"
 
 // from sandstone.cpp
 extern const uint64_t minimum_cpu_features;
@@ -123,4 +122,3 @@ static void premain(int argc, char **argv, char **envp)
     check_missing_features(cpu_features, minimum_cpu_features);
 }
 }
-#endif // SANDSTONE_DEVICE_CPU
