@@ -43,8 +43,9 @@ struct eigen_test_data {
 static int eigen_gemm_double14_init(struct test *test) {
     test->data = new(eigen_test_data);
     try {
-        CAST(test->data)->lhs = Mat::Random(M_DIM, M_DIM);
-        CAST(test->data)->rhs = Mat::Random(M_DIM, M_DIM);
+        Mat::Index dim = get_testspecific_knob_value_int(test, "Dim", M_DIM);
+        CAST(test->data)->lhs = Mat::Random(dim, dim);
+        CAST(test->data)->rhs = Mat::Random(dim, dim);
         CAST(test->data)->prod = CAST(test->data)->lhs * CAST(test->data)->rhs;
     } catch (...) {
         report_fail_msg("Exception on Eigen code, most probably OOM");
