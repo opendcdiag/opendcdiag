@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
         - { name: GCC, selftests: "selftests" }
-        - { name: Clang, env: "CC=clang-16 CXX=clang++-16" }
+        - { name: Clang, env: "CC=clang-19 CXX=clang++-19" }
     steps:
     - name: setup environment
       run: printf '%s\n' ${{ matrix.env }} | tee -a ${GITHUB_ENV}
