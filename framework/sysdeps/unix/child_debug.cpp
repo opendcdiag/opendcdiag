@@ -1023,7 +1023,16 @@ void debug_init_child()
 #endif
 }
 
-void debug_crashed_child()
+static int find_slice_by_pid(pid_t child, std::span<const pid_t> children)
+{
+    for (size_t i = 0; i < children.size(); ++i) {
+        if (children[i] == child)
+            return int(i);
+    }
+    return -1;
+}
+
+void debug_crashed_child(std::span<const pid_t> children)
 {
     if (!SandstoneConfig::ChildDebugCrashes || sApp->shmem->server_debug_socket == -1)
         return;
@@ -1036,6 +1045,15 @@ void debug_crashed_child()
 
         if (ctx.contents == CrashContext::NoContents)
             break;
+
+        // find out which slice this context is for
+        int slice = find_slice_by_pid(ctx.fixed.pid, children);
+        if (slice < 0) {
+            log_message(-1, "Received a context dump from PID %ld that doesn't seem to match any "
+                            "child slice", long(ctx.fixed.pid));
+            continue;
+        }
+
         char buf[std::numeric_limits<pid_t>::digits10 + 2];
         sprintf(buf, "%d", ctx.fixed.pid);
 
@@ -1045,7 +1063,7 @@ void debug_crashed_child()
             print_crash_info(buf, ctx);
 
         // release the child
-        auto &thread_state = sApp->main_thread_data()->thread_state;
+        auto &thread_state = sApp->main_thread_data(slice)->thread_state;
         thread_state.load(std::memory_order_acquire);
         if (on_crash_action != context_on_crash) {
             thread_state.store(thread_debugged, std::memory_order_relaxed);
