@@ -95,12 +95,6 @@ struct mmap_region
  */
 void cpu_specific_init(void);
 
-/* child_debug.cpp */
-void debug_init_child(void);
-void debug_init_global(const char *on_hang_arg, const char *on_crash_arg);
-void debug_crashed_child();
-void debug_hung_child(pid_t child);
-
 /* splitlock_detect.c */
 bool splitlock_enforcement_enabled(void);
 
@@ -658,6 +652,12 @@ template <typename F> inline auto scopeExit(F &&f)
 
 static_assert(std::is_trivially_copyable_v<SandstoneApplication::SharedMemory>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::SharedMemory>);
+
+/* child_debug.cpp */
+void debug_init_child(void);
+void debug_init_global(const char *on_hang_arg, const char *on_crash_arg);
+void debug_crashed_child();
+void debug_hung_child(pid_t child);
 
 /* logging.cpp */
 int logging_stdout_fd(void);
