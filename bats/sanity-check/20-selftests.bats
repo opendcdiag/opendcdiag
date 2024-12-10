@@ -1626,6 +1626,18 @@ function check_gdb_usable() {
 
     declare -A yamldump
     selftest_crash_context_common -n2 --timeout=5m -e selftest_sigsegv --on-crash=backtrace --max-cores-per-slice=1
+
+    # We should have as output two main threads and two worker threads
+    test_yaml_regexp "/tests/0/threads/0/thread" "main"
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" "info"
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "Backtrace:.*"
+
+    test_yaml_regexp "/tests/0/threads/1/thread" "main 1"
+    test_yaml_regexp "/tests/0/threads/1/messages/0/level" "info"
+    test_yaml_regexp "/tests/0/threads/1/messages/0/text" "Backtrace:.*"
+
+    test_yaml_regexp "/tests/0/threads/2/thread" "0"
+    test_yaml_regexp "/tests/0/threads/3/thread" "1"
 }
 
 @test "selftest_oserror" {

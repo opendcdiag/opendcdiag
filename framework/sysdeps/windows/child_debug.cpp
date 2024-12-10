@@ -354,10 +354,11 @@ void debug_crashed_child(std::span<const pid_t> children)
     sApp->shmem->debug_event = 0;
 }
 
-void debug_hung_child(pid_t child)
+void debug_hung_child(pid_t child, std::span<const pid_t> children)
 {
     if (!SandstoneConfig::ChildDebugHangs || on_hang_action == kill_on_hang)
         return;
+    (void) children;
 
     // pid_t is actually a HANDLE in disguise (using _spawnv)
     if (on_hang_action == attach_gdb_on_hang)
