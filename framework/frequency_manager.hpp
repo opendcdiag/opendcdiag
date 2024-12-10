@@ -250,7 +250,6 @@ public:
     {
 #ifdef __linux__
         for (size_t socket = 0; socket < total_sockets; socket++) {
-            std::pair<int, int> max_min_frequency;
             std::string uncore_frequency_path = BASE_UNCORE_FREQ_PATH;
             uncore_frequency_path += std::to_string(socket);
 
@@ -291,7 +290,6 @@ public:
     {
 #ifdef __linux__
         for (size_t socket = 0; socket < total_sockets; socket++) {
-            std::pair<int, int> max_min_frequency;
             std::string uncore_frequency_path = BASE_UNCORE_FREQ_PATH;
             uncore_frequency_path += std::to_string(socket);
 
