@@ -657,7 +657,7 @@ static_assert(std::is_trivially_destructible_v<SandstoneApplication::SharedMemor
 void debug_init_child(void);
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg);
 void debug_crashed_child(std::span<const pid_t> children);
-void debug_hung_child(pid_t child);
+void debug_hung_child(pid_t child, std::span<const pid_t> children);
 
 /* logging.cpp */
 int logging_stdout_fd(void);

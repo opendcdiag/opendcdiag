@@ -590,7 +590,7 @@ static void communicate_gdb_backtrace(int log, int in, int out, uintptr_t handle
     }
 }
 
-static void generate_backtrace(const char *pidstr, uintptr_t handle = 0, int cpu = -1)
+static void generate_backtrace(const char *pidstr, int slice, uintptr_t handle = 0, int cpu = -1)
 {
     if (!SandstoneConfig::ChildBacktrace) {
         assert(false && "Should not have reached here");
@@ -635,7 +635,7 @@ static void generate_backtrace(const char *pidstr, uintptr_t handle = 0, int cpu
     }
 
     {
-        LoggingStream stream = logging_user_messages_stream(-1, LOG_LEVEL_VERBOSE(2));
+        LoggingStream stream = logging_user_messages_stream(-slice - 1, LOG_LEVEL_VERBOSE(2));
         communicate_gdb_backtrace(stream, gdb_out.in(), gdb_in.out(), handle, cpu);
     }
 
@@ -851,7 +851,7 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
     return true;
 }
 
-static void print_crash_info(const char *pidstr, CrashContext &ctx)
+static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
 {
     int cpu = -1;
     uintptr_t handle = 0;
@@ -869,7 +869,7 @@ static void print_crash_info(const char *pidstr, CrashContext &ctx)
     if (SandstoneConfig::ChildBacktrace
             && (on_crash_action & backtrace_on_crash) == backtrace_on_crash) {
         // generate the backtrace as a second step
-        generate_backtrace(pidstr, handle, cpu);
+        generate_backtrace(pidstr, slice, handle, cpu);
     }
 
     // now include the register state
@@ -1060,7 +1060,7 @@ void debug_crashed_child(std::span<const pid_t> children)
         if (on_crash_action == attach_gdb_on_crash)
             attach_gdb(buf);
         else
-            print_crash_info(buf, ctx);
+            print_crash_info(slice, buf, ctx);
 
         // release the child
         auto &thread_state = sApp->main_thread_data(slice)->thread_state;
@@ -1072,10 +1072,14 @@ void debug_crashed_child(std::span<const pid_t> children)
     }
 }
 
-void debug_hung_child(pid_t child)
+void debug_hung_child(pid_t child, std::span<const pid_t> children)
 {
     if (!SandstoneConfig::ChildDebugHangs || on_hang_action == kill_on_hang)
         return;
+
+    // find out which slice this context is for
+    int slice = find_slice_by_pid(child, children);
+    assert(slice >= 0);
 
     char buf[std::numeric_limits<pid_t>::digits10 + 2];
     sprintf(buf, "%d", child);
@@ -1089,7 +1093,7 @@ void debug_hung_child(pid_t child)
         if (on_hang_action == attach_gdb_on_hang) {
             attach_gdb(buf);
         } else if (on_hang_action == backtrace_on_hang) {
-            generate_backtrace(buf);
+            generate_backtrace(buf, slice);
         }
     }
 }
