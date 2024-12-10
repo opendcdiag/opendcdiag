@@ -293,12 +293,13 @@ static void attach_gdb(HANDLE child)
     close(saved_stdout);
 }
 
-void debug_crashed_child()
+void debug_crashed_child(std::span<const pid_t> children)
 {
     if (!SandstoneConfig::ChildDebugCrashes)
         return;
     if (hSlot == INVALID_HANDLE_VALUE)
         return;
+    (void) children;
 
     ResetEvent(HANDLE(sApp->shmem->debug_event));
 

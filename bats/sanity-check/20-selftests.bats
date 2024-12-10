@@ -1573,7 +1573,7 @@ crash_context_socket1_common() {
     crash_context_socket1_common  --max-cores-per-slice=1
 }
 
-@test "crash backtrace" {
+function check_gdb_usable() {
     if [[ "$SANDSTONE" != "$SANDSTONE_BIN" ]] &&
        [[ "$SANDSTONE" != "$SANDSTONE_BIN "* ]]; then
         skip "Not executing directly (executing '$SANDSTONE')"
@@ -1593,7 +1593,10 @@ crash_context_socket1_common() {
         skip "GDB can't attach to running processes"
     fi
     wait $pid ||:
+}
 
+@test "crash backtrace" {
+    check_gdb_usable
     declare -A yamldump
     selftest_crash_context_common -n1 --timeout=5m -e selftest_sigsegv --on-crash=backtrace
 
@@ -1610,6 +1613,19 @@ crash_context_socket1_common() {
             test_yaml_regexp "/tests/0/threads/1/messages/1/text" ".*\bldr\b.*"
             ;;
     esac
+}
+
+@test "crash backtrace multi-slice" {
+    # We need GDB and at least two cores
+    check_gdb_usable
+    export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
+    run $SANDSTONE --cpuset=t0 --dump-cpu-info
+    if [[ "$output" != *$'\n1\t'* ]]; then
+        skip "Test only works with multiple cores or a debug build"
+    fi
+
+    declare -A yamldump
+    selftest_crash_context_common -n2 --timeout=5m -e selftest_sigsegv --on-crash=backtrace --max-cores-per-slice=1
 }
 
 @test "selftest_oserror" {
