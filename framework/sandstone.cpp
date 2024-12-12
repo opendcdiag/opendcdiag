@@ -1065,7 +1065,7 @@ static void attach_shmem_internal(int fd, size_t size)
     ptr += sApp->shmem->thread_data_offset;
 
     sApp->main_thread_data_ptr = reinterpret_cast<PerThreadData::Main *>(ptr);
-    ptr += ROUND_UP_TO_PAGE(sizeof(PerThreadData::Main[sApp->shmem->main_thread_count]));
+    ptr += ROUND_UP_TO_PAGE(sizeof(PerThreadData::Main) * sApp->shmem->main_thread_count);
     sApp->test_thread_data_ptr = reinterpret_cast<PerThreadData::Test *>(ptr);
 }
 
