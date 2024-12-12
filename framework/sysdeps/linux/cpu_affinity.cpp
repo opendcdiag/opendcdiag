@@ -40,7 +40,8 @@ LogicalProcessorSet ambient_logical_processor_set()
     return result;
 }
 
-bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
+// TODO: Do the same for the others
+bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name, pid_t thread_id)
 {
     set_thread_name(thread_name);
     if (n == LogicalProcessor(-1))
@@ -54,7 +55,7 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     memset(cpu_set, 0, sizeof(cpu_set));
     LogicalProcessorSetOps::setInArray({ cpu_set, size }, n);
 
-    if (sched_setaffinity(0, sizeof(cpu_set), reinterpret_cast<cpu_set_t *>(cpu_set))) {
+    if (sched_setaffinity(thread_id, sizeof(cpu_set), reinterpret_cast<cpu_set_t *>(cpu_set))) {
         perror("sched_setaffinity");
         return false;
     }
