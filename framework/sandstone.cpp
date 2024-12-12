@@ -1647,7 +1647,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
         auto now = MonotonicTimePoint::clock::now();
         if (pollfd &pfd = children.pollfds.back(); pfd.revents & POLLIN) {
             // one child (or more than one) is crashing
-            debug_crashed_child();
+            debug_crashed_child(children.handles);
         }
 
         // check if any of the children have exited
@@ -1713,7 +1713,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
         int idx = result - WAIT_OBJECT_0;
         if (idx == 0 && sApp->shmem->debug_event) {
             // one child (or more than one) is crashing
-            debug_crashed_child();
+            debug_crashed_child(children.handles);
             return 0;
         }
 
@@ -1763,7 +1763,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
         for (size_t i = 0; i < children.handles.size(); ++i) {
             auto child = children.handles[i];
             if (children.results[i].endtime == MonotonicTimePoint{}) {
-                debug_hung_child(child);
+                debug_hung_child(child, children.handles);
 #ifdef _WIN32
                 log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %ld did not exit, using TerminateProcess()",
                             GetProcessId(HANDLE(child)));

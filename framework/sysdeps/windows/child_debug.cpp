@@ -293,12 +293,13 @@ static void attach_gdb(HANDLE child)
     close(saved_stdout);
 }
 
-void debug_crashed_child()
+void debug_crashed_child(std::span<const pid_t> children)
 {
     if (!SandstoneConfig::ChildDebugCrashes)
         return;
     if (hSlot == INVALID_HANDLE_VALUE)
         return;
+    (void) children;
 
     ResetEvent(HANDLE(sApp->shmem->debug_event));
 
@@ -353,10 +354,11 @@ void debug_crashed_child()
     sApp->shmem->debug_event = 0;
 }
 
-void debug_hung_child(pid_t child)
+void debug_hung_child(pid_t child, std::span<const pid_t> children)
 {
     if (!SandstoneConfig::ChildDebugHangs || on_hang_action == kill_on_hang)
         return;
+    (void) children;
 
     // pid_t is actually a HANDLE in disguise (using _spawnv)
     if (on_hang_action == attach_gdb_on_hang)
