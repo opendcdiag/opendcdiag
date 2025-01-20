@@ -447,6 +447,11 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     SandstoneBackgroundScan background_scan;
     SandstoneThreadSynchronizationBase *thread_synchronization = nullptr;
 
+    bool cpujump = false;
+    int barrier_count = 0;
+    int members_per_barrier = 2; // Make this configurable
+    std::vector<pthread_barrier_t*> cpujump_barrier_vec;
+
 private:
     SandstoneApplication() = default;
     ~SandstoneApplication() = delete;
