@@ -115,6 +115,7 @@ enum {
     five_min_option,
 
     cpuset_option,
+    cpujump_option,
     disable_option,
     dump_cpu_info_option,
     fatal_skips_option,
@@ -1190,6 +1191,20 @@ int num_cpus()
 
 int num_packages() {
     return Topology::topology().packages.size();
+}
+
+void checkpoint(int thread) {
+    // Checks if cpujump enable, but for now do nothing.
+    if ( sApp->cpujump ) {
+        // using thread number, deduce the barrier index
+        int barrier_idx = thread / sApp->members_per_barrier;
+        log_warning("Thread %d is waiting on barrier %d", thread, barrier_idx);
+        pthread_barrier_wait(sApp->cpujump_barrier_vec[barrier_idx]);
+        return;
+    }
+
+    log_warning("# Checkpoint is not enabled");
+    return;
 }
 
 static LogicalProcessorSet init_cpus()
@@ -3243,6 +3258,7 @@ int main(int argc, char **argv)
         { "alpha", no_argument, &sApp->requested_quality, INT_MIN },
         { "beta", no_argument, &sApp->requested_quality, 0 },
         { "cpuset", required_argument, nullptr, cpuset_option },
+        { "cpujump", no_argument, nullptr, cpujump_option },
         { "disable", required_argument, nullptr, disable_option },
         { "dump-cpu-info", no_argument, nullptr, dump_cpu_info_option },
         { "enable", required_argument, nullptr, 'e' },
@@ -3468,6 +3484,9 @@ int main(int argc, char **argv)
             break;
         case cpuset_option:
             apply_cpuset_param(optarg);
+            break;
+        case cpujump_option:
+            sApp->cpujump = true;
             break;
         case dump_cpu_info_option:
             dump_cpu_info();
@@ -3908,6 +3927,24 @@ int main(int argc, char **argv)
     if (sApp->vary_uncore_frequency_mode)
         sApp->frequency_manager.initial_uncore_frequency_setup();
 
+    /* CPU jump is only available with 2 or more threads
+       This may change in the near future */
+    if (sApp->cpujump ) {
+        if (sApp->thread_count % 2 != 0) {
+        fprintf(stderr, "%s: --cpujump requires an even number of threads\n", argv[0]);
+        exit(EX_USAGE);
+        }
+
+        // Initialize barriers array
+        sApp->barrier_count = sApp->thread_count / sApp->members_per_barrier; // TODO: make this configurable
+        sApp->cpujump_barrier_vec.resize(sApp->barrier_count);
+        for (int i = 0; i < sApp->barrier_count; i++) {
+            sApp->cpujump_barrier_vec[i] = new pthread_barrier_t;
+            pthread_barrier_init(sApp->cpujump_barrier_vec[i], nullptr, sApp->members_per_barrier);
+        }
+
+    }
+
 #ifndef __OPTIMIZE__
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
 #endif
@@ -3972,6 +4009,11 @@ int main(int argc, char **argv)
     int exit_code = EXIT_SUCCESS;
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
+
+    for (int i = 0; i < sApp->barrier_count; i++) {
+        pthread_barrier_destroy(sApp->cpujump_barrier_vec[i]);
+        delete sApp->cpujump_barrier_vec[i];
+    }
 
     // done running all the tests, clean up and exit
     return cleanup_global(exit_code, std::move(per_cpu_failures));
