@@ -327,6 +327,12 @@ struct SandstoneThreadSynchronizationBase
     virtual void synchronize() noexcept = 0;
 };
 
+struct CPUJump {
+    pthread_barrier_t *barrier = nullptr;
+    int current_cpu;
+    int next_cpu;
+};
+
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
     enum class OutputFormat : int8_t {
@@ -448,9 +454,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     SandstoneThreadSynchronizationBase *thread_synchronization = nullptr;
 
     bool cpujump = false;
-    int barrier_count = 0;
     int members_per_barrier = 2; // Make this configurable
-    std::vector<pthread_barrier_t*> cpujump_barrier_vec;
+    std::vector<CPUJump*> cpujump_vec;
 
 private:
     SandstoneApplication() = default;
