@@ -1193,13 +1193,30 @@ int num_packages() {
     return Topology::topology().packages.size();
 }
 
-void checkpoint(int thread) {
+void checkpoint(int thread_idx) {
     // Checks if cpujump enable, but for now do nothing.
     if ( sApp->cpujump ) {
-        // using thread number, deduce the barrier index
-        int barrier_idx = thread / sApp->members_per_barrier;
-        log_warning("Thread %d is waiting on barrier %d", thread, barrier_idx);
-        pthread_barrier_wait(sApp->cpujump_barrier_vec[barrier_idx]);
+
+        CPUJump *cpujump_info = sApp->cpujump_vec[thread_idx];
+        log_warning("Thread %d is waiting on barrier", thread_idx);
+        pthread_barrier_wait(cpujump_info->barrier);
+
+        // Jump to next cpu
+        cpu_set_t cpuset;
+        pthread_t thread = pthread_self();
+        CPU_ZERO(&cpuset);
+        CPU_SET(cpujump_info->next_cpu, &cpuset);
+
+        int r = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+        if (r != 0) {
+            log_error("Failed to set affinity to CPU %d: %s", cpujump_info->next_cpu, strerror(r));
+            return;
+        }
+        int tmp_cpu = cpujump_info->next_cpu;
+        cpujump_info->next_cpu = cpujump_info->current_cpu;
+        cpujump_info->current_cpu = tmp_cpu;
+        log_warning("Current CPU: %d, Next CPU: %d", cpujump_info->current_cpu, cpujump_info->next_cpu);
+
         return;
     }
 
@@ -3935,14 +3952,26 @@ int main(int argc, char **argv)
         exit(EX_USAGE);
         }
 
-        // Initialize barriers array
-        sApp->barrier_count = sApp->thread_count / sApp->members_per_barrier; // TODO: make this configurable
-        sApp->cpujump_barrier_vec.resize(sApp->barrier_count);
-        for (int i = 0; i < sApp->barrier_count; i++) {
-            sApp->cpujump_barrier_vec[i] = new pthread_barrier_t;
-            pthread_barrier_init(sApp->cpujump_barrier_vec[i], nullptr, sApp->members_per_barrier);
-        }
+        // Setup cpujump info
+        sApp->cpujump_vec.resize(sApp->thread_count);
+        for (int i = 0; i < sApp->thread_count; i+=2) {
+            pthread_barrier_t *barrier = new pthread_barrier_t;
+            pthread_barrier_init(barrier, nullptr, sApp->members_per_barrier);
 
+            logging_printf(LOG_LEVEL_VERBOSE(1) , "Creating cpujump struct %d\n", i);
+            sApp->cpujump_vec[i] = new CPUJump;
+            sApp->cpujump_vec[i]->barrier = barrier;
+            sApp->cpujump_vec[i]->current_cpu = i;
+            sApp->cpujump_vec[i]->next_cpu = i+1;
+
+            sApp->cpujump_vec[i+1] = new CPUJump;
+            sApp->cpujump_vec[i+1]->barrier = barrier;
+            sApp->cpujump_vec[i+1]->current_cpu = i+1;
+            sApp->cpujump_vec[i+1]->next_cpu = i;
+
+            //logging_printf(LOG_LEVEL_VERBOSE(1) , "Current CPU: %d, Next CPU: %d\n", sApp->cpujump_vec[i]->current_cpu, sApp->cpujump_vec[i]->next_cpu);
+            //logging_printf(LOG_LEVEL_VERBOSE(1) , "Current CPU: %d, Next CPU: %d\n", sApp->cpujump_vec[i+1]->current_cpu, sApp->cpujump_vec[i+1]->next_cpu);
+        }
     }
 
 #ifndef __OPTIMIZE__
@@ -4010,9 +4039,12 @@ int main(int argc, char **argv)
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
 
-    for (int i = 0; i < sApp->barrier_count; i++) {
-        pthread_barrier_destroy(sApp->cpujump_barrier_vec[i]);
-        delete sApp->cpujump_barrier_vec[i];
+    if (sApp->cpujump ) {
+        for (int i = 0; i < sApp->thread_count; i+=2) {
+            delete sApp->cpujump_vec[i]->barrier;
+            delete sApp->cpujump_vec[i];
+            delete sApp->cpujump_vec[i+1];
+        }
     }
 
     // done running all the tests, clean up and exit
