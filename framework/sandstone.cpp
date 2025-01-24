@@ -1202,16 +1202,8 @@ void checkpoint(int thread_idx) {
         pthread_barrier_wait(cpujump_info->barrier);
 
         // Jump to next cpu
-        cpu_set_t cpuset;
-        pthread_t thread = pthread_self();
-        CPU_ZERO(&cpuset);
-        CPU_SET(cpujump_info->next_cpu, &cpuset);
+        pin_to_logical_processor(LogicalProcessor(cpujump_info->next_cpu));
 
-        int r = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-        if (r != 0) {
-            log_error("Failed to set affinity to CPU %d: %s", cpujump_info->next_cpu, strerror(r));
-            return;
-        }
         int tmp_cpu = cpujump_info->next_cpu;
         cpujump_info->next_cpu = cpujump_info->current_cpu;
         cpujump_info->current_cpu = tmp_cpu;
@@ -3961,13 +3953,13 @@ int main(int argc, char **argv)
             logging_printf(LOG_LEVEL_VERBOSE(1) , "Creating cpujump struct %d\n", i);
             sApp->cpujump_vec[i] = new CPUJump;
             sApp->cpujump_vec[i]->barrier = barrier;
-            sApp->cpujump_vec[i]->current_cpu = i;
-            sApp->cpujump_vec[i]->next_cpu = i+1;
+            sApp->cpujump_vec[i]->current_cpu = cpu_info[i].cpu_number;
+            sApp->cpujump_vec[i]->next_cpu = cpu_info[i+1].cpu_number;
 
             sApp->cpujump_vec[i+1] = new CPUJump;
             sApp->cpujump_vec[i+1]->barrier = barrier;
-            sApp->cpujump_vec[i+1]->current_cpu = i+1;
-            sApp->cpujump_vec[i+1]->next_cpu = i;
+            sApp->cpujump_vec[i+1]->current_cpu = cpu_info[i+1].cpu_number;
+            sApp->cpujump_vec[i+1]->next_cpu = cpu_info[i].cpu_number;
 
             //logging_printf(LOG_LEVEL_VERBOSE(1) , "Current CPU: %d, Next CPU: %d\n", sApp->cpujump_vec[i]->current_cpu, sApp->cpujump_vec[i]->next_cpu);
             //logging_printf(LOG_LEVEL_VERBOSE(1) , "Current CPU: %d, Next CPU: %d\n", sApp->cpujump_vec[i+1]->current_cpu, sApp->cpujump_vec[i+1]->next_cpu);
