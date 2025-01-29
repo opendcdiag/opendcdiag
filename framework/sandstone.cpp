@@ -1193,21 +1193,21 @@ int num_packages() {
     return Topology::topology().packages.size();
 }
 
-void checkpoint(int thread_idx) {
+void checkpoint() {
     // Checks if cpujump enable, but for now do nothing.
     if ( sApp->cpujump ) {
 
-        CPUJump *cpujump_info = sApp->cpujump_vec[thread_idx];
-        log_warning("Thread %d is waiting on barrier", thread_idx);
-        pthread_barrier_wait(cpujump_info->barrier);
+        // TODO: We need to add the offset of the slice
+        CPUJump *cpujump_info = sApp->cpujump_vec[thread_num];
+        log_warning("Thread %d is waiting on barrier", thread_num);
+        pthread_barrier_wait(cpujump_info->barrier); // TODO: We need to reinit barrier on darwin
 
         // Jump to next cpu
-        pin_to_logical_processor(LogicalProcessor(cpujump_info->next_cpu));
-
-        int tmp_cpu = cpujump_info->next_cpu;
-        cpujump_info->next_cpu = cpujump_info->current_cpu;
-        cpujump_info->current_cpu = tmp_cpu;
-        log_warning("Current CPU: %d, Next CPU: %d", cpujump_info->current_cpu, cpujump_info->next_cpu);
+        // TODO: create a function to pin someone else to logical processor (logical processor, who (thread_idx ))
+        if (pin_to_logical_processor(LogicalProcessor(cpujump_info->next_cpu))) {
+            swap(cpujump_info->current_cpu, cpujump_info->next_cpu);
+            log_warning("Current CPU: %d, Next CPU: %d", cpujump_info->current_cpu, cpujump_info->next_cpu);
+        }
 
         return;
     }
@@ -3947,6 +3947,7 @@ int main(int argc, char **argv)
         // Setup cpujump info
         sApp->cpujump_vec.resize(sApp->thread_count);
         for (int i = 0; i < sApp->thread_count; i+=2) {
+
             pthread_barrier_t *barrier = new pthread_barrier_t;
             pthread_barrier_init(barrier, nullptr, sApp->members_per_barrier);
 

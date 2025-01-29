@@ -625,7 +625,7 @@ int num_packages() __attribute__((pure));
 
 /// Check point for cpu jump feature, which allows the test to jump execution
 /// to a different cpu. If cpujump is not set, this does nothing
-void checkpoint(int cpu);
+void checkpoint();
 
 #ifdef __cplusplus
 }
