@@ -1038,6 +1038,18 @@ int num_packages() {
     return Topology::topology().packages.size();
 }
 
+void reschedule() {
+    // Choose a random CPU to hop to
+    int cpu_idx = random32() % num_cpus();
+    int next_cpu = cpu_info[cpu_idx].cpu_number;
+    if (pin_to_logical_processor(LogicalProcessor(next_cpu)))
+        log_debug("Rescheduled thread %d (%ld) to CPU %d",thread_num, pthread_self(), next_cpu);
+    else
+        log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
+
+    return;
+}
+
 static LogicalProcessorSet init_cpus()
 {
     LogicalProcessorSet result = ambient_logical_processor_set();
