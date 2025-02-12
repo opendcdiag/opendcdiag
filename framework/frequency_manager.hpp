@@ -111,14 +111,16 @@ private:
             exit(EX_IOERR);
         }
 
+        bool userspace_present = false;
         while (fscanf(file, "%s", read_file) != EOF) {
             if (strcmp(read_file, "userspace") == 0) {
-                fclose(file);
-                return true;
+                userspace_present = true;
+                break;
             }
         }
 
-        return false;
+        fclose(file);
+        return userspace_present;
     }
 
     void check_uncore_frequency_support()
@@ -131,6 +133,7 @@ private:
             fprintf(stderr, "%s: cannot read from file: %s. Please check if intel_uncore_frequency directory is present in the file path /sys/devices/system/cpu: %m\n", program_invocation_name, uncore_path);
             exit(EX_IOERR);
         }
+        fclose(file);
     }
 
     void enable_disable_userspace(bool should_enable_userspace)
