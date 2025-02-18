@@ -1193,22 +1193,26 @@ int num_packages() {
     return Topology::topology().packages.size();
 }
 
+// TODO: Think of a better name
+void jump_threads() noexcept {
+    log_warning("Jump other threads to their next cpu\n");
+}
+
 void checkpoint() {
     // Checks if cpujump enable, but for now do nothing.
     if ( sApp->cpujump ) {
 
-        // TODO: We need to add the offset of the slice
+        // TODO: We need to add the offset of the slice to get the proper cpujump_info
         CPUJump *cpujump_info = sApp->cpujump_vec[thread_num];
         log_warning("Thread %d is waiting on barrier", thread_num);
-        pthread_barrier_wait(cpujump_info->barrier); // TODO: We need to reinit barrier on darwin
+        cpujump_info->barrier->arrive_and_wait();
 
         // Jump to next cpu
-        // TODO: create a function to pin someone else to logical processor (logical processor, who (thread_idx ))
+        // TODO: Remove, only last to arrive will pin the other threads to their next cpu
         if (pin_to_logical_processor(LogicalProcessor(cpujump_info->next_cpu))) {
             swap(cpujump_info->current_cpu, cpujump_info->next_cpu);
             log_warning("Current CPU: %d, Next CPU: %d", cpujump_info->current_cpu, cpujump_info->next_cpu);
         }
-
         return;
     }
 
@@ -3945,23 +3949,14 @@ int main(int argc, char **argv)
         }
 
         // Setup cpujump info
-        sApp->cpujump_vec.resize(sApp->thread_count);
+        sApp->cpujump_vec.reserve(sApp->thread_count);
         for (int i = 0; i < sApp->thread_count; i+=2) {
-
-            pthread_barrier_t *barrier = new pthread_barrier_t;
-            pthread_barrier_init(barrier, nullptr, sApp->members_per_barrier);
-
             logging_printf(LOG_LEVEL_VERBOSE(1) , "Creating cpujump struct %d\n", i);
-            sApp->cpujump_vec[i] = new CPUJump;
-            sApp->cpujump_vec[i]->barrier = barrier;
-            sApp->cpujump_vec[i]->current_cpu = cpu_info[i].cpu_number;
-            sApp->cpujump_vec[i]->next_cpu = cpu_info[i+1].cpu_number;
-
-            sApp->cpujump_vec[i+1] = new CPUJump;
-            sApp->cpujump_vec[i+1]->barrier = barrier;
-            sApp->cpujump_vec[i+1]->current_cpu = cpu_info[i+1].cpu_number;
-            sApp->cpujump_vec[i+1]->next_cpu = cpu_info[i].cpu_number;
-
+            auto *barrier = new std::barrier(2, jump_threads);
+            CPUJump *cj1 = new CPUJump(barrier, i, i+1);
+            CPUJump *cj2 = new CPUJump(barrier, i+1, i);
+            sApp->cpujump_vec.push_back(cj1);
+            sApp->cpujump_vec.push_back(cj2);
             //logging_printf(LOG_LEVEL_VERBOSE(1) , "Current CPU: %d, Next CPU: %d\n", sApp->cpujump_vec[i]->current_cpu, sApp->cpujump_vec[i]->next_cpu);
             //logging_printf(LOG_LEVEL_VERBOSE(1) , "Current CPU: %d, Next CPU: %d\n", sApp->cpujump_vec[i+1]->current_cpu, sApp->cpujump_vec[i+1]->next_cpu);
         }

@@ -29,6 +29,7 @@
 #ifdef __cplusplus
 #include <memory>
 #include <span>
+#include <barrier>
 
 #include <sandstone_config.h>
 #include <sandstone_chrono.h>
@@ -328,7 +329,7 @@ struct SandstoneThreadSynchronizationBase
 };
 
 struct CPUJump {
-    pthread_barrier_t *barrier = nullptr;
+    std::barrier<void(*)(void) noexcept> *barrier;
     int current_cpu;
     int next_cpu;
 };
