@@ -187,8 +187,39 @@ print("..Done..")
 end
 )gdb";
 
-static void child_crash_handler(int, siginfo_t *si, void *ucontext)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-security"
+template <typename... Args> [[noreturn]] static void
+terminate_with_ignored_crash(const char *msg, Args... params)
 {
+    // we can't really recover from a signal, so we terminate the
+    // process in a way the parent can tell it was an ignored error
+    log_message_skip(-1, IgnoredMceCategory, msg, params...);
+    log_warning("MCE was delivered to or is related to this thread");
+
+    sApp->test_thread_data(thread_num)->thread_state.store(thread_skipped, std::memory_order_release);
+    _exit(-EXIT_SKIP);
+}
+#pragma GCC diagnostic push
+
+static void child_crash_handler(int signum, siginfo_t *si, void *ucontext)
+{
+    if (!SandstoneConfig::RestrictedCommandLine) {
+#if defined(BUS_MCEERR_AO) && defined(BUS_MCEERR_AR)
+        if (signum == SIGBUS && sApp->ignore_mce_errors) {
+            if (si->si_code == BUS_MCEERR_AO || si->si_code == BUS_MCEERR_AR) {
+                const char *extra = si->si_code == BUS_MCEERR_AO
+                        ? "Action Optional" : "Action Required";
+                terminate_with_ignored_crash("Caught signal SIGBUS for MCE Error (%s)", extra);
+            }
+        }
+#endif
+#if !defined(NDEBUG)
+        if (signum == SIGTRAP)
+            terminate_with_ignored_crash("Debugging SIGTRAP");
+#endif
+    }
+
     // mark thread as failed
     logging_mark_thread_failed(thread_num);
 

@@ -1509,6 +1509,23 @@ selftest_crash_common() {
     test_yaml_regexp "/tests/0/result-details/reason" Killed
 }
 
+@test "selftest_sigtrap_int3 --ignore-mce-error" {
+    if ! $is_debug; then
+        skip "Debug-only test"
+    fi
+    if $is_windows; then
+        skip "Unix-only test"
+    fi
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_sigtrap_int3 --on-crash=context --ignore-mce-error
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" IgnoredMceCategory
+    test_yaml_regexp "/tests/0/skip-reason" "Debugging SIGTRAP"
+    test_yaml_regexp "/tests/0/threads/2/messages/0/text" "W> MCE was delivered to or is related to this thread"
+}
+
 @test "selftest_malloc_fail" {
     declare -A yamldump
     selftest_crash_common selftest_malloc_fail SIGABRT 0xC0000017 "Out of memory condition"

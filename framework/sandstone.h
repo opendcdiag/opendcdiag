@@ -92,6 +92,7 @@ typedef enum SkipCategory {
     DeviceNotFoundSkipCategory,
     DeviceNotConfiguredSkipCategory,
     UnknownSkipCategory,
+    IgnoredMceCategory,
     RuntimeSkipCategory,
     SelftestSkipCategory,
 } SkipCategory;

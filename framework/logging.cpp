@@ -473,6 +473,8 @@ static const char *char_to_skip_category(int val)
         return "CpuTopologyIssue";
     case OSResourceIssueSkipCategory:
         return "OSResourceIssue";
+    case IgnoredMceCategory:
+        return "IgnoredMceCategory";
     }
 
     return "NO CATEGORY PRESENT";
