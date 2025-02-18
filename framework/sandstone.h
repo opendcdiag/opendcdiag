@@ -174,20 +174,30 @@ typedef enum SkipCategory {
 /// Variadic macros to count the number of arguments passed to other macro.
 /// @see OVERLOAD()
 #define NARGN(\
-            n1, n2, n3, n4, n5, n6, n7, n8, n9, n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,\
+            em, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,\
             n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,\
             N, ...) \
         N
 
+#define APPEND_NON_EMPTY(...) ,##__VA_ARGS__
 #define NARG_(...) NARGN(__VA_ARGS__)
 #define NARGS(...) NARG_( \
-            __VA_ARGS__,\
+            -1 APPEND_NON_EMPTY(__VA_ARGS__),\
             63,62,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,\
             31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
 
+static_assert(NARGS() == 0, "Empty list");
+static_assert(NARGS(a1) == 1, "single element");
+static_assert(NARGS(a1, a2) == 2, "two elements");
+static_assert(NARGS(a1, a2, a3, a4, a5, a6, a7, a8) == 8, "8 elements");
+
+static_assert(NARGS(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15) == 63, "63 elements");
+
 /**
- * Variadic macro to alias functions in C (with the use of variadic macros).
- * Macro allows to "overload" calls in C language.
+ * Variadic macro to alias functions in C/macros.
  * Example instantiation:
  * `#define V(...)   OVERLOAD(V,NARGS(__VA_ARGS__))(__VA_ARGS__)`
  * with appropriate Vs() definitions:
@@ -199,6 +209,33 @@ typedef enum SkipCategory {
  */
 #define OVERLOAD_(name,num) name##num
 #define OVERLOAD(name,num) OVERLOAD_(name,num)
+
+/**
+ * Variadic macro to suppress warnings on unused arguments/variables
+ */
+#define UNUSED_ARGS_0()
+#define UNUSED_ARGS_1(e)       ((void) (e));
+#define UNUSED_ARGS_2(e, ...)  UNUSED_ARGS_1(e) UNUSED_ARGS_1(__VA_ARGS__)
+#define UNUSED_ARGS_3(e, ...)  UNUSED_ARGS_1(e) UNUSED_ARGS_2(__VA_ARGS__)
+#define UNUSED_ARGS_4(e, ...)  UNUSED_ARGS_1(e) UNUSED_ARGS_3(__VA_ARGS__)
+#define UNUSED_ARGS_5(e, ...)  UNUSED_ARGS_1(e) UNUSED_ARGS_4(__VA_ARGS__)
+#define UNUSED_ARGS_6(e, ...)  UNUSED_ARGS_1(e) UNUSED_ARGS_5(__VA_ARGS__)
+#define UNUSED_ARGS_7(e, ...)  UNUSED_ARGS_1(e) UNUSED_ARGS_6(__VA_ARGS__)
+#define UNUSED_ARGS_8(e, ...)  UNUSED_ARGS_1(e) UNUSED_ARGS_7(__VA_ARGS__)
+#define UNUSED_ARGS_9(e, ...)  UNUSED_ARGS_1(e) UNUSED_ARGS_8(__VA_ARGS__)
+#define UNUSED_ARGS_10(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_9(__VA_ARGS__)
+#define UNUSED_ARGS_11(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_10(__VA_ARGS__)
+#define UNUSED_ARGS_12(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_11(__VA_ARGS__)
+#define UNUSED_ARGS_13(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_12(__VA_ARGS__)
+#define UNUSED_ARGS_14(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_13(__VA_ARGS__)
+#define UNUSED_ARGS_15(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_14(__VA_ARGS__)
+#define UNUSED_ARGS_16(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_15(__VA_ARGS__)
+#define UNUSED_ARGS_17(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_16(__VA_ARGS__)
+#define UNUSED_ARGS_18(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_17(__VA_ARGS__)
+#define UNUSED_ARGS_19(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_18(__VA_ARGS__)
+#define UNUSED_ARGS_20(e, ...) UNUSED_ARGS_1(e) UNUSED_ARGS_19(__VA_ARGS__)
+
+#define UNUSED_ARGS(...) do { OVERLOAD(UNUSED_ARGS_,NARGS(__VA_ARGS__))(__VA_ARGS__) } while(0)
 
 /// Macro to check if pointer is properly aligned. Alignment must be a valid power of 2.
 #define IS_ALIGNED(ptr, alignment) ((((uint64_t) (ptr)) & ((alignment) - 1)) == 0)
