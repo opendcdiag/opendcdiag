@@ -118,6 +118,7 @@ enum {
     dump_cpu_info_option,
     fatal_skips_option,
     gdb_server_option,
+    ignore_mce_errors_option,
     ignore_os_errors_option,
     ignore_unknown_tests_option,
     is_asan_option,
@@ -3094,6 +3095,7 @@ int main(int argc, char **argv)
         { "fatal-skips", no_argument, nullptr, fatal_skips_option },
         { "fork-mode", required_argument, nullptr, 'f' },
         { "help", no_argument, nullptr, 'h' },
+        { "ignore-mce-errors", no_argument, nullptr, ignore_mce_errors_option },
         { "ignore-os-errors", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-unknown-tests", no_argument, nullptr, ignore_unknown_tests_option },
@@ -3323,6 +3325,9 @@ int main(int argc, char **argv)
             sApp->gdb_server_comm = optarg;
             break;
 #endif
+        case ignore_mce_errors_option:
+            sApp->ignore_mce_errors = true;
+            break;
         case ignore_os_errors_option:
             sApp->ignore_os_errors = true;
             break;
@@ -3694,10 +3699,10 @@ int main(int argc, char **argv)
         }
     }
 
-
     /* Add mce_check as the last test to the set. It will be kept last by
      * SandstoneTestSet in case randomization is requested. */
-    test_set->add(&mce_test);
+    if (!sApp->ignore_mce_errors)
+        test_set->add(&mce_test);
 
     /* Remove all the tests we were told to disable */
     if (disabled_tests.size()) {
