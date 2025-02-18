@@ -1471,6 +1471,10 @@ selftest_crash_common() {
     selftest_crash_common selftest_sigsegv_instruction SIGSEGV 0xC0000005 'Access violation'
 }
 
+@test "selftest_sigtrap_int3" {
+    selftest_crash_common selftest_sigtrap_int3 SIGTRAP 0x80000003 'Breakpoint'
+}
+
 @test "selftest_fastfail" {
     if ! $is_windows; then
         skip "Windows-only test"
