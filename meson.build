@@ -64,18 +64,18 @@ if get_option('buildtype') == 'debug'
     debug_c_flags = [
         '-ggdb3',
         '-O0',
-        '-U_FORTIFY_SOURCE'
     ]
 elif get_option('buildtype') == 'debugoptimized'
     debug_c_flags = [
         '-ggdb3',
         '-O3',
-        '-U_FORTIFY_SOURCE'
+        '-D_FORTIFY_SOURCE=2',
     ]
 else
     debug_c_flags = [
         '-O3',
-        '-g'
+        '-g',
+        '-D_FORTIFY_SOURCE=2',
     ]
 endif
 
@@ -159,14 +159,12 @@ endif
 
 default_c_flags += [
     '-DSANDSTONE',
-    '-D_FORTIFY_SOURCE=2',
     '-fno-associative-math',
     '-fno-asynchronous-unwind-tables',
 ]
 
 default_cpp_flags += [
     '-DSANDSTONE',
-    '-D_FORTIFY_SOURCE=2',
     '-fno-associative-math',
     '-fvisibility-inlines-hidden',
 ]
