@@ -724,4 +724,86 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 #  endif
 #endif
 
+// Static C++ test runner to instantiate appropriate test class or always skipping one
+#ifdef __cplusplus
+template<class T>
+class TestRunner
+{
+public:
+    TestRunner(void) = delete;
+
+    // test context
+    static int init(struct test *test)
+    {
+        assert((test->data == nullptr) && (!!"Test runner already initialized"));
+        T* t = new T(test);
+        test->data = t;
+        return t->init(test);
+    }
+
+    static int run(struct test *test, int cpu)
+    {
+        assert((test->data != nullptr) && (!!"Test runner not initialized"));
+        T* t = static_cast<T*>(test->data);
+        return t->run(test, cpu);
+    }
+
+    static int cleanup(struct test *test)
+    {
+        assert((test->data != nullptr) && (!!"Test runner not initialized"));
+        T* t = static_cast<T*>(test->data);
+        int ret = t->cleanup(test);
+        test->data = nullptr;
+        delete t;
+        return ret;
+    }
+};
+
+class CpuNotSupported
+{
+public:
+    CpuNotSupported(struct test* test)
+    {}
+
+    int init(struct test *test)
+    {
+        log_skip(CpuNotSupportedSkipCategory, "Not supported on this OS");
+        return EXIT_SKIP;
+    }
+
+    int run(struct test *test, int cpu)
+    {
+        __builtin_unreachable();
+    }
+
+    int cleanup(struct test *test)
+    {
+        return EXIT_SUCCESS;
+    }
+};
+
+class OsNotSupported
+{
+public:
+    OsNotSupported(struct test* test)
+    {}
+
+    int init(struct test *test)
+    {
+        log_skip(OsNotSupportedSkipCategory, "Not supported on this OS");
+        return EXIT_SKIP;
+    }
+
+    int run(struct test *test, int cpu)
+    {
+        __builtin_unreachable();
+    }
+
+    int cleanup(struct test *test)
+    {
+        return EXIT_SUCCESS;
+    }
+};
+#endif // __cplusplus
+
 #endif  /* __INCLUDE_GUARD_SANDSTONE_H_ */
