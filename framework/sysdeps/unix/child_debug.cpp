@@ -1007,7 +1007,7 @@ void debug_init_child()
     action.sa_sigaction = child_crash_handler;
     action.sa_flags = SA_NODEFER;       // allow recursive signalling, so the child can raise()
     action.sa_flags |= SA_SIGINFO;
-    for (int signum : { SIGILL, SIGABRT, SIGFPE, SIGBUS, SIGSEGV }) {
+    for (int signum : { SIGILL, SIGTRAP, SIGABRT, SIGFPE, SIGBUS, SIGSEGV }) {
         sigaction(signum, &action, nullptr);
     }
 
