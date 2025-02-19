@@ -56,6 +56,7 @@
 
 #include "cpu_features.h"
 #include "forkfd.h"
+#include "futex.h"
 
 #include "sandstone.h"
 #include "sandstone_p.h"
@@ -114,6 +115,7 @@ enum {
     five_min_option,
 
     cpuset_option,
+    cpujump_option,
     disable_option,
     dump_cpu_info_option,
     fatal_skips_option,
@@ -153,6 +155,7 @@ enum {
     service_option,
     shortened_runtime_option,
     strict_runtime_option,
+    synchronize_threads_option,
     syslog_runtime_option,
     temperature_threshold_option,
     test_delay_option,
@@ -626,6 +629,149 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
 #undef maybe_log_error
 }
 
+namespace {
+class BarrierThreadSynchronization : public SandstoneThreadSynchronizationBase
+{
+public:
+    struct alignas(64) AlignedAtomicInt : std::atomic_int {
+        using std::atomic_int::atomic;
+    };
+
+    void init() noexcept override;
+    void synchronize() noexcept override { do_sync(); }
+    virtual void do_wait(std::atomic_int &, int) noexcept;
+    virtual void do_wake(std::atomic_int &) noexcept;
+    void do_sync() noexcept;
+
+    std::array<AlignedAtomicInt, 2> phases;
+    AlignedAtomicInt phase_idx = 0;
+};
+
+void BarrierThreadSynchronization::init() noexcept
+{
+    phases[0].store(num_cpus(), std::memory_order_relaxed);
+    phases[1].store(INT_MAX, std::memory_order_relaxed);
+    phase_idx.store(0, std::memory_order_relaxed);
+}
+
+void BarrierThreadSynchronization::do_sync() noexcept
+{
+    int idx = phase_idx.load(std::memory_order_relaxed);
+    auto &phase = phases[idx];
+
+    // are we the last to arrive?
+    int remaining = phase.fetch_add(-1, std::memory_order_relaxed) - 1;
+    assert(remaining >= 0);
+    assert(remaining < num_cpus());
+    if (remaining > 0) {
+        // not the last, so wait
+        return do_wait(phase, remaining);
+    }
+
+    // yes, set up the next phase
+    idx ^= 1;
+    phases[idx].store(num_cpus(), std::memory_order_relaxed);
+    phase_idx.store(idx, std::memory_order_relaxed);
+    do_wake(phase);
+}
+
+void BarrierThreadSynchronization::do_wait(std::atomic_int &phase, int) noexcept
+{
+    while (phase.load(std::memory_order_relaxed) >= 0) {
+        // no pause
+    }
+}
+
+void BarrierThreadSynchronization::do_wake(std::atomic_int &phase) noexcept
+{
+    // release the other threads
+    phase.store(-1, std::memory_order_relaxed);
+}
+
+class FutexThreadSynchronization : public BarrierThreadSynchronization
+{
+public:
+    void do_wait(std::atomic_int &phase, int remaining) noexcept override;
+    void do_wake(std::atomic_int &phase) noexcept override;
+};
+
+void FutexThreadSynchronization::do_wait(std::atomic_int &phase, int remaining) noexcept
+{
+    while (futex_wait(&phase, remaining) != 0) {
+        remaining = phase.load(std::memory_order_relaxed);
+        if (remaining < 0)
+            return;
+    }
+}
+
+void FutexThreadSynchronization::do_wake(std::atomic_int &phase) noexcept
+{
+    BarrierThreadSynchronization::do_wake(phase);
+    futex_wake_all(&phase);
+}
+
+#ifdef __x86_64__
+#pragma GCC push_options
+#pragma GCC target("waitpkg")
+
+static constexpr int WaitpkgWaitState = 1;       // C0.1
+void check_waitpkg()
+{
+    if (cpu_has_feature(cpu_feature_waitpkg)) {
+        // test that the OS has enabled this
+        uint64_t current_tsc = __rdtsc();
+        if (_tpause(WaitpkgWaitState, current_tsc + 1) == 0)
+            return;
+    }
+
+    fprintf(stderr, "%s: waitpkg is not supported on this CPU or this OS.\n",
+            program_invocation_name);
+    exit(EX_OSERR);
+}
+
+class TPauseThreadSynchronization : public BarrierThreadSynchronization
+{
+public:
+    TPauseThreadSynchronization() { check_waitpkg(); }
+    void do_wait(std::atomic_int &phase, int remaining) noexcept override;
+    void do_wake(std::atomic_int &phase) noexcept override;
+
+    std::atomic<uint64_t> tsc;
+};
+
+void TPauseThreadSynchronization::do_wait(std::atomic_int &phase, int remaining) noexcept
+{
+    BarrierThreadSynchronization::do_wait(phase, remaining);
+    _tpause(WaitpkgWaitState, tsc.load(std::memory_order_relaxed));
+}
+
+void TPauseThreadSynchronization::do_wake(std::atomic_int &phase) noexcept
+{
+    uint64_t target_tsc = __rdtsc() + 16;
+    tsc.store(target_tsc, std::memory_order_relaxed);
+    BarrierThreadSynchronization::do_wake(phase);
+    _tpause(WaitpkgWaitState, target_tsc);
+}
+
+class UMWaitThreadSynchronization : public BarrierThreadSynchronization
+{
+public:
+    UMWaitThreadSynchronization() { check_waitpkg(); }
+    void do_wait(std::atomic_int &phase, int remaining) noexcept override;
+};
+
+void UMWaitThreadSynchronization::do_wait(std::atomic_int &phase, int remaining) noexcept
+{
+    _umonitor(&phase);      // arm the monitor first
+    if (phase.load(std::memory_order_relaxed) < 0)
+        return;
+    _umwait(WaitpkgWaitState, __rdtsc() + 128);
+}
+
+#pragma GCC pop_options
+#endif
+} // unnamed namespace
+
 static ShortDuration test_duration()
 {
     /* global (-t) option overrides this all */
@@ -729,7 +875,12 @@ bool test_time_condition() noexcept
     if (max_loop_count_exceeded(current_test))
         return 0;  // end the test if max loop count exceeded
 
-    return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
+    if (wallclock_deadline_has_expired(sApp->shmem->current_test_endtime))
+        return 0;
+
+    if (sApp->thread_synchronization)
+        sApp->thread_synchronization->synchronize();
+    return 1;
 }
 
 bool test_is_retry() noexcept
@@ -950,6 +1101,10 @@ int test_run_wrapper_function(const struct test *test, int thread_number)
 
 void test_loop_start() noexcept
 {
+#ifdef __x86_64__
+    sApp->test_thread_data(thread_num)->last_tsc = __rdtsc();
+#endif
+
     using namespace AssemblyMarker;
     assembly_marker<TestLoop, Start>();
 }
@@ -1036,6 +1191,29 @@ int num_cpus()
 
 int num_packages() {
     return Topology::topology().packages.size();
+}
+
+void checkpoint(int thread_idx) {
+    // Checks if cpujump enable, but for now do nothing.
+    if ( sApp->cpujump ) {
+
+        CPUJump *cpujump_info = sApp->cpujump_vec[thread_idx];
+        log_warning("Thread %d is waiting on barrier", thread_idx);
+        pthread_barrier_wait(cpujump_info->barrier);
+
+        // Jump to next cpu
+        pin_to_logical_processor(LogicalProcessor(cpujump_info->next_cpu));
+
+        int tmp_cpu = cpujump_info->next_cpu;
+        cpujump_info->next_cpu = cpujump_info->current_cpu;
+        cpujump_info->current_cpu = tmp_cpu;
+        log_warning("Current CPU: %d, Next CPU: %d", cpujump_info->current_cpu, cpujump_info->next_cpu);
+
+        return;
+    }
+
+    log_warning("# Checkpoint is not enabled");
+    return;
 }
 
 static LogicalProcessorSet init_cpus()
@@ -1834,6 +2012,8 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         signals_init_child();
         debug_init_child();
     }
+    if (sApp->thread_synchronization)
+        sApp->thread_synchronization->init();
 
     prepare_test(test);
 
@@ -3087,6 +3267,7 @@ int main(int argc, char **argv)
         { "alpha", no_argument, &sApp->requested_quality, INT_MIN },
         { "beta", no_argument, &sApp->requested_quality, 0 },
         { "cpuset", required_argument, nullptr, cpuset_option },
+        { "cpujump", no_argument, nullptr, cpujump_option },
         { "disable", required_argument, nullptr, disable_option },
         { "dump-cpu-info", no_argument, nullptr, dump_cpu_info_option },
         { "enable", required_argument, nullptr, 'e' },
@@ -3131,6 +3312,7 @@ int main(int argc, char **argv)
         { "service", no_argument, nullptr, service_option },
         { "shorten-runtime", required_argument, nullptr, shortened_runtime_option },
         { "strict-runtime", no_argument, nullptr, strict_runtime_option },
+        { "synchronize-threads", required_argument, nullptr, synchronize_threads_option },
         { "syslog", no_argument, nullptr, syslog_runtime_option },
         { "temperature-threshold", required_argument, nullptr, temperature_threshold_option },
         { "test-delay", required_argument, nullptr, test_delay_option },
@@ -3312,6 +3494,9 @@ int main(int argc, char **argv)
         case cpuset_option:
             apply_cpuset_param(optarg);
             break;
+        case cpujump_option:
+            sApp->cpujump = true;
+            break;
         case dump_cpu_info_option:
             dump_cpu_info();
             return EXIT_SUCCESS;
@@ -3391,6 +3576,26 @@ int main(int argc, char **argv)
             break;
         case strict_runtime_option:
             sApp->shmem->use_strict_runtime = true;
+            break;
+        case synchronize_threads_option:
+            if (std::string_view(optarg) == "barrier") {
+                sApp->thread_synchronization = new BarrierThreadSynchronization;
+            } else if (std::string_view(optarg) == "futex") {
+                sApp->thread_synchronization = new FutexThreadSynchronization;
+#ifdef __x86_64__
+            } else if (std::string_view(optarg) == "tpause") {
+                sApp->thread_synchronization = new TPauseThreadSynchronization;
+            } else if (std::string_view(optarg) == "umwait") {
+                sApp->thread_synchronization = new UMWaitThreadSynchronization;
+#endif
+            } else {
+                fprintf(stderr, "%s: invalid option --synchronize-threads=%s. Valid options are: barrier, futex"
+#ifdef __x86_64__
+                                ", tpause, umwait"
+#endif
+                                "\n", argv[0], optarg);
+                return EX_USAGE;
+            }
             break;
         case syslog_runtime_option:
             sApp->syslog_ident = program_invocation_name;
@@ -3731,6 +3936,36 @@ int main(int argc, char **argv)
     if (sApp->vary_uncore_frequency_mode)
         sApp->frequency_manager.initial_uncore_frequency_setup();
 
+    /* CPU jump is only available with 2 or more threads
+       This may change in the near future */
+    if (sApp->cpujump ) {
+        if (sApp->thread_count % 2 != 0) {
+        fprintf(stderr, "%s: --cpujump requires an even number of threads\n", argv[0]);
+        exit(EX_USAGE);
+        }
+
+        // Setup cpujump info
+        sApp->cpujump_vec.resize(sApp->thread_count);
+        for (int i = 0; i < sApp->thread_count; i+=2) {
+            pthread_barrier_t *barrier = new pthread_barrier_t;
+            pthread_barrier_init(barrier, nullptr, sApp->members_per_barrier);
+
+            logging_printf(LOG_LEVEL_VERBOSE(1) , "Creating cpujump struct %d\n", i);
+            sApp->cpujump_vec[i] = new CPUJump;
+            sApp->cpujump_vec[i]->barrier = barrier;
+            sApp->cpujump_vec[i]->current_cpu = cpu_info[i].cpu_number;
+            sApp->cpujump_vec[i]->next_cpu = cpu_info[i+1].cpu_number;
+
+            sApp->cpujump_vec[i+1] = new CPUJump;
+            sApp->cpujump_vec[i+1]->barrier = barrier;
+            sApp->cpujump_vec[i+1]->current_cpu = cpu_info[i+1].cpu_number;
+            sApp->cpujump_vec[i+1]->next_cpu = cpu_info[i].cpu_number;
+
+            //logging_printf(LOG_LEVEL_VERBOSE(1) , "Current CPU: %d, Next CPU: %d\n", sApp->cpujump_vec[i]->current_cpu, sApp->cpujump_vec[i]->next_cpu);
+            //logging_printf(LOG_LEVEL_VERBOSE(1) , "Current CPU: %d, Next CPU: %d\n", sApp->cpujump_vec[i+1]->current_cpu, sApp->cpujump_vec[i+1]->next_cpu);
+        }
+    }
+
 #ifndef __OPTIMIZE__
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
 #endif
@@ -3795,6 +4030,12 @@ int main(int argc, char **argv)
     int exit_code = EXIT_SUCCESS;
     if (total_failures || (total_skips && sApp->fatal_skips))
         exit_code = EXIT_FAILURE;
+
+    for (int i = 0; i < sApp->thread_count; i+=2) {
+        delete sApp->cpujump_vec[i]->barrier;
+        delete sApp->cpujump_vec[i];
+        delete sApp->cpujump_vec[i+1];
+    }
 
     // done running all the tests, clean up and exit
     return cleanup_global(exit_code, std::move(per_cpu_failures));

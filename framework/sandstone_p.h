@@ -216,11 +216,15 @@ struct alignas(64) Test : Common
     /* Thread's effective CPU frequency during execution */
     double effective_freq_mhz;
 
+    /* Last TSC reading */
+    uint64_t last_tsc;
+
     void init()
     {
         Common::init();
         inner_loop_count = inner_loop_count_at_fail = 0;
         effective_freq_mhz = 0.0;
+        last_tsc = 0;
     }
 };
 } // namespace PerThreadData
@@ -314,6 +318,19 @@ public:
 private:
     int fd;
     friend LoggingStream logging_user_messages_stream(int thread_num, int level);
+};
+
+struct SandstoneThreadSynchronizationBase
+{
+    virtual ~SandstoneThreadSynchronizationBase() = default;
+    virtual void init() noexcept = 0;
+    virtual void synchronize() noexcept = 0;
+};
+
+struct CPUJump {
+    pthread_barrier_t *barrier = nullptr;
+    int current_cpu;
+    int next_cpu;
 };
 
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
@@ -434,6 +451,11 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     void select_main_thread(int slice);
 
     SandstoneBackgroundScan background_scan;
+    SandstoneThreadSynchronizationBase *thread_synchronization = nullptr;
+
+    bool cpujump = false;
+    int members_per_barrier = 2; // Make this configurable
+    std::vector<CPUJump*> cpujump_vec;
 
 private:
     SandstoneApplication() = default;
