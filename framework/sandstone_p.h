@@ -369,6 +369,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 #else
             fork_each_test;
 #endif
+    bool ignore_mce_errors = false;
     bool ignore_os_errors = false;
     bool force_test_time = false;
     bool service_background_scan = false;
