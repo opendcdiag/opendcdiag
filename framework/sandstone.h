@@ -33,6 +33,7 @@
 
 #ifdef __cplusplus
 #include <atomic>
+#include <vector>
 using std::atomic_int;
 extern "C" {
 #else
@@ -660,8 +661,13 @@ int num_cpus() __attribute__((pure));
 /// test.
 int num_packages() __attribute__((pure));
 
+// CPU reschedule
+void reschedule();
+
 #ifdef __cplusplus
 }
+void reschedule_queue(std::vector<int> *reschedule_cpu_q, std::atomic<int> *cpu_idx);
+
 inline int cpu_info::cpu() const
 {
     return this - ::cpu_info;

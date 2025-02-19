@@ -16,6 +16,7 @@
 #include <new>
 #include <map>
 #include <numeric>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -1036,6 +1037,39 @@ int num_cpus()
 
 int num_packages() {
     return Topology::topology().packages.size();
+}
+
+void reschedule() {
+    // Choose a random CPU to hop to
+    int cpu_idx = random32() % num_cpus();
+    int next_cpu = cpu_info[cpu_idx].cpu_number;
+
+    if (pin_to_logical_processor(LogicalProcessor(next_cpu)))
+        log_debug("Rescheduled thread %d (%ld) to CPU %d",thread_num, pthread_self(), next_cpu);
+    else
+        log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
+
+    return;
+}
+
+void reschedule_queue(std::vector<int> *reschedule_cpu_q, std::atomic<int> *cpu_idx) {
+    // Reshuffle the queue if we have iterated through it
+    if (cpu_idx->load() >= reschedule_cpu_q->size()) {
+        auto rng = std::default_random_engine {};
+        rng.seed(random32());
+        std::shuffle(reschedule_cpu_q->begin(), reschedule_cpu_q->end(), rng);
+        cpu_idx->store(0);
+    }
+
+    // Pin to the next cpu based on the queue
+    int next_cpu = reschedule_cpu_q->at(cpu_idx->fetch_add(1));
+
+    if (pin_to_logical_processor(LogicalProcessor(next_cpu)))
+        log_debug("Rescheduled thread %d (%ld) to CPU %d",thread_num, pthread_self(), next_cpu);
+    else
+        log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
+
+    return;
 }
 
 static LogicalProcessorSet init_cpus()
