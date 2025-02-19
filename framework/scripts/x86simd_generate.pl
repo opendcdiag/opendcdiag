@@ -186,7 +186,12 @@ for (@architecture_names) {
 }
 
 print q{
-static const uint64_t _compilerCpuFeatures = 0};
+typedef uint64_t CpuFeatures_t;
+
+#define  CPU_FEATURES_ALL  UINT64_MAX
+#define  CPU_FEATURES_C(c) UINT64_C(c)
+
+static const CpuFeatures_t _compilerCpuFeatures = 0};
 
 # And print the compiler-enabled features part:
 for (my $i = 0; $i < scalar @features; ++$i) {
