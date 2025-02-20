@@ -956,7 +956,7 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     }
 
     auto detect = [](void *ptr) -> void * {
-        auto enabled_cpus = *static_cast<const LogicalProcessorSet *>(ptr);
+        const auto & enabled_cpus = *static_cast<const LogicalProcessorSet *>(ptr);
         int curr_cpu = 0;
         for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
             auto lp = LogicalProcessor(curr_cpu);
