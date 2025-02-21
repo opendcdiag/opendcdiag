@@ -88,3 +88,24 @@ bool pin_to_logical_processors(CpuRange range, const char *thread_name)
     }
     return true;
 }
+// TODO: Can we keep using the original pin_thread_to_logical_processor function with thread_pid=0 as default?
+bool pin_thread_to_logical_processor(LogicalProcessor n, const char *thread_name, pid_t thread_pid)
+{
+    set_thread_name(thread_name);
+    if (n == LogicalProcessor(-1))
+        return true;            // don't change affinity
+
+    using Word = LogicalProcessorSetOps::Word;
+    constexpr size_t ProcessorsPerWord = LogicalProcessorSetOps::ProcessorsPerWord;
+    size_t size = size_t(n) / ProcessorsPerWord + 1;
+
+    Word cpu_set[size];         // -Wvla
+    memset(cpu_set, thread_pid, sizeof(cpu_set));
+    LogicalProcessorSetOps::setInArray({ cpu_set, size }, n);
+
+    if (sched_setaffinity(thread_pid, sizeof(cpu_set), reinterpret_cast<cpu_set_t *>(cpu_set))) {
+        perror("sched_setaffinity");
+        return false;
+    }
+    return true;
+}

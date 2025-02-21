@@ -1194,25 +1194,35 @@ int num_packages() {
 }
 
 // TODO: Think of a better name
+// TODO: Make it scalable for more than 2 threads
 void jump_threads() noexcept {
-    log_warning("Jump other threads to their next cpu\n");
-}
+    // Get self CPUJump and pair's CPUJump info
+    CPUJump *self_cpujump_info = sApp->cpujump_vec[thread_num];
+    int pair_thread_num = (self_cpujump_info->current_cpu == thread_num) ? self_cpujump_info->next_cpu : self_cpujump_info->current_cpu;
+    CPUJump *pair_cpujump_info = sApp->cpujump_vec[pair_thread_num];
 
-void checkpoint() {
-    // Checks if cpujump enable, but for now do nothing.
-    if ( sApp->cpujump ) {
+    tid_t self_tid = sApp->test_thread_data(thread_num)->tid.load();
+    tid_t pair_tid = sApp->test_thread_data(pair_thread_num)->tid.load();
+    log_warning("Thread %d and %d are waiting on barrier", self_tid, pair_tid);
 
-        // TODO: We need to add the offset of the slice to get the proper cpujump_info
-        CPUJump *cpujump_info = sApp->cpujump_vec[thread_num];
-        log_warning("Thread %d is waiting on barrier", thread_num);
-        cpujump_info->barrier->arrive_and_wait();
-
-        // Jump to next cpu
-        // TODO: Remove, only last to arrive will pin the other threads to their next cpu
-        if (pin_to_logical_processor(LogicalProcessor(cpujump_info->next_cpu))) {
-            swap(cpujump_info->current_cpu, cpujump_info->next_cpu);
+    auto pin_and_swap = [](CPUJump *cpujump_info, tid_t tid) {
+        if (pin_thread_to_logical_processor(LogicalProcessor(cpujump_info->next_cpu), nullptr, tid)) {
+            std::swap(cpujump_info->current_cpu, cpujump_info->next_cpu);
             log_warning("Current CPU: %d, Next CPU: %d", cpujump_info->current_cpu, cpujump_info->next_cpu);
         }
+    };
+
+    pin_and_swap(self_cpujump_info, self_tid);
+    pin_and_swap(pair_cpujump_info, pair_tid);
+}
+
+// TODO: Think of a better name
+void checkpoint() {
+    if ( sApp->cpujump ) {
+        // TODO: We need to add the offset of the slice to get the proper cpujump_info
+        CPUJump *cpujump_info = sApp->cpujump_vec[thread_num];
+        cpujump_info->barrier->arrive_and_wait();
+
         return;
     }
 
