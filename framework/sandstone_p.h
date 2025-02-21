@@ -37,6 +37,7 @@
 #include <sandstone_utils.h>
 
 #include "effective_cpu_freq.hpp"
+#include "gettid.h"
 #include "topology.h"
 #include "interrupt_monitor.hpp"
 #include "thermal_monitor.hpp"
@@ -219,6 +220,9 @@ struct alignas(64) Test : Common
 
     /* Last TSC reading */
     uint64_t last_tsc;
+
+    /* Thread Process ID */
+    std::atomic<tid_t> tid;
 
     void init()
     {
