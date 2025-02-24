@@ -30,6 +30,14 @@ static void set_thread_name(const char *thread_name)
     (void) thread_name;
 }
 
+[[maybe_unused]] static bool running_in_wine()
+{
+    HMODULE hMod = GetModuleHandleW(L"ntdll.dll");
+    if (hMod)
+        return GetProcAddress(hMod, "wine_get_version") != nullptr;
+    return false;
+}
+
 LogicalProcessorSet ambient_logical_processor_set()
 {
     LogicalProcessorSet result = {};        // memsets to zero
@@ -51,12 +59,20 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     if (n == LogicalProcessor(-1))
         return true;            // don't change affinity
 
+    HANDLE hThread = GetCurrentThread();
+
+#ifdef ENABLE_WINE_WORKAROUNDS
+    // Work around WINE not implementing SetThreadIdealProcessorEx
+    static const bool is_wine = running_in_wine();
+    if (is_wine && SetThreadIdealProcessor(hThread, DWORD(n)) == 0)
+        return true;
+#endif
+
     PROCESSOR_NUMBER processorNumber = to_processor_number(n);
     GROUP_AFFINITY groupAffinity = {};
     groupAffinity.Group = processorNumber.Group;
     groupAffinity.Mask = KAFFINITY(1) << processorNumber.Number;
 
-    HANDLE hThread = GetCurrentThread();
     if (!SetThreadGroupAffinity(hThread, &groupAffinity, nullptr)) {
         win32_perror("SetThreadGroupAffinity");
         return false;
