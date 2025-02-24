@@ -8,6 +8,7 @@ framework_files += \
         'cpu_affinity.cpp',
         'fcntl.c',
         'fnmatch.c',
+        'gettid.cpp',
         'mman.c',
         'resource.cpp',
         'signals.cpp',
