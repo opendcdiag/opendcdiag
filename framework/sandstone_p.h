@@ -36,6 +36,7 @@
 #include <sandstone_utils.h>
 
 #include "effective_cpu_freq.hpp"
+#include "gettid.h"
 #include "topology.h"
 #include "interrupt_monitor.hpp"
 #include "thermal_monitor.hpp"
@@ -215,6 +216,9 @@ struct alignas(64) Test : Common
 
     /* Thread's effective CPU frequency during execution */
     double effective_freq_mhz;
+
+    /* Thread ID */
+    std::atomic<tid_t> tid;
 
     void init()
     {

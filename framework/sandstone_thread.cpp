@@ -89,6 +89,8 @@ void SandstoneTestThread::start(RunnerFunction *f, int cpu)
     auto runner = +[](void *ptr) {
         auto self = static_cast<SandstoneTestThread *>(ptr);
         ::thread_num = self->thread_num;
+        sApp->test_thread_data(self->thread_num)->tid.store(gettid());
+        auto clear_tid = scopeExit([self] { sApp->test_thread_data(self->thread_num)->tid.store(0, std::memory_order_relaxed); });
         return reinterpret_cast<void *>(self->target(self->thread_num));
     };
 
