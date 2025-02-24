@@ -6,13 +6,8 @@
 #ifndef SYSDEPS_WIN32_GETTID_H
 #define SYSDEPS_WIN32_GETTID_H
 
-#include <windows.h>
+using tid_t = unsigned;
 
-typedef DWORD tid_t;
-
-static inline tid_t gettid()
-{
-    return GetCurrentThreadId();
-}
+extern tid_t gettid() noexcept;
 
 #endif // SYSDEPS_WIN32_GETTID_H
