@@ -75,7 +75,7 @@ jobs:
 
   Windows:
     runs-on: ubuntu-latest
-    container: fedora:38
+    container: fedora:41
     env:
       ENABLE_WINE_WORKAROUNDS: 1
       WINEDEBUG: fixme-all,-dbghelp_stabs
