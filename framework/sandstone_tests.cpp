@@ -52,7 +52,7 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     if (!name || !strlen(name)) return res;
     if (strchr(name, '*')) { /* if it has an asterisk, it's a glob, so expand it. */
         for (struct test *t : all_tests) {
-            if (!fnmatch(name, t->id, 0))
+            if (t->quality_level >= sApp->requested_quality && !fnmatch(name, t->id, 0))
                 res.push_back(t);
         }
     } else if (name[0] == '@') { /* it's a group name */
@@ -76,6 +76,8 @@ SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) 
     if (!(flags & enable_all_tests)) return;
     std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
     for (struct test &test : source) {
+        if (test.quality_level < sApp->requested_quality)
+            continue;
         struct test_cfg_info ti;
         ti.status = test_cfg_info::enabled;
         ti.test = &test;
