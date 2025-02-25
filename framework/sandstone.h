@@ -154,7 +154,7 @@ typedef enum TestQuality {
     static_assert(N > 0, "N must be positive");     \
     test_loop_start();                              \
     for (int _loop_i_ = 0; _loop_i_ == 0; test_loop_end(), _loop_i_ = 1)          \
-        for ( ; _loop_i_ < N || (_loop_i_ = 0, test_time_condition(test)); ++_loop_i_)
+        for ( ; _loop_i_ < N || (_loop_i_ = 0, test_time_condition(test), test_inject_idle(N)); ++_loop_i_)
 
 /// used in a test's test_init function to indicate that a test should be skipped.
 #define EXIT_SKIP               -255
@@ -548,6 +548,9 @@ extern bool test_time_condition() noexcept;
 
 /// Returns true if this is a retry.
 bool test_is_retry() noexcept __attribute__((pure));
+
+/// Injects sleep cycles into the test.
+bool test_inject_idle(int N) noexcept;
 
 /// outputs msg to the logs, prefixing it with the string "Platform issue:"
 /// This function is usually used to log a warning when an error is detected
