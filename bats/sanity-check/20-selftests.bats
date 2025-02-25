@@ -173,7 +173,7 @@ tap_negative_check() {
                 ;;
             "not ok"*)
                 # inspect a little more
-                if ! [[ "$line" =~ 'not ok '[\ 0-9]+\ ([^#\ ]+)\ *#' (beta test)'?$suffix ]] ||
+                if ! [[ "$line" =~ 'not ok '[\ 0-9]+\ ([^#\ ]+)\ *$suffix ]] ||
                         ! [[ "${BASH_REMATCH[1]}" = "$test" ]]; then
                     echo "bad line: $line" >&2
                     return 1
@@ -224,7 +224,7 @@ tap_negative_check() {
         run $SANDSTONE --output-format=tap --selftests --retest-on-failure=0 --on-crash=kill -e $test -o /dev/null -v
         [[ $status -eq 1 ]]
         sed 's/\r$//; /^wine: Unhandled/d' <<<"$output" | \
-            tap_negative_check "$test" ' (Killed|Core Dumped):.*'
+            tap_negative_check "$test" '# (Killed|Core Dumped):.*'
     done
 }
 
@@ -232,7 +232,7 @@ tap_negative_check() {
     run $SANDSTONE --output-format=tap --selftests --retest-on-failure=0 --on-crash=kill -e selftest_oserror -o /dev/null -v
     [[ $status -eq 2 ]]
     sed 's/\r$//' <<<"$output" | \
-        tap_negative_check selftest_oserror ' Operating system error:.*' "exit: invalid"
+        tap_negative_check selftest_oserror '# Operating system error:.*' "exit: invalid"
 }
 
 @test "TAP silent output" {
@@ -382,7 +382,7 @@ selftest_pass() {
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_pass
-    test_yaml_regexp "/tests/0/details/quality" beta
+    test_yaml_regexp "/tests/0/details/quality" production
     test_yaml_regexp "/tests/0/details/description" 'Just pass'
     test_yaml_regexp "/tests/0/state/seed" '\w+:\w+'
     test_yaml_numeric "/tests/0/state/iteration" 'value == 0'
