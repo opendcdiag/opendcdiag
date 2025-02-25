@@ -360,9 +360,9 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     SharedMemory *shmem = nullptr;
     int shmemfd = -1;
 
+    static constexpr int DefaultQualityLevel = int(TEST_QUALITY_PROD);
     int requested_quality = DefaultQualityLevel;
     std::string file_log_path;
-    static constexpr int DefaultQualityLevel = 50;
     const char *syslog_ident = nullptr;
 
     bool fatal_skips = false;

@@ -97,6 +97,16 @@ typedef enum SkipCategory {
     SelftestSkipCategory,
 } SkipCategory;
 
+/// Values to be used in the test's .quality_level field
+typedef enum TestQuality {
+    /// test should not be run (ever)
+    TEST_QUALITY_SKIP               = -1,
+    /// test is a beta test (default) and should be run only if --beta is used
+    TEST_QUALITY_BETA               = 0,
+    /// test is a production test and should be run by default
+    TEST_QUALITY_PROD               = 2,
+} test_quality;
+
 /// logs a skip message to the logfile. log_skip accepts the category to which the skip belongs to
 /// and accepts a constant format string followed by 0 or more arguments that provide data for the
 /// format string.
@@ -143,13 +153,6 @@ typedef enum SkipCategory {
     test_loop_start();                              \
     for (int _loop_i_ = 0; _loop_i_ == 0; test_loop_end(), _loop_i_ = 1)          \
         for ( ; _loop_i_ < N || (_loop_i_ = 0, test_time_condition(test)); ++_loop_i_)
-
-/// used in a test's quality_level field to signify that a test is a production test.
-#define TEST_QUALITY_PROD        100
-/// used in a test's quality_level field to signify that a test is a beta test.
-#define TEST_QUALITY_BETA        0
-/// used in a test's quality_level field to signify that a test should not be run.
-#define TEST_QUALITY_SKIP        -1
 
 /// used in a test's test_init function to indicate that a test should be skipped.
 #define EXIT_SKIP               -255
@@ -497,7 +500,7 @@ struct test {
     int fracture_loop_count;
 
     /// whether to enable this test
-    int quality_level;
+    test_quality quality_level;
 
     /// flags for this test. See enum for possible values
     test_flags flags;
