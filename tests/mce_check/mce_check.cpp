@@ -106,7 +106,7 @@ struct test mce_test = {  // This variable is used in the framework!
         .test_run = mce_check_run,
         .desired_duration = -1,
         .fracture_loop_count = -1,
-        .quality_level = INT_MAX,
+        .quality_level = TEST_QUALITY_PROD,
         .flags = test_schedule_sequential,
 };
 // Do not convert to use the test declaration macros - read above
