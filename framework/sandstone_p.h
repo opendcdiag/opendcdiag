@@ -406,7 +406,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
-    FrequencyManager frequency_manager;
+    std::unique_ptr<FrequencyManager> frequency_manager;
 
 #ifndef __linux__
     std::string path_to_self;
