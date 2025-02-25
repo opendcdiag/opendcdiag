@@ -92,6 +92,11 @@ string format_duration(std::chrono::nanoseconds ns, FormatDurationOptions opts)
     return result;
 }
 
+int duration_to_usec(ShortDuration duration)
+{
+    return duration_cast<microseconds>(duration).count();
+}
+
 #ifdef CLOCK_MONOTONIC_COARSE
 coarse_steady_clock::time_point coarse_steady_clock::now() noexcept
 {
