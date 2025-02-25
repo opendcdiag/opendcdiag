@@ -415,13 +415,13 @@ static const char *quality_string(const struct test *test)
     case SandstoneApplication::OutputFormat::yaml:
         if (test->quality_level < 0)
             return "alpha";
-        if (test->quality_level < TEST_QUALITY_PROD)
+        if (test->quality_level == TEST_QUALITY_BETA)
             return "beta";
         return "production";
     case SandstoneApplication::OutputFormat::tap:
         if (test->quality_level < 0)
             return "(alpha test) ";
-        if (test->quality_level < TEST_QUALITY_PROD)
+        if (test->quality_level == TEST_QUALITY_BETA)
             return "(beta test) ";
         return nullptr;
     case SandstoneApplication::OutputFormat::no_output:
