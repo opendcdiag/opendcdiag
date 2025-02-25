@@ -877,6 +877,11 @@ const static test_group group_positive = {
     .description = "Self-tests that succeed (positive results)"
 };
 
+const static test_group group_selftest_passes = {
+    .id = "selftest_passes",
+    .description = "Group for selftest_pass* tests"
+};
+
 const static test_group group_fail_test_the_test = {
     .id = "fail_test_the_test",
     .description = "Self-tests that fail --test-tests"
@@ -901,15 +906,31 @@ static struct test selftests_array[] = {
 {
     .id = "selftest_pass",
     .description = "Just pass",
-    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
     .test_run = selftest_pass_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_pass_optional",
+    .description = "Just pass",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_OPTIONAL,
+},
+{
+    .id = "selftest_pass_beta",
+    .description = "Just pass",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_BETA,
+},
+{
     .id = "selftest_pass_low_quality",
     .description = "Just pass",
-    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
     .test_run = selftest_pass_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_SKIP,

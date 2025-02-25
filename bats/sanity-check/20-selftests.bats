@@ -398,10 +398,36 @@ selftest_pass() {
 }
 
 @test "selftest_pass wildcard" {
-    # This should NOT run selftest_pass_low_quality
+    # This should run ONLY selftest_pass, not any of the others, not even mention them
     declare -A yamldump
     selftest_pass -e 'selftest_pass*'
     [[ ${yamldump[/tests]} != *selftest_pass_low_quality* ]]
+    [[ ${yamldump[/tests]} != *selftest_pass_beta* ]]
+    [[ ${yamldump[/tests]} != *selftest_pass_optional* ]]
+}
+
+@test "selftest_pass_beta" {
+    # This should SKIP selftest_pass_beta
+    declare -A yamldump
+    sandstone_selftest -e selftest_pass_beta -e selftest_pass
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_pass_beta
+    test_yaml_regexp "/tests/0/details/quality" beta
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/0/skip-category" TestResourceIssue
+    test_yaml_regexp "/tests/0/skip-reason" '.*BETA quality.*'
+}
+
+@test "selftest_pass_optional" {
+    # This should RUN selftest_pass_optional
+    declare -A yamldump
+    sandstone_selftest -e selftest_pass_optional -e selftest_pass
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_pass_optional
+    test_yaml_regexp "/tests/0/details/quality" production
+    test_yaml_regexp "/tests/0/result" pass
 }
 
 @test "selftest_pass_low_quality" {
@@ -409,6 +435,21 @@ selftest_pass() {
     declare -A yamldump
     selftest_pass -e 'selftest_pass_low_quality' -e selftest_pass
     [[ ${yamldump[/tests]} != *selftest_pass_low_quality* ]]
+}
+
+@test "selftest_pass group" {
+    # This should run both selftest_pass and selftest_pass_optional,
+    # skip selftest_pass_beta and not mention selftest_pass_low_quality
+    declare -A yamldump
+    sandstone_selftest -e '@selftest_passes'
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_pass
+    test_yaml_regexp "/tests/0/result" pass
+    test_yaml_regexp "/tests/1/test" selftest_pass_optional
+    test_yaml_regexp "/tests/1/result" pass
+    test_yaml_regexp "/tests/2/test" selftest_pass_beta
+    test_yaml_regexp "/tests/2/result" skip
 }
 
 @test "selftest_cxxthrowcatch" {
@@ -952,8 +993,12 @@ test_list_file() {
     test_list_file selftest_pass
 }
 
-@test "--test-list-file with 3 tests" {
+@test "--test-list-file with duplicate test" {
     test_list_file selftest_pass selftest_logs selftest_pass
+}
+
+@test "--test-list-file with optional test" {
+    test_list_file selftest_pass selftest_pass_optional
 }
 
 @test "--test-list-file with duration" {
@@ -1052,7 +1097,9 @@ test_list_randomize() {
 test_list_file_ignores_beta() {
     declare -A yamldump
     local -a list=(selftest_pass selftest_pass_low_quality
+                   selftest_pass_beta selftest_pass_optional
                    selftest_skip selftest_pass selftest_logs)
+    local -a not_to_run=(selftest_pass_low_quality selftest_pass_beta)
 
     local testlistfile=`mktempfile list.XXXXXX`
     echo "=== test list ==="
@@ -1064,12 +1111,15 @@ test_list_file_ignores_beta() {
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
 
-    # confirm all but one of these tests ran
-    test_yaml_numeric "/tests@len" "${#list[@]} - 1"
+    # confirm all but two of these tests ran
+    test_yaml_numeric "/tests@len" "${#list[@]} - ${#not_to_run[@]}"
 
-    # and that none of them is the low_quality one
+    # and that none of the ones we didn't want to run ran
     for ((i = 0; i < yamldump[/tests@len]; ++i)); do
-        [[ ${yamldump[/tests/test]} != "selftest_pass_low_quality" ]]
+        local norun
+        for norun in "${not_to_run[@]}"; do
+            [[ ${yamldump[/tests/test]} != "$norun" ]]
+        done
     done
 }
 

@@ -2161,11 +2161,11 @@ static TestResult run_one_test_once(const struct test *test)
         (void) missing;
 
         children.results.emplace_back(ChildExitStatus{ TestResult::Skipped });
-    } else if (test->quality_level >= 0 && test->quality_level < sApp->requested_quality) {
+    } else if (test->quality_level == TEST_QUALITY_BETA && test->quality_level < sApp->requested_quality) {
         init_per_thread_data();
         log_skip(TestResourceIssueSkipCategory, "Test %s is in BETA quality, try again using --beta option", test->id);
         children.results.emplace_back(ChildExitStatus{ TestResult::Skipped });
-    } else if (test->quality_level >= sApp->requested_quality) {
+    } else {
         run_one_test_children(children, test);
     }
 
@@ -3377,8 +3377,8 @@ int main(int argc, char **argv)
         case quality_option:
             sApp->requested_quality = ParseIntArgument<>{
                     .name = "--quality",
-                    .min = -1000,
-                    .max = +1000,
+                    .min = int(TEST_QUALITY_SKIP),
+                    .max = int(TEST_QUALITY_PROD),
                     .range_mode = OutOfRangeMode::Saturate
             }();
             break;

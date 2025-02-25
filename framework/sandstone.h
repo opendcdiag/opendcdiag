@@ -103,6 +103,8 @@ typedef enum TestQuality {
     TEST_QUALITY_SKIP               = -1,
     /// test is a beta test (default) and should be run only if --beta is used
     TEST_QUALITY_BETA               = 0,
+    /// test is a production-quality test but should not be run by default
+    TEST_QUALITY_OPTIONAL           = 1,
     /// test is a production test and should be run by default
     TEST_QUALITY_PROD               = 2,
 } test_quality;
