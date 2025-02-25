@@ -46,20 +46,19 @@ private:
     {
         /* Read first line of given file */
         char line[100]; //100 characters should be more than enough
-        FILE *file = fopen(file_path.data(), "r");
+        AutoClosingFile file(fopen(file_path.data(), "r"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, file_path.data());
             exit(EX_IOERR);
         }
         fscanf(file, "%s", line);
-        fclose(file);
         return std::string(line);
     }
 
     void write_file(std::string_view file_path, std::string_view line)
     {
-        FILE *file = fopen(file_path.data(), "w");
+        AutoClosingFile file(fopen(file_path.data(), "w"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot write \"%s\" to file \"%s\". Make sure the user is root: %m\n", program_invocation_name, line.data(), file_path.data());
@@ -67,21 +66,19 @@ private:
         }
 
         fprintf(file, "%s", line.data());
-        fclose(file);
     }
 
     int get_frequency_from_file(std::string_view file_path)
     {
         /* Read frequency value from file */
         int frequency = 0;
-        FILE *file = fopen(file_path.data(), "r");
+        AutoClosingFile file(fopen(file_path.data(), "r"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, file_path.data());
             exit(EX_IOERR);
         }
         fscanf(file, "%d", &frequency);
-        fclose(file);
         return frequency;
     }
 
@@ -111,7 +108,7 @@ private:
     {
         const char *scaling_governor_path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors";
         char read_file[100];
-        FILE *file = fopen(scaling_governor_path, "r");
+        AutoClosingFile file(fopen(scaling_governor_path, "r"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, scaling_governor_path);
@@ -126,7 +123,6 @@ private:
             }
         }
 
-        fclose(file);
         return userspace_present;
     }
 
@@ -134,13 +130,12 @@ private:
     {
         // check for 0th socket. 0th socket should always be present.
         const char *uncore_path = "/sys/devices/system/cpu/intel_uncore_frequency/package_00_die_00/initial_min_freq_khz";
-        FILE *file = fopen(uncore_path, "r");
+        AutoClosingFile file(fopen(uncore_path, "r"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot read from file: %s. Please check if intel_uncore_frequency directory is present in the file path /sys/devices/system/cpu: %m\n", program_invocation_name, uncore_path);
             exit(EX_IOERR);
         }
-        fclose(file);
     }
 
     void enable_disable_userspace(bool should_enable_userspace)
