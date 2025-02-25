@@ -6,7 +6,14 @@
 #ifndef FREQUENCY_MANAGER_HPP
 #define FREQUENCY_MANAGER_HPP
 
+#include <sandstone_utils.h>
+
+#include <string>
 #include <unordered_set>
+#include <vector>
+
+#include <stdint.h>
+
 #define BASE_CORE_FREQ_PATH    "/sys/devices/system/cpu/cpu"
 #define BASE_UNCORE_FREQ_PATH  "/sys/devices/system/cpu/intel_uncore_frequency/package_0"
 #define SCALING_GOVERNOR       "/cpufreq/scaling_governor"
