@@ -3402,11 +3402,6 @@ int main(int argc, char **argv)
             break;
 #ifndef NO_SELF_TESTS
         case selftest_option:
-            if (sApp->requested_quality != SandstoneApplication::DefaultQualityLevel) {
-                fprintf(stderr, "%s: --selftest is incompatible with --beta or --quality.\n", argv[0]);
-                return EX_USAGE;
-            }
-            sApp->requested_quality = 0;
             sApp->shmem->selftest = true;
             test_set_config.is_selftest = true;
             break;

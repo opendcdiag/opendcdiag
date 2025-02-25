@@ -904,6 +904,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_pass_low_quality",
@@ -918,6 +919,7 @@ static struct test selftests_array[] = {
     .description = "Loops around usleep() for the regular test time",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_timedpass_run<10'000>,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #ifdef __unix__
 {
@@ -925,6 +927,7 @@ static struct test selftests_array[] = {
     .description = "Forks, then loops around usleep() for the regular test time",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_fork_run<selftest_timedpass_run<10'000>>,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #endif
 {
@@ -935,6 +938,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_logs_run,
     .desired_duration = -1,
     .max_threads = 3,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_logdata",
@@ -942,6 +946,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_logdata_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_log_platform",
@@ -950,6 +955,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_log_platform_init,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_logs_options",
@@ -958,6 +964,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_logs_options_init,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_logs_getcpu",
@@ -965,6 +972,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_logs_getcpu_run,   // may skip
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_logs_random_init",
@@ -973,6 +981,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_logs_random",
@@ -980,6 +989,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_logs_random_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_cxxthrowcatch",
@@ -987,6 +997,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_cxxthrowcatch_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_skip_minimum_cpu",
@@ -996,6 +1007,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_fail_run,                  // shouldn't get run
     .minimum_cpu = ~decltype(test::minimum_cpu)(0), // hopefully we won't get run where this passes!
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_skip",
@@ -1004,6 +1016,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_skip_init,
     .test_run = selftest_skip_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_log_skip_init",
@@ -1012,6 +1025,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_log_skip_init,
     .test_run = selftest_skip_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_log_skip_init_socket0",
@@ -1020,6 +1034,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_log_skip_socket_init<0>,
     .test_run = selftest_log_skip_socket_run<0>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_log_skip_init_socket1",
@@ -1028,6 +1043,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_log_skip_socket_init<1>,
     .test_run = selftest_log_skip_socket_run<1>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_log_skip_run_all_threads",
@@ -1035,6 +1051,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_log_skip_run_all_threads,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_log_skip_run_even_threads",
@@ -1042,6 +1059,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_log_skip_run_even_threads,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_log_skip_newline",
@@ -1050,6 +1068,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_log_skip_newline_init,
     .test_run = selftest_log_skip_newline_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_skip_cleanup",
@@ -1059,6 +1078,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_skip_cleanup,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_oserror_cleanup",
@@ -1068,6 +1088,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_errno_cleanup,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_skipmsg_success_cleanup",
@@ -1077,6 +1098,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_skipmsg_success_cleanup,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_skipmsg_skip_cleanup",
@@ -1086,13 +1108,15 @@ static struct test selftests_array[] = {
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_skipmsg_skip_cleanup,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_maybe_skip_750ms",
     .description = "Requests to run for 750 ms (could be skipped)",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_timedpass_run<(7500us).count()>,
-    .desired_duration = 750
+    .desired_duration = 750,
+    .quality_level = TEST_QUALITY_PROD,
 },
 
 {
@@ -1102,19 +1126,22 @@ static struct test selftests_array[] = {
     .test_run = selftest_timedpass_run<0>,
     .desired_duration = 200,
     .fracture_loop_count = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_timedpass_tooshort",
     .description = "Runs for the requested time, but each loop is too short",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
     .test_run = selftest_timedpass_run<(250us).count()>,
-    .desired_duration = 200
+    .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_timedpass_toolong",
     .description = "Runs for the requested time, but each loop is too long",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
     .test_run = selftest_timedpass_run<duration_cast<microseconds>(test_the_test_data<true>::MaximumLoopDuration).count() * 2>,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_timedpass_whileloop",
@@ -1122,6 +1149,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
     .test_run = selftest_timedpass_whileloop_run<10'000>,
     .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_timedpass_noloop",
@@ -1129,6 +1157,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
     .test_run = selftest_timedpass_noloop_run<10'000>,
     .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_uses_too_much_mem",
@@ -1136,6 +1165,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
     .test_run = selftest_uses_too_much_mem_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_check_sequential",
@@ -1143,6 +1173,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_check_sequential_init,
     .test_run = selftest_check_sequential_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
     .flags = test_schedule_sequential,
 },
 
@@ -1152,6 +1183,7 @@ static struct test selftests_array[] = {
     .description = "Runs simple 64-bit KVM workload successfully",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_kvm),
     .test_kvm_config = selftest_kvm_config_long_64bit,
+    .quality_level = TEST_QUALITY_PROD,
     .flags = test_type_kvm,
 },
 {
@@ -1159,6 +1191,7 @@ static struct test selftests_array[] = {
     .description = "Runs simple 16-bit KVM workload successfully",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_kvm),
     .test_kvm_config = selftest_kvm_config_real_16bit,
+    .quality_level = TEST_QUALITY_PROD,
     .flags = test_type_kvm,
 },
 {
@@ -1166,6 +1199,7 @@ static struct test selftests_array[] = {
     .description = "Checks the setup and check handlers are called correctly",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_kvm),
     .test_kvm_config = selftest_kvm_config_real_setup_check,
+    .quality_level = TEST_QUALITY_PROD,
     .flags = test_type_kvm,
 },
 #endif // __linux__
@@ -1179,6 +1213,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_randomfail_run<std::ratio<1, 2>>,
     .desired_duration = -1,
     .max_threads = 3,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_randomfail_rare",
@@ -1187,6 +1222,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_randomfail_run<std::ratio<1, 1024>>,
     .desired_duration = -1,
     .max_threads = 3,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_timed_randomfail_25pct",
@@ -1194,6 +1230,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_random),
     .test_run = selftest_timed_randomfail_run<100'000, std::ratio<1, 4>>,
     .fracture_loop_count = 4,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_timed_randomfail_rare",
@@ -1201,6 +1238,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_random),
     .test_run = selftest_timed_randomfail_run<10'000, std::ratio<1, 1024>>,
     .fracture_loop_count = 4,
+    .quality_level = TEST_QUALITY_PROD,
 },
 
     /* Multi-socket tests */
@@ -1211,6 +1249,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_if_socket1_initcleanup<selftest_failinit_init>,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_fail_socket1",
@@ -1218,6 +1257,7 @@ static struct test selftests_array[] = {
     .groups = nullptr, // positive on single-socket systems, negative on multi-socket
     .test_run = selftest_if_socket1_run<selftest_fail_run>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_freeze_socket1",
@@ -1225,6 +1265,7 @@ static struct test selftests_array[] = {
     .groups = nullptr, // positive on single-socket systems, negative on multi-socket
     .test_run = selftest_if_socket1_run<selftest_noreturn_run>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigsegv_init_socket1",
@@ -1233,6 +1274,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_if_socket1_initcleanup<selftest_crash_initcleanup<cause_sigsegv_null>>,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigsegv_socket1",
@@ -1240,6 +1282,7 @@ static struct test selftests_array[] = {
     .groups = nullptr, // positive on single-socket systems, negative on multi-socket
     .test_run = selftest_if_socket1_run<selftest_crash_run<cause_sigsegv_null>>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 
     /* Negative tests */
@@ -1251,6 +1294,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_logerror_init,
     .test_run = selftest_failinit_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_fail",
@@ -1259,6 +1303,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_randomprint_init,
     .test_run = selftest_fail_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_failinit",
@@ -1267,6 +1312,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_failinit_init,
     .test_run = selftest_failinit_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_fail_cleanup",
@@ -1276,6 +1322,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_fail_cleanup,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_logerror",
@@ -1283,6 +1330,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_logerror_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_errormsg_cleanup",
@@ -1292,6 +1340,7 @@ static struct test selftests_array[] = {
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_errormsg_success_cleanup,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_reportfail",
@@ -1300,6 +1349,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_randomprint_init,
     .test_run = selftest_reportfail_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_reportfailmsg",
@@ -1308,6 +1358,7 @@ static struct test selftests_array[] = {
     .test_init = selftest_randomprint_init,
     .test_run = selftest_reportfailmsg_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #if defined(STATIC) && defined(__GLIBC__)
 {
@@ -1316,6 +1367,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_libc_fatal_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #endif
 
@@ -1326,6 +1378,7 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_negative),                     \
     .test_run = selftest_datacomparefail_run<Type>,                     \
     .desired_duration = -1,                                             \
+    .quality_level = TEST_QUALITY_PROD,                                 \
 },
 FOREACH_DATATYPE(DATACOMPARE_TEST)
 #undef DATACOMPARE_TEST
@@ -1335,6 +1388,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
             .test_run = selftest_datacompare_nodifference_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 
 {
@@ -1343,6 +1397,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_cxxthrow_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_abort",
@@ -1350,6 +1405,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<abort>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_abortinit",
@@ -1358,6 +1414,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .test_init = selftest_crash_initcleanup<abort>,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigill",
@@ -1365,6 +1422,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigill>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigfpe",
@@ -1372,6 +1430,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigfpe>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigbus",
@@ -1379,6 +1438,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigbus>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigsegv_init",
@@ -1387,6 +1447,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .test_init = selftest_crash_initcleanup<cause_sigsegv_null>,
     .test_run = selftest_pass_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigsegv",
@@ -1394,6 +1455,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigsegv_null>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigsegv_noncanonical",
@@ -1401,6 +1463,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigsegv_noncanonical>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigsegv_kernel",
@@ -1408,6 +1471,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigsegv_kernel>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigsegv_cleanup",
@@ -1416,6 +1480,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .test_run = selftest_pass_run,
     .test_cleanup  = selftest_crash_initcleanup<cause_sigsegv_null>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigsegv_instruction",
@@ -1423,6 +1488,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigsegv_instruction>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_sigtrap_int3",
@@ -1430,6 +1496,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigtrap_int3>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #ifdef _WIN32
 {
@@ -1438,6 +1505,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<raise_fastfail>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #else
 {
@@ -1446,6 +1514,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<raise_sigkill>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #endif
 {
@@ -1454,6 +1523,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_malloc_fail,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_oserror",
@@ -1461,6 +1531,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_oserror_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 {
     .id = "selftest_freeze",
@@ -1468,6 +1539,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_noreturn_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #ifdef __unix__
 {
@@ -1476,6 +1548,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_fork_run<selftest_noreturn_run>,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 #endif
 {
@@ -1484,6 +1557,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_50pct_freeze_fail_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
 },
 
 #if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
@@ -1493,6 +1567,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative, &group_kvm),
     .test_kvm_config = selftest_kvm_config_prot_64bit_fail,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
     .flags = test_type_kvm,
 },
 {
@@ -1501,8 +1576,9 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative, &group_kvm),
     .test_kvm_config = selftest_kvm_config_real_16bit_fail,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
     .flags = test_type_kvm,
-}
+},
 #endif // __linux__
 };
 
