@@ -61,11 +61,6 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
         win32_perror("SetThreadGroupAffinity");
         return false;
     }
-
-    if (SetThreadIdealProcessorEx(hThread, &processorNumber, nullptr) == 0) {
-        win32_perror("SetThreadIdealProcessorEx");
-        return false;
-    }
     return true;
 }
 
