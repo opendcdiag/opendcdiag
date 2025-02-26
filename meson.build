@@ -120,49 +120,49 @@ foreach lflag : [
 endforeach
 
 if target_machine.system() == 'windows'
-add_project_arguments([
-    '-D__STDC_FORMAT_MACROS',
-    '-D__USE_MINGW_ANSI_STDIO',
-    '-D_POSIX',
-    '-D_WIN32_WINNT=0x0A00',
-    '-D_NO_SYS_GUID_OPERATOR_EQ_',
-    '-Wa,-mbig-obj',
-    '-include',
-    meson.current_source_dir() + '/framework/sysdeps/windows/win32_stdlib.h',
-], language: [ 'c', 'cpp' ])
-add_project_link_arguments([
-    '-mconsole',
-    '-Wl,--stack,8388608',
-    '-static-libgcc',
-    '-Wl,-static',
-    '-lpthread',
-    '-lm',
-    '-lssp',
-    '-Wl,-Bdynamic',
-    '-lshlwapi',
-    '-lntdll',
-], language : [ 'c', 'cpp' ])
-nasm_system_flags = [
-    '-fwin64',
-    '-Xgnu',
-    '-DWIN_ABI',
-]
+    add_project_arguments([
+        '-D__STDC_FORMAT_MACROS',
+        '-D__USE_MINGW_ANSI_STDIO',
+        '-D_POSIX',
+        '-D_WIN32_WINNT=0x0A00',
+        '-D_NO_SYS_GUID_OPERATOR_EQ_',
+        '-Wa,-mbig-obj',
+        '-include',
+        meson.current_source_dir() + '/framework/sysdeps/windows/win32_stdlib.h',
+    ], language: [ 'c', 'cpp' ])
+    add_project_link_arguments([
+        '-mconsole',
+        '-Wl,--stack,8388608',
+        '-static-libgcc',
+        '-Wl,-static',
+        '-lpthread',
+        '-lm',
+        '-lssp',
+        '-Wl,-Bdynamic',
+        '-lshlwapi',
+        '-lntdll',
+    ], language : [ 'c', 'cpp' ])
+    nasm_system_flags = [
+        '-fwin64',
+        '-Xgnu',
+        '-DWIN_ABI',
+    ]
 elif target_machine.system() == 'darwin'
-add_project_arguments([
-    '-D__unix__',        # Why doesn't Apple think their OS is Unix?
-    '-D_DARWIN_C_SOURCE',
-], language: [ 'c', 'cpp' ])
-nasm_system_flags = [
-    '-fmacho64',
-    '-Xgnu',
-    '-DAPPLE',
-    '-D__APPLE__',
-    '--prefix=_'
-]
+    add_project_arguments([
+        '-D__unix__',        # Why doesn't Apple think their OS is Unix?
+        '-D_DARWIN_C_SOURCE',
+    ], language: [ 'c', 'cpp' ])
+    nasm_system_flags = [
+        '-fmacho64',
+        '-Xgnu',
+        '-DAPPLE',
+        '-D__APPLE__',
+        '--prefix=_'
+    ]
 else
-if get_option('buildtype') == 'debug'
-    debug_nasm_flags = '-gdwarf'
-endif
+    if get_option('buildtype') == 'debug'
+        debug_nasm_flags = '-gdwarf'
+    endif
 endif
 
 default_c_flags += [
