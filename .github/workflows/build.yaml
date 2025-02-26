@@ -81,6 +81,7 @@ jobs:
       WINEDEBUG: fixme-all,-dbghelp_stabs
       WINEPREFIX: /tmp/wine_root
       WINEPATH: d:/bin
+      XDG_RUNTIME_DIR: /tmp/wine_root
     steps:
     - name: Install distro packages
       run: |
@@ -111,6 +112,7 @@ jobs:
             elfutils \
             python3-pyyaml \
             wine
+        mkdir -v -m 0700 $XDG_RUNTIME_DIR
         # Create drive D: at MinGW's sysroot
         winecfg
         rpm -ql mingw64-zlib | sed -n '/bin\/zlib1.dll/s///p' | \
