@@ -94,10 +94,16 @@ nasm_system_flags = [
 default_c_flags = []
 default_cpp_flags = []
 
-add_project_arguments([
+foreach ccflag : [
+    '-fstack-clash-protection',
     '-fstack-protector-strong',
     '-fcf-protection=full',
-], language: [ 'c', 'cpp' ])
+    '-mcet-switch',
+]
+    if cc.has_argument(ccflag)
+        add_project_arguments(ccflag, language: [ 'c', 'cpp' ])
+    endif
+endforeach
 
 foreach lflag : [
     '-Wl,-z,relro',
@@ -157,14 +163,6 @@ else
 if get_option('buildtype') == 'debug'
     debug_nasm_flags = '-gdwarf'
 endif
-if cc.get_id() == 'gcc'
-    march_flags += [
-        '-mcet-switch',
-    ]
-endif
-march_flags += [
-    '-fstack-clash-protection',
-]
 endif
 
 default_c_flags += [
