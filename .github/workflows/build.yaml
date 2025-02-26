@@ -78,7 +78,7 @@ jobs:
     container: fedora:41
     env:
       ENABLE_WINE_WORKAROUNDS: 1
-      WINEDEBUG: fixme-all,-dbghelp_stabs
+      WINEDEBUG: -all
       WINEPREFIX: /tmp/wine_root
       WINEPATH: d:/bin
       XDG_RUNTIME_DIR: /tmp/wine_root
