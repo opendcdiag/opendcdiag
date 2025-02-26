@@ -28,6 +28,7 @@ enum {
     two_min_option,
     five_min_option,
 
+    check_amx_support_option,
     cpuset_option,
     disable_option,
     dump_cpu_info_option,
@@ -106,6 +107,9 @@ static struct option long_options[]  = {
     { "5min", no_argument, nullptr, five_min_option },
     { "alpha", no_argument, &sApp->requested_quality, int(TEST_QUALITY_SKIP) },
     { "beta", no_argument,  &sApp->requested_quality, int(TEST_QUALITY_BETA) },
+#ifdef __x86_64__
+    { "check-amx-support", no_argument, nullptr, check_amx_support_option },
+#endif
     { "cpuset", required_argument, nullptr, cpuset_option },
     { "disable", required_argument, nullptr, disable_option },
     { "dump-cpu-info", no_argument, nullptr, dump_cpu_info_option },
@@ -579,7 +583,6 @@ struct ProgramOptionsParser {
             case timeout_option:
                 opts_map.insert_or_assign(opt, string_to_millisecs(optarg));
                 break;
-
             case cpuset_option:
                 opts_map.insert_or_assign(cpuset_option, optarg);
                 break;
@@ -668,18 +671,18 @@ struct ProgramOptionsParser {
                 opts_map.insert_or_assign(quality_option, optarg);
                 break;
 
+            // these options are only accessible in the command-line if the
+            // corresponding functionality is active
+            case is_asan_option:
+            case is_debug_option:
+
+            case 'h':
             case 'l':
+            case check_amx_support_option:
             case raw_list_tests:
             case raw_list_groups:
             case dump_cpu_info_option:
             case version_option:
-            case is_asan_option:
-                // these options are only accessible in the command-line if the
-                // corresponding functionality is active
-            case is_debug_option:
-                // these options are only accessible in the command-line if the
-                // corresponding functionality is active
-            case 'h':
                 opts_map.insert_or_assign(_action_option, opt);
                 opts_map.emplace(opt, true);
                 break;
@@ -831,6 +834,9 @@ struct ProgramOptionsParser {
             case is_asan_option:
             case is_debug_option:
                 opts.action = Action::exit;
+                return EXIT_SUCCESS;
+            case check_amx_support_option:
+                opts.action = Action::check_amx_support;
                 return EXIT_SUCCESS;
             case 'l':
                 opts.list_tests_include_descriptions = true;

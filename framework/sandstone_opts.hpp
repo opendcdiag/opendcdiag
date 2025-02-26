@@ -11,6 +11,7 @@
 enum class Action {
     list_tests,
     list_group,
+    check_amx_support,
     dump_cpu_info,
     version,
     exit,

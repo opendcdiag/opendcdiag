@@ -86,6 +86,9 @@
 #  endif
 #endif
 
+#if defined(__x86_64__) && !defined(signature_INTEL_ebx)     /* cpuid.h lacks include guards */
+#  include <cpuid.h>
+#endif
 
 #ifndef O_PATH
 #  define O_PATH        0
@@ -1270,10 +1273,8 @@ static std::string cpu_features_to_string(uint64_t f)
     return result;
 }
 
-static void dump_cpu_info()
+static void print_detected_cpu_info()
 {
-    int i;
-
     // find the best matching CPU
     const char *detected = "<unknown>";
     for (const auto &arch : x86_architectures) {
@@ -1288,6 +1289,63 @@ static void dump_cpu_info()
     printf("Detected CPU: %s; family-model-stepping (hex): %02x-%02x-%02x; CPU features: %s\n",
            detected, sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping,
            cpu_features_to_string(cpu_features).c_str());
+}
+
+static void check_amx_support()
+{
+#ifdef __x86_64__
+    print_detected_cpu_info();
+
+    uint32_t eax, ebx, ecx, edx;
+    __cpuid(1, eax, ebx, ecx, edx);
+    bool osxsave = ecx & (1U << 27);
+    printf("CPUID[1].ECX[OSXSAVE bit 27] = %d\n", osxsave);
+
+    __cpuid_count(7, 0, eax, ebx, ecx, edx);
+    bool amxtile = edx & (1U << 24);
+    printf("CPUID[7:0].EDX[AMX_TILE bit 24] = %d\n", amxtile);
+
+    if (!osxsave)
+        return;         // No AVX, which is required.
+
+    unsigned long long xcr0 = _xgetbv(0);
+    printf("XCR0 = 0x%05llx [", xcr0);
+    if (xcr0 & XSave_Xtilecfg)
+        printf(" XTILECFG");
+    if (xcr0 & XSave_Xtiledata)
+        printf(" XTILEDATA");
+    printf(" ]\n");
+
+#  ifndef ARCH_GET_XCOMP_SUPP
+#    define ARCH_GET_XCOMP_SUPP     0x1021
+#    define ARCH_GET_XCOMP_PERM     0x1022
+#    define ARCH_REQ_XCOMP_PERM     0x1023
+#  endif // ARCH_GET_XCOMP_SUPP
+#  ifdef __linux__
+
+    unsigned long xcr0_supported = 0;
+    if (syscall(SYS_arch_prctl, ARCH_GET_XCOMP_SUPP, &xcr0_supported) == 0) {
+        printf("ARCH_GET_XCOMP_SUPP = 0x%05lx\n", xcr0_supported);
+
+        int feature_nr = 32 - __builtin_clz(XSave_Xtiledata);
+        if (syscall(SYS_arch_prctl, ARCH_REQ_XCOMP_PERM, feature_nr) == 0)
+            errno = 0;
+        printf("ARCH_REQ_XCOMP_PERM(%d) = %m\n", feature_nr);
+    } else {
+        printf("ARCH_GET_XCOMP_SUPP = <not supported>\n");
+    }
+#  endif
+
+#else
+    __builtin_unreachable();
+#endif
+}
+
+static void dump_cpu_info()
+{
+    int i;
+    print_detected_cpu_info();
+
     printf("# CPU\tPkgID\tCoreID\tThrdID\tModId\tNUMAId\tApicId\tMicrocode\tPPIN\n");
     for (i = 0; i < num_cpus(); ++i) {
         printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t0x%" PRIx64, cpu_info[i].cpu_number,
@@ -2812,6 +2870,13 @@ int main(int argc, char **argv)
     }
 
     switch (opts.action) {
+    case Action::check_amx_support:
+#ifdef __x86_64__
+        check_amx_support();
+#else
+        __builtin_unreachable();
+#endif
+        return EXIT_SUCCESS;
     case Action::dump_cpu_info:
         dump_cpu_info();
         return EXIT_SUCCESS;
