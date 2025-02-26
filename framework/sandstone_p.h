@@ -320,6 +320,13 @@ private:
     friend LoggingStream logging_user_messages_stream(int thread_num, int level);
 };
 
+class DeviceSchedule {
+public:
+    virtual int get_next_cpu() = 0;
+    virtual void populate_devices_info(struct cpu_info *cpu_info) = 0;
+    virtual ~DeviceSchedule() = default;
+};
+
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
     enum class OutputFormat : int8_t {
@@ -439,6 +446,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     void select_main_thread(int slice);
 
     SandstoneBackgroundScan background_scan;
+
+    std::unique_ptr<DeviceSchedule> device_schedule = nullptr;
 
 private:
     SandstoneApplication() = default;
