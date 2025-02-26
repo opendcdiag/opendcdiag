@@ -147,6 +147,7 @@ enum {
     raw_list_group_members,
     raw_list_groups,
     retest_on_failure_option,
+    reschedule_option,
     schedule_by_option,
 #ifndef NO_SELF_TESTS
     selftest_option,
@@ -1037,6 +1038,12 @@ int num_cpus()
 
 int num_packages() {
     return Topology::topology().packages.size();
+}
+
+void reschedule()
+{
+    if (sApp->device_schedule == nullptr) return;
+    return;
 }
 
 static LogicalProcessorSet init_cpus()
@@ -3125,6 +3132,7 @@ int main(int argc, char **argv)
         { "quick", no_argument, nullptr, quick_run_option },
         { "quiet", no_argument, nullptr, 'q' },
         { "retest-on-failure", required_argument, nullptr, retest_on_failure_option },
+        { "reschedule", required_argument, nullptr, reschedule_option },
         { "rng-state", required_argument, nullptr, 's' },
         { "schedule-by", required_argument, nullptr, schedule_by_option },
 #ifndef NO_SELF_TESTS
@@ -3393,6 +3401,21 @@ int main(int argc, char **argv)
                     .max = SandstoneApplication::MaxRetestCount,
                     .range_mode = OutOfRangeMode::Saturate
             }();
+            break;
+        case reschedule_option:
+            if (sApp->thread_count < 1) {
+                fprintf(stderr, "%s: --reschedule is only useful with at least 2 threads\n", argv[0]);
+                return EX_USAGE;
+            }
+
+            if (strcmp(optarg, "none") == 0 ) {
+                // Default option, so do nothing
+            } else if (strcmp(optarg, "queue") == 0) {
+            } else if (strcmp(optarg, "random") == 0) {
+            } else {
+                fprintf(stderr, "%s: unknown reschedule option: %s. Available options: queue, random and none(default)\n", argv[0], optarg);
+                return EX_USAGE;
+            }
             break;
         case strict_runtime_option:
             sApp->shmem->use_strict_runtime = true;

@@ -666,6 +666,9 @@ int num_cpus() __attribute__((pure));
 /// test.
 int num_packages() __attribute__((pure));
 
+// CPU reschedule
+void reschedule();
+
 #ifdef __cplusplus
 }
 inline int cpu_info::cpu() const
