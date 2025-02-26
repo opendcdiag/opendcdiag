@@ -95,13 +95,23 @@ default_c_flags = []
 default_cpp_flags = []
 
 add_project_arguments([
-    '-Wl,-z,relro',
-    '-Wl,-z,noexecstack',
-    '-pie',
     '-fstack-protector-strong',
     '-fcf-protection=full',
 ], language: [ 'c', 'cpp' ])
 
+foreach lflag : [
+    '-Wl,-z,relro',
+    '-Wl,-z,noexecstack',
+    '-pie',
+]
+    if cc.links(
+       'int main() { return 0; }',
+       args: [ lflag ],
+       name: lflag
+    )
+        add_project_link_arguments(lflag, language : [ 'c', 'cpp' ])
+    endif
+endforeach
 
 if target_machine.system() == 'windows'
 add_project_arguments([
