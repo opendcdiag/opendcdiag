@@ -22,7 +22,3 @@ framework_files += \
         '../generic/msr.c',
         '../generic/physicaladdress.c',
     )
-
-if run_command([shell, '-c', 'echo $ENABLE_WINE_WORKAROUNDS'], capture: true).stdout().strip() == '1'
-    default_cpp_flags += [ '-DENABLE_WINE_WORKAROUNDS', ]
-endif
