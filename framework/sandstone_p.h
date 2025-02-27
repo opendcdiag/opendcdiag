@@ -365,6 +365,18 @@ private:
     }
 };
 
+class RandomDeviceSchedule : public DeviceSchedule {
+public:
+    RandomDeviceSchedule() {}
+
+    int get_next_cpu() override {
+        // return random cpu
+        return random32() % num_cpus();
+    }
+
+    void populate_devices_info() override {}
+};
+
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
     enum class OutputFormat : int8_t {
