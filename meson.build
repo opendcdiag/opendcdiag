@@ -79,10 +79,10 @@ else
     ]
 endif
 
-if get_option('static_libstdcpp') == true
-add_project_link_arguments([
-    '-static-libstdc++',
-], language : 'cpp')
+if get_option('static_libstdcpp') == true or target_machine.system() == 'windows'
+    add_project_link_arguments([
+        '-static-libstdc++',
+    ], language : 'cpp')
 endif
 
 nasm_system_flags = [
@@ -321,7 +321,7 @@ executable(
 summary({
         'Logging format': get_option('logging_format'),
         'Using -march': march_base,
-        'Static libstdc++': get_option('static_libstdcpp'),
+        'Static libstdc++': get_option('static_libstdcpp') or target_machine.system() == 'windows',
         'Executable name': get_option('executable_name'),
         'Fallback executable name': get_option('fallback_exec'),
     },
