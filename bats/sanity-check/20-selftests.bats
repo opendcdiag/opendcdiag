@@ -1436,11 +1436,13 @@ selftest_crash_common() {
     # 0xC0000409 is STATUS_STACK_BUFFER_OVERRUN, which is not a buffer overrun
     # - see https://devblogs.microsoft.com/oldnewthing/20190108-00/?p=100655
     #       https://devblogs.microsoft.com/oldnewthing/20080404-00/?p=22863
-    selftest_crash_common selftest_abortinit SIGABRT '0xC0000602 || value == 0xC0000409' "Aborted"
+    selftest_crash_common selftest_abortinit SIGABRT '0xC0000602 || value == 0xC0000409' \
+                          "Aborted|Program self-triggered abnormal termination"
 }
 
 @test "selftest_abort" {
-    selftest_crash_common selftest_abort SIGABRT '0xC0000602 || value == 0xC0000409' "Aborted"
+    selftest_crash_common selftest_abort SIGABRT '0xC0000602 || value == 0xC0000409' \
+                          "Aborted|Program self-triggered abnormal termination"
 }
 
 @test "selftest_sigill" {
