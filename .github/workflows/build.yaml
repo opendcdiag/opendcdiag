@@ -48,6 +48,11 @@ jobs:
       run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized
     - name: ninja build
       run: ninja -C builddir
+    - uses: actions/upload-artifact@v4
+      with:
+        name: linux-${{ matrix.name }}-binary
+        path: builddir/opendcdiag
+        retention-days: 3
     - name: confirm opendcdiag runs
       run: |
         builddir/opendcdiag --version
@@ -69,6 +74,15 @@ jobs:
         nproc=`nproc`
         nproc=$((nproc > 4 ? 4 : nproc))
         builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
+    - name: upload test run logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-linux-${{ matrix.name }}-logs
+        if-no-files-found: ignore
+        path: |
+          *.yaml
+        retention-days: 3
 
 
   Windows:
@@ -112,6 +126,11 @@ jobs:
       run: ninja -C builddir-windows
     - name: List DLL dependencies
       run: objdump -p builddir-windows/opendcdiag.exe | grep DLL\ Name
+    - uses: actions/upload-artifact@v4
+      with:
+        name: windows-binary
+        path: builddir-windows/opendcdiag.exe
+        retention-days: 3
     - name: confirm OpenDCDiag runs
       run: |
         builddir-windows/opendcdiag --version
@@ -123,3 +142,12 @@ jobs:
         nproc=`nproc`
         nproc=$((nproc > 4 ? 4 : nproc))
         builddir-windows/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
+    - name: upload test run logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-windows-logs
+        if-no-files-found: ignore
+        path: |
+          *.yaml
+        retention-days: 3
