@@ -16,6 +16,7 @@
 #include <new>
 #include <map>
 #include <numeric>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -3419,6 +3420,7 @@ int main(int argc, char **argv)
             } else if (strcmp(optarg, "queue") == 0) {
                 sApp->device_schedule = std::make_unique<QueueDeviceSchedule>();
             } else if (strcmp(optarg, "random") == 0) {
+                sApp->device_schedule = std::make_unique<RandomDeviceSchedule>();
             } else {
                 fprintf(stderr, "%s: unknown reschedule option: %s. Available options: queue, random and none(default)\n", argv[0], optarg);
                 return EX_USAGE;
