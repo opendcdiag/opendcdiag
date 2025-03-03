@@ -783,3 +783,26 @@ int default_CSPRNG(uint8_t *dest, unsigned int size)
 }
 
 } // extern "C"
+
+using std::random_device;
+static_assert(std::is_same_v<decltype(random32()), random_device::result_type>);
+static_assert(random_device::min() == 0);
+static_assert(random_device::max() == UINT_MAX);
+
+#ifdef __GLIBCXX__
+void random_device::_M_init(const char *, size_t) {}
+void random_device::_M_init(const std::string &) {}
+void random_device::_M_init_pretr1(const std::string &) {}
+void random_device::_M_fini() {}
+unsigned random_device::_M_getval()
+{
+    return random32();
+}
+#elif defined(_LIBCPP_VERSION)
+random_device::random_device(const std::string &) {}
+random_device::~random_device() {}
+unsigned random_device::operator()()
+{
+    return random32();
+}
+#endif
