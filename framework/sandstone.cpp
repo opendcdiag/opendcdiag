@@ -1043,6 +1043,10 @@ int num_packages() {
 void reschedule()
 {
     if (sApp->device_schedule == nullptr) return;
+    int next_cpu = sApp->device_schedule->get_next_cpu();
+    if (!pin_to_logical_processor(LogicalProcessor(cpu_info[next_cpu].cpu_number))) {
+        log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
+    }
     return;
 }
 
@@ -1839,6 +1843,8 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         sApp->select_main_thread(child_number);
         pin_to_logical_processors(sApp->main_thread_data()->cpu_range, "control");
         restrict_topology(sApp->main_thread_data()->cpu_range);
+        if (sApp->device_schedule != nullptr)
+            sApp->device_schedule->populate_devices_info();
         signals_init_child();
         debug_init_child();
     }
@@ -3411,6 +3417,7 @@ int main(int argc, char **argv)
             if (strcmp(optarg, "none") == 0 ) {
                 // Default option, so do nothing
             } else if (strcmp(optarg, "queue") == 0) {
+                sApp->device_schedule = std::make_unique<QueueDeviceSchedule>();
             } else if (strcmp(optarg, "random") == 0) {
             } else {
                 fprintf(stderr, "%s: unknown reschedule option: %s. Available options: queue, random and none(default)\n", argv[0], optarg);
