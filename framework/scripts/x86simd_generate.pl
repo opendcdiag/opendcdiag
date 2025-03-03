@@ -76,6 +76,7 @@ while (<FH>) {
             unless grep {$_ eq $arch} @architecture_names;
     } elsif (s/^xsave=//) {
         my ($name, $value, $required) = split /\s+/;
+        $required =~ s/[^a-z0-9_,]/_/g;
         push @xsaveStates,
             { id => $name, value => $value, required_for => $required, comment => $comment };
     } else {
@@ -92,6 +93,7 @@ while (<FH>) {
 
         my $id = uc($name);
         $id =~ s/[^A-Z0-9_]/_/g;
+        $depends =~ s/[^a-z0-9_,]/_/g;
         push @features,
         { name => $name, depends => $depends, id => $id, bit => $bit, leaf => $function, comment => $comment };
         $feature_ids{$name} = $i;
