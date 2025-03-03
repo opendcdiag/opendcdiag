@@ -27,6 +27,7 @@
 #include <sandstone.h>
 
 #ifdef __cplusplus
+#include <chrono>
 #include <memory>
 #include <span>
 
@@ -41,6 +42,8 @@
 #include "interrupt_monitor.hpp"
 #include "thermal_monitor.hpp"
 #include "frequency_manager.hpp"
+
+using namespace std::chrono_literals;
 
 #ifdef _WIN32
 struct rusage
@@ -459,7 +462,7 @@ struct SandstoneApplication::SharedMemory
     // test execution
     MonotonicTimePoint current_test_endtime = {};
     int current_max_loop_count = 0;
-    int current_test_sleep_duration = 0;
+    std::chrono::duration<int, std::micro> current_test_sleep_duration = 0us;
     bool selftest = false;
     bool ud_on_failure = false;
     bool use_strict_runtime = false;

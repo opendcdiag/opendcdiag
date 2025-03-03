@@ -125,28 +125,28 @@ static int zfuzz_run(struct test *test, int cpu)
     if (in == NULL || out == NULL || back == NULL)
             goto done;
 
-    do {
-            size_t bufsz, compsz, backsz;
-            uint32_t in_crc, out_crc;
-            int level;
+    TEST_LOOP(test, 1) {
+        size_t bufsz, compsz, backsz;
+        uint32_t in_crc, out_crc;
+        int level;
 
-            bufsz = (random32() % (BUF_MAX-4096)) + 4096;
-            in_crc = zfuzz_gen_buffer(in, bufsz);
+        bufsz = (random32() % (BUF_MAX-4096)) + 4096;
+        in_crc = zfuzz_gen_buffer(in, bufsz);
 
-            level = (random32() % 9) + 1;
+        level = (random32() % 9) + 1;
 
-            compsz = zfuzz_zcomp(level, in, bufsz, out, outsz, &out_crc);
-            if (compsz == 0 || out_crc != in_crc)
-                    goto done;
+        compsz = zfuzz_zcomp(level, in, bufsz, out, outsz, &out_crc);
+        if (compsz == 0 || out_crc != in_crc)
+                goto done;
 
-            backsz = zfuzz_decomp(out, compsz, back, BUF_MAX);
-            if (backsz == 0)
-                    goto done;
+        backsz = zfuzz_decomp(out, compsz, back, BUF_MAX);
+        if (backsz == 0)
+                goto done;
 
-            if (backsz != bufsz)
-                    goto done;
-            memcmp_or_fail(back, in, bufsz, "decompressed data");
-    } while (test_time_condition(test));
+        if (backsz != bufsz)
+                goto done;
+        memcmp_or_fail(back, in, bufsz, "decompressed data");
+    }
 
     ret = EXIT_SUCCESS;
 done:

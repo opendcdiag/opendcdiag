@@ -94,7 +94,7 @@ static int eigen_sparse_cleanup(struct test *test) {
 
 static int eigen_sparse_run(struct test *test, int cpu) {
     auto d = static_cast<EigenSparseTestData *>(test->data);
-    do {
+    TEST_LOOP(test, 1) {
         Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver;
         Eigen::VectorXd x;
         try {
@@ -110,7 +110,7 @@ static int eigen_sparse_run(struct test *test, int cpu) {
             report_fail(test);
             return EXIT_FAILURE;
         }
-    } while (test_time_condition(test));
+    }
     return EXIT_SUCCESS;
 }
 
