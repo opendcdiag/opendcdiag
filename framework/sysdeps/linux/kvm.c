@@ -968,7 +968,7 @@ int kvm_generic_run(struct test *test, int cpu)
 
         count++;
 
-    } while (result == EXIT_SUCCESS && test_time_condition(1));
+    } while (result == EXIT_SUCCESS && test_time_condition(test));
 
 epilogue:
     if (ctx.vm_fd >= 0) close(ctx.vm_fd);

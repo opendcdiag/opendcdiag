@@ -54,14 +54,14 @@ static int eigen_gemm_float_dynamic_square_init(struct test *test) {
 
 static int eigen_gemm_float_dynamic_square_run(struct test *test, int cpu) {
     //int i=0;
-    TEST_LOOP(test, 1) {
+    do {
         //++i;
         auto testdata = CAST(test->data);
         Mat x;
         x = testdata->lhs * testdata->rhs;
 
         memcmp_or_fail(x.data(), testdata->prod.data(), M_DIM * M_DIM);
-    }
+    } while (test_time_condition(test));
     //log_info("Num iters = %i\n", i);
     return EXIT_SUCCESS;
 }

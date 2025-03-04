@@ -724,7 +724,7 @@ extern "C" void test_loop_iterate() noexcept;    // see below
 
 /* returns 1 if the test should keep running, useful for a while () loop */
 #undef test_time_condition
-bool test_time_condition(int N) noexcept
+bool test_time_condition() noexcept
 {
     test_loop_iterate();
     sApp->test_tests_iteration(current_test);
@@ -733,11 +733,16 @@ bool test_time_condition(int N) noexcept
     if (max_loop_count_exceeded(current_test))
         return 0;  // end the test if max loop count exceeded
 
-    if (sApp->shmem->current_test_sleep_duration != 0us) {
+    return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
+}
+
+bool test_loop_condition(int N) noexcept
+{
+    if (sApp->shmem->current_test_sleep_duration != 0us)
+    {
         usleep(sApp->shmem->current_test_sleep_duration.count() / N);
     }
-
-    return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
+    return test_time_condition();
 }
 
 bool test_is_retry() noexcept
