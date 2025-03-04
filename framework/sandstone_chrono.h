@@ -44,7 +44,7 @@ enum class FormatDurationOptions {
 ShortDuration string_to_millisecs(std::string_view in_string);
 std::string format_duration(std::chrono::nanoseconds ns,
                             FormatDurationOptions options = FormatDurationOptions::WithUnit);
-int duration_to_usec(ShortDuration duration);
+
 #endif // __cplusplus
 
 /* C-interface to measure cpu/wall-clock time in [us]. */
