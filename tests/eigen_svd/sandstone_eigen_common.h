@@ -63,13 +63,13 @@ template <typename SVD, int Dim> struct EigenSVDTest
     static int run(struct test *test, int)
     {
         auto d = static_cast<eigen_test_data *>(test->data);
-        TEST_LOOP(test, 1) {
+        do {
             Mat u, v;
             calculate_once(d->orig_matrix, u, v);
 
             compare_or_fail(u.data(), d->u_matrix.data(), "Matrix U");
             compare_or_fail(v.data(), d->v_matrix.data(), "Matrix V");
-        }
+        } while (test_time_condition(test));
         return EXIT_SUCCESS;
     }
 };
