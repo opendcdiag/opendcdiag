@@ -1905,6 +1905,37 @@ selftest_cpuset_negated() {
     done
 }
 
+# Confirm we are rescheduling properly
+@test "thread queue reschedule" {
+    if $is_windows; then
+        skip "Windows not working yet"
+    fi
+
+    local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
+    nproc=${#cpuset[@]}
+
+    declare -A yamldump
+    sandstone_selftest -e selftest_logs_reschedule -s LCG:232155056 --reschedule=queue
+
+    # Did we get anything?
+    if [[ ${yamldump[/tests/0/result]} = skip ]]; then
+        skip "Test did not report results: ${yamldump/tests/0/threads/0/messages/0/text}"
+    fi
+
+    # Same seed will always give us the same combination for rescheduling
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> ${cpuset[0]}\$"
+    test_yaml_regexp "/tests/0/threads/0/messages/1/text" "I> ${cpuset[1]}\$"
+
+    test_yaml_regexp "/tests/0/threads/1/messages/0/text" "I> ${cpuset[1]}\$"
+    test_yaml_regexp "/tests/0/threads/1/messages/1/text" "I> ${cpuset[2]}\$"
+
+    test_yaml_regexp "/tests/0/threads/2/messages/0/text" "I> ${cpuset[2]}\$"
+    test_yaml_regexp "/tests/0/threads/2/messages/1/text" "I> ${cpuset[0]}\$"
+
+    test_yaml_regexp "/tests/0/threads/3/messages/0/text" "I> ${cpuset[3]}\$"
+    test_yaml_regexp "/tests/0/threads/3/messages/1/text" "I> ${cpuset[3]}\$"
+}
+
 selftest_interrupt_common() {
     local timeout=30000
     local signal=$1

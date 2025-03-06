@@ -7,6 +7,7 @@
 
 #include <inttypes.h>
 #include <limits.h>
+#include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -160,7 +161,7 @@ static int selftest_logs_options_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_logs_getcpu_run(struct test *test, int cpu)
+static int get_cpu()
 {
     int cpu_number = -1;
 #if defined(_WIN32)
@@ -171,14 +172,67 @@ static int selftest_logs_getcpu_run(struct test *test, int cpu)
 #elif defined(__linux__) || defined(__FreeBSD__)
     cpu_number = sched_getcpu();
 #else
-    log_skip(OsNotSupportedSkipCategory, "No API to get the CPU number on this OS");
+    errno = ENOSYS;
+    log_skip(OSResourceIssueSkipCategory, "OS failed: %m");
+    return -1;
 #endif
-    if (cpu_number == -1)
-        log_skip(OSResourceIssueSkipCategory, "OS failed: %m");
+    return cpu_number;
+}
+
+static int selftest_logs_getcpu_run(struct test *test, int cpu)
+{
+    int cpu_number = get_cpu();
     log_info("%d", cpu_number);
     return EXIT_SUCCESS;
 }
 
+static int selftest_logs_reschedule_init(struct test *test)
+{
+    // In order to always get the same result and avoid race conditions,
+    // we use semaphores to synchronize the access to reschedule()
+    int sem_size = num_cpus() - 1;
+    sem_t *reschedule_sem = (sem_t *) calloc(sem_size, sizeof(sem_t));
+    for (int i = 0; i < sem_size; i++) {
+        sem_init(&reschedule_sem[i], 0, 0);
+    }
+
+    test->data = (void *) reschedule_sem;
+
+    return EXIT_SUCCESS;
+}
+
+static int selftest_logs_reschedule_run(struct test *test, int cpu)
+{
+    sem_t *semaphores = (sem_t *) test->data;
+    int cpu_number = get_cpu();
+    log_info("%d", cpu_number);
+
+    // Let's wait unit previous CPU has finished
+    if (cpu > 0)
+        sem_wait(&semaphores[cpu-1]);
+
+    reschedule();
+
+    // When we finish, instruct next thread it can proceed
+    // unless we are the last one
+    if (cpu < num_cpus()-1)
+        sem_post(&semaphores[cpu]);
+
+    cpu_number = get_cpu();
+    log_info("%d", cpu_number);
+
+    return EXIT_SUCCESS;
+}
+
+static int selftest_logs_reschedule_cleanup(struct test *test)
+{
+    sem_t *reschedule_sem = (sem_t *) test->data;
+    for (int i = 0; i < num_cpus() - 1; i++) {
+        sem_destroy(&reschedule_sem[i]);
+    }
+    free (reschedule_sem);
+    return EXIT_SUCCESS;
+}
 static int selftest_logs_random_init(struct test *test)
 {
     // print 4 ints
@@ -992,6 +1046,16 @@ static struct test selftests_array[] = {
     .description = "Logs the getcpu() result",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_logs_getcpu_run,   // may skip
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_logs_reschedule",
+    .description = "Logs the getcpu() result before and after rescheduling",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_logs_reschedule_init,
+    .test_run = selftest_logs_reschedule_run,   // may skip
+    .test_cleanup = selftest_logs_reschedule_cleanup,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
