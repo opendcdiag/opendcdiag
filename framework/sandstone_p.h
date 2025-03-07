@@ -331,52 +331,6 @@ public:
     virtual ~DeviceSchedule() = default;
 };
 
-class QueueDeviceSchedule : public DeviceSchedule {
-public:
-    QueueDeviceSchedule() {}
-
-    int get_next_cpu() override
-    {
-        // Returns next CPU from the queue
-        std::lock_guard lock(q_mutex);
-        if (q_idx >= queue.size())
-            shuffle_queue();
-        return queue[q_idx++];
-    }
-
-    void populate_devices_info() override
-    {
-        // Populate queue with the indexes available
-        for (int i=0; i<num_cpus(); i++)
-            queue.push_back(i);
-        shuffle_queue();
-    }
-
-private:
-    int q_idx = 0;
-    std::vector<int> queue;
-    std::mutex q_mutex;
-
-    void shuffle_queue() {
-        // Must be called with mutex locked
-        std::default_random_engine rng(random32());
-        std::shuffle(queue.begin(), queue.end(), rng);
-        q_idx = 0;
-    }
-};
-
-class RandomDeviceSchedule : public DeviceSchedule {
-public:
-    RandomDeviceSchedule() {}
-
-    int get_next_cpu() override {
-        // return random cpu
-        return random32() % num_cpus();
-    }
-
-    void populate_devices_info() override {}
-};
-
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
     enum class OutputFormat : int8_t {
