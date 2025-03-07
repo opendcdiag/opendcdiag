@@ -3701,10 +3701,17 @@ int main(int argc, char **argv)
         usage(argv);
         return EX_USAGE;
     }
-    if (sApp->shmem->log_test_knobs && sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",
-                program_invocation_name);
-        return EX_USAGE;
+    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
+        if (sApp->shmem->log_test_knobs) {
+            fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",
+                    program_invocation_name);
+            return EX_USAGE;
+        }
+        if (sApp->device_schedule) {
+            fprintf(stderr, "%s: error: --reschedule is not supported in this configuration\n",
+                    program_invocation_name);
+            return EX_USAGE;
+        }
     }
 
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)

@@ -1907,8 +1907,9 @@ selftest_cpuset_negated() {
 
 # Confirm we are rescheduling properly
 @test "thread queue reschedule" {
-    if $is_windows; then
-        skip "Windows not working yet"
+    run $SANDSTONE -n1 --selftests -e selftest_logs_reschedule --reschedule=queue
+    if [[ $status == 64 ]]; then
+       skip "Not supported"
     fi
 
     local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
