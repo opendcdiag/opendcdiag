@@ -1049,17 +1049,12 @@ public:
     {
         // Returns next CPU from the queue
         std::lock_guard lock(q_mutex);
-        if (q_idx >= queue.size())
+        if (q_idx == 0)
             shuffle_queue();
-        return queue[q_idx++];
-    }
-
-    void populate_devices_info() override
-    {
-        // Populate queue with the indexes available
-        for (int i=0; i<num_cpus(); i++)
-            queue.push_back(i);
-        shuffle_queue();
+        int result = queue[q_idx];
+        if (++q_idx == queue.size())
+            q_idx = 0;
+        return result;
     }
 
 private:
@@ -1070,9 +1065,14 @@ private:
     void shuffle_queue()
     {
         // Must be called with mutex locked
+        if (queue.size() == 0) {
+            // First use: populate queue with the indexes available
+            for (int i=0; i<num_cpus(); i++)
+                queue.push_back(i);
+        }
+
         std::default_random_engine rng(random32());
         std::shuffle(queue.begin(), queue.end(), rng);
-        q_idx = 0;
     }
 };
 
@@ -1084,8 +1084,6 @@ public:
         // return random cpu
         return random32() % num_cpus();
     }
-
-    void populate_devices_info() override {}
 };
 } // unnamed namespace
 
@@ -1892,8 +1890,6 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         sApp->select_main_thread(child_number);
         pin_to_logical_processors(sApp->main_thread_data()->cpu_range, "control");
         restrict_topology(sApp->main_thread_data()->cpu_range);
-        if (sApp->device_schedule != nullptr)
-            sApp->device_schedule->populate_devices_info();
         signals_init_child();
         debug_init_child();
     }

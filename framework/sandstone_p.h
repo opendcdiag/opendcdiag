@@ -327,7 +327,6 @@ private:
 class DeviceSchedule {
 public:
     virtual int get_next_cpu() = 0;
-    virtual void populate_devices_info() = 0;
     virtual ~DeviceSchedule() = default;
 };
 
