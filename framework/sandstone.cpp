@@ -884,10 +884,10 @@ static void cleanup_internal(const struct test *test)
 static int cleanup_global(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures)
 {
     if (sApp->vary_frequency_mode)
-        sApp->frequency_manager.restore_core_frequency_initial_state();
+        sApp->frequency_manager->restore_core_frequency_initial_state();
 
     if (sApp->vary_uncore_frequency_mode)
-        sApp->frequency_manager.restore_uncore_frequency_initial_state();
+        sApp->frequency_manager->restore_uncore_frequency_initial_state();
 
     exit_code = print_application_footer(exit_code, std::move(per_cpu_failures));
     return logging_close_global(exit_code);
@@ -2425,11 +2425,11 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures
 
         //change frequency per fracture
         if (sApp->vary_frequency_mode == true)
-            sApp->frequency_manager.change_core_frequency();
+            sApp->frequency_manager->change_core_frequency();
 
         //change uncore frequency per fracture
         if (sApp->vary_uncore_frequency_mode == true)
-            sApp->frequency_manager.change_uncore_frequency();
+            sApp->frequency_manager->change_uncore_frequency();
 
         init_internal(test);
 
@@ -2505,7 +2505,7 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures
 out:
     //reset frequency level idx for the next test
     if (sApp->vary_frequency_mode || sApp->vary_uncore_frequency_mode)
-        sApp->frequency_manager.reset_frequency_level_idx();
+        sApp->frequency_manager->reset_frequency_level_idx();
 
     random_advance_seed();      // advance seed for the next test
     logging_flush();
@@ -3806,13 +3806,16 @@ int main(int argc, char **argv)
         sApp->mce_count_last = std::accumulate(sApp->mce_counts_start.begin(), sApp->mce_counts_start.end(), uint64_t(0));
     }
 
+    if (sApp->vary_frequency_mode || sApp->vary_uncore_frequency_mode)
+        sApp->frequency_manager = std::make_unique<FrequencyManager>();
+
     //if --vary-frequency mode is used, do a initial setup for running different frequencies
     if (sApp->vary_frequency_mode)
-        sApp->frequency_manager.initial_core_frequency_setup();
+        sApp->frequency_manager->initial_core_frequency_setup();
 
     //if --vary-uncore-frequency mode is used, do a initial setup for running different frequencies
     if (sApp->vary_uncore_frequency_mode)
-        sApp->frequency_manager.initial_uncore_frequency_setup();
+        sApp->frequency_manager->initial_uncore_frequency_setup();
 
 #ifndef __OPTIMIZE__
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");

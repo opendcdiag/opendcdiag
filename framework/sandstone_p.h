@@ -406,7 +406,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
-    FrequencyManager frequency_manager;
+    std::unique_ptr<FrequencyManager> frequency_manager;
 
 #ifndef __linux__
     std::string path_to_self;
@@ -561,25 +561,6 @@ template <typename Lambda> static void for_each_test_thread(Lambda &&l)
     for (int i = 0; i < num_cpus(); i++)
         l(sApp->test_thread_data(i), i);
 }
-
-struct AutoClosingFile
-{
-    FILE *f = nullptr;
-    AutoClosingFile(FILE *f = nullptr) : f(f) {}
-    ~AutoClosingFile() { if (f) fclose(f); }
-    AutoClosingFile(const AutoClosingFile &) = delete;
-    AutoClosingFile(AutoClosingFile &&other) : f(other.f) { other.f = nullptr; }
-    AutoClosingFile &operator=(const AutoClosingFile &) = delete;
-    AutoClosingFile &operator=(AutoClosingFile &&other)
-    {
-        if (f)
-            fclose(f);
-        f = other.f;
-        other.f = nullptr;
-        return *this;
-    }
-    operator FILE *() const { return f; }
-};
 
 struct Pipe
 {

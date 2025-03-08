@@ -54,4 +54,23 @@ inline int dprintf(int fd, const char *fmt, ...)
 }
 #endif
 
+struct AutoClosingFile
+{
+    FILE *f = nullptr;
+    AutoClosingFile(FILE *f = nullptr) : f(f) {}
+    ~AutoClosingFile() { if (f) fclose(f); }
+    AutoClosingFile(const AutoClosingFile &) = delete;
+    AutoClosingFile(AutoClosingFile &&other) : f(other.f) { other.f = nullptr; }
+    AutoClosingFile &operator=(const AutoClosingFile &) = delete;
+    AutoClosingFile &operator=(AutoClosingFile &&other)
+    {
+        if (f)
+            fclose(f);
+        f = other.f;
+        other.f = nullptr;
+        return *this;
+    }
+    operator FILE *() const { return f; }
+};
+
 #endif //SANDSTONE_UTILS_H_INCLUDED
