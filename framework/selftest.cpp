@@ -276,7 +276,7 @@ static int selftest_skip_run(struct test *test, int cpu)
 static int selftest_log_skip_init(struct test *test)
 {
     log_skip(SelftestSkipCategory, "This is a skip in init");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_logerror_init(struct test *test)
@@ -288,13 +288,13 @@ static int selftest_logerror_init(struct test *test)
 static int selftest_skipmsg_success_cleanup(struct test *test)
 {
     log_skip(SelftestSkipCategory, "SUCCESS after skipmsg from cleanup");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_skipmsg_skip_cleanup(struct test *test)
 {
     log_skip(SelftestSkipCategory, "SKIP after skipmsg from cleanup");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_skip_cleanup(struct test *test)
@@ -339,7 +339,7 @@ template <int PackageId> static int selftest_log_skip_socket_run(struct test *te
 static int selftest_log_skip_run_all_threads(struct test *test, int cpu)
 {
     log_skip(SelftestSkipCategory, "Skipping on all threads");
-    return EXIT_SKIP;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_log_skip_run_even_threads(struct test *test, int cpu)
@@ -1099,7 +1099,7 @@ static struct test selftests_array[] = {
     .description = "Skips by returning EXIT_SKIP from the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_skip_init,
-    .test_run = selftest_skip_run,
+    .test_run = selftest_noreturn_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
@@ -1108,7 +1108,7 @@ static struct test selftests_array[] = {
     .description = "Skips using log_skip() in the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_log_skip_init,
-    .test_run = selftest_skip_run,
+    .test_run = selftest_noreturn_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
