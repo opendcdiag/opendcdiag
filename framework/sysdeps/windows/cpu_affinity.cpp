@@ -45,7 +45,7 @@ LogicalProcessorSet ambient_logical_processor_set()
     return result;
 }
 
-bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
+bool pin_handle_to_logical_processor(LogicalProcessor n, HANDLE hThread, const char *thread_name)
 {
     set_thread_name(thread_name);
     if (n == LogicalProcessor(-1))
@@ -56,12 +56,25 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     groupAffinity.Group = processorNumber.Group;
     groupAffinity.Mask = KAFFINITY(1) << processorNumber.Number;
 
-    HANDLE hThread = GetCurrentThread();
     if (!SetThreadGroupAffinity(hThread, &groupAffinity, nullptr)) {
         win32_perror("SetThreadGroupAffinity");
         return false;
     }
     return true;
+}
+
+bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
+{
+    HANDLE hThread = GetCurrentThread();
+    return pin_handle_to_logical_processor(n, hThread, thread_name);
+}
+
+bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const char *thread_name)
+{
+    HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, FALSE, thread_id);
+    bool ret = pin_handle_to_logical_processor(n, hThread, thread_name);
+    CloseHandle(hThread);
+    return ret;
 }
 
 bool pin_to_logical_processors(CpuRange range, const char *thread_name)
