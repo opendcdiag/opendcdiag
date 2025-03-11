@@ -53,7 +53,7 @@ static int eigen_gemm_double14_init(struct test *test) {
 }
 
 static int eigen_gemm_double14_run(struct test *test, int cpu) {
-    do {
+    TEST_LOOP(test, 1) {
         auto testdata = CAST(test->data);
         Mat _x;
         _x = testdata->lhs;
@@ -76,7 +76,7 @@ static int eigen_gemm_double14_run(struct test *test, int cpu) {
                 report_fail_msg("_prod.isApprox failed");
         }
         memcmp_or_fail(_prod.data(), testdata->prod.data(), M_DIM * M_DIM);
-    } while (test_time_condition(test));
+    }
     return EXIT_SUCCESS;
 }
 

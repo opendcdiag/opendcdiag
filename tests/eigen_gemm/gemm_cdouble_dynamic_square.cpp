@@ -55,7 +55,7 @@ static int eigen_gemm_cdouble_dynamic_square_init(struct test *test) {
 
 static int eigen_gemm_cdouble_dynamic_square_run(struct test *test, int cpu) {
     //int i=0;
-    do {
+    TEST_LOOP(test, 1) {
         //++i;
         auto testdata = CAST(test->data);
         Mat x;
@@ -63,7 +63,7 @@ static int eigen_gemm_cdouble_dynamic_square_run(struct test *test, int cpu) {
 
         memcmp_or_fail(reinterpret_cast<double *>(x.data()),
                        reinterpret_cast<double *>(testdata->prod.data()), 2 * M_DIM * M_DIM);
-    } while (test_time_condition(test));
+    }
     //log_info("Num iters = %i\n", i);
     return EXIT_SUCCESS;
 }

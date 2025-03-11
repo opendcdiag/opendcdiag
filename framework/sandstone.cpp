@@ -724,7 +724,7 @@ extern "C" void test_loop_iterate() noexcept;    // see below
 
 /* returns 1 if the test should keep running, useful for a while () loop */
 #undef test_time_condition
-bool test_time_condition() noexcept
+bool test_time_condition(int N) noexcept
 {
     test_loop_iterate();
     sApp->test_tests_iteration(current_test);
@@ -733,6 +733,10 @@ bool test_time_condition() noexcept
     if (max_loop_count_exceeded(current_test))
         return 0;  // end the test if max loop count exceeded
 
+    if (sApp->shmem->current_test_sleep_duration != 0us) {
+        usleep(sApp->shmem->current_test_sleep_duration.count() / N);
+    }
+
     return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
 }
 
@@ -740,16 +744,6 @@ bool test_is_retry() noexcept
 {
     // negative values indicate a retry
     return sApp->current_iteration_count < 0;
-}
-
-bool test_inject_idle(int N) noexcept
-{
-    if (sApp->shmem->current_test_sleep_duration > 0) {
-        usleep(sApp->shmem->current_test_sleep_duration / N);
-    }
-    // Always return false so that the condition check in TEST_LOOP
-    // doesn't create an infinite loop.
-    return false;
 }
 
 // Creates a string containing all socket temperatures like: "P0:30oC P2:45oC"
@@ -2414,11 +2408,14 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
 
     if (sApp->inject_idle > 0) {
-        sApp->shmem->current_test_sleep_duration = duration_to_usec(
-            sApp->current_test_duration * sApp->inject_idle / 100
+        float idle_rate = sApp->inject_idle / 100.0;
+        sApp->shmem->current_test_sleep_duration = duration_cast<microseconds>(
+            sApp->current_test_duration * idle_rate
         );
         // When injecting idle time, reduce the test duration accordingly
-        sApp->current_test_duration = sApp->current_test_duration * (1 - sApp->inject_idle / 100);
+        sApp->current_test_duration = duration_cast<ShortDuration>(
+            sApp->current_test_duration * (1 - idle_rate)
+        );
     }
 
     if (test->fracture_loop_count) {
