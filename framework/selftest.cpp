@@ -80,14 +80,14 @@ static int selftest_timedpass_run(struct test *test, int cpu)
     do {
         if (Usecs)
             usleep(Usecs);
-    } while (test_time_condition(test));
+    } while (test_time_condition(1));
     return EXIT_SUCCESS;
 }
 
 template <useconds_t Usecs>
 static int selftest_timedpass_whileloop_run(struct test *test, int cpu)
 {
-    while (test_time_condition(test)) {
+    while (test_time_condition(1)) {
         if (Usecs)
             usleep(Usecs);
     }
@@ -475,7 +475,7 @@ static int selftest_timed_randomfail_run(struct test *test, int cpu)
             continue;
         report_fail_msg("Randomly failing on iteration %d (TTF should be ~%u ms)",
                         i, unsigned(Sleeptime) * i);
-    } while (test_time_condition(test));
+    } while (test_time_condition(1));
     return EXIT_SUCCESS;
 }
 
