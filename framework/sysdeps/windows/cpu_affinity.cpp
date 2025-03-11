@@ -64,6 +64,25 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
     return true;
 }
 
+bool pin_thread_to_logical_processor(LogicalProcessor n, const char *thread_name, tid_t thread_id)
+{
+    set_thread_name(thread_name);
+    if (n == LogicalProcessor(-1))
+        return true;            // don't change affinity
+
+    PROCESSOR_NUMBER processorNumber = to_processor_number(n);
+    GROUP_AFFINITY groupAffinity = {};
+    groupAffinity.Group = processorNumber.Group;
+    groupAffinity.Mask = KAFFINITY(1) << processorNumber.Number;
+
+    HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, FALSE, thread_id);
+    if (!SetThreadGroupAffinity(hThread, &groupAffinity, nullptr)) {
+        win32_perror("SetThreadGroupAffinity");
+        return false;
+    }
+    return true;
+}
+
 bool pin_to_logical_processors(CpuRange range, const char *thread_name)
 {
     set_thread_name(thread_name);
