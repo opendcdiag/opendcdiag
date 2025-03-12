@@ -69,6 +69,24 @@
 #  ifndef SEGV_PKUERR
 #  define SEGV_PKUERR   4
 #  endif
+#  ifndef SEGV_ACCADI
+#  define SEGV_ACCADI   5
+#  endif
+#  ifndef SEGV_ADIDERR
+#  define SEGV_ADIDERR  6
+#  endif
+#  ifndef SEGV_ADIPERR
+#  define SEGV_ADIPERR  7
+#  endif
+#  ifndef SEGV_MTEAERR
+#  define SEGV_MTEAERR  8
+#  endif
+#  ifndef SEGV_MTESERR
+#  define SEGV_MTESERR  9
+#  endif
+#  ifndef SEGV_CPERR
+#  define SEGV_CPERR    10
+#  endif
 #  ifndef BUS_MCEERR_AR
 #  define BUS_MCEERR_AR 4
 #  endif
@@ -771,9 +789,12 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
         case SEGV_ADIDERR: return "SEGV_ADIDERR";      // Disrupting MCD error.
         case SEGV_ADIPERR: return "SEGV_ADIPERR";      // Precise MCD exception.
 #endif
-#if 0               // ARM exceptions can't occur on x86
+#ifdef __aarch64__
         case SEGV_MTEAERR: return "SEGV_MTEAERR";      // Asynchronous ARM MTE error.
         case SEGV_MTESERR: return "SEGV_MTESERR";      // Synchronous ARM MTE exception.
+#endif
+#ifdef SEGV_CPERR
+        case SEGV_CPERR:  return "SEGV_CPERR";         // Control protection fault
 #endif
         }
         return generic_code_string(code);
