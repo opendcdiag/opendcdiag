@@ -888,7 +888,8 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
             "OF", "BR", "UD", "NM",
             "DF", "MF", "TS", "NP",
             "SS", "GP", "PF", "spu",
-            "MF", "AC", "MC", "XF",
+            "MF", "AC", "MC", "XM",
+            "VE", "CP",
         };
         const char *trap_name = "??";
         if (ctx.trap_nr == 32)
