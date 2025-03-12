@@ -11,6 +11,9 @@
 #else
 #  include <dlfcn.h>
 #endif
+#if defined(__ELF__)
+#  include <elf.h>
+#endif
 
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
@@ -84,3 +87,45 @@ void sandstone_ssl_init()
     }
 }
 
+#if SANDSTONE_SSL_LINKED == 0 && defined(__ELF__)
+// Add metadata indicating we do dlopen() OpenSSL
+// https://systemd.io/ELF_DLOPEN_METADATA/
+#ifndef ELF_NOTE_FDO
+#  define ELF_NOTE_FDO              "FDO"
+#endif
+#ifndef NT_FDO_DLOPEN_METADATA
+#  define NT_FDO_DLOPEN_METADATA    0x407c0c0a
+#endif
+
+namespace {
+struct alignas(void*) ElfDlopenMetadata
+{
+    static constexpr const char s_payload[] =
+        "["
+            "{"
+                "\"soname\":[\"libcrypto.so.3\"],"
+                "\"description\":\"OpenSSL-based tests\","
+                "\"priority\":\"recommended\""
+            "}"
+        "]";
+
+    // Pedantic: Elf64_Nhdr and Elf32_Nhdr are identical
+    using Header = std::conditional_t<sizeof(void *) == 8, Elf64_Nhdr, Elf32_Nhdr>;
+    Header header = {
+        .n_namesz = sizeof(name),
+        .n_descsz = sizeof(payload),
+        .n_type = NT_FDO_DLOPEN_METADATA,
+    };
+    char name[sizeof(ELF_NOTE_FDO)] = ELF_NOTE_FDO;
+    char payload[sizeof(s_payload)] = {};
+
+    consteval ElfDlopenMetadata()
+    {
+        std::copy_n(s_payload, sizeof(s_payload), payload);
+    }
+};
+
+[[gnu::used, gnu::section(".note.dlopen")]]
+static constexpr ElfDlopenMetadata elfDlopenMetadata = {};
+} // unnamed namespace
+#endif
