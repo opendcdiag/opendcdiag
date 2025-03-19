@@ -298,7 +298,7 @@ protected:
     void pin_to_next_cpu(int next_cpu, tid_t thread_id=0)
     {
         if (!pin_thread_to_logical_processor(LogicalProcessor(next_cpu), thread_id)) {
-            log_warning("Failed to reschedule %d (%tu) to CPU %d", thread_num, (uintptr_t)pthread_self(), next_cpu);
+            log_warning("Failed to reschedule %d (%tu) to CPU %d", thread_id, (uintptr_t)pthread_self(), next_cpu);
         }
     }
 };

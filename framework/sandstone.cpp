@@ -942,6 +942,10 @@ static uintptr_t thread_runner(int thread_number)
             logging_mark_thread_failed(thread_number);
         }
         test_end(new_state);
+
+        // If rescheduling, do cleanup
+        if (sApp->device_schedule != nullptr)
+            sApp->device_schedule->finish_reschedule();
     });
 
     // indicate to SIGQUIT handler that we're running
