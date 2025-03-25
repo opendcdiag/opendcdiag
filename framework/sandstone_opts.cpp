@@ -294,17 +294,22 @@ void warn_deprecated_opt(const char *opt)
 class QueueDeviceSchedule : public DeviceSchedule
 {
 public:
-    int get_next_cpu() override
+    void reschedule_to_next_device() override
     {
-        // Returns next CPU from the queue
+        // Select a cpu from the queue
         std::lock_guard lock(q_mutex);
         if (q_idx == 0)
             shuffle_queue();
-        int result = queue[q_idx];
+
+        int next_idx = queue[q_idx];
         if (++q_idx == queue.size())
             q_idx = 0;
-        return result;
+
+        pin_to_next_cpu(cpu_info[next_idx].cpu_number);
+        return;
     }
+
+    void finish_reschedule() override {}
 
 private:
     int q_idx = 0;
@@ -328,11 +333,16 @@ private:
 class RandomDeviceSchedule : public DeviceSchedule
 {
 public:
-    int get_next_cpu() override
+    void reschedule_to_next_device() override
     {
-        // return random cpu
-        return random32() % num_cpus();
+        // Select a random cpu index among the ones available
+        int next_idx = unsigned(random()) % num_cpus();
+        pin_to_next_cpu(cpu_info[next_idx].cpu_number);
+
+        return;
     }
+
+    void finish_reschedule() override {}
 };
 } /* anonymous namespace */
 
