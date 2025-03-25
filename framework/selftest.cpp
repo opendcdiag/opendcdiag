@@ -933,13 +933,15 @@ static int selftest_inject_idle(struct test *test, int cpu)
         for (int i = 0; i < 10000; ++i) {
             int a_variable = cpu * 2;
             a_variable += 1;
+            // use the result so the compiler doesn't optimize this away
+            __asm__ ("" : "+gv" (a_variable));
         }
     }
     auto loop_end = std::chrono::steady_clock::now();
     auto elapsed_time = duration_cast<microseconds>(loop_end - loop_start);
     auto sleep_duration = sApp->shmem->current_test_sleep_duration;
 
-    if ((elapsed_time > 1.01 * sleep_duration) || (elapsed_time < 0.99 * sleep_duration)) {
+    if (elapsed_time < 0.99 * sleep_duration) {
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;

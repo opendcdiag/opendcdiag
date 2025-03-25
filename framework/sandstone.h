@@ -548,10 +548,7 @@ extern bool test_time_condition() noexcept;
 
 /// Called from the TEST_LOOP macro to determine if loop should continue.
 /// Argument N is the requested number of loop iterations. If idle cycle
-/// injection is configured, this function will issue usleep() for calculated time
-/// (configured idle time / N) before calling test_time_condition().
-/// This way compatibility with tests that call test_time_condition() directly
-/// is maintained.
+/// injection is configured, this function will issue usleep() for calculated time.
 extern bool test_loop_condition(int N) noexcept;
 
 /// Returns true if this is a retry.
