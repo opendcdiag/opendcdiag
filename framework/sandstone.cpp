@@ -1045,17 +1045,23 @@ namespace {
 class QueueDeviceSchedule : public DeviceSchedule
 {
 public:
-    int get_next_cpu() override
-    {
-        // Returns next CPU from the queue
+    void device_reschedule() override {
+        // Select a cpu from the queue
         std::lock_guard lock(q_mutex);
         if (q_idx == 0)
             shuffle_queue();
-        int result = queue[q_idx];
+
+        int next_cpu = queue[q_idx];
         if (++q_idx == queue.size())
             q_idx = 0;
-        return result;
+
+        if (!pin_to_logical_processor(LogicalProcessor(cpu_info[next_cpu].cpu_number))) {
+            log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
+        }
+        return;
     }
+
+    void finish_reschedule() override {}
 
 private:
     int q_idx = 0;
@@ -1079,21 +1085,24 @@ private:
 class RandomDeviceSchedule : public DeviceSchedule
 {
 public:
-    int get_next_cpu() override
-    {
-        // return random cpu
-        return random32() % num_cpus();
+    void device_reschedule() override {
+        // Select a random cpu index among the ones available
+        int next_cpu = random32() % num_cpus();
+
+        if (!pin_to_logical_processor(LogicalProcessor(cpu_info[next_cpu].cpu_number))) {
+            log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
+        }
+        return;
     }
+
+    void finish_reschedule() override {}
 };
 } // unnamed namespace
 
 void reschedule()
 {
     if (sApp->device_schedule == nullptr) return;
-    int next_cpu = sApp->device_schedule->get_next_cpu();
-    if (!pin_to_logical_processor(LogicalProcessor(cpu_info[next_cpu].cpu_number))) {
-        log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
-    }
+    sApp->device_schedule->device_reschedule();
     return;
 }
 
