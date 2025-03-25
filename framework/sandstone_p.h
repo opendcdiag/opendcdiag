@@ -291,8 +291,16 @@ struct SandstoneBackgroundScan
 
 class DeviceSchedule {
 public:
-    virtual int get_next_cpu() = 0;
+    virtual void reschedule_to_next_device() = 0;
+    virtual void finish_reschedule() = 0;
     virtual ~DeviceSchedule() = default;
+protected:
+    void pin_to_next_cpu(int next_cpu, tid_t thread_id=0)
+    {
+        if (!pin_thread_to_logical_processor(LogicalProcessor(next_cpu), thread_id)) {
+            log_warning("Failed to reschedule %d (%tu) to CPU %d", thread_num, (uintptr_t)pthread_self(), next_cpu);
+        }
+    }
 };
 
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>

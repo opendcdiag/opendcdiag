@@ -986,10 +986,7 @@ int num_packages() {
 void reschedule()
 {
     if (sApp->device_schedule == nullptr) return;
-    int next_cpu = sApp->device_schedule->get_next_cpu();
-    if (!pin_to_logical_processor(LogicalProcessor(cpu_info[next_cpu].cpu_number))) {
-        log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
-    }
+    sApp->device_schedule->reschedule_to_next_device();
     return;
 }
 
