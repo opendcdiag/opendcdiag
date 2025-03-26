@@ -28,6 +28,7 @@
 
 #ifdef __cplusplus
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -389,6 +390,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool service_background_scan = false;
     bool vary_frequency_mode = false;
     bool vary_uncore_frequency_mode = false;
+    int inject_idle = 0;
     static constexpr int MaxRetestCount = sizeof(PerCpuFailures::value_type) * 8;
     int retest_count = 10;
     int total_retest_count = -2;
@@ -470,6 +472,7 @@ struct SandstoneApplication::SharedMemory
     // test execution
     MonotonicTimePoint current_test_endtime = {};
     int current_max_loop_count = 0;
+    std::chrono::duration<int, std::micro> current_test_sleep_duration = {};
     bool selftest = false;
     bool ud_on_failure = false;
     bool use_strict_runtime = false;

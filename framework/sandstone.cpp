@@ -122,6 +122,7 @@ enum {
     ignore_mce_errors_option,
     ignore_os_errors_option,
     ignore_unknown_tests_option,
+    inject_idle_option,
     is_asan_option,
     is_debug_option,
     force_test_time_option,
@@ -733,6 +734,15 @@ bool test_time_condition() noexcept
         return 0;  // end the test if max loop count exceeded
 
     return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
+}
+
+bool test_loop_condition(int N) noexcept
+{
+    if (sApp->shmem->current_test_sleep_duration != 0us)
+    {
+        usleep(sApp->shmem->current_test_sleep_duration.count() / N);
+    }
+    return test_time_condition();
 }
 
 bool test_is_retry() noexcept
@@ -2402,6 +2412,17 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures
     sApp->current_test_duration = test_duration(test_cfg);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
 
+    if (sApp->inject_idle > 0) {
+        float idle_rate = sApp->inject_idle / 100.0;
+        sApp->shmem->current_test_sleep_duration = duration_cast<microseconds>(
+            sApp->current_test_duration * idle_rate
+        );
+        // When injecting idle time, reduce the test duration accordingly
+        sApp->current_test_duration = duration_cast<ShortDuration>(
+            sApp->current_test_duration * (1 - idle_rate)
+        );
+    }
+
     if (test->fracture_loop_count) {
         // handled first, not overridable by --max-test-loop-count
         sApp->shmem->current_max_loop_count = test->fracture_loop_count;
@@ -3157,6 +3178,7 @@ int main(int argc, char **argv)
         { "ignore-os-errors", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-unknown-tests", no_argument, nullptr, ignore_unknown_tests_option },
+        { "inject-idle", required_argument, nullptr, inject_idle_option },
         { "list", no_argument, nullptr, 'l' },
         { "list-tests", no_argument, nullptr, raw_list_tests },
         { "list-group-members", required_argument, nullptr, raw_list_group_members },
@@ -3392,6 +3414,14 @@ int main(int argc, char **argv)
             break;
         case ignore_unknown_tests_option:
             test_set_config.ignore_unknown_tests = true;
+            break;
+        case inject_idle_option:
+            sApp->inject_idle = ParseIntArgument<>{
+                .name = "--inject-idle",
+                .min = 0,
+                .max = 50,
+                .range_mode = OutOfRangeMode::Saturate
+            }();
             break;
         case is_asan_option:
         case is_debug_option:
