@@ -11,6 +11,7 @@
 #endif
 
 #include <algorithm>
+#include <barrier>
 #include <chrono>
 #include <iterator>
 #include <new>
@@ -1028,6 +1029,10 @@ static uintptr_t thread_runner(int thread_number)
 
     cleanup.run_now();
 
+    // If rescheduling, do cleanup
+    if (sApp->device_schedule != nullptr)
+        sApp->device_schedule->finish_reschedule();
+
     CPUTimeFreqStamp after;
     after.Snapshot(thread_number);
     this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
@@ -1052,20 +1057,107 @@ int num_packages() {
 }
 
 namespace {
+class BarrierDeviceSchedule : public DeviceSchedule
+{
+public:
+    void device_reschedule() override {
+        auto on_completion = [&]() noexcept {
+            std::unique_lock lock(groups_mutex);
+
+            int group_idx = thread_num / members_per_group;
+            GroupInfo *group = groups[group_idx];
+
+            // Rotate cpus vector so reschedule group members to a different cpu
+            std::rotate(group->next_cpu.begin(), group->next_cpu.begin() + 1, group->next_cpu.end());
+            lock.unlock();
+
+            // Reschedule group members
+            for (int i=0; i<members_per_group; i++) {
+                if(!pin_thread_to_logical_processor(LogicalProcessor(cpu_info[group->next_cpu[i]].cpu_number), group->pid[i]))
+                    log_debug("Failed to reschedule %d (%lld) to CPU %d", thread_num, pthread_self(), cpu_info[group->next_cpu[i]].cpu_number);
+            }
+        };
+
+        std::unique_lock lock(groups_mutex);
+
+        // Initialize groups on first run
+        if (groups.size() == 0) {
+            groups.reserve(num_cpus()/members_per_group);
+            for (int i=0; i<num_cpus(); i+=members_per_group) {
+                groups.push_back(new GroupInfo(members_per_group, on_completion));
+            }
+        }
+
+        // Fill thread info if not done already
+        int group_idx = thread_num / members_per_group;
+        GroupInfo *group = groups[group_idx];
+        int thread_info_idx = thread_num % members_per_group;
+        if (group->pid[thread_info_idx] == 0) {
+            group->pid[thread_info_idx] = getpid();
+            group->next_cpu[thread_info_idx] = thread_num;
+        }
+
+        lock.unlock();
+
+        // Wait on proper barrier
+        group->barrier->arrive_and_wait();
+        return;
+    }
+
+    void finish_reschedule() override {
+        // When thread finishes, unsubscribe it from barrier
+        // this avoid partners deadlocks
+        int group_idx = thread_num / members_per_group;
+        GroupInfo *group = groups[group_idx];
+
+        // Remove thread info from groups
+        std::unique_lock lock(groups_mutex);
+        int thread_info_idx = thread_num % members_per_group;
+        // group->next_cpu.erase(group->next_cpu.begin() + thread_info_idx); // Should I remove the cpus as well?
+        group->pid.erase(group->pid.begin() + thread_info_idx);
+        lock.unlock();
+
+        group->barrier->arrive_and_drop();
+    }
+
+private:
+    struct GroupInfo {
+        std::unique_ptr<std::barrier<std::function<void()>>> barrier;
+        std::vector<pid_t> pid; // Keep track of all members pid
+        std::vector<int> next_cpu; // Keep track of cpus on the group
+
+        GroupInfo(int members_per_group, std::function<void()> on_completion) {
+            barrier = std::make_unique<std::barrier<std::function<void()>>>(members_per_group, std::move(on_completion));
+            pid.resize(members_per_group);
+            next_cpu.resize(members_per_group);
+        }
+    };
+
+    const int members_per_group = 2; // TODO: Make it configurable and define what to do if we can have full groups, or if members are > than num_cpus()
+    std::vector<GroupInfo *> groups;
+    std::mutex groups_mutex; // Should I use a mutex per group?
+};
+
 class QueueDeviceSchedule : public DeviceSchedule
 {
 public:
-    int get_next_cpu() override
-    {
-        // Returns next CPU from the queue
+    void device_reschedule() override {
+        // Select a cpu from the queue
         std::lock_guard lock(q_mutex);
         if (q_idx == 0)
             shuffle_queue();
-        int result = queue[q_idx];
+
+        int next_cpu = queue[q_idx];
         if (++q_idx == queue.size())
             q_idx = 0;
-        return result;
+
+        if (!pin_to_logical_processor(LogicalProcessor(cpu_info[next_cpu].cpu_number))) {
+            log_debug("Failed to reschedule %d (%lld) to CPU %d", thread_num, pthread_self(), cpu_info[next_cpu].cpu_number);
+        }
+        return;
     }
+
+    void finish_reschedule() override {}
 
 private:
     int q_idx = 0;
@@ -1089,21 +1181,24 @@ private:
 class RandomDeviceSchedule : public DeviceSchedule
 {
 public:
-    int get_next_cpu() override
-    {
-        // return random cpu
-        return random32() % num_cpus();
+    void device_reschedule() override {
+        // Select a random cpu index among the ones available
+        int next_cpu = random32() % num_cpus();
+
+        if (!pin_to_logical_processor(LogicalProcessor(cpu_info[next_cpu].cpu_number))) {
+            log_debug("Failed to reschedule %d (%lld) to CPU %d", thread_num, pthread_self(), cpu_info[next_cpu].cpu_number);
+        }
+        return;
     }
+
+    void finish_reschedule() override {}
 };
 } // unnamed namespace
 
 void reschedule()
 {
     if (sApp->device_schedule == nullptr) return;
-    int next_cpu = sApp->device_schedule->get_next_cpu();
-    if (!pin_to_logical_processor(LogicalProcessor(cpu_info[next_cpu].cpu_number))) {
-        log_debug("Failed to reschedule %d (%ld) to CPU %d", thread_num, pthread_self(), next_cpu);
-    }
+    sApp->device_schedule->device_reschedule();
     return;
 }
 
@@ -3491,12 +3586,14 @@ int main(int argc, char **argv)
 
             if (strcmp(optarg, "none") == 0 ) {
                 // Default option, so do nothing
+            } else if (strcmp(optarg, "barrier") == 0) {
+                sApp->device_schedule = std::make_unique<BarrierDeviceSchedule>();
             } else if (strcmp(optarg, "queue") == 0) {
                 sApp->device_schedule = std::make_unique<QueueDeviceSchedule>();
             } else if (strcmp(optarg, "random") == 0) {
                 sApp->device_schedule = std::make_unique<RandomDeviceSchedule>();
             } else {
-                fprintf(stderr, "%s: unknown reschedule option: %s. Available options: queue, random and none(default)\n", argv[0], optarg);
+                fprintf(stderr, "%s: unknown reschedule option: %s. Available options: barrier, queue, random and none(default)\n", argv[0], optarg);
                 return EX_USAGE;
             }
             break;
