@@ -13,6 +13,7 @@
 #include <string.h>
 #include <time.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #ifdef __x86_64__
 #pragma GCC diagnostic push
@@ -76,10 +77,12 @@ extern "C" {
 /// followed by 0 or more arguments that provide data for the format string.  The message
 /// is only logged in debug builds.  This macro has no effect in release builds and generates
 /// no code.
+#ifndef log_debug
 #ifndef NDEBUG
 #  define log_debug(...)        log_message(thread_num, SANDSTONE_LOG_DEBUG __VA_ARGS__)
 #else
 #  define log_debug( ...)       (void)0
+#endif
 #endif
 
 // skip categories
@@ -750,6 +753,123 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
     _memcmp_or_fail(actual, expected, size, "" __VA_ARGS__)
 
 #endif
+
+static inline const char* buf_as_hex(const void* data, size_t len, char* buf)
+{
+    const uint8_t* ptr = (const uint8_t*) data;
+    size_t i;
+    for (i = 0; i < len; i++) {
+        sprintf(buf + 3 * i, "%02x ", *ptr++);
+    }
+    if (len != 0) {
+        buf[3 * i - 1] = '\0';
+    } else {
+        *buf = '\0';
+    }
+    return buf;
+}
+
+static inline const char* get_print_asm_cmd(void)
+{
+    const char* cmd = getenv("PRINT_ASM");
+    if (cmd != NULL) {
+        return cmd;
+    }
+    return "print_asm.sh";
+}
+
+static inline void log_assembly_stderr(const char* msg, const void* code, size_t size)
+{
+    const char* add = "";
+    if (size > 2000) {
+        add = " (too long to print the assembly out)";
+    }
+    log_warning("%s: ptr=%" PRIx64 ", len=%" PRId64 "%s", msg, (uintptr_t) code, size, add);
+    if (*add == '\0') {
+        const char* print_asm_cmd = get_print_asm_cmd();
+        const char redir[] = " 1>&2";
+        char buf[strlen(print_asm_cmd) + 1 + 16 + 2 + size * 3 + strlen(redir)];
+        sprintf(buf, "%s %" PRIx64 ": ", print_asm_cmd, (uintptr_t) code);
+        buf_as_hex(code, size, buf + strlen(buf));
+        strcat(buf, redir);
+        int status = system(buf);
+        if (status != 0) {
+            log_warning("%s has failed with status=%x", print_asm_cmd, status);
+        }
+    }
+}
+
+#if defined(PTSLOG_PREFIX)
+
+#define QUOTE(...) #__VA_ARGS__
+#define EXPAND_AND_QUOTE(...) QUOTE(__VA_ARGS__)
+
+static inline const char* get_pts(void)
+{
+    static const char* con = NULL;
+    if (con == NULL) {
+        con = getenv("PTS");
+        if (con == NULL) {
+            con = "";
+        }
+    }
+    if (*con != '\0') {
+        return con;
+    } else {
+        return NULL;
+    }
+}
+
+#define PTSLOG(fmt, ...) \
+    do {\
+        const char* con = get_pts();\
+        FILE* f =  con ? fopen(con, "a") : NULL;\
+        if (f) {\
+            const char* pfmt = EXPAND_AND_QUOTE(PTSLOG_PREFIX);\
+            fprintf(f,  "%s%s[%s:%d] " fmt "\n", pfmt, (*pfmt ? " " : ""), __FILE__, __LINE__, ##__VA_ARGS__);\
+            fclose(f);\
+        }\
+    } while (0)
+
+
+// Print the assembly of JITed code
+// It requires properly set-up script print_asm.sh in order to print out the assembly
+static inline void log_assembly(const char* msg, const void* code, size_t size)
+{
+    const char* con1 = NULL;
+    // command line max length = on linux $(getconf ARG_MAX) => 2097152, on windows 8192
+    // let's have the "stronger" limit to avoid too long assembly printed out
+    if (size < 2000) {
+        PTSLOG("%s: ptr=%" PRIx64 ", len=%" PRId64 "%s", msg, (uintptr_t) code, size, con + strlen(con1 = con));
+    } else {
+        PTSLOG("%s: ptr=%" PRIx64 ", len=%" PRId64 " (too long to print the assembly out)", msg, (uintptr_t) code, size);
+    }
+    if (con1 != NULL) {
+        const char* print_asm_cmd = get_print_asm_cmd();
+        char buf[strlen(print_asm_cmd) + 1 + 16 + 2 + size * 3 + 2 + strlen(con1)];
+        sprintf(buf, "%s %" PRIx64 ": ", print_asm_cmd, (uintptr_t) code);
+        buf_as_hex(code, size, buf + strlen(buf));
+        sprintf(buf + strlen(buf), " >>%s", con1);
+        int status = system(buf);
+        if (status != 0) {
+            PTSLOG("%s has failed with status=%x", print_asm_cmd, status);
+        }
+    }
+}
+
+#elif !defined(PTSLOG_PREFIX)
+
+// check fmt string against args, no code emitted and/or nothing logged
+#define PTSLOG(fmt, ...) do { if (false) { printf(fmt, ##__VA_ARGS__); }} while(0)
+
+static inline void log_assembly(const char* msg, const void* code, size_t size)
+{
+    if (false) {
+        printf("%s:%p.%" PRId64, msg, code, size);
+    }
+}
+
+#endif // defined(PTSLOG_PREFIX)
 
 #if SANDSTONE_NO_LOGGING
 #  undef log_data
