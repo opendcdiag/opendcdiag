@@ -34,6 +34,7 @@ jobs:
             elfutils \
             file \
             git \
+            hwloc \
             libboost-dev \
             libeigen3-dev \
             libgtest-dev \
