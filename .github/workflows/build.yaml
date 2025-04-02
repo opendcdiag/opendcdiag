@@ -34,12 +34,12 @@ jobs:
             elfutils \
             file \
             git \
-            hwloc \
             libboost-dev \
             libeigen3-dev \
             libgtest-dev \
             libhwloc-dev \
             libssl-dev \
+            libudev-dev \
             libzstd-dev \
             meson \
             ninja-build \
