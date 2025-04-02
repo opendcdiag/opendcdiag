@@ -745,6 +745,9 @@ template <typename CallDetector> static bool call_detector(CallDetector fn, stru
     return false;
 }
 
+using FuncWithTopology = bool(*)(cpu_info*, hwloc_topology*);
+using FuncWithoutTopology = bool(*)(cpu_info*);
+
 typedef bool (* fill_family_func)(struct cpu_info *);
 typedef bool (* fill_ppin_func)(struct cpu_info *);
 typedef bool (* fill_ucode_func)(struct cpu_info *);
@@ -756,7 +759,7 @@ static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
  * root. */
 static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
 /* prefer hwloc, fallback to CPUID. */
-static const fill_topo_func topo_impls[] = { fill_topology_hwloc,  fill_topo_cpuid };
+static const fill_topo_func topo_impls[] = { fill_topology_hwloc };
 
 void apply_cpuset_param(char *param)
 {
