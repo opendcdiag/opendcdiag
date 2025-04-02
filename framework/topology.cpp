@@ -745,9 +745,6 @@ template <typename CallDetector> static bool call_detector(CallDetector fn, stru
     return false;
 }
 
-using FuncWithTopology = bool(*)(cpu_info*, hwloc_topology*);
-using FuncWithoutTopology = bool(*)(cpu_info*);
-
 typedef bool (* fill_family_func)(struct cpu_info *);
 typedef bool (* fill_ppin_func)(struct cpu_info *);
 typedef bool (* fill_ucode_func)(struct cpu_info *);
