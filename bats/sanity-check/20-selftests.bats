@@ -1995,3 +1995,12 @@ selftest_interrupt_common() {
 @test "interrupt-SIGTERM" {
     selftest_interrupt_common TERM
 }
+
+@test "idle injection" {
+    declare -A yamldump
+    for inject_idle in 0 10 20 30 40 50; do
+        sandstone_selftest -e selftest_inject_idle --inject-idle $inject_idle
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/exit" pass
+    done
+}

@@ -926,6 +926,27 @@ static const kvm_config_t *selftest_kvm_config_real_16bit_fail()
 }
 #endif // __linux__ && x86-64
 
+static int selftest_inject_idle(struct test *test, int cpu)
+{
+    auto loop_start = std::chrono::steady_clock::now();
+    TEST_LOOP(test, 1) {
+        for (int i = 0; i < 10000; ++i) {
+            int a_variable = cpu * 2;
+            a_variable += 1;
+            // use the result so the compiler doesn't optimize this away
+            __asm__ ("" : "+gv" (a_variable));
+        }
+    }
+    auto loop_end = std::chrono::steady_clock::now();
+    auto elapsed_time = duration_cast<microseconds>(loop_end - loop_start);
+    auto sleep_duration = sApp->shmem->current_test_sleep_duration;
+
+    if (elapsed_time < 0.99 * sleep_duration) {
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
 const static test_group group_positive = {
     .id = "positive",
     .description = "Self-tests that succeed (positive results)"
@@ -1665,6 +1686,14 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .flags = test_type_kvm,
 },
 #endif // __linux__
+{
+    .id = "selftest_inject_idle",
+    .description = "Verifies idle injection has no impact on test run time",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_inject_idle,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD
+}
 };
 
 extern const std::span<struct test> selftests;
