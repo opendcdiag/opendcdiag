@@ -33,6 +33,17 @@ generated_cpu_features_h = configure_file(
     ],
 )
 
+configure_file(
+    input : [
+        'scripts/make-gitid.pl',
+    ],
+    output : 'gitid.h',
+    encoding : 'ascii',
+    command : [
+        perl, '@INPUT0@', '@OUTPUT@', 'opendcdiag', get_option('version_suffix')
+    ],
+)
+
 generated_builtin_test_list = []
 builtin_test_list_inputs = get_option('builtin_test_list')
 generated_builtin_test_list += custom_target(
