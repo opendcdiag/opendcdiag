@@ -110,6 +110,11 @@ char *strdup(const char *str)
     return static_cast<char *>(memcpy(newstr, str, strlen(str) + 1));
 }
 
+// Fake a DLL import to _strdup pointing back to our strdup() above.
+// We need to do this because MinGW's <string.h> unconditionally declares _strdup()
+// as __declspec(dllimport).
+extern const auto __imp__strdup = &strdup;
+
 char *strndup(const char *str, size_t n)
 {
     size_t len = strnlen(str, n);
