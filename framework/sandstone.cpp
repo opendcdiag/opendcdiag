@@ -173,6 +173,7 @@ enum {
     vary_uncore_frequency,
     version_option,
     weighted_testrun_option,
+    pts_option,
 };
 
 using namespace std::chrono_literals;
@@ -3235,6 +3236,7 @@ int main(int argc, char **argv)
         { "verbose", no_argument, nullptr, 'v' },
         { "version", no_argument, nullptr, version_option },
         { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
+        { "pts", required_argument, nullptr, pts_option },
         { "yaml", optional_argument, nullptr, 'Y' },
 
 #if defined(__SANITIZE_ADDRESS__)
@@ -3653,6 +3655,10 @@ int main(int argc, char **argv)
             sApp->max_test_loop_count = ParseIntArgument<>{"--max-test-loop-count"}();
             if (sApp->max_test_loop_count == 0)
                     sApp->max_test_loop_count = std::numeric_limits<int>::max();
+            break;
+
+        case pts_option:
+            sApp->pts_arg = std::make_unique<std::string>(optarg);
             break;
 
             /* deprecated options */
