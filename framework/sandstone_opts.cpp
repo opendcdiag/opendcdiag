@@ -72,7 +72,6 @@ enum {
     syslog_runtime_option,
     temperature_threshold_option,
     test_delay_option,
-    test_index_range_option,
     test_list_file_option,
     test_list_randomize_option,
     test_tests_option,
@@ -184,12 +183,6 @@ Common command-line options are:
      Specifies the tests to run in a text file.  This will run the tests
      in the order they appear in the file and also allows you to vary the
      individual test durations.  See the User Guide for details.
- --test-range A-B
-     Run tests from test number A to test number B based on their list location
-     in an input file specified using --test-list-file <inputfile>.
-     For example: --test-list-file mytests.list -test-range 6-10
-                  runs tests 6 through 10 from the file mytests.list.
-     See User Guide for more details.
  --test-list-randomize
      Randomizes the order in which tests are executed.
  --test-delay <time in ms>
@@ -291,35 +284,6 @@ template <typename Integer = int> struct ParseIntArgument
         return v;
     }
 };
-
-auto parse_testrun_range(const char *arg)
-{
-    int starting_test_number = 1; // One based count for user interface, not zero based
-    int ending_test_number = INT_MAX;
-
-    char *end;
-    errno = 0;
-    starting_test_number = strtoul(arg, &end, 10);
-    if (errno == 0) {
-        if (*end == '-')
-            ending_test_number = strtoul(end + 1, &end, 10);
-        else
-            errno = EINVAL;
-    }
-    if (errno != 0) {
-        fprintf(stderr, "%s: error: --test-range requires two dash separated integer args like --test-range 1-10\n",
-                program_invocation_name);
-        return EXIT_FAILURE;
-    }
-    if (starting_test_number > ending_test_number)
-        std::swap(starting_test_number, ending_test_number);
-    if (starting_test_number < 1) {
-        fprintf(stderr, "%s: error: The lower bound of the test range must be >= 1, %d specified\n",
-                program_invocation_name, starting_test_number);
-        return EXIT_FAILURE;
-    }
-    return EXIT_SUCCESS;
-}
 
 void warn_deprecated_opt(const char *opt)
 {
@@ -432,7 +396,6 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
         { "temperature-threshold", required_argument, nullptr, temperature_threshold_option },
         { "test-delay", required_argument, nullptr, test_delay_option },
         { "test-list-file", required_argument, nullptr, test_list_file_option },
-        { "test-range", required_argument, nullptr, test_index_range_option },
         { "test-list-randomize", no_argument, nullptr, test_list_randomize_option },
         { "test-time", required_argument, nullptr, 't' },   // repeated below
         { "force-test-time", no_argument, nullptr, force_test_time_option },
@@ -753,11 +716,6 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
 
             case test_list_file_option:
                 opts.test_list_file_path = optarg;
-                break;
-
-            case test_index_range_option:
-                if (parse_testrun_range(optarg) == EXIT_FAILURE)
-                    return EX_USAGE;
                 break;
 
             case test_list_randomize_option:
