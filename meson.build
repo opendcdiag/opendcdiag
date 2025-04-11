@@ -258,16 +258,6 @@ target_deps += [
     pthread_dep,
 ]
 
-generated_gitid_h = configure_file(
-    input : [
-        'framework/scripts/make-gitid.pl',
-    ],
-    output : 'gitid.h',
-    encoding : 'ascii',
-    command : [
-        perl, '@INPUT0@', '@OUTPUT@', 'opendcdiag', get_option('version_suffix')
-    ],
-)
 top_incdir = include_directories('.')
 
 # Subdirs add (static) libraries to these arrays for linking
