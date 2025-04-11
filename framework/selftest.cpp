@@ -934,7 +934,7 @@ static int selftest_inject_idle(struct test *test, int cpu)
             int a_variable = cpu * 2;
             a_variable += 1;
             // use the result so the compiler doesn't optimize this away
-            __asm__ ("" : "+gv" (a_variable));
+            __asm__ volatile ("" : "+g" (a_variable));
         }
     }
     auto loop_end = std::chrono::steady_clock::now();
