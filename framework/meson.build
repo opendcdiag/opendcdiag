@@ -33,16 +33,20 @@ generated_cpu_features_h = configure_file(
     ],
 )
 
-configure_file(
-    input : [
-        'scripts/make-gitid.pl',
-    ],
-    output : 'gitid.h',
-    encoding : 'ascii',
-    command : [
-        perl, '@INPUT0@', '@OUTPUT@', 'opendcdiag', get_option('version_suffix')
-    ],
-)
+if meson.current_source_dir() == join_paths(meson.project_source_root(), 'framework')
+  configure_file(
+      input : [
+          'scripts/make-gitid.pl',
+      ],
+      output : 'gitid.h',
+      encoding : 'ascii',
+      command : [
+          perl, '@INPUT0@', '@OUTPUT@', 'opendcdiag', get_option('version_suffix')
+      ],
+  )
+else
+  message('opendcdiag: not generating gitid.h -- likely included as subdir')
+endif
 
 generated_builtin_test_list = []
 builtin_test_list_inputs = get_option('builtin_test_list')
