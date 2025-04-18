@@ -4,6 +4,8 @@
  */
 
 #define _GNU_SOURCE     1
+#include <sandstone_kvm.h>
+
 #include <errno.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -24,7 +26,10 @@
 #  include <asm/vmx.h>
 #endif
 
-#include "sandstone_kvm.h"
+#include <sandstone_context_dump.h>
+
+#define KVM_CAP_XSAVE2      208
+#define KVM_GET_XSAVE2      _IOR(KVMIO,  0xcf, struct kvm_xsave)
 
 #define KVM_EXIT_X86_RDMSR        29
 #define KVM_EXIT_X86_WRMSR        30
@@ -383,6 +388,7 @@ static int kvm_prot64_setup_sregs(int cpu_fd, struct kvm_sregs *sregs)
 {
     // Enable 64-bit protected mode
     sregs->cr0 |= X86_CR0_PE;
+    sregs->cr4 |= X86_CR4_OSFXSR;
     sregs->efer |= EFER_LMA;
     sregs->efer |= EFER_LME;
 
@@ -392,6 +398,16 @@ static int kvm_prot64_setup_sregs(int cpu_fd, struct kvm_sregs *sregs)
     }
 
     return ret;
+}
+
+__attribute__((target("xsave")))
+static int kvm_prot64_setup_xsave(int cpu_fd)
+{
+    struct kvm_xcrs xcrs;
+    IOCTL_OR_RET(cpu_fd, KVM_GET_XCRS, &xcrs);
+
+    xcrs.xcrs[0].value = _xgetbv(0);
+    return ioctl(cpu_fd, KVM_SET_XCRS, &xcrs);
 }
 
 static int kvm_prot64_setup_payload(kvm_ctx_t *ctx)
@@ -416,6 +432,21 @@ static int kvm_generic_setup_cpuid(kvm_ctx_t *ctx)
     } cpuid;
     cpuid.header.nent = sizeof(cpuid.entries) / sizeof(cpuid.entries[0]);
     IOCTL_OR_RET(kvm_fd, KVM_GET_SUPPORTED_CPUID, &cpuid);
+
+    for (int i = 0; i < cpuid.header.nent; ++i) {
+        static const __u32 Xsave = (1U << 26);
+        static const __u32 OsXSave = (1U << 27);
+        if (cpuid.entries[i].function != 1)
+            continue;
+        if (cpuid.entries[i].ecx & Xsave) {
+            if (ctx->config->addr_mode == KVM_ADDR_MODE_PROTECTED_64BIT)
+                cpuid.entries[i].ecx |= OsXSave;
+            else
+                cpuid.entries[i].ecx &= ~OsXSave;
+        }
+        break;
+    }
+
     IOCTL_OR_RET(ctx->cpu_fd, KVM_SET_CPUID2, &cpuid);
     return EXIT_SUCCESS;
 }
@@ -450,6 +481,9 @@ static int kvm_generic_setup_vcpu(kvm_ctx_t *ctx)
 
             kvm_prot64_setup_segmentation(&sregs, ctx->ram);
             ret = kvm_prot64_setup_sregs(ctx->cpu_fd, &sregs);
+            if (ret < 0)
+                return EXIT_FAILURE;
+            ret = kvm_prot64_setup_xsave(ctx->cpu_fd);
             if (ret < 0)
                 return EXIT_FAILURE;
 
@@ -567,6 +601,33 @@ static void kvm_log_registers(const kvm_ctx_t *ctx, const struct kvm_regs *gprs)
         free(fs);
         free(gs);
         free(ss);
+
+        void *xsave_area;
+        int xsave_get = KVM_GET_XSAVE2;
+        int xsave_size = ioctl(ctx->vm_fd, KVM_CHECK_EXTENSION, KVM_CAP_XSAVE2);
+        if (xsave_size == 0) {
+            /* pre-5.16 kernel (no AMX support) */
+            xsave_size = sizeof(struct kvm_xsave);
+            xsave_get = KVM_GET_XSAVE;
+        }
+
+        xsave_area = alloca(xsave_size);
+        if (ioctl(ctx->cpu_fd, xsave_get, xsave_area) != 0) {
+            /* CPU without XSAVE support (Nehalem, Westmere), try to get the FXSAVE state */
+            if (ioctl(ctx->cpu_fd, KVM_GET_FPU, &xsave_area) == 0) {
+                static_assert(sizeof(struct kvm_xsave) >= sizeof(struct kvm_fpu));
+                xsave_size = sizeof(struct kvm_fpu);
+            } else {
+                xsave_size = 0;
+            }
+        }
+        char *xsave_dump = dump_xsave(xsave_area, xsave_size, -1);
+        if (xsave_dump) {
+            extra_dump = realloc(extra_dump, strlen(extra_dump) + 1 + strlen(xsave_dump) + 1);
+            strcat(extra_dump, "\n");
+            strcat(extra_dump, xsave_dump);
+            free(xsave_dump);
+        }
     }
 
     log_message(thread_num, SANDSTONE_LOG_INFO "Register dump:\n"

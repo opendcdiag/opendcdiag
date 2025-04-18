@@ -6,8 +6,6 @@
 #ifndef SANDSTONE_CONTEXT_DUMP_H
 #define SANDSTONE_CONTEXT_DUMP_H
 
-#include <stdio.h>
-
 #if defined(__APPLE__)
 #  include <sys/ucontext.h>
 typedef mcontext_t SandstoneMachineContext;
@@ -26,8 +24,8 @@ typedef const struct _CONTEXT *SandstoneMachineContext;
 extern "C" {
 #endif
 
-extern void dump_gprs(FILE *, SandstoneMachineContext);
-extern void dump_xsave(FILE *, const void *xsave_area, size_t xsave_size, int xsave_dump_mask);
+extern char *dump_gprs(SandstoneMachineContext);
+extern char *dump_xsave(const void *xsave_area, size_t xsave_size, int xsave_dump_mask);
 
 #ifdef __cplusplus
 }
