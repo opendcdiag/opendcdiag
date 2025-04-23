@@ -1698,7 +1698,7 @@ function check_gdb_usable() {
     fi
 
     declare -A yamldump
-    selftest_crash_context_common -n2 --timeout=5m -e selftest_sigsegv --on-crash=backtrace --max-cores-per-slice=1
+    selftest_crash_context_common --cpuset=t0 -n2 --timeout=5m -e selftest_sigsegv --on-crash=backtrace --max-cores-per-slice=1
 
     # We should have as output two main threads and two worker threads
     test_yaml_regexp "/tests/0/threads/0/thread" "main"
