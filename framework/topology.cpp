@@ -25,6 +25,7 @@
 #endif
 #if defined(_WIN32)
 #   include <windows.h>
+#   #include <intrin.h>
 #endif
 
 namespace {
@@ -259,129 +260,6 @@ static bool fill_topo_sysfs(struct cpu_info *info)
     fclose(f);
 
     return true;
-}
-#elif defined(_WIN32)
-
-// The definition of CACHE_RELATIONSHIP in MinGW's headers is outdated
-struct CACHE_RELATIONSHIP_2 {
-    BYTE Level;
-    BYTE Associativity;
-    WORD LineSize;
-    DWORD CacheSize;
-    PROCESSOR_CACHE_TYPE Type;
-    BYTE Reserved[18];
-    WORD                 GroupCount;
-    union {
-        GROUP_AFFINITY GroupMask;
-        GROUP_AFFINITY GroupMasks[ANYSIZE_ARRAY];
-    };
-};
-
-static bool fill_topo_sysfs(struct cpu_info *info)
-{
-    if (info != &cpu_info[0])
-        return info->core_id != -1; // we only need to run once
-
-    DWORD length = 0;
-    GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);
-    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-        return false;
-
-    auto buffer = std::make_unique<unsigned char[]>(length);
-    auto lpi = new (buffer.get()) SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX;
-
-    if (!GetLogicalProcessorInformationEx(RelationAll, lpi, &length))
-        return false;
-
-    static constexpr unsigned CpusPerGroup =
-            std::numeric_limits<KAFFINITY>::digits;
-
-    std::span infos(info, info + num_cpus());
-    auto first_cpu_for_group = [infos](unsigned group) -> struct cpu_info * {
-        for (struct cpu_info &info : infos) {
-            if (info.cpu_number / CpusPerGroup == group)
-                return &info;
-        }
-        return nullptr;
-    };
-
-    auto for_each_proc_in = [&](unsigned groupCount, GROUP_AFFINITY *groups, auto lambda) {
-        // find the first CPU matching this group
-        for (GROUP_AFFINITY &ga : std::span(groups, groupCount)) {
-            struct cpu_info *info = first_cpu_for_group(ga.Group);
-            if (!info)
-                continue;
-
-            KAFFINITY mask = ga.Mask;
-            while (mask) {
-                int n = std::countr_zero(mask);
-                mask &= ~(1 << n);
-
-                // find the CPU matching this number in this group
-                for ( ; info < std::to_address(infos.end()); ++info) {
-                    unsigned group = info->cpu_number / CpusPerGroup;
-                    unsigned number = info->cpu_number % CpusPerGroup;
-                    if (group == ga.Group && number < n)
-                        continue;
-                    if (group == ga.Group && number == n)
-                        lambda(info++);
-                    break;
-                }
-            }
-        }
-    };
-
-    unsigned char *ptr = buffer.get();
-    unsigned char *end = ptr + length;
-
-    int pkg_id = 0;
-    int core_id = 0;
-    for ( ; ptr < end; ptr += lpi->Size) {
-        lpi = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(ptr);
-        switch (lpi->Relationship) {
-        case RelationProcessorPackage:
-            for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
-                             [&](struct cpu_info *info) {
-                                 info->package_id = pkg_id;
-                             }
-                );
-            ++pkg_id;
-            core_id = 0;
-            break;
-
-        case RelationProcessorCore:
-            for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
-                             [&, thread_id = 0](struct cpu_info *info) mutable {
-                                 info->core_id = core_id;
-                                 info->thread_id = thread_id++;
-                             }
-                );
-            ++core_id;
-            break;
-
-        case RelationCache: {
-            auto &cache = *reinterpret_cast<CACHE_RELATIONSHIP_2 *>(&lpi->Cache);
-            for_each_proc_in(cache.GroupCount, cache.GroupMasks,
-                             [&](struct cpu_info *info) {
-                                 int level = cache.Level - 1;
-                                 if (level >= std::size(info->cache))
-                                     return;
-                                 if (cache.Type == CacheUnified
-                                         || cache.Type == CacheInstruction)
-                                     info->cache[level].cache_instruction = cache.CacheSize;
-                                 if (cache.Type == CacheUnified
-                                         || cache.Type == CacheData)
-                                     info->cache[level].cache_data = cache.CacheSize;
-                             }
-                );
-        }
-
-        default:
-            break;
-        }
-    }
-
-    return info->core_id != -1;
 }
 #else /* __linux__ */
 static auto fill_topo_sysfs = nullptr;
@@ -656,19 +534,65 @@ static bool fill_ppin_sysfs(struct cpu_info *info)
     return false;
 }
 
+static unsigned  get_apic_id_from_cpuid() {
+    #ifdef _WIN32
+        unsigned int cpu_info[4];
+        __cpuid(cpu_info, 1);
+        return (cpu_info[1] >> 24) & 0xFF;
+    #else
+        unsigned eax, ebx, ecx, edx;
+        __cpuid(1, eax, ebx, ecx, edx);
+        return (ebx >> 24) & 0xFF;
+    #endif
+    }
+
 static bool fill_topology_hwloc(struct cpu_info *info, hwloc_topology_t topology)
 {
-    hwloc_obj_t obj = hwloc_get_obj_by_type(topology, HWLOC_OBJ_PU, info->cpu_number);
-    if (!obj) {
+    hwloc_obj_t pu = hwloc_get_pu_obj_by_os_index(topology, info->cpu_number);
+    if (!pu) {
         hwloc_topology_destroy(topology);
         return false;
     }
 
-    info->package_id = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_PACKAGE, obj)->logical_index;
-    info->core_id = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_CORE, obj)->logical_index;
-    info->thread_id = obj->logical_index;
-    info->apic_id = obj->os_index;
+    int apic = 0;
 
+    // Try this 1st to find APIC ID in infos[]
+    for (unsigned i = 0; i < pu->infos_count; i++) {
+        if (strcmp(pu->infos[i].name, "APIC ID") == 0) {
+            info->apic_id = atoi(pu->infos[i].value);
+            apic = 1;
+            break;
+        }
+    }
+
+    // If the above lookup fails execute the below
+    if (!apic) {
+        int can_bind = hwloc_topology_get_support(topology)->cpubind->set_thisproc_cpubind;
+        if (can_bind) {
+            hwloc_cpuset_t cpuset = hwloc_bitmap_dup(pu->cpuset);
+            hwloc_bitmap_singlify(cpuset);
+            if (hwloc_set_cpubind(topology, cpuset, HWLOC_CPUBIND_PROCESS) == 0) {
+                info->apic_id = get_apic_id_from_cpuid();
+                apic = 1;
+            }
+            hwloc_bitmap_free(cpuset);
+        }
+    }
+
+    hwloc_obj_t package = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_PACKAGE, pu);
+    info->package_id = package->os_index;
+    hwloc_obj_t core = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_CORE, pu);
+    info->core_id = core->logical_index;
+    int thread_position = 0;
+    for (unsigned i = 0; i < core->arity; i++) {
+        if (core->children[i]->type == HWLOC_OBJ_PU && core->children[i]->os_index == pu->os_index) {
+            thread_position = i;
+
+            break;
+        }
+    }
+    info->thread_id = thread_position;
+        
     int depth = hwloc_get_type_depth(topology, HWLOC_OBJ_NUMANODE);
     if (depth != HWLOC_TYPE_DEPTH_UNKNOWN) {
         int num_nodes = hwloc_get_nbobjs_by_depth(topology, depth);
@@ -685,13 +609,13 @@ static bool fill_topology_hwloc(struct cpu_info *info, hwloc_topology_t topology
     for (int level = 0; level < 3; ++level) { // Assuming 3 levels: L1, L2, L3
         switch (level) {
             case 0:
-                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L1CACHE, obj);
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L1CACHE, pu);
                 break;
             case 1:
-                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L2CACHE, obj);
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L2CACHE, pu);
                 break;
             case 2:
-                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L3CACHE, obj);
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L3CACHE, pu);
                 break;
         }
         if (cache) {
@@ -703,7 +627,6 @@ static bool fill_topology_hwloc(struct cpu_info *info, hwloc_topology_t topology
             }
         }
     }
-
     return true;
 }
 
