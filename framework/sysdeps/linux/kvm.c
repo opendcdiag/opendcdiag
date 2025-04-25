@@ -406,7 +406,10 @@ static int kvm_prot64_setup_xsave(int cpu_fd)
     struct kvm_xcrs xcrs;
     IOCTL_OR_RET(cpu_fd, KVM_GET_XCRS, &xcrs);
 
-    xcrs.xcrs[0].value = _xgetbv(0);
+    /* clear bits above 9 (bit 17 & 18, AMX support). it workarounds the kernels
+     * refusing to set it on the hardware which supports AMX and KVM's CPUID
+     * reporting support too. */
+    xcrs.xcrs[0].value = _xgetbv(0) & 0x3ff;
     return ioctl(cpu_fd, KVM_SET_XCRS, &xcrs);
 }
 
