@@ -475,6 +475,8 @@ static const char *char_to_skip_category(int val)
         return "OSResourceIssue";
     case IgnoredMceCategory:
         return "IgnoredMceCategory";
+    case TestObsoleteSkipCategory:
+        return "TestObsolete";
     }
 
     return "NO CATEGORY PRESENT";
