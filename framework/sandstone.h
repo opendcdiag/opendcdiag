@@ -94,6 +94,7 @@ typedef enum SkipCategory {
     UnknownSkipCategory,
     IgnoredMceCategory,
     RuntimeSkipCategory,
+    TestObsoleteSkipCategory,
     SelftestSkipCategory,
 } SkipCategory;
 
