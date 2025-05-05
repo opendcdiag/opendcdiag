@@ -436,20 +436,28 @@ static int kvm_generic_setup_cpuid(kvm_ctx_t *ctx)
     cpuid.header.nent = sizeof(cpuid.entries) / sizeof(cpuid.entries[0]);
     IOCTL_OR_RET(kvm_fd, KVM_GET_SUPPORTED_CPUID, &cpuid);
 
+    /* turn on OSXSave and copy the interesting CPUID leaves */
+    int o = 0;
     for (int i = 0; i < cpuid.header.nent; ++i) {
         static const __u32 Xsave = (1U << 26);
         static const __u32 OsXSave = (1U << 27);
-        if (cpuid.entries[i].function != 1)
-            continue;
-        if (cpuid.entries[i].ecx & Xsave) {
-            if (ctx->config->addr_mode == KVM_ADDR_MODE_PROTECTED_64BIT)
+        switch (cpuid.entries[i].function) {
+        case 0x01:              /* feature information */
+            if (ctx->config->addr_mode == KVM_ADDR_MODE_REAL_16BIT && (cpuid.entries[i].ecx & Xsave))
                 cpuid.entries[i].ecx |= OsXSave;
-            else
-                cpuid.entries[i].ecx &= ~OsXSave;
+            [[fallthrough]];
+
+        case 0x07:              /* structured extended feature flags */
+        case 0x0d:              /* extended state enumeration */
+        case 0x1d:              /* AMX tile information */
+        case 0x1e:              /* AMX TMUL information */
+        case 0x24:              /* converged vector ISA information (e.g. AVX10) */
+        case 0x80000001:        /* extended function (LZCNT) */
+            cpuid.entries[o++] = cpuid.entries[i];
         }
-        break;
     }
 
+    cpuid.header.nent = o;
     IOCTL_OR_RET(ctx->cpu_fd, KVM_SET_CPUID2, &cpuid);
     return EXIT_SUCCESS;
 }
