@@ -902,8 +902,33 @@ static const kvm_config_t *selftest_kvm_config_real_setup_check()
 BEGIN_ASM_FUNCTION(payload_prot_64bit_fail)
     asm("mov $1, %eax\n"
         "fld1\n"
-        "pcmpeqb %xmm0, %xmm0\n"
-        "hlt");
+        "pcmpeqb %xmm0, %xmm0\n"                // init SSE state
+
+        "cpuid\n"
+        "test $((1 << 27) | (1 << 28)), %ecx\n"
+        "mov $2, %eax\n"
+        "jz 9f\n"
+        "vcmpeqps %ymm1, %ymm1, %ymm1\n"        // init AVX state
+
+        "mov $7, %eax\n"
+        "xor %ecx, %ecx\n"
+        "cpuid\n"
+        "test $(1 << 16), %ebx\n"
+        "mov $3, %eax\n"
+        "jz 9f\n"
+        "vpternlogd $0xff, %zmm16, %zmm16, %zmm16\n"
+        "vpcmpeqb %zmm16, %zmm16, %k1\n"        // init AVX512 state
+
+        "mov $7, %eax\n"
+        "mov $1, %ecx\n"
+        "cpuid\n"
+        "test $(1 << 21), %edx\n"
+        "mov $4, %eax\n"
+        "jz 9f\n"
+        ".byte 0xd5, 0x18; inc %eax\n"          // init APX state
+
+        ".align 16\n"
+        "9: hlt");
 END_ASM_FUNCTION()
 
 static const kvm_config_t kvm_config_prot_64bit_fail = {
