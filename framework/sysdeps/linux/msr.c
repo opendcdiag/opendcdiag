@@ -16,7 +16,7 @@
 
 #include "sandstone_p.h"
 
-static atomic_bool msr_access_denied = ATOMIC_VAR_INIT(false);
+static atomic_bool msr_access_denied = 0;
 
 static void try_load_kmod()
 {
