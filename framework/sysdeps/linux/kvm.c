@@ -486,9 +486,11 @@ static int kvm_generic_setup_vcpu(kvm_ctx_t *ctx)
             ret = kvm_prot64_setup_sregs(ctx->cpu_fd, &sregs);
             if (ret < 0)
                 return EXIT_FAILURE;
-            ret = kvm_prot64_setup_xsave(ctx->cpu_fd);
-            if (ret < 0)
-                return EXIT_FAILURE;
+            if (cpu_has_feature(cpu_feature_avx)) {
+                ret = kvm_prot64_setup_xsave(ctx->cpu_fd);
+                if (ret < 0)
+                    return EXIT_FAILURE;
+            }
 
             ret = kvm_prot64_setup_payload(ctx);
             if (ret < 0)
