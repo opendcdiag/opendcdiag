@@ -51,7 +51,7 @@ typedef atomic_int ffd_atomic_int;
 #ifdef __cpp_lib_atomic_value_initialization
 #define FFD_ATOMIC_INIT(val)        { val }
 #else
-#define FFD_ATOMIC_INIT(val)        ATOMIC_VAR_INIT(val)
+#define FFD_ATOMIC_INIT(val)        (val)
 #endif
 
 #define ffd_atomic_load(ptr, order) \
