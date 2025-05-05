@@ -236,7 +236,7 @@ dl_dep = []
 gtest_dep = []
 if target_machine.system() != 'windows'
     dl_dep = cc.find_library('dl')
-    gtest_dep = dependency('gtest_main')
+    gtest_dep = dependency('gtest_main', required: false)
 endif
 
 if get_option('coverage') == true
