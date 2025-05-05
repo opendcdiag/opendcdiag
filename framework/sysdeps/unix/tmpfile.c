@@ -52,7 +52,7 @@ static int try_open_tmpfile(const char *dir, int ocloexec)
 static int try_open_regular_tmpfile(const char *dir, int ocloexec)
 {
     /* opens a regular, temporary file but deletes it before returning */
-    static atomic_uint seq_nr = ATOMIC_VAR_INIT(0);
+    static atomic_uint seq_nr = 0;
     char *name;
     int fd;
     int saved_errno;
@@ -84,7 +84,7 @@ int open_memfd(enum MemfdCloexecFlag flag)
         return fd;
 
     // try O_TMPFILE
-    static _Atomic(const char *) s_dir = ATOMIC_VAR_INIT(NULL);
+    static _Atomic(const char *) s_dir = 0;
     const char *dir = atomic_load_explicit(&s_dir, memory_order_acquire);
     __auto_type opener = &try_open_tmpfile;
 
