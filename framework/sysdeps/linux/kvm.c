@@ -389,6 +389,8 @@ static int kvm_prot64_setup_sregs(int cpu_fd, struct kvm_sregs *sregs)
     // Enable 64-bit protected mode
     sregs->cr0 |= X86_CR0_PE;
     sregs->cr4 |= X86_CR4_OSFXSR;
+    sregs->cr4 |= X86_CR4_OSXMMEXCPT;
+    sregs->cr4 |= X86_CR4_OSXSAVE;
     sregs->efer |= EFER_LMA;
     sregs->efer |= EFER_LME;
 
