@@ -929,10 +929,10 @@ static uintptr_t thread_runner(int thread_number)
         // let SIGQUIT handler know we're done
         ThreadState new_state = thread_failed;
         if (!this_thread->has_failed()) {
-            if (ret == EXIT_SUCCESS)
-                new_state = thread_succeeded;
-            else if (ret < EXIT_SUCCESS)
+            if (this_thread->has_skipped() || ret < EXIT_SUCCESS)
                 new_state = thread_skipped;
+            else if (ret == EXIT_SUCCESS)
+                new_state = thread_succeeded;
         }
         this_thread->thread_state.store(new_state, std::memory_order_relaxed);
 
@@ -1689,16 +1689,29 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
             pthread_create(&init_thread, nullptr, init_thread_runner, test);
             pthread_join(init_thread, &retptr);
             ret = intptr_t(retptr);
+            if (ret > 0) {
+                state = TestResult::Failed;
+            } else if (ret < 0) {
+                state = TestResult::Skipped;
+            } else {
+                // check if the thread has failed with log_error() or skipped
+                // with log_skip()
+                PerThreadData::Main *thr = sApp->main_thread_data();
+                if (thr->has_skipped())
+                    state = TestResult::Skipped;
+                else if (thr->has_failed())
+                    state = TestResult::Failed;
+            }
         }
 
-        if (ret > 0 || sApp->main_thread_data()->has_failed()) {
+        if (state == TestResult::Failed) {
             logging_mark_thread_failed(-1);
             if (ret > 0)
                 log_error("Init function failed with code %i", ret);
             state = TestResult::Failed;
             break;
-        } else if (ret < 0) {
-            if (ret != EXIT_SKIP)
+        } else if (state == TestResult::Skipped) {
+            if (ret != 0 && ret != EXIT_SKIP)
                 log_skip(RuntimeSkipCategory, "Unexpected OS error: %s", strerror(-ret));
             state = TestResult::Skipped;
             break;
@@ -1706,22 +1719,17 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 
         run_threads(test);
 
-        if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime)){
-            // skip cleanup on the last test when using strict runtime
-        } else {
-            if (test->test_cleanup) {
-                ret = test->test_cleanup(test);
-                if (state == TestResult::Passed) {
-                    if (ret == EXIT_SKIP) {
-                        log_skip(RuntimeSkipCategory, "SKIP requested in cleanup");
-                        state = TestResult::Skipped;
-                    } else if (ret < EXIT_SUCCESS) {
-                        log_skip(RuntimeSkipCategory, "Unexpected OS error in cleanup: %s", strerror(-ret));
-                        state = TestResult::Skipped;
-                    } else if (ret > EXIT_SUCCESS) {
-                        state = TestResult::Failed;
-                    }
-                }
+        if (test->test_cleanup) {
+            ret = test->test_cleanup(test);
+            PerThreadData::Main *thr = sApp->main_thread_data();
+            if (ret == EXIT_SKIP || thr->has_skipped()) {
+                log_skip(RuntimeSkipCategory, "SKIP requested in cleanup");
+                state = TestResult::Skipped;
+            } else if (ret < EXIT_SUCCESS) {
+                log_skip(RuntimeSkipCategory, "Unexpected OS error in cleanup: %s", strerror(-ret));
+                state = TestResult::Skipped;
+            } else if (ret > EXIT_SUCCESS || thr->has_failed()) {
+                state = TestResult::Failed;
             }
         }
 
