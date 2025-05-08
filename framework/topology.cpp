@@ -12,6 +12,7 @@
 #include <vector>
 #include <utility>
 
+#include <hwloc.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -24,6 +25,7 @@
 #endif
 #if defined(_WIN32)
 #   include <windows.h>
+#   #include <intrin.h>
 #endif
 
 namespace {
@@ -48,33 +50,9 @@ struct auto_fd
     operator int() const { return fd; }
 };
 
-struct linux_cpu_info
-{
-    using Fields = std::map<std::string, std::string>;
-    Fields general_fields;
-    std::vector<Fields> cpu_fields;
-
-    std::optional<uint64_t> number(int cpu_number, const char *field, int base = 0)
-    {
-        const Fields *f;
-        if (cpu_number < 0)
-            f = &general_fields;
-        else if (cpu_number < cpu_fields.size())
-            f = &cpu_fields[cpu_number];
-        else
-            return std::nullopt;
-
-        auto it = f->find(field);
-        if (it == f->end())
-            return std::nullopt;
-
-        // decode using strtoull, which skips spaces and decodes numbers with 0x prefix
-        char *endptr;
-        uint64_t value = strtoull(it->second.c_str(), &endptr, base);
-        if (endptr > it->second.c_str())
-            return value;
-        return std::nullopt;
-    }
+struct DetectionContext {
+    hwloc_topology_t topology;
+    const LogicalProcessorSet* enabled_cpus;
 };
 }
 
@@ -92,66 +70,6 @@ static auto_fd open_sysfs_cpu_dir(int cpu)
     char buf[sizeof("/sys/devices/system/cpu/cpu2147483647")];
     sprintf(buf, "/sys/devices/system/cpu/cpu%d", cpu);
     return auto_fd { open(buf, O_PATH | O_CLOEXEC) };
-}
-
-static linux_cpu_info parse_proc_cpuinfo()
-{
-    static const char header[] = "processor\t";
-    AutoClosingFile f{ fopen("/proc/cpuinfo", "r") };
-    assert(f.f && "/proc must be mounted for proper operation");
-
-    linux_cpu_info result;
-    linux_cpu_info::Fields *current = &result.general_fields;
-
-    char *line = nullptr;
-    size_t len = 0;
-    size_t nread;
-    while ((nread = getline(&line, &len, f)) != -1) {
-        const char *colon = strchr(line, ':');
-        char *lineend = strchr(line, '\n');
-        if (lineend)
-            *lineend = '\0';
-        else
-            lineend = line + strlen(line);
-
-        if (strlen(line) == 0) {
-            current = &result.general_fields;
-        } else if (strlen(line) >= strlen(header) && memcmp(line, header, strlen(header)) == 0) {
-            // new processor, parse the number
-
-            char *endptr = nullptr;
-            uint64_t value = strtoull(colon + 1, &endptr, 0);
-            if (endptr > colon) {
-                if (value >= result.cpu_fields.size())
-                    result.cpu_fields.resize(value + 1);
-                current = &result.cpu_fields[value];
-            } else {
-                current = &result.general_fields;
-            }
-        } else if (colon != nullptr) {
-            auto trimmed_string = [](const char *s, const char *e) {
-                while (s != e && (*s == ' ' || *s == '\t'))
-                    ++s;
-                while (e - 1 != s && (e[-1] == ' ' || e[-1] == '\t'))
-                    --e;
-
-                return std::string(s, e - s);
-            };
-
-            current->insert({ trimmed_string(line, colon),
-                              trimmed_string(colon + 1, lineend) });
-        }
-    }
-
-    free(line);
-    return result;
-}
-
-static linux_cpu_info &proc_cpuinfo()
-{
-    static linux_cpu_info r =
-        parse_proc_cpuinfo();
-    return r;
 }
 #endif
 
@@ -343,129 +261,6 @@ static bool fill_topo_sysfs(struct cpu_info *info)
 
     return true;
 }
-#elif defined(_WIN32)
-
-// The definition of CACHE_RELATIONSHIP in MinGW's headers is outdated
-struct CACHE_RELATIONSHIP_2 {
-    BYTE Level;
-    BYTE Associativity;
-    WORD LineSize;
-    DWORD CacheSize;
-    PROCESSOR_CACHE_TYPE Type;
-    BYTE Reserved[18];
-    WORD                 GroupCount;
-    union {
-        GROUP_AFFINITY GroupMask;
-        GROUP_AFFINITY GroupMasks[ANYSIZE_ARRAY];
-    };
-};
-
-static bool fill_topo_sysfs(struct cpu_info *info)
-{
-    if (info != &cpu_info[0])
-        return info->core_id != -1; // we only need to run once
-
-    DWORD length = 0;
-    GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);
-    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-        return false;
-
-    auto buffer = std::make_unique<unsigned char[]>(length);
-    auto lpi = new (buffer.get()) SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX;
-
-    if (!GetLogicalProcessorInformationEx(RelationAll, lpi, &length))
-        return false;
-
-    static constexpr unsigned CpusPerGroup =
-            std::numeric_limits<KAFFINITY>::digits;
-
-    std::span infos(info, info + num_cpus());
-    auto first_cpu_for_group = [infos](unsigned group) -> struct cpu_info * {
-        for (struct cpu_info &info : infos) {
-            if (info.cpu_number / CpusPerGroup == group)
-                return &info;
-        }
-        return nullptr;
-    };
-
-    auto for_each_proc_in = [&](unsigned groupCount, GROUP_AFFINITY *groups, auto lambda) {
-        // find the first CPU matching this group
-        for (GROUP_AFFINITY &ga : std::span(groups, groupCount)) {
-            struct cpu_info *info = first_cpu_for_group(ga.Group);
-            if (!info)
-                continue;
-
-            KAFFINITY mask = ga.Mask;
-            while (mask) {
-                int n = std::countr_zero(mask);
-                mask &= ~(1 << n);
-
-                // find the CPU matching this number in this group
-                for ( ; info < std::to_address(infos.end()); ++info) {
-                    unsigned group = info->cpu_number / CpusPerGroup;
-                    unsigned number = info->cpu_number % CpusPerGroup;
-                    if (group == ga.Group && number < n)
-                        continue;
-                    if (group == ga.Group && number == n)
-                        lambda(info++);
-                    break;
-                }
-            }
-        }
-    };
-
-    unsigned char *ptr = buffer.get();
-    unsigned char *end = ptr + length;
-
-    int pkg_id = 0;
-    int core_id = 0;
-    for ( ; ptr < end; ptr += lpi->Size) {
-        lpi = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(ptr);
-        switch (lpi->Relationship) {
-        case RelationProcessorPackage:
-            for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
-                             [&](struct cpu_info *info) {
-                                 info->package_id = pkg_id;
-                             }
-                );
-            ++pkg_id;
-            core_id = 0;
-            break;
-
-        case RelationProcessorCore:
-            for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
-                             [&, thread_id = 0](struct cpu_info *info) mutable {
-                                 info->core_id = core_id;
-                                 info->thread_id = thread_id++;
-                             }
-                );
-            ++core_id;
-            break;
-
-        case RelationCache: {
-            auto &cache = *reinterpret_cast<CACHE_RELATIONSHIP_2 *>(&lpi->Cache);
-            for_each_proc_in(cache.GroupCount, cache.GroupMasks,
-                             [&](struct cpu_info *info) {
-                                 int level = cache.Level - 1;
-                                 if (level >= std::size(info->cache))
-                                     return;
-                                 if (cache.Type == CacheUnified
-                                         || cache.Type == CacheInstruction)
-                                     info->cache[level].cache_instruction = cache.CacheSize;
-                                 if (cache.Type == CacheUnified
-                                         || cache.Type == CacheData)
-                                     info->cache[level].cache_data = cache.CacheSize;
-                             }
-                );
-        }
-
-        default:
-            break;
-        }
-    }
-
-    return info->core_id != -1;
-}
 #else /* __linux__ */
 static auto fill_topo_sysfs = nullptr;
 #endif /* __linux__ */
@@ -647,9 +442,20 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
         IGNORE_RETVAL(fscanf(f, "%" PRIx64 , &info->microcode));
         fclose(f);
     } else {
-        // Prior to Linux 4.19, the microcode/version sysfs node was not world-readable
-        if (auto opt = proc_cpuinfo().number(info->cpu_number, "microcode"))
-            info->microcode = *opt;
+        f = fopen("/proc/cpuinfo", "r");
+        if (f) {
+            char line[256];
+            while (fgets(line, sizeof(line), f)) {
+                if (strncmp(line, "microcode", 9) == 0) {
+                    char *colon = strchr(line, ':');
+                    if (colon) {
+                        info->microcode = strtoull(colon + 1, nullptr, 0);
+                        break;
+                    }
+                }
+            }
+            fclose(f);
+        }
     }
     return info->microcode != 0;
 #elif defined(_WIN32)
@@ -728,24 +534,120 @@ static bool fill_ppin_sysfs(struct cpu_info *info)
     return false;
 }
 
-template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
+static unsigned  get_apic_id_from_cpuid() {
+    #ifdef _WIN32
+        unsigned int cpu_info[4];
+        __cpuid(cpu_info, 1);
+        return (cpu_info[1] >> 24) & 0xFF;
+    #else
+        unsigned eax, ebx, ecx, edx;
+        __cpuid(1, eax, ebx, ecx, edx);
+        return (ebx >> 24) & 0xFF;
+    #endif
+    }
+
+static bool fill_topology_hwloc(struct cpu_info *info, hwloc_topology_t topology)
+{
+    hwloc_obj_t pu = hwloc_get_pu_obj_by_os_index(topology, info->cpu_number);
+    if (!pu) {
+        hwloc_topology_destroy(topology);
+        return false;
+    }
+
+    int apic = 0;
+
+    // Try this 1st to find APIC ID in infos[]
+    for (unsigned i = 0; i < pu->infos_count; i++) {
+        if (strcmp(pu->infos[i].name, "APIC ID") == 0) {
+            info->apic_id = atoi(pu->infos[i].value);
+            apic = 1;
+            break;
+        }
+    }
+
+    // If the above lookup fails execute the below
+    if (!apic) {
+        int can_bind = hwloc_topology_get_support(topology)->cpubind->set_thisproc_cpubind;
+        if (can_bind) {
+            hwloc_cpuset_t cpuset = hwloc_bitmap_dup(pu->cpuset);
+            hwloc_bitmap_singlify(cpuset);
+            if (hwloc_set_cpubind(topology, cpuset, HWLOC_CPUBIND_PROCESS) == 0) {
+                info->apic_id = get_apic_id_from_cpuid();
+                apic = 1;
+            }
+            hwloc_bitmap_free(cpuset);
+        }
+    }
+
+    hwloc_obj_t package = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_PACKAGE, pu);
+    info->package_id = package->os_index;
+    hwloc_obj_t core = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_CORE, pu);
+    info->core_id = core->logical_index;
+    int thread_position = 0;
+    for (unsigned i = 0; i < core->arity; i++) {
+        if (core->children[i]->type == HWLOC_OBJ_PU && core->children[i]->os_index == pu->os_index) {
+            thread_position = i;
+
+            break;
+        }
+    }
+    info->thread_id = thread_position;
+        
+    int depth = hwloc_get_type_depth(topology, HWLOC_OBJ_NUMANODE);
+    if (depth != HWLOC_TYPE_DEPTH_UNKNOWN) {
+        int num_nodes = hwloc_get_nbobjs_by_depth(topology, depth);
+        for (int i = 0; i < num_nodes; i++) {
+            hwloc_obj_t numa_node = hwloc_get_obj_by_depth(topology, depth, i);
+            if (hwloc_bitmap_isset(numa_node->cpuset, info->cpu_number)) {
+                info->numa_node_id = numa_node->logical_index;
+                break;
+            }
+        }
+    }
+
+    hwloc_obj_t cache;
+    for (int level = 0; level < 3; ++level) { // Assuming 3 levels: L1, L2, L3
+        switch (level) {
+            case 0:
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L1CACHE, pu);
+                break;
+            case 1:
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L2CACHE, pu);
+                break;
+            case 2:
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L3CACHE, pu);
+                break;
+        }
+        if (cache) {
+            if (cache->attr->cache.type == HWLOC_OBJ_CACHE_UNIFIED || cache->attr->cache.type == HWLOC_OBJ_CACHE_DATA) {
+                info->cache[level].cache_data = cache->attr->cache.size;
+            }
+            if (cache->attr->cache.type == HWLOC_OBJ_CACHE_UNIFIED || cache->attr->cache.type == HWLOC_OBJ_CACHE_INSTRUCTION) {
+                info->cache[level].cache_instruction = cache->attr->cache.size;
+            }
+        }
+    }
+    return true;
+}
+
+template <auto &fnArray> static bool try_detection(struct cpu_info *cpu, hwloc_topology_t topology = nullptr)
 {
     using DetectorFunction = std::decay_t<decltype(fnArray[0])>;
     if (std::size(fnArray) > 0) {
         if (std::size(fnArray) == 1) {
             // no need to cache, there's only one implementation
             DetectorFunction fn = fnArray[0];
-            return fn ? fn(cpu) : true;
+            return call_detector(fn, cpu, topology);
         }
 
         static DetectorFunction cached_fn = nullptr;
         if (cached_fn)
-            return cached_fn(cpu);
+            call_detector(cached_fn, cpu, topology);
 
         for (DetectorFunction fn : fnArray) {
             if (!fn)
                 continue;
-            if (fn(cpu)) {
+            if (call_detector(fn, cpu, topology)) {
                 cached_fn = fn;
                 return true;
             }
@@ -754,18 +656,30 @@ template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
     return false;
 }
 
+template <typename CallDetector> static bool call_detector(CallDetector fn, struct cpu_info *cpu, hwloc_topology_t topology = nullptr) {
+    // Check if the fn matches the regular signature
+    if constexpr (std::is_invocable_v<CallDetector, struct cpu_info *>) {
+        return fn(cpu);
+    }
+    // If it matches the specialized signature
+    else if constexpr (std::is_invocable_v<CallDetector, struct cpu_info *, hwloc_topology_t>) {
+        return fn(cpu, topology);
+    }
+    return false;
+}
+
 typedef bool (* fill_family_func)(struct cpu_info *);
 typedef bool (* fill_ppin_func)(struct cpu_info *);
 typedef bool (* fill_ucode_func)(struct cpu_info *);
-typedef bool (* fill_topo_func)(struct cpu_info *);
+typedef bool (* fill_topo_func)( struct cpu_info *, hwloc_topology_t);
 
 static const fill_family_func family_impls[] = { fill_family_cpuid };
 static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
 /* prefer sysfs, fallback to MSR. the latter is not reliable and may require
  * root. */
 static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
-/* prefer CPUID, fallback to sysfs. */
-static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
+/* prefer hwloc, fallback to CPUID. */
+static const fill_topo_func topo_impls[] = { fill_topology_hwloc };
 
 void apply_cpuset_param(char *param)
 {
@@ -951,12 +865,23 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         info->package_id = -1;
         info->core_id = -1;
         info->thread_id = -1;
+        info->numa_node_id = -1;
+        info->apic_id = -1;
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
     }
 
+    hwloc_topology_t topology;
+    hwloc_topology_init(&topology);
+    hwloc_topology_load(topology);
+
+    DetectionContext context = {topology, &enabled_cpus};
+
     auto detect = [](void *ptr) -> void * {
-        const auto & enabled_cpus = *static_cast<const LogicalProcessorSet *>(ptr);
+        DetectionContext* context = static_cast<DetectionContext*>(ptr);
+        hwloc_topology_t topology = context->topology;
+        const auto& enabled_cpus = *context->enabled_cpus;
+
         int curr_cpu = 0;
         for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
             auto lp = LogicalProcessor(curr_cpu);
@@ -965,7 +890,7 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             }
 
             pin_to_logical_processor(lp);
-            try_detection<topo_impls>(&cpu_info[i]);
+            try_detection<topo_impls>(&cpu_info[i], topology);
             try_detection<family_impls>(&cpu_info[i]);
             try_detection<ppin_impls>(&cpu_info[i]);
             try_detection<ucode_impls>(&cpu_info[i]);
@@ -974,8 +899,10 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     };
 
     pthread_t detection_thread;
-    pthread_create(&detection_thread, nullptr, detect, const_cast<LogicalProcessorSet *>(&enabled_cpus));
+    pthread_create(&detection_thread, nullptr, detect, &context);
     pthread_join(detection_thread, nullptr);
+
+    hwloc_topology_destroy(topology);
 }
 
 static Topology build_topology()
