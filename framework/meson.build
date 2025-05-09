@@ -11,6 +11,39 @@
 # because without these variables, the compilation will fail either way.
 
 
+# Required variables, assert if not set
+assert(is_variable('top_incdir'), 'top_incdir is not set!')
+assert(is_variable('python'), 'python interpreter not found!')
+assert(is_variable('perl'), 'perl interpreter not found!')
+assert(is_variable('cc'), 'C compiler not configured!')
+assert(is_variable('cpp'), 'C++ compiler not configured!')
+assert(is_variable('boost_dep'), 'boost dependency not found!')
+
+# Optional variables, set default values if not set
+if is_variable('unittests_sources') == false
+    unittests_sources = []
+endif
+
+if is_variable('device_type') == false
+    # Defaults to 'cpu'. Choices: 'cpu', 'gpu' (defined in the application's meson_options)
+    device_type = 'cpu'
+endif
+if is_variable('debug_c_flags') == false
+    debug_c_flags = []
+endif
+if is_variable('march_flags') == false
+    march_flags = []
+endif
+if is_variable('march_generic_flags') == false
+    march_generic_flags = []
+endif
+if is_variable('default_cpp_flags') == false
+    default_cpp_flags = []
+endif
+if is_variable('default_cpp_warn') == false
+    default_cpp_warn = []
+endif
+
 framework_config = configuration_data()
 framework_config.set10('SANDSTONE_STATIC', false) # sysdeps may override
 
