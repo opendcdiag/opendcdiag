@@ -485,9 +485,8 @@ struct SandstoneApplication::SharedMemory
 
 inline SandstoneApplication *_sApp() noexcept
 {
-    using App = std::aligned_storage_t<sizeof(SandstoneApplication), alignof(SandstoneApplication)>;
-    static App app;
-    return reinterpret_cast<SandstoneApplication *>(&app);
+    alignas(SandstoneApplication) static std::uint8_t aligned_storage[sizeof(SandstoneApplication)];
+    return reinterpret_cast<SandstoneApplication *>(aligned_storage);
 }
 
 #define sApp    _sApp()
