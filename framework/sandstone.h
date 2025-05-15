@@ -367,7 +367,6 @@ struct cpu_info {
     int thread_id;          ///! Topology info from hwloc
     int core_id;            ///! Topology info from hwloc
     int package_id;         ///! Topology info from hwloc
-    uint32_t apic_id;       ///! APIC ID from hwloc
     int numa_node_id;       ///! NUMA node from hwloc
     struct cache_info cache[3]; ///! Cache info from OS
     uint8_t family;         ///! CPU family (usually 6)

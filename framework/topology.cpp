@@ -167,102 +167,6 @@ static FILE *fopenat(int dfd, const char *name)
         close(fd);
     return f;
 };
-
-static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
-{
-    FILE *f;
-    char buf[256];  // size repeated in fscanf below
-
-    // Read cache information
-    for (int j = 0; ; ++j) {
-        int level;
-
-        sprintf(buf, "cache/index%d", j);
-        auto_fd cachefd{openat(cpufd, buf, O_PATH | O_CLOEXEC)};
-        if (cachefd == -1)
-            break;
-
-        f = fopenat(cachefd, "level");
-        if (!f)
-            continue;
-        IGNORE_RETVAL(fscanf(f, "%d", &level));
-        fclose(f);
-
-        if (level <= int(sizeof(info->cache) / sizeof(info->cache[0]))) {
-            int size;
-            char suffix = '\0';
-            f = fopenat(cachefd, "size");
-            if (!f)
-                continue;
-            IGNORE_RETVAL(fscanf(f, "%d%c", &size, &suffix));
-            fclose(f);
-
-            if (suffix == 'K')
-                size *= 1024;
-            else if (suffix == 'M')
-                size *= 1024 * 1024;
-
-            f = fopenat(cachefd, "type");
-            if (!f)
-                continue;
-            IGNORE_RETVAL(fscanf(f, "%255s", buf));
-            fclose(f);
-
-            if (strcmp(buf, "Instruction") == 0)
-                info->cache[level - 1].cache_instruction = size;
-            else if (strcmp(buf, "Data") == 0)
-                info->cache[level - 1].cache_data = size;
-            else
-                info->cache[level - 1].cache_instruction =
-                        info->cache[level - 1].cache_data = size;
-        }
-    }
-    return true;
-}
-
-static bool fill_topo_sysfs(struct cpu_info *info)
-{
-    FILE *f;
-
-    auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
-    if (cpufd < 0)
-        return false;
-    if (!fill_cache_info_sysfs(info, cpufd))
-        return false;
-
-    // Read the topology
-    f = fopenat(cpufd, "topology/physical_package_id");
-    if (!f)
-        return false;
-    IGNORE_RETVAL(fscanf(f, "%d", &info->package_id));
-    fclose(f);
-
-    f = fopenat(cpufd, "topology/core_id");
-    if (!f)
-        return false;
-    IGNORE_RETVAL(fscanf(f, "%d", &info->core_id));
-    fclose(f);
-
-    f = fopenat(cpufd, "topology/thread_siblings_list");
-    if (!f)
-        return false;
-    info->thread_id = 0;
-    while (!feof(f)) {
-        int n;
-        IGNORE_RETVAL(fscanf(f, "%d", &n));
-        if (n == info->cpu_number)
-            break;
-        ++info->thread_id;
-        fgetc(f);
-
-        assert(info->thread_id < MAX_HWTHREADS_PER_CORE);
-    }
-    fclose(f);
-
-    return true;
-}
-#else /* __linux__ */
-static auto fill_topo_sysfs = nullptr;
 #endif /* __linux__ */
 
 #ifdef __x86_64__
@@ -322,96 +226,6 @@ static bool fill_family_cpuid(struct cpu_info *info)
     return true;
 }
 
-static bool fill_cache_info_cpuid(struct cpu_info *info)
-{
-    /* since info->cache is statically allocated */
-    static int max_levels = sizeof(info->cache) / sizeof(*info->cache);
-
-    /* read the leaf 0x04: deterministic cache parameters */
-    uint32_t a, b, c, d; /* eax, ebx, ecx, edx */
-    int subleaf = 0; /* incrementing subleaf index */
-
-    do {
-        int ways, parts, line_sz, sets;
-        int level, size;
-
-        __cpuid_count(0x04, subleaf, a, b, c, d);
-
-        if (!(a & 0xf)) break; /* first 4 bits eax are 0 -- no more info */
-
-        level = (a >> 5) & 0x7; /* eax 3 bits 07:05 */
-        if (level > max_levels) return 1; /* this is fatal. */
-
-        /* cache topology */
-        ways = ((b >> 22) & ((1 << 9) - 1)) + 1; /* ebx 9 bits 31:22 plus 1 */
-        parts = ((b >> 12) & ((1 << 9) - 1)) + 1; /* ebx 9 bits 21:12 plus 1 */
-        line_sz = (b & ((1 << 12) - 1)) + 1; /* ebx 12 bits 11:0 plus 1*/
-        sets = c + 1; /* entire ecx plus 1 */
-
-        size = ways * parts * line_sz * sets;
-
-        switch (a & 0xf) { /* first four eax bits are type */
-            case 1: /* data */
-                info->cache[level - 1].cache_data = size;
-                break;
-            case 2: /* instruction */
-                info->cache[level - 1].cache_instruction = size;
-                break;
-            case 3: /* unified */
-                info->cache[level - 1].cache_data =
-                    info->cache[level - 1].cache_instruction =
-                    size;
-                break;
-            default: /* at this point it's > 3, i.e. a reserved value. */
-                return 1;
-        }
-        subleaf++;
-
-    } while (a);
-
-    return true;
-}
-
-static bool fill_topo_cpuid(struct cpu_info *info)
-{
-    int curr_cpu = info->cpu_number;
-    int subleaf = 0;
-    uint32_t a, b, c, d;
-    uint32_t smt_mask = 0,
-             core_shift = 0,
-             core_mask = 0,
-             pkg_shift = 0;
-
-    if (curr_cpu < 0)
-        return false;
-    if (!fill_cache_info_cpuid(info))
-        return false;
-
-    do {
-        int lvl_type;
-        __cpuid_count(0xb, subleaf, a, b, c, d);
-        if (!b) break;
-        lvl_type = (c >> 8) & 0xff;
-        switch (lvl_type) {
-            case 1:
-                core_shift = a & 0xf;
-                smt_mask = (1 << core_shift) - 1;
-                info->thread_id = d & smt_mask;
-                break;
-            case 2:
-                pkg_shift = a & 0xf;
-                core_mask = (1 << (pkg_shift - core_shift)) - 1;
-                info->core_id = (d >> core_shift) & core_mask;
-                break;
-            default:
-                break;
-        }
-        subleaf++;
-    } while (1);
-    info->package_id = d >> pkg_shift;
-    return info->core_id != -1;
-}
-
 static bool fill_ucode_msr(struct cpu_info *info)
 {
     uint64_t ucode = 0;
@@ -425,7 +239,6 @@ static bool fill_ucode_msr(struct cpu_info *info)
 #else
 constexpr auto fill_family_cpuid = nullptr;
 constexpr auto fill_ucode_msr = nullptr;
-constexpr auto fill_topo_cpuid = nullptr;
 #endif // x86-64
 
 static bool fill_ucode_sysfs(struct cpu_info *info)
@@ -534,18 +347,6 @@ static bool fill_ppin_sysfs(struct cpu_info *info)
     return false;
 }
 
-static unsigned  get_apic_id_from_cpuid() {
-    #ifdef _WIN32
-        unsigned int cpu_info[4];
-        __cpuid(cpu_info, 1);
-        return (cpu_info[1] >> 24) & 0xFF;
-    #else
-        unsigned eax, ebx, ecx, edx;
-        __cpuid(1, eax, ebx, ecx, edx);
-        return (ebx >> 24) & 0xFF;
-    #endif
-    }
-
 static bool fill_topology_hwloc(struct cpu_info *info, hwloc_topology_t topology)
 {
     hwloc_obj_t pu = hwloc_get_pu_obj_by_os_index(topology, info->cpu_number);
@@ -554,53 +355,30 @@ static bool fill_topology_hwloc(struct cpu_info *info, hwloc_topology_t topology
         return false;
     }
 
-    int apic = 0;
-
-    // Try this 1st to find APIC ID in infos[]
-    for (unsigned i = 0; i < pu->infos_count; i++) {
-        if (strcmp(pu->infos[i].name, "APIC ID") == 0) {
-            info->apic_id = atoi(pu->infos[i].value);
-            apic = 1;
-            break;
-        }
-    }
-
-    // If the above lookup fails execute the below
-    if (!apic) {
-        int can_bind = hwloc_topology_get_support(topology)->cpubind->set_thisproc_cpubind;
-        if (can_bind) {
-            hwloc_cpuset_t cpuset = hwloc_bitmap_dup(pu->cpuset);
-            hwloc_bitmap_singlify(cpuset);
-            if (hwloc_set_cpubind(topology, cpuset, HWLOC_CPUBIND_PROCESS) == 0) {
-                info->apic_id = get_apic_id_from_cpuid();
-                apic = 1;
-            }
-            hwloc_bitmap_free(cpuset);
-        }
-    }
-
     hwloc_obj_t package = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_PACKAGE, pu);
-    info->package_id = package->os_index;
+    info->package_id = package ? package->os_index : -1;
     hwloc_obj_t core = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_CORE, pu);
-    info->core_id = core->logical_index;
-    int thread_position = 0;
-    for (unsigned i = 0; i < core->arity; i++) {
-        if (core->children[i]->type == HWLOC_OBJ_PU && core->children[i]->os_index == pu->os_index) {
-            thread_position = i;
+    info->core_id = core ? core->logical_index : -1;
 
-            break;
+    if (core) {
+        for (unsigned i = 0; i < core->arity; ++i) {
+            if (core->children[i] == pu) {
+                info->thread_id = i;
+                break;
+            }
         }
     }
-    info->thread_id = thread_position;
-        
+
     int depth = hwloc_get_type_depth(topology, HWLOC_OBJ_NUMANODE);
     if (depth != HWLOC_TYPE_DEPTH_UNKNOWN) {
         int num_nodes = hwloc_get_nbobjs_by_depth(topology, depth);
-        for (int i = 0; i < num_nodes; i++) {
-            hwloc_obj_t numa_node = hwloc_get_obj_by_depth(topology, depth, i);
-            if (hwloc_bitmap_isset(numa_node->cpuset, info->cpu_number)) {
-                info->numa_node_id = numa_node->logical_index;
-                break;
+        if (pu && pu->nodeset) {
+            for (int i = 0; i < num_nodes; i++) {
+                hwloc_obj_t numa_node = hwloc_get_obj_by_depth(topology, depth, i);
+                if (hwloc_bitmap_isset(pu->nodeset, numa_node->os_index)) {
+                    info->numa_node_id = numa_node->os_index;  // Not logical_index
+                    break;
+                }
             }
         }
     }
@@ -618,7 +396,7 @@ static bool fill_topology_hwloc(struct cpu_info *info, hwloc_topology_t topology
                 cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L3CACHE, pu);
                 break;
         }
-        if (cache) {
+        if (cache && cache->attr) {
             if (cache->attr->cache.type == HWLOC_OBJ_CACHE_UNIFIED || cache->attr->cache.type == HWLOC_OBJ_CACHE_DATA) {
                 info->cache[level].cache_data = cache->attr->cache.size;
             }
@@ -678,7 +456,7 @@ static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
 /* prefer sysfs, fallback to MSR. the latter is not reliable and may require
  * root. */
 static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
-/* prefer hwloc, fallback to CPUID. */
+/* prefer hwloc */
 static const fill_topo_func topo_impls[] = { fill_topology_hwloc };
 
 void apply_cpuset_param(char *param)
@@ -852,6 +630,10 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             return apply_mock_topology(mock_topology, enabled_cpus);
     }
 
+    hwloc_topology_t topology;
+    hwloc_topology_init(&topology);
+    hwloc_topology_load(topology);
+
     int curr_cpu = 0;
     for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
         auto lp = LogicalProcessor(curr_cpu);
@@ -866,20 +648,16 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         info->core_id = -1;
         info->thread_id = -1;
         info->numa_node_id = -1;
-        info->apic_id = -1;
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
+        try_detection<topo_impls>(&cpu_info[i], topology);
     }
 
-    hwloc_topology_t topology;
-    hwloc_topology_init(&topology);
-    hwloc_topology_load(topology);
-
+   
     DetectionContext context = {topology, &enabled_cpus};
 
     auto detect = [](void *ptr) -> void * {
         DetectionContext* context = static_cast<DetectionContext*>(ptr);
-        hwloc_topology_t topology = context->topology;
         const auto& enabled_cpus = *context->enabled_cpus;
 
         int curr_cpu = 0;
@@ -890,7 +668,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             }
 
             pin_to_logical_processor(lp);
-            try_detection<topo_impls>(&cpu_info[i], topology);
             try_detection<family_impls>(&cpu_info[i]);
             try_detection<ppin_impls>(&cpu_info[i]);
             try_detection<ucode_impls>(&cpu_info[i]);
