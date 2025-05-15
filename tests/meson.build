@@ -119,6 +119,7 @@ tests_base_a = static_library(
     dependencies: [
         tests_config_base.dependencies(),
         boost_dep,
+        hwloc_dep,
     ],
     c_args : [
         tests_common_c_args,

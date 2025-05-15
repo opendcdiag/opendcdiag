@@ -39,6 +39,7 @@ jobs:
             libgtest-dev \
             libhwloc-dev \
             libssl-dev \
+            libudev-dev \
             libzstd-dev \
             meson \
             ninja-build \

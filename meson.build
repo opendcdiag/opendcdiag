@@ -252,10 +252,13 @@ if get_option('coverage') == true
     ]
 endif
 
+hwloc_dep = dependency('hwloc', static : true)
+
 target_deps += [
     boost_dep,
     dl_dep,
     pthread_dep,
+    hwloc_dep,
 ]
 
 top_incdir = include_directories('.')
@@ -301,7 +304,8 @@ executable(
     unittests_sources,
     dependencies: [
         gtest_dep,
-        pthread_dep
+        pthread_dep,
+        hwloc_dep,
     ],
     include_directories : [
         framework_incdir,
