@@ -170,11 +170,10 @@ typedef enum TestQuality {
 
 #ifndef DECLARE_TEST
 #  define DECLARE_TEST(test_id, test_description)       DECLARE_TEST_INNER(test_id, test_description)
-#  define DECLARE_TEST_GROUPS(...) \
-    __extension__ (const struct test_group* const[]){ __VA_ARGS__, NULL }
-#else
-#  define DECLARE_TEST_GROUPS(...)                      NULL
 #endif
+
+#define DECLARE_TEST_GROUPS(...)                                      \
+    __extension__ (const struct test_group* const[]){ __VA_ARGS__, NULL }
 
 #define END_DECLARE_TEST   };
 
