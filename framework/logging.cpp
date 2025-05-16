@@ -184,7 +184,7 @@ private:
     static void format_and_print_message(int fd, std::string_view level, std::string_view message);
     static void format_and_print_skip_reason(int fd, std::string_view message);
     int print_one_thread_messages(int fd, mmap_region r, int level);
-    void print_result_line();
+    void print_result_line(int &init_skip_message_bytes);
 
     enum TestHeaderTime { AtStart, OnFirstFail };
     static void print_tests_header(TestHeaderTime mode);
@@ -2358,7 +2358,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
     return lowest_level;
 }
 
-void YamlLogger::print_result_line()
+void YamlLogger::print_result_line(int &init_skip_message_bytes)
 {
     int loglevel = this->loglevel();
     if (loglevel == LOG_LEVEL_QUIET && file_log_fd != real_stdout_fd && sApp->shmem->verbosity < 1) {
@@ -2390,6 +2390,7 @@ void YamlLogger::print_result_line()
                 if (loglevel <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd)
                     format_and_print_skip_reason(real_stdout_fd, message);
                 format_and_print_skip_reason(file_log_fd, message);
+                init_skip_message_bytes = init_skip_message.size() + 2;
             } else {
                 logging_printf(loglevel, "  skip-category: %s\n", "Unknown");
                 logging_printf(loglevel, "  skip-reason: %s\n",
@@ -2455,7 +2456,8 @@ void YamlLogger::print()
 {
     Duration test_duration = MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
-    print_result_line();
+    int init_skip_message_bytes = 0;
+    print_result_line(init_skip_message_bytes);
     if (should_print_fail_info())
         logging_printf(LOG_LEVEL_QUIET, "%s", fail_info_details().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  time-at-end:   %s\n", get_current_time().c_str());
@@ -2483,17 +2485,22 @@ void YamlLogger::print()
     }
 
     // print the thread messages
-    auto doprint = [this](PerThreadData::Common *data, int i) {
+    auto doprint = [this, init_skip_message_bytes](PerThreadData::Common *data, int s_tid) {
         struct mmap_region r = maybe_mmap_log(data);
 
-        if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
+        /* for main threads (negative ids) adjust the message size to account
+         * for skip message. this is to avoid empty messages printed to the log.
+         */
+        if (r.size - (s_tid < 0 ? init_skip_message_bytes : 0) == 0 && !data->has_failed() && sApp->shmem->verbosity < 3) {
+            munmap_and_truncate_log(data, r);
             return;             /* nothing to be printed, on any level */
+        }
 
-        print_thread_header(file_log_fd, i, INT_MAX);
+        print_thread_header(file_log_fd, s_tid, INT_MAX);
         int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX);
 
         if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, i, sApp->shmem->verbosity);
+            print_thread_header(real_stdout_fd, s_tid, sApp->shmem->verbosity);
             print_one_thread_messages(real_stdout_fd, r, sApp->shmem->verbosity);
         }
 
