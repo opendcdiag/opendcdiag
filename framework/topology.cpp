@@ -48,35 +48,6 @@ struct auto_fd
 
     operator int() const { return fd; }
 };
-
-struct linux_cpu_info
-{
-    using Fields = std::map<std::string, std::string>;
-    Fields general_fields;
-    std::vector<Fields> cpu_fields;
-
-    std::optional<uint64_t> number(int cpu_number, const char *field, int base = 0)
-    {
-        const Fields *f;
-        if (cpu_number < 0)
-            f = &general_fields;
-        else if (cpu_number < cpu_fields.size())
-            f = &cpu_fields[cpu_number];
-        else
-            return std::nullopt;
-
-        auto it = f->find(field);
-        if (it == f->end())
-            return std::nullopt;
-
-        // decode using strtoull, which skips spaces and decodes numbers with 0x prefix
-        char *endptr;
-        uint64_t value = strtoull(it->second.c_str(), &endptr, base);
-        if (endptr > it->second.c_str())
-            return value;
-        return std::nullopt;
-    }
-};
 }
 
 struct cpu_info *cpu_info = nullptr;
@@ -93,66 +64,6 @@ static auto_fd open_sysfs_cpu_dir(int cpu)
     char buf[sizeof("/sys/devices/system/cpu/cpu2147483647")];
     sprintf(buf, "/sys/devices/system/cpu/cpu%d", cpu);
     return auto_fd { open(buf, O_PATH | O_CLOEXEC) };
-}
-
-static linux_cpu_info parse_proc_cpuinfo()
-{
-    static const char header[] = "processor\t";
-    AutoClosingFile f{ fopen("/proc/cpuinfo", "r") };
-    assert(f.f && "/proc must be mounted for proper operation");
-
-    linux_cpu_info result;
-    linux_cpu_info::Fields *current = &result.general_fields;
-
-    char *line = nullptr;
-    size_t len = 0;
-    size_t nread;
-    while ((nread = getline(&line, &len, f)) != -1) {
-        const char *colon = strchr(line, ':');
-        char *lineend = strchr(line, '\n');
-        if (lineend)
-            *lineend = '\0';
-        else
-            lineend = line + strlen(line);
-
-        if (strlen(line) == 0) {
-            current = &result.general_fields;
-        } else if (strlen(line) >= strlen(header) && memcmp(line, header, strlen(header)) == 0) {
-            // new processor, parse the number
-
-            char *endptr = nullptr;
-            uint64_t value = strtoull(colon + 1, &endptr, 0);
-            if (endptr > colon) {
-                if (value >= result.cpu_fields.size())
-                    result.cpu_fields.resize(value + 1);
-                current = &result.cpu_fields[value];
-            } else {
-                current = &result.general_fields;
-            }
-        } else if (colon != nullptr) {
-            auto trimmed_string = [](const char *s, const char *e) {
-                while (s != e && (*s == ' ' || *s == '\t'))
-                    ++s;
-                while (e - 1 != s && (e[-1] == ' ' || e[-1] == '\t'))
-                    --e;
-
-                return std::string(s, e - s);
-            };
-
-            current->insert({ trimmed_string(line, colon),
-                              trimmed_string(colon + 1, lineend) });
-        }
-    }
-
-    free(line);
-    return result;
-}
-
-static linux_cpu_info &proc_cpuinfo()
-{
-    static linux_cpu_info r =
-        parse_proc_cpuinfo();
-    return r;
 }
 #endif
 
@@ -648,9 +559,20 @@ static bool fill_ucode_sysfs(struct cpu_info *info, hwloc_topology_t topology)
         IGNORE_RETVAL(fscanf(f, "%" PRIx64 , &info->microcode));
         fclose(f);
     } else {
-        // Prior to Linux 4.19, the microcode/version sysfs node was not world-readable
-        if (auto opt = proc_cpuinfo().number(info->cpu_number, "microcode"))
-            info->microcode = *opt;
+        f = fopen("/proc/cpuinfo", "r");
+        if (f) {
+            char line[256];
+            while (fgets(line, sizeof(line), f)) {
+                if (strncmp(line, "microcode", 9) == 0) {
+                    char *colon = strchr(line, ':');
+                    if (colon) {
+                        info->microcode = strtoull(colon + 1, nullptr, 0);
+                        break;
+                    }
+                }
+            }
+            fclose(f);
+        }
     }
     return info->microcode != 0;
 #elif defined(_WIN32)
