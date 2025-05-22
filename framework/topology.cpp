@@ -14,6 +14,7 @@
 
 #include <assert.h>
 #include <fcntl.h>
+#include <hwloc.h>
 #include <inttypes.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -302,7 +303,7 @@ static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
     return true;
 }
 
-static bool fill_topo_sysfs(struct cpu_info *info)
+static bool fill_topo_sysfs(struct cpu_info *info, hwloc_topology_t topology)
 {
     FILE *f;
 
@@ -360,7 +361,7 @@ struct CACHE_RELATIONSHIP_2 {
     };
 };
 
-static bool fill_topo_sysfs(struct cpu_info *info)
+static bool fill_topo_sysfs(struct cpu_info *info, hwloc_topology_t topology)
 {
     if (info != &cpu_info[0])
         return info->core_id != -1; // we only need to run once
@@ -471,7 +472,7 @@ static auto fill_topo_sysfs = nullptr;
 #endif /* __linux__ */
 
 #ifdef __x86_64__
-static bool fill_family_cpuid(struct cpu_info *info)
+static bool fill_family_cpuid(struct cpu_info *info, hwloc_topology_t topology)
 {
     /*
      * EAX layout from the manual:
@@ -577,7 +578,7 @@ static bool fill_cache_info_cpuid(struct cpu_info *info)
     return true;
 }
 
-static bool fill_topo_cpuid(struct cpu_info *info)
+static bool fill_topo_cpuid(struct cpu_info *info, hwloc_topology_t topology)
 {
     int curr_cpu = info->cpu_number;
     int subleaf = 0;
@@ -617,7 +618,7 @@ static bool fill_topo_cpuid(struct cpu_info *info)
     return info->core_id != -1;
 }
 
-static bool fill_ucode_msr(struct cpu_info *info)
+static bool fill_ucode_msr(struct cpu_info *info, hwloc_topology_t topology)
 {
     uint64_t ucode = 0;
 
@@ -633,7 +634,7 @@ constexpr auto fill_ucode_msr = nullptr;
 constexpr auto fill_topo_cpuid = nullptr;
 #endif // x86-64
 
-static bool fill_ucode_sysfs(struct cpu_info *info)
+static bool fill_ucode_sysfs(struct cpu_info *info, hwloc_topology_t topology)
 {
 #ifdef __linux__
     FILE *f;
@@ -703,7 +704,7 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
 }
 
 #ifdef __x86_64__
-static bool fill_ppin_msr(struct cpu_info *info)
+static bool fill_ppin_msr(struct cpu_info *info, hwloc_topology_t topology)
 {
     info->ppin = 0;
     return read_msr(info->cpu_number, 0x4F, &info->ppin); /* MSR_PPIN */
@@ -712,7 +713,7 @@ static bool fill_ppin_msr(struct cpu_info *info)
 constexpr auto fill_ppin_msr = nullptr;
 #endif // __x86_64__
 
-static bool fill_ppin_sysfs(struct cpu_info *info)
+static bool fill_ppin_sysfs(struct cpu_info *info, hwloc_topology_t topology)
 {
 #if defined(__linux__) && defined(__x86_64__)
     auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
@@ -728,24 +729,24 @@ static bool fill_ppin_sysfs(struct cpu_info *info)
     return false;
 }
 
-template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
+template <auto &fnArray> static bool try_detection(struct cpu_info *cpu, hwloc_topology_t topology = nullptr)
 {
     using DetectorFunction = std::decay_t<decltype(fnArray[0])>;
     if (std::size(fnArray) > 0) {
         if (std::size(fnArray) == 1) {
             // no need to cache, there's only one implementation
             DetectorFunction fn = fnArray[0];
-            return fn ? fn(cpu) : true;
+            return fn ? fn(cpu, topology) : true;
         }
 
         static DetectorFunction cached_fn = nullptr;
         if (cached_fn)
-            return cached_fn(cpu);
+            return cached_fn(cpu, topology);
 
         for (DetectorFunction fn : fnArray) {
             if (!fn)
                 continue;
-            if (fn(cpu)) {
+            if (fn(cpu, topology)) {
                 cached_fn = fn;
                 return true;
             }
@@ -754,10 +755,10 @@ template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
     return false;
 }
 
-typedef bool (* fill_family_func)(struct cpu_info *);
-typedef bool (* fill_ppin_func)(struct cpu_info *);
-typedef bool (* fill_ucode_func)(struct cpu_info *);
-typedef bool (* fill_topo_func)(struct cpu_info *);
+typedef bool (* fill_family_func)(struct cpu_info *, hwloc_topology_t);
+typedef bool (* fill_ppin_func)(struct cpu_info *, hwloc_topology_t);
+typedef bool (* fill_ucode_func)(struct cpu_info *, hwloc_topology_t);
+typedef bool (* fill_topo_func)(struct cpu_info *, hwloc_topology_t);
 
 static const fill_family_func family_impls[] = { fill_family_cpuid };
 static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
