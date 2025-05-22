@@ -77,9 +77,9 @@ framework_config.set('SANDSTONE_DEFAULT_LOGGING', 'SandstoneApplication::OutputF
 
 framework_config.set10('SANDSTONE_RESTRICTED_CMDLINE', get_option('framework_options').contains('restricted-cmdline'))
 if get_option('framework_options').contains('no-child-debug')
-    framework_config.set10('SANDSTONE_CHILD_DEBUG_CRASHES', 0)
-    framework_config.set10('SANDSTONE_CHILD_DEBUG_HANGS', 0)
-    framework_config.set10('SANDSTONE_CHILD_BACKTRACE', 0)
+    framework_config.set10('SANDSTONE_CHILD_DEBUG_CRASHES', false)
+    framework_config.set10('SANDSTONE_CHILD_DEBUG_HANGS', false)
+    framework_config.set10('SANDSTONE_CHILD_BACKTRACE', false)
 else
     framework_config.set10('SANDSTONE_CHILD_DEBUG_CRASHES', not get_option('framework_options').contains('no-child-debug-crashes'))
     framework_config.set10('SANDSTONE_CHILD_DEBUG_HANGS', not get_option('framework_options').contains('no-child-debug-hangs'))
