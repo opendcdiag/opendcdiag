@@ -34,12 +34,16 @@ void SandstoneTestSet::load_all_tests()
 {
     std::span<struct test> known_tests = cfg.is_selftest ? selftests : regular_tests;
 
-    for (struct test &t : known_tests) {
-        all_tests.push_back(&t);
-        for (auto ptr = t.groups; ptr && *ptr; ++ptr) {
-            all_group_map[(*ptr)->id].push_back(&t);
+    if (!SandstoneConfig::RestrictedCommandLine) {
+        // only populate all_group_map if we're parsing command-line
+        for (struct test &t : known_tests) {
+            all_tests.push_back(&t);
+            for (auto ptr = t.groups; ptr && *ptr; ++ptr) {
+                all_group_map[(*ptr)->id].push_back(&t);
+            }
         }
     }
+
     /* add "special" mce_check as well */
     all_tests.push_back(&mce_test);
 }
