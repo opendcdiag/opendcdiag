@@ -20,6 +20,8 @@ perl = find_program('perl')
 python = find_program('python3')
 shell = find_program('sh')
 
+dep_static = get_option('dependency_link') == 'static'
+
 if cpp.get_id() != 'gcc' or cc.get_id() != 'gcc'
     warning('We recommend building OpenDCDiag with the GNU Compiler Collection (gcc). Your build may fail or your executable may not behave as expected.')
 endif
@@ -252,10 +254,13 @@ if get_option('coverage') == true
     ]
 endif
 
+hwloc_dep = dependency('hwloc', static : dep_static)
+
 target_deps += [
     boost_dep,
     dl_dep,
     pthread_dep,
+    hwloc_dep,
 ]
 
 generated_gitid_h = configure_file(
@@ -311,7 +316,8 @@ executable(
     unittests_sources,
     dependencies: [
         gtest_dep,
-        pthread_dep
+        pthread_dep,
+        hwloc_dep,
     ],
     include_directories : [
         framework_incdir,
