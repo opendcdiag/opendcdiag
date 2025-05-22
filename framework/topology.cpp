@@ -729,6 +729,67 @@ static bool fill_ppin_sysfs(struct cpu_info *info, hwloc_topology_t topology)
     return false;
 }
 
+static bool fill_topology_hwloc(struct cpu_info *info, hwloc_topology_t topology)
+{
+    hwloc_obj_t pu = hwloc_get_pu_obj_by_os_index(topology, info->cpu_number);
+    if (!pu) {
+        hwloc_topology_destroy(topology);
+        return false;
+    }
+
+    hwloc_obj_t package = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_PACKAGE, pu);
+    info->package_id = package ? package->os_index : -1;
+    hwloc_obj_t core = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_CORE, pu);
+    info->core_id = core ? core->logical_index : -1;
+
+    if (core) {
+        for (unsigned i = 0; i < core->arity; ++i) {
+            if (core->children[i] == pu) {
+                info->thread_id = i;
+                break;
+            }
+        }
+    }
+
+    int depth = hwloc_get_type_depth(topology, HWLOC_OBJ_NUMANODE);
+    if (depth != HWLOC_TYPE_DEPTH_UNKNOWN) {
+        int num_nodes = hwloc_get_nbobjs_by_depth(topology, depth);
+        if (pu && pu->nodeset) {
+            for (int i = 0; i < num_nodes; i++) {
+                hwloc_obj_t numa_node = hwloc_get_obj_by_depth(topology, depth, i);
+                if (hwloc_bitmap_isset(pu->nodeset, numa_node->os_index)) {
+                    info->numa_node_id = numa_node->os_index;  // Not logical_index
+                    break;
+                }
+            }
+        }
+    }
+
+    hwloc_obj_t cache;
+    for (int level = 0; level < 3; ++level) { // Assuming 3 levels: L1, L2, L3
+        switch (level) {
+            case 0:
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L1CACHE, pu);
+                break;
+            case 1:
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L2CACHE, pu);
+                break;
+            case 2:
+                cache = hwloc_get_ancestor_obj_by_type(topology, HWLOC_OBJ_L3CACHE, pu);
+                break;
+        }
+        if (cache && cache->attr) {
+            if (cache->attr->cache.type == HWLOC_OBJ_CACHE_UNIFIED || cache->attr->cache.type == HWLOC_OBJ_CACHE_DATA) {
+                info->cache[level].cache_data = cache->attr->cache.size;
+            }
+            if (cache->attr->cache.type == HWLOC_OBJ_CACHE_UNIFIED || cache->attr->cache.type == HWLOC_OBJ_CACHE_INSTRUCTION) {
+                info->cache[level].cache_instruction = cache->attr->cache.size;
+            }
+        }
+    }
+    return true;
+}
+
 template <auto &fnArray> static bool try_detection(struct cpu_info *cpu, hwloc_topology_t topology = nullptr)
 {
     using DetectorFunction = std::decay_t<decltype(fnArray[0])>;
@@ -765,8 +826,8 @@ static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
 /* prefer sysfs, fallback to MSR. the latter is not reliable and may require
  * root. */
 static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
-/* prefer CPUID, fallback to sysfs. */
-static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
+/* prefer hwloc. */
+static const fill_topo_func topo_impls[] = { fill_topology_hwloc };
 
 void apply_cpuset_param(char *param)
 {
@@ -939,6 +1000,10 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             return apply_mock_topology(mock_topology, enabled_cpus);
     }
 
+    hwloc_topology_t topology;
+    hwloc_topology_init(&topology);
+    hwloc_topology_load(topology);
+
     int curr_cpu = 0;
     for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
         auto lp = LogicalProcessor(curr_cpu);
@@ -954,6 +1019,7 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         info->thread_id = -1;
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
+        try_detection<topo_impls>(&cpu_info[i], topology);
     }
 
     auto detect = [](void *ptr) -> void * {
@@ -966,7 +1032,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             }
 
             pin_to_logical_processor(lp);
-            try_detection<topo_impls>(&cpu_info[i]);
             try_detection<family_impls>(&cpu_info[i]);
             try_detection<ppin_impls>(&cpu_info[i]);
             try_detection<ucode_impls>(&cpu_info[i]);
