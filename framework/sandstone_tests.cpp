@@ -96,7 +96,12 @@ struct test_cfg_info SandstoneTestSet::add(test_cfg_info t)
     return ti;
 }
 
-std::vector<struct test_cfg_info> SandstoneTestSet::add(const char *name) {
+std::vector<struct test_cfg_info> SandstoneTestSet::add(const char *name)
+{
+    if (SandstoneConfig::RestrictedCommandLine) {
+        assert(false && "There is no --enable command-line option");
+        __builtin_unreachable();
+    }
     std::vector<struct test_cfg_info> res;
     std::vector<struct test *> tests = lookup(name);
     for (auto t : tests) {
@@ -123,6 +128,11 @@ int SandstoneTestSet::remove(const struct test *test)
 /// function returns -1.
 int SandstoneTestSet::remove(const char *name)
 {
+    if (SandstoneConfig::RestrictedCommandLine) {
+        assert(false && "There is no --disable command-line option");
+        __builtin_unreachable();
+    }
+
     std::vector tests = lookup(name);
     if (tests.size() == 0)
         return -1;
@@ -233,6 +243,11 @@ static std::vector<struct test_cfg_info> load_test_list(std::ifstream &fstream, 
 
 std::vector<struct test_cfg_info> SandstoneTestSet::add_test_list(const char *fname, std::vector<std::string> &errors)
 {
+    if (SandstoneConfig::RestrictedCommandLine) {
+        assert(false && "There is no --test-list-name command-line option");
+        __builtin_unreachable();
+    }
+
     std::ifstream list_file(fname, std::ios_base::in);
     std::vector<struct test_cfg_info> entries = load_test_list(list_file, this, cfg.ignore_unknown_tests, errors);
     if (!errors.empty()) return {};
