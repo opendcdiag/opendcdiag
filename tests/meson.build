@@ -1,8 +1,6 @@
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-dep_static = get_option('dependency_link') == 'static'
-
 setmod = import('sourceset')
 
 tests_config = configuration_data()
@@ -119,6 +117,7 @@ tests_base_a = static_library(
     dependencies: [
         tests_config_base.dependencies(),
         boost_dep,
+        hwloc_dep,
     ],
     c_args : [
         tests_common_c_args,
