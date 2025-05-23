@@ -5,11 +5,8 @@
 
 #include "sandstone_p.h"
 
-#if SANDSTONE_RESTRICTED_CMDLINE
-#  define TEST_GROUP(name, descr)   .id = nullptr, .description = nullptr
-#else
-#  define TEST_GROUP(name, descr)   .id = name, .description = descr
-#endif
+#define TEST_GROUP(name, descr)   .id = name, .description = descr
+
 #define TEST_GROUP_ATTRIBUTES                                           \
     __attribute__((section(SANDSTONE_SECTION_PREFIX "test_group"), aligned(8)))
 
