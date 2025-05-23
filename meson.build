@@ -259,8 +259,8 @@ hwloc_dep = dependency('hwloc', static : dep_static)
 target_deps += [
     boost_dep,
     dl_dep,
-    pthread_dep,
     hwloc_dep,
+    pthread_dep,
 ]
 
 generated_gitid_h = configure_file(

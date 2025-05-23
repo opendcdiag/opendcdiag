@@ -439,7 +439,7 @@ static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
 /* prefer sysfs, fallback to MSR. the latter is not reliable and may require
  * root. */
 static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
-/* prefer hwloc. */
+/* fill via hwloc. */
 static const fill_topo_func topo_impls[] = { fill_topology_hwloc };
 
 void apply_cpuset_param(char *param)
