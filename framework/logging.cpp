@@ -508,7 +508,7 @@ static inline void truncate_log(int fd)
 {
     // truncate files back to empty, preparing for the next iteration
     lseek(fd, 0, SEEK_SET);
-    ftruncate(fd, 0);
+    IGNORE_RETVAL(ftruncate(fd, 0));
 }
 
 static inline mmap_region maybe_mmap_log(const PerThreadData::Common *data)
