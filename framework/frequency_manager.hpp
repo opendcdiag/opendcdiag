@@ -52,7 +52,7 @@ private:
             fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, file_path.data());
             exit(EX_IOERR);
         }
-        fscanf(file, "%s", line);
+        IGNORE_RETVAL(fscanf(file, "%s", line));
         return std::string(line);
     }
 
@@ -78,7 +78,7 @@ private:
             fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, file_path.data());
             exit(EX_IOERR);
         }
-        fscanf(file, "%d", &frequency);
+        IGNORE_RETVAL(fscanf(file, "%d", &frequency));
         return frequency;
     }
 

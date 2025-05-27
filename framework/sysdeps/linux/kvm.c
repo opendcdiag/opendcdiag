@@ -543,9 +543,9 @@ static char *kvm_log_segment(const struct kvm_segment *seg)
     }
 
     char *ret = NULL;
-    asprintf(&ret, "0x%04x base = 0x%012llx limit = 0x%08x s=%d type=%s dpl=%d db=%d g=%d l=%d %s",
-             seg->selector, seg->base, seg->limit, seg->s, type, seg->dpl, seg->db, seg->g, seg->l,
-             seg->present ? "present" : "");
+    IGNORE_RETVAL(asprintf(&ret, "0x%04x base = 0x%012llx limit = 0x%08x s=%d type=%s dpl=%d db=%d g=%d l=%d %s",
+                           seg->selector, seg->base, seg->limit, seg->s, type, seg->dpl, seg->db, seg->g, seg->l,
+                           seg->present ? "present" : ""));
     return ret;
 }
 #endif // __x86_64__
@@ -598,7 +598,8 @@ static void kvm_log_registers(const kvm_ctx_t *ctx, const struct kvm_regs *gprs)
         char *fs = kvm_log_segment(&sregs.fs);
         char *gs = kvm_log_segment(&sregs.gs);
         char *ss = kvm_log_segment(&sregs.ss);
-        asprintf(&extra_dump, "\n cs  = %s"
+        IGNORE_RETVAL(asprintf(&extra_dump,
+                              "\n cs  = %s"
                               "\n ds  = %s"
                               "\n es  = %s"
                               "\n fs  = %s"
@@ -609,7 +610,7 @@ static void kvm_log_registers(const kvm_ctx_t *ctx, const struct kvm_regs *gprs)
                               "\n ldt: base = 0x%016llx limit = 0x%04x",
                  cs, ds, es, fs, gs, ss,
                  sregs.cr0, sregs.cr2, sregs.cr3, sregs.cr4, sregs.efer, xcr0,
-                 sregs.gdt.base, sregs.gdt.limit, sregs.ldt.base, sregs.ldt.limit);
+                 sregs.gdt.base, sregs.gdt.limit, sregs.ldt.base, sregs.ldt.limit));
         free(cs);
         free(ds);
         free(es);
