@@ -47,6 +47,12 @@ endif
 framework_config = configuration_data()
 framework_config.set10('SANDSTONE_STATIC', false) # sysdeps may override
 
+if device_type == 'cpu'
+    framework_config.set10('SANDSTONE_DEVICE_CPU', true)
+else
+    framework_config.set10('SANDSTONE_DEVICE_GPU', true)
+endif
+
 sysdeps_dir = 'sysdeps/' + target_machine.system()
 
 if target_machine.system() == 'cygwin'
