@@ -16,7 +16,6 @@
 #include <new>
 #include <map>
 #include <numeric>
-#include <random>
 #include <utility>
 #include <vector>
 
@@ -61,7 +60,6 @@
 #include "sandstone.h"
 #include "sandstone_p.h"
 #include "sandstone_opts.hpp"
-#include "sandstone_iovec.h"
 #include "sandstone_kvm.h"
 #include "sandstone_system.h"
 #include "sandstone_thread.h"
@@ -88,7 +86,6 @@
 #  endif
 #endif
 
-#include "sandstone_test_lists.h"
 
 #ifndef O_PATH
 #  define O_PATH        0
