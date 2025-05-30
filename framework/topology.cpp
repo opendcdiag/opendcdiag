@@ -26,6 +26,9 @@
 #   include <windows.h>
 #endif
 
+static void update_topology(std::span<const struct cpu_info> new_cpu_info,
+                            std::span<const Topology::Package> sockets = {});
+
 namespace {
 struct auto_fd
 {
