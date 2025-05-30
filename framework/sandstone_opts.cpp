@@ -36,6 +36,7 @@ enum {
     ignore_mce_errors_option,
     ignore_os_errors_option,
     ignore_unknown_tests_option,
+    include_optional_option,
     inject_idle_option,
     is_asan_option,
     is_debug_option,
@@ -467,6 +468,7 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
         { "ignore-os-errors", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-timeout", no_argument, nullptr, ignore_os_errors_option },
         { "ignore-unknown-tests", no_argument, nullptr, ignore_unknown_tests_option },
+        { "include-optional", no_argument, nullptr, include_optional_option },
         { "inject-idle", required_argument, nullptr, inject_idle_option },
         { "list", no_argument, nullptr, 'l' },
         { "list-tests", no_argument, nullptr, raw_list_tests },
@@ -672,6 +674,11 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
                 break;
             case ignore_unknown_tests_option:
                 opts.test_set_config.ignore_unknown_tests = true;
+                break;
+            case include_optional_option:
+                /* do not override lower quality levels if they were requested */
+                if (app->requested_quality < int(TEST_QUALITY_OPTIONAL)) break;
+                app->requested_quality = int(TEST_QUALITY_OPTIONAL);
                 break;
             case inject_idle_option:
                 app->inject_idle = ParseIntArgument<>{
