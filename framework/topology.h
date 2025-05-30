@@ -192,8 +192,6 @@ bool pin_to_logical_processors(CpuRange, const char *thread_name);
 
 void apply_cpuset_param(char *param);
 void init_topology(const LogicalProcessorSet &enabled_cpus);
-void update_topology(std::span<const struct cpu_info> new_cpu_info,
-                     std::span<const Topology::Package> sockets = {});
 void restrict_topology(CpuRange range);
 
 #endif /* INC_TOPOLOGY_H */
