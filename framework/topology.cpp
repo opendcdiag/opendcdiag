@@ -561,7 +561,7 @@ static bool fill_family_cpuid(struct cpu_info *info)
     return true;
 }
 
-static bool fill_cache_info_cpuid(struct cpu_info *info)
+static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_sharing_l2)
 {
     /* since info->cache is statically allocated */
     static int max_levels = sizeof(info->cache) / sizeof(*info->cache);
@@ -588,6 +588,8 @@ static bool fill_cache_info_cpuid(struct cpu_info *info)
         sets = c + 1; /* entire ecx plus 1 */
 
         size = ways * parts * line_sz * sets;
+        if (level == 2 && max_cpus_sharing_l2)
+            *max_cpus_sharing_l2 = ((a >> 14) & ((1 << 11) - 1)) + 1; /* eax 11 bits 25:14 plus 1 */
 
         switch (a & 0xf) { /* first four eax bits are type */
             case 1: /* data */
@@ -627,10 +629,11 @@ static bool fill_topo_cpuid(struct cpu_info *info)
 
     int curr_cpu = info->cpu_number;
     uint32_t a, b, c, apicid;
+    uint32_t max_cpus_sharing_l2 = 0;
 
     if (curr_cpu < 0)
         return false;
-    if (!fill_cache_info_cpuid(info))
+    if (!fill_cache_info_cpuid(info, &max_cpus_sharing_l2))
         return false;
 
     static int8_t leaf;
@@ -705,6 +708,14 @@ static bool fill_topo_cpuid(struct cpu_info *info)
     if (width(Domain::Module)) {
         info->module_id = extract(next, width(Package));
         next = width(Domain::Module);
+    } else if (max_cpus_sharing_l2) {
+        // CPUID didn't provide module information, we assume that a module is
+        // a group of cores that share L2 cache. That is true for Intel parts,
+        // and is what Linux implements (how Windows determines how to return
+        // RelationProcessorModule is a guess). Intel docs say "the nearest
+        // power-of-2 not smaller than".
+        int l2_sharing_width = 31 - std::countl_zero(max_cpus_sharing_l2);
+        info->module_id = extract(l2_sharing_width, width(Package));
     } else {
         // if neither CPUID nor cache provide module information, we assume module == core
         info->module_id = info->core_id;
