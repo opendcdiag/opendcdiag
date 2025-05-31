@@ -363,10 +363,23 @@ struct cache_info {
 struct cpu_info {
     uint64_t ppin;          ///! Processor ID read from MSR
     uint64_t microcode;     ///! Microcode version read from /sys
-    int cpu_number;         ///! Logical processor number as seen by OS
-    int thread_id;          ///! Topology info from APIC
-    int core_id;            ///! Topology info from APIC
-    int package_id;         ///! Topology info from APIC
+
+    /// Logical OS processor number.
+    /// On Unix systems, this is a sequential ID; on Windows, it encodes
+    /// 64 * ProcessorGroup + ProcessorNumber
+    int cpu_number;
+
+    /// Thread ID inside a core, usually 0 or 1 (-1 if not known).
+    int16_t thread_id;
+    /// Core ID inside of a package, -1 if not known.
+    int16_t core_id;
+    /// Module ID inside of a package, -1 if not known.
+    int16_t module_id;
+    /// Tile ID inside of a package, -1 if not known. May combine with the die ID.
+    int16_t tile_id;
+    /// Package ID in the system, -1 if not known.
+    int16_t package_id;
+
     struct cache_info cache[3]; ///! Cache info from OS
     uint8_t family;         ///! CPU family (usually 6)
     uint8_t stepping;       ///! CPU stepping

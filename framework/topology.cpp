@@ -319,14 +319,25 @@ static bool fill_topo_sysfs(struct cpu_info *info)
     f = fopenat(cpufd, "topology/physical_package_id");
     if (!f)
         return false;
-    IGNORE_RETVAL(fscanf(f, "%d", &info->package_id));
+    IGNORE_RETVAL(fscanf(f, "%hd", &info->package_id));
     fclose(f);
+
+    // Linux doesn't appear to have information about tiles
 
     f = fopenat(cpufd, "topology/core_id");
     if (!f)
         return false;
-    IGNORE_RETVAL(fscanf(f, "%d", &info->core_id));
+    IGNORE_RETVAL(fscanf(f, "%hd", &info->core_id));
     fclose(f);
+
+    f = fopenat(cpufd, "topology/cluster_id");
+    if (f) {
+        // Linux calls them modules "clusters"
+        IGNORE_RETVAL(fscanf(f, "%hd", &info->module_id));
+        fclose(f);
+    } else {
+        info->module_id = info->core_id;
+    }
 
     f = fopenat(cpufd, "topology/thread_siblings_list");
     if (!f)
@@ -421,6 +432,7 @@ static bool fill_topo_sysfs(struct cpu_info *info)
     unsigned char *end = ptr + length;
 
     int pkg_id = 0;
+    int module_id = 0;
     int core_id = 0;
     for ( ; ptr < end; ptr += lpi->Size) {
         lpi = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(ptr);
@@ -432,7 +444,17 @@ static bool fill_topo_sysfs(struct cpu_info *info)
                              }
                 );
             ++pkg_id;
+            module_id = 0;
             core_id = 0;
+            break;
+
+        case RelationProcessorModule:
+            for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
+                              [&](struct cpu_info *info) {
+                                  info->module_id = module_id;
+                              }
+                 );
+            ++module_id;
             break;
 
         case RelationProcessorCore:
@@ -467,7 +489,16 @@ static bool fill_topo_sysfs(struct cpu_info *info)
         }
     }
 
-    return info->core_id != -1;
+    if (info->core_id == -1)
+        return false;       // failed; we got no RelationProcessorCore results
+
+    if (info->module_id == -1) {
+        // we got no RelationProcessorModule, so "fake" them by assuming
+        // core_ids == module_ids
+        for (struct cpu_info &cpu : infos)
+            cpu.module_id = cpu.core_id;
+    }
+    return true;
 }
 #else /* __linux__ */
 static auto fill_topo_sysfs = nullptr;
@@ -582,41 +613,110 @@ static bool fill_cache_info_cpuid(struct cpu_info *info)
 
 static bool fill_topo_cpuid(struct cpu_info *info)
 {
+    enum Domain {
+        Invalid = 0,
+        Logical = 1,
+        Core = 2,
+        Module = 3,
+        Tile = 4,
+        Die = 5,
+        DieGrp = 6,
+    };
+    // we only want up to Tile
+    constexpr Domain Package = Domain(Domain::Tile + 1);
+
     int curr_cpu = info->cpu_number;
-    int subleaf = 0;
-    uint32_t a, b, c, d;
-    uint32_t smt_mask = 0,
-             core_shift = 0,
-             core_mask = 0,
-             pkg_shift = 0;
+    uint32_t a, b, c, apicid;
 
     if (curr_cpu < 0)
         return false;
     if (!fill_cache_info_cpuid(info))
         return false;
 
-    do {
-        int lvl_type;
-        __cpuid_count(0xb, subleaf, a, b, c, d);
-        if (!b) break;
-        lvl_type = (c >> 8) & 0xff;
-        switch (lvl_type) {
-            case 1:
-                core_shift = a & 0xf;
-                smt_mask = (1 << core_shift) - 1;
-                info->thread_id = d & smt_mask;
+    static int8_t leaf;
+    static std::array<uint8_t, Package> widthsarray;
+    auto width = [](Domain domain) -> uint8_t & { return widthsarray[domain - 1]; };
+
+    if (leaf < 0)
+        return false;
+    if (!leaf) {
+        __cpuid(0, a, b, c, apicid);
+        leaf = -1;
+        if (a >= 0x1f)
+            leaf = 0x1f;        // use V2 Extended Topology
+        else if (a >= 0x0b)
+            leaf = 0x0b;        // use regular Extended Topology
+        else
+            return false;
+
+        int subleaf = 0;
+        __cpuid_count(leaf, subleaf, a, b, c, apicid);
+
+        // extract the domain levels
+        while (b) {
+            Domain domain = Domain((c >> 8) & 0xff);
+            a &= 0xf;
+            switch (domain) {
+            case Domain::Invalid:
+                __builtin_unreachable();
                 break;
-            case 2:
-                pkg_shift = a & 0xf;
-                core_mask = (1 << (pkg_shift - core_shift)) - 1;
-                info->core_id = (d >> core_shift) & core_mask;
+            case Domain::Logical:
+            case Domain::Core:
+            case Domain::Module:
+            case Domain::Tile:
+                width(domain) = a;
                 break;
-            default:
+
+            case Domain::Die:
+            case Domain::DieGrp:
+                // ignore
                 break;
+            }
+
+            // the package shift is implied by the largest shift
+            width(Package) = std::max(uint8_t(a), width(Package));
+
+            // get next level
+            subleaf++;
+            __cpuid_count(leaf, subleaf, a, b, c, apicid);
         }
-        subleaf++;
-    } while (1);
-    info->package_id = d >> pkg_shift;
+
+        if (width(Domain::Logical) == 0 || width(Domain::Core) == 0
+                || width(Package) == 0) [[unlikely]] {
+            // no information on CPUID leaf; fallback to OS
+            leaf = -1;
+            return false;
+        }
+    } else {
+        // just get this processor's APIC ID
+        __cpuid_count(leaf, 0, a, b, c, apicid);
+    }
+
+    // process the widths
+    auto extract = [&](uint32_t start, uint32_t end) {
+        uint32_t value = apicid;
+        if (end < 32)
+            value &= ~(~0U << end);
+        value >>= start;
+        return value;
+    };
+
+    uint32_t next = width(Domain::Core);
+    if (width(Domain::Module)) {
+        info->module_id = extract(next, width(Package));
+        next = width(Domain::Module);
+    } else {
+        // if neither CPUID nor cache provide module information, we assume module == core
+        info->module_id = info->core_id;
+    }
+    if (width(Domain::Tile)) {
+        info->tile_id = extract(next, width(Package));
+        next = width(Domain::Tile);
+    }
+
+    info->package_id = extract(width(Package), -1);
+    info->core_id = extract(width(Domain::Logical), width(Package));
+    info->thread_id = extract(0, width(Domain::Logical));
     return info->core_id != -1;
 }
 
@@ -952,6 +1052,8 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         auto info = cpu_info + i;
         info->cpu_number = curr_cpu;
         info->package_id = -1;
+        info->tile_id = -1;
+        info->module_id = -1;
         info->core_id = -1;
         info->thread_id = -1;
 
