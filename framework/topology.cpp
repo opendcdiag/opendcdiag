@@ -461,6 +461,8 @@ static bool fill_topo_sysfs(struct cpu_info *info)
     }
     fclose(f);
 
+    if (std::optional apicid = proc_cpuinfo().number(info->cpu_number, "apicid", 10))
+        info->hwid = *apicid;
     return true;
 }
 #elif defined(_WIN32)
@@ -875,7 +877,8 @@ static bool fill_topo_cpuid(struct cpu_info *info)
     info->package_id = extract(width(Package), -1);
     info->core_id = extract(width(Domain::Logical), width(Package));
     info->thread_id = extract(0, width(Domain::Logical));
-    return info->core_id != -1;
+    info->hwid = apicid;
+    return true;
 }
 
 static bool fill_ucode_msr(struct cpu_info *info)
@@ -1215,6 +1218,7 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         info->module_id = -1;
         info->core_id = -1;
         info->thread_id = -1;
+        info->hwid = -1;
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
     }
