@@ -382,6 +382,9 @@ struct cpu_info {
     /// Package ID in the system, -1 if not known.
     int16_t package_id;
 
+    /// On x86, it's the APICID or x2APICID, if known; -1 if not.
+    int hwid;
+
     struct cache_info cache[3]; ///! Cache info from OS
     uint8_t family;         ///! CPU family (usually 6)
     uint8_t stepping;       ///! CPU stepping
