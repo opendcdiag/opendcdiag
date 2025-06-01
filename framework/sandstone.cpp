@@ -1313,11 +1313,11 @@ static void dump_cpu_info()
     printf("Detected CPU: %s; family-model-stepping (hex): %02x-%02x-%02x; CPU features: %s\n",
            detected, cpu_info[0].family, cpu_info[0].model, cpu_info[0].stepping,
            cpu_features_to_string(cpu_features).c_str());
-    printf("# CPU\tPkgID\tCoreID\tThrdID\tModId\tMicrocode\tPPIN\n");
+    printf("# CPU\tPkgID\tCoreID\tThrdID\tModId\tNUMAId\tMicrocode\tPPIN\n");
     for (i = 0; i < num_cpus(); ++i) {
-        printf("%d\t%d\t%d\t%d\t%d\t0x%" PRIx64, cpu_info[i].cpu_number,
+        printf("%d\t%d\t%d\t%d\t%d\t%d\t0x%" PRIx64, cpu_info[i].cpu_number,
                cpu_info[i].package_id, cpu_info[i].core_id, cpu_info[i].thread_id,
-               cpu_info[i].module_id, cpu_info[i].microcode);
+               cpu_info[i].module_id, cpu_info[i].numa_id, cpu_info[i].microcode);
         if (cpu_info[i].ppin)
             printf("\t%016" PRIx64, cpu_info[i].ppin);
         puts("");

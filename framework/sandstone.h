@@ -377,6 +377,8 @@ struct cpu_info {
     int16_t module_id;
     /// Tile ID inside of a package, -1 if not known. May combine with the die ID.
     int16_t tile_id;
+    /// NUMA node ID in the system, -1 if not known.
+    int16_t numa_id;
     /// Package ID in the system, -1 if not known.
     int16_t package_id;
 
