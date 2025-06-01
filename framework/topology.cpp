@@ -13,6 +13,7 @@
 #include <utility>
 
 #include <assert.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <sys/types.h>
@@ -305,6 +306,111 @@ static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
     return true;
 }
 
+static bool fill_numa()
+{
+    auto parse_cpulist_range = [](const char *&ptr) {
+        // parses one range (which can be a single number) and advances ptr to
+        // the next range
+        // see https://codebrowser.dev/linux/linux/lib/vsprintf.c.html#bitmap_list_string
+        struct { int start, stop; } r;
+        assert(*ptr);
+
+        char *endptr;
+        r.start = strtol(ptr, &endptr, 10);
+        assert(endptr > ptr);
+
+        if (*endptr == '-') {
+            // it's a range
+            r.stop = strtol(endptr + 1, &endptr, 10);
+        } else {
+            // it was a single number
+            r.stop = r.start;
+        }
+        if (*endptr == ',')
+            ++endptr;   // there's more
+        ptr = endptr;
+        return r;
+    };
+
+    int dfd = open("/sys/devices/system/node", O_RDONLY | O_DIRECTORY);
+    if (dfd < 0)
+        return false;
+
+    // fdopendir takes ownership and will close dfd for us
+    DIR *dir = fdopendir(dfd);
+    if (!dir) [[unlikely]] {
+        close(dfd);
+        return false;
+    }
+
+    std::string cpulist;
+    if (!cpulist.capacity())
+        cpulist.reserve(16);
+    while (struct dirent *entry = readdir(dir)) {
+        std::string_view name(entry->d_name);
+        if (!name.starts_with("node"))
+            continue;
+        name.remove_prefix(strlen("node"));
+
+        char *endptr;
+        long id = strtol(name.data(), &endptr, 10);
+        if (endptr != name.end())
+            continue;   // maybe something else starting with "node" ("node_list" ?)
+
+        auto_fd listfd = { openat(dfd, (std::string(entry->d_name) + "/cpulist").c_str(),
+                                  O_RDONLY | O_CLOEXEC) };
+        if (listfd < 0)
+            continue;
+
+        cpulist.resize(cpulist.capacity());
+        while (true) {
+            ssize_t n = pread(listfd, &cpulist[0], cpulist.size(), 0);
+            if (n <= 0) [[unlikely]]
+                return false;
+
+            if (cpulist[n - 1] == '\n') {
+                // it fit
+                cpulist.resize(n - 1);
+                break;
+            }
+
+            // need more space
+            cpulist.resize(cpulist.capacity() * 4);
+        }
+
+        // Parse the list. This will *usually* be one or two ranges.
+        struct cpu_info *cpu = &cpu_info[0];
+        struct cpu_info *const end = cpu_info + sApp->thread_count;
+        const char *ptr = cpulist.c_str();
+        while (*ptr && cpu != end) {
+            auto [start, stop] = parse_cpulist_range(ptr);
+
+            // Find the starting CPU.
+            // At this point, the cpu_info array is sorted by cpu_number and,
+            // if we're running over the entire system, the array index
+            // matches the cpu_number too.
+            if (start < sApp->thread_count && cpu_info[start].cpu_number == start) {
+                cpu = &cpu_info[start];
+            } else {
+                // no such luck, scan forward from the last cpu we marked
+                for ( ; cpu < end; ++cpu) {
+                    if (cpu->cpu_number >= stop)
+                        cpu = end;  // we're past the end already
+                    else if (cpu->cpu_number >= start)
+                        break;
+                }
+            }
+
+            // Mark the range until stop
+            for ( ; cpu < end && cpu->cpu_number <= stop; ++cpu)
+                cpu->numa_id = id;
+        }
+    }
+
+    closedir(dir);
+    return true;
+}
+
 static bool fill_topo_sysfs(struct cpu_info *info)
 {
     FILE *f;
@@ -374,25 +480,34 @@ struct CACHE_RELATIONSHIP_2 {
     };
 };
 
-static bool fill_topo_sysfs(struct cpu_info *info)
-{
-    if (info != &cpu_info[0])
-        return info->core_id != -1; // we only need to run once
+// Likewise (missing GroupCount and GroupMasks)
+struct NUMA_NODE_RELATIONSHIP_2 {
+  DWORD NodeNumber;
+  BYTE  Reserved[18];
+  WORD  GroupCount;
+  union {
+    GROUP_AFFINITY GroupMask;
+    GROUP_AFFINITY GroupMasks[ANYSIZE_ARRAY];
+  } DUMMYUNIONNAME;
+};
 
+static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
+{
     DWORD length = 0;
-    GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);
+    GetLogicalProcessorInformationEx(relationships, nullptr, &length);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
         return false;
 
     auto buffer = std::make_unique<unsigned char[]>(length);
     auto lpi = new (buffer.get()) SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX;
 
-    if (!GetLogicalProcessorInformationEx(RelationAll, lpi, &length))
+    if (!GetLogicalProcessorInformationEx(relationships, lpi, &length))
         return false;
 
     static constexpr unsigned CpusPerGroup =
             std::numeric_limits<KAFFINITY>::digits;
 
+    struct cpu_info *const info = cpu_info;
     std::span infos(info, info + num_cpus());
     auto first_cpu_for_group = [infos](unsigned group) -> struct cpu_info * {
         for (struct cpu_info &info : infos) {
@@ -482,6 +597,18 @@ static bool fill_topo_sysfs(struct cpu_info *info)
                                      info->cache[level].cache_data = cache.CacheSize;
                              }
                 );
+            break;
+        }
+
+        case RelationNumaNodeEx: {
+            // this only works for Windows 20H2 or later, otherwise GroupCount = 0
+            auto &numa = *reinterpret_cast<NUMA_NODE_RELATIONSHIP_2 *>(&lpi->NumaNode);
+            for_each_proc_in(numa.GroupCount, numa.GroupMasks,
+                             [&](struct cpu_info *info) {
+                                 info->numa_id = numa.NodeNumber;
+                             }
+                );
+            break;
         }
 
         default:
@@ -500,8 +627,28 @@ static bool fill_topo_sysfs(struct cpu_info *info)
     }
     return true;
 }
+
+static bool fill_topo_sysfs(struct cpu_info *info)
+{
+    if (info != &cpu_info[0])
+        return info->core_id != -1; // we only need to run once
+
+    return detect_topology_via_os(RelationAll);
+}
+
+static void fill_numa()
+{
+    if (cpu_info[0].numa_id >= 0)
+        return;         // already filled in above
+
+    detect_topology_via_os(RelationNumaNodeEx);
+}
 #else /* __linux__ */
 static auto fill_topo_sysfs = nullptr;
+static void fill_numa()
+{
+    // unimplemented
+}
 #endif /* __linux__ */
 
 #ifdef __x86_64__
@@ -1063,6 +1210,7 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         auto info = cpu_info + i;
         info->cpu_number = curr_cpu;
         info->package_id = -1;
+        info->numa_id = -1;
         info->tile_id = -1;
         info->module_id = -1;
         info->core_id = -1;
@@ -1092,6 +1240,8 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     pthread_t detection_thread;
     pthread_create(&detection_thread, nullptr, detect, const_cast<LogicalProcessorSet *>(&enabled_cpus));
     pthread_join(detection_thread, nullptr);
+
+    fill_numa();
 }
 
 static Topology build_topology()
