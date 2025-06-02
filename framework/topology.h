@@ -30,9 +30,22 @@ public:
     struct Core {
         std::span<const Thread> threads;
     };
+    struct Module {
+        std::span<const Thread> threads;
+    };
 
-    struct Package {
+    struct CoreGrouping {
         std::vector<Core> cores;
+        // std::vector<Module> modules;
+    };
+
+    struct NumaNode : CoreGrouping {
+        int id() const
+        { return cores.size() ? cores.front().threads.front().numa_id : -1; }
+    };
+
+    struct Package : CoreGrouping {
+        std::vector<NumaNode> numa_domains;
         int id() const
         { return cores.size() ? cores.front().threads.front().package_id : -1; }
     };

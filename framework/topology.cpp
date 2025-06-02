@@ -1252,6 +1252,27 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     fill_numa();
 }
 
+static void populate_core_group(Topology::CoreGrouping *group, const Topology::Thread *begin,
+                                const Topology::Thread *end)
+{
+    // fill in the threads
+    auto fill_in_threads = [&](auto &where, auto what) {
+        const Topology::Thread *first = begin;
+        const Topology::Thread *last = first;
+        for ( ; last != end; ++last) {
+            if (last->*what == first->*what)
+                continue;
+            where.push_back({ { first, last } });
+            first = last;
+        }
+        // add any remainders
+        where.push_back({ { first, end } });
+    };
+
+    fill_in_threads(group->cores, &Topology::Thread::core_id);
+    // fill_in_threads(group->modules, &Topology::Thread::module_id);
+}
+
 static Topology build_topology()
 {
     struct cpu_info *info = cpu_info;
@@ -1271,6 +1292,7 @@ static Topology build_topology()
 
         // scan forward to the end of this package
         Topology::Thread *first = info;
+        Topology::Thread *numafirst = info;
         int core_count = 0;
         for (int last_core_id = -1; info != end; ++info) {
             if (info->core_id < 0 || info->thread_id < 0)
@@ -1281,18 +1303,23 @@ static Topology build_topology()
                 ++core_count;
                 last_core_id = info->core_id;
             }
+            if (info->numa_id != numafirst->numa_id) {
+                // start of a new NUMA node inside of this Package
+                populate_core_group(&pkg->numa_domains.emplace_back(), numafirst, info);
+                numafirst = info;
+            }
         }
 
+        // populate the full core
         pkg->cores.reserve(core_count + 1);
+        populate_core_group(pkg, first, info);
 
-        // fill in the threads
-        for (Topology::Thread *last = first; last != info; ++last) {
-            if (last->core_id == first->core_id)
-                continue;
-            pkg->cores.push_back({ { first, last } });
-            first = last;
-        }
-        pkg->cores.push_back({ { first, info } });
+        // populate the last NUMA node, which may be the only one too
+        Topology::NumaNode *numa = &pkg->numa_domains.emplace_back();
+        if (pkg->numa_domains.size() == 1)
+            numa->CoreGrouping::operator=(*pkg);    // just copy the Package
+        else
+            populate_core_group(numa, numafirst, info);
     }
 
     return Topology(std::move(packages));
