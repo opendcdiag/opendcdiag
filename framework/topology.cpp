@@ -161,11 +161,15 @@ static linux_cpu_info &proc_cpuinfo()
 
 static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2)
 {
+    static_assert(offsetof(struct cpu_info, numa_id) + 2 == offsetof(struct cpu_info, package_id));
+    static_assert(offsetof(struct cpu_info, tile_id) + 4 == offsetof(struct cpu_info, package_id));
+    static_assert(offsetof(struct cpu_info, module_id) + 6 == offsetof(struct cpu_info, package_id));
+    static_assert(offsetof(struct cpu_info, thread_id) + 2 == offsetof(struct cpu_info, core_id));
+    static_assert(offsetof(struct cpu_info, cpu_number) + 6 == offsetof(struct cpu_info, core_id));
     static auto cpu_tuple = [](const struct cpu_info &c) {
-        uint64_t h = (uint64_t(c.package_id) << 32) +
-                unsigned(c.core_id);
-        uint64_t l = ((uint64_t(c.thread_id)) << 32) +
-                unsigned(c.cpu_number);
+        uint64_t h, l;
+        memcpy(&h, &c.module_id, sizeof(h));
+        memcpy(&l, &c.cpu_number, sizeof(l));
         return std::make_tuple(h, l);
     };
 
