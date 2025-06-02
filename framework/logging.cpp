@@ -2147,8 +2147,9 @@ std::string YamlLogger::thread_id_header(int cpu, int verbosity)
 #else
     line = stdprintf("{ logical: %*d, ", thread_core_spacing().logical, info->cpu_number);
 #endif
-    line += stdprintf("package: %d, core: %*d, thread: %d",
-                     info->package_id, thread_core_spacing().core, info->core_id, info->thread_id);
+    line += stdprintf("package: %d, numa_node: %d, module: %*d, core: %*d, thread: %d",
+                      info->package_id, info->numa_id, thread_core_spacing().core, info->module_id,
+                      thread_core_spacing().core, info->core_id, info->thread_id);
     if (verbosity > 1) {
         auto add_value_or_null = [&line](const char *fmt, uint64_t value) {
             if (value)
@@ -2526,16 +2527,10 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                    format_duration(test_timeout, FormatDurationOptions::WithoutUnit).c_str());
 
     // print the CPU information
-    int spacing = 1;
-    if (num_cpus() > 9) {
-        ++spacing;
-        if (num_cpus() > 99)
-            ++spacing;
-    }
     logging_printf(LOG_LEVEL_VERBOSE(1), "cpu-info:\n");
     for (int i = 0; i < num_cpus(); ++i) {
-        logging_printf(LOG_LEVEL_VERBOSE(1), "  %-*d: %s\n", spacing, i,
-                       thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str());
+        logging_printf(LOG_LEVEL_VERBOSE(1), "- %s   # %d\n",
+                       thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
     }
 
     auto make_plan_string = [](const std::vector<CpuRange> &plan) {
