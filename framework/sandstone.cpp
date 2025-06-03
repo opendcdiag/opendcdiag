@@ -2793,7 +2793,7 @@ skip_wait:
     return true;
 }
 
-extern constexpr const uint64_t minimum_cpu_features = _compilerCpuFeatures;
+extern constexpr const cpu_feature_t minimum_cpu_features = _compilerCpuFeatures;
 int main(int argc, char **argv)
 {
     // initialize the main application
