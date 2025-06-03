@@ -110,7 +110,7 @@ using namespace std::chrono_literals;
 char *program_invocation_name;
 #endif
 
-uint64_t cpu_features;
+cpu_features_t cpu_features;
 static const struct test *current_test = nullptr;
 #ifdef __llvm__
 thread_local int thread_num __attribute__((tls_model("initial-exec")));
@@ -1256,7 +1256,7 @@ __attribute__((weak, noclone, noinline)) int print_application_footer(int exit_c
     return exit_code;
 }
 
-static std::string cpu_features_to_string(uint64_t f)
+static std::string cpu_features_to_string(cpu_features_t f)
 {
     std::string result;
     const char *comma = "";
@@ -1956,7 +1956,7 @@ static TestResult run_one_test_once(const struct test *test)
     ChildrenList children;
 
     sApp->current_test_count++;
-    if (uint64_t missing = (test->minimum_cpu | test->compiler_minimum_cpu) & ~cpu_features) {
+    if (cpu_features_t missing = (test->minimum_cpu | test->compiler_minimum_cpu) & ~cpu_features) {
         init_per_thread_data();
 
         // for brevity, don't report the bits that the framework itself needs
@@ -2299,7 +2299,7 @@ static void list_tests(const ProgramOptions& opts)
                     printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
                 } else if (sApp->shmem->verbosity > 0) {
                     // don't report the FW minimum CPU features
-                    uint64_t cpuf = test->compiler_minimum_cpu & ~_compilerCpuFeatures;
+                    cpu_features_t cpuf = test->compiler_minimum_cpu & ~_compilerCpuFeatures;
                     cpuf |= test->minimum_cpu;
                     printf("%-20s %s\n", test->id, cpu_features_to_string(cpuf).c_str());
                 } else {
@@ -2770,7 +2770,7 @@ skip_wait:
     return true;
 }
 
-extern constexpr const uint64_t minimum_cpu_features = _compilerCpuFeatures;
+extern constexpr const cpu_features_t minimum_cpu_features = _compilerCpuFeatures;
 int main(int argc, char **argv)
 {
     // initialize the main application

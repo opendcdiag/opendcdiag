@@ -111,16 +111,16 @@ static uint64_t adjusted_xcr0(uint64_t xcr0, uint64_t xcr0_wanted)
 }
 #endif
 
-static uint64_t parse_register(enum X86CpuidLeaves leaf, uint32_t reg)
+static cpu_features_t parse_register(enum X86CpuidLeaves leaf, uint32_t reg)
 {
     size_t i;
-    uint64_t features = 0;
+    cpu_features_t features = 0;
     for (i = 0; i < x86_locator_count; ++i) {
         uint32_t locator = x86_locators[i];
         if (locator < leaf * 32 || locator >= (leaf + 1) * 32)
             continue;
         if (reg & (1U << (locator % 32)))
-            features |= UINT64_C(1) << i;
+            features |= CPU_FEATURE_CONSTANT(i);
     }
     return features;
 };
@@ -139,11 +139,11 @@ static void detect_cpu_not_supported(const char *msg)
 }
 
 __attribute__((noinline))
-static uint64_t detect_cpu()
+static cpu_features_t detect_cpu()
 {
     uint32_t eax, ebx, ecx, edx;
     uint32_t max_level = 0;
-    uint64_t features = 0;
+    cpu_features_t features = 0;
 
     __cpuid(0, max_level, ebx, ecx, edx);
 
@@ -217,9 +217,9 @@ static uint64_t detect_cpu()
 }
 
 __attribute__((unused))
-static void check_missing_features(uint64_t features, uint64_t minimum_cpu_features)
+static void check_missing_features(cpu_features_t features, cpu_features_t minimum_cpu_features)
 {
-    uint64_t missing = minimum_cpu_features & ~features;
+    cpu_features_t missing = minimum_cpu_features & ~features;
     if (!missing)
         return;
 
@@ -237,12 +237,12 @@ static void check_missing_features(uint64_t features, uint64_t minimum_cpu_featu
 #undef cpuid_errmsg
 
 #else // ! x86-64
-static uint64_t detect_cpu()
+static cpu_features_t detect_cpu()
 {
     return 0;
 }
 
-static void check_missing_features(uint64_t features, uint64_t minimum_cpu_features)
+static void check_missing_features(cpu_features_t features, cpu_features_t minimum_cpu_features)
 {
     (void) features;
     (void) minimum_cpu_features;
