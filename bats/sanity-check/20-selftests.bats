@@ -680,6 +680,31 @@ selftest_log_skip_init_socket_common() {
     done
 }
 
+@test "selftest_timedpass_no_fracture --max-test-loop-count=1" {
+    # With just one loop, this should have very predictable timing
+    declare -A yamldump
+    sandstone_selftest -e selftest_timedpass_no_fracture --max-test-loop-count=1 -vvv
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/result" pass
+
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        test_yaml_numeric "/tests/0/threads/$i/loop-count" 'value == 1'
+    done
+}
+
+@test "selftest_timedpass_no_fracture -t 250" {
+    # With just one loop, this should have very predictable timing
+    declare -A yamldump
+    sandstone_selftest -e selftest_timedpass_no_fracture -t 250 -vvv
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/result" pass
+    test_yaml_numeric "/tests/0/test-runtime" 'value >= 250'
+
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        test_yaml_numeric "/tests/0/threads/$i/loop-count" 'value > 1'
+    done
+}
+
 @test "selftest_logs" {
     # Run the test twice to ensure one run doesn't clobber the next
     declare -A yamldump
