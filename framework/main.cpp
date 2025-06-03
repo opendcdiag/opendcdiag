@@ -23,7 +23,7 @@
 #include "cpuid_internal.h"
 
 // from sandstone.cpp
-extern const uint64_t minimum_cpu_features;
+extern const cpu_features_t minimum_cpu_features;
 
 #if defined(AT_EXECPATH) && !defined(AT_EXECFN)
 // FreeBSD uses AT_EXECPATH instead of AT_EXECFN

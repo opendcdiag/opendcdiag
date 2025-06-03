@@ -15,6 +15,7 @@ my %leaves = (
     Leaf07_01EAX        => "CPUID Leaf 7, Sub-leaf 1, EAX",
     Leaf07_01EDX        => "CPUID Leaf 7, Sub-leaf 1, EDX",
     Leaf13_01EAX        => "CPUID Leaf 13, Sub-leaf 1, EAX",
+    Leaf1E_01EAX        => "CPUID Leaf 1e, Sub-leaf 1, EAX",
     Leaf80000001hECX    => "CPUID Leaf 80000001h, ECX",
     Leaf80000008hEBX    => "CPUID Leaf 80000008h, EBX",
 );
@@ -31,6 +32,7 @@ open(FH, '<', $input_conf_file) or die $!;
 my $i = 0;
 my @features;
 my %feature_ids;
+my $feature_type = "uint64_t";
 my @architecture_names;
 my %architectures;
 my @xsaveStates;
@@ -98,7 +100,9 @@ while (<FH>) {
         { name => $name, depends => $depends, id => $id, bit => $bit, leaf => $function, comment => $comment };
         $feature_ids{$name} = $i;
         ++$i;
-        die("Too many features to fit a 64-bit integer") if $i > 64;
+
+        die("Too many features to fit a 128-bit integer") if $i > 128;
+        $feature_type = "unsigned __int128" if $i > 64;
     }
 }
 close FH;
@@ -121,6 +125,9 @@ if ($headername = shift @ARGV) {
     $debug = 1;
 }
 
+printf "typedef %s cpu_features_t;\n", $feature_type;
+printf "#define CPU_FEATURE_CONSTANT(bit) (((cpu_features_t) 1) << (bit))\n\n";
+
 # Print the feature list
 my $lastleaf;
 for (my $i = 0; $i < scalar @features; ++$i) {
@@ -131,7 +138,7 @@ for (my $i = 0; $i < scalar @features; ++$i) {
     $lastleaf = $feature->{leaf};
 
     # Feature
-    printf "#define cpu_feature_%-31s (UINT64_C(1) << %d)\n", lc($feature->{id}), $i;
+    printf "#define cpu_feature_%-31s (CPU_FEATURE_CONSTANT(%d))\n", lc($feature->{id}), $i;
 }
 
 # Print the architecture list
@@ -188,7 +195,7 @@ for (@architecture_names) {
 }
 
 print q{
-static const uint64_t _compilerCpuFeatures = 0};
+static const cpu_features_t _compilerCpuFeatures = 0};
 
 # And print the compiler-enabled features part:
 for (my $i = 0; $i < scalar @features; ++$i) {
@@ -204,7 +211,7 @@ print '        ;';
 if ($headerguard ne "") {
     print q|
 #if (defined __cplusplus) && __cplusplus >= 201103L
-enum X86CpuFeatures : uint64_t {|;
+enum X86CpuFeatures : cpu_features_t {|;
 
     for (@features) {
         my $line = sprintf "CpuFeature%s = cpu_feature_%s,", $_->{id}, lc($_->{id});
@@ -217,7 +224,7 @@ enum X86CpuFeatures : uint64_t {|;
 
 print qq|}; // enum X86CpuFeatures
 
-enum X86CpuArchitectures : uint64_t {|;
+enum X86CpuArchitectures : cpu_features_t {|;
 
     for (@architecture_names) {
         my $arch = $architectures{$_};
@@ -281,7 +288,7 @@ for (@architecture_names) {
 print qq|
 struct X86Architecture
 {
-    uint64_t features;
+    cpu_features_t features;
     char name[$maxarchnamelen + 1];
 };
 
@@ -316,7 +323,7 @@ for my $state (@xsaveStates) {
     my @required_for = split /,/, $state->{required_for};
     next unless scalar @required_for;
 
-    my $prefix = sprintf "\n// List of features requiring %s%s\nstatic const uint64_t %s%s = 0",
+    my $prefix = sprintf "\n// List of features requiring %s%s\nstatic const cpu_features_t %s%s = 0",
         $xsaveEnumPrefix, $state->{id}, $xsaveReqPrefix, $state->{id};
 
     # match either the feature name or one of its requirements against list
@@ -345,8 +352,8 @@ for my $state (@xsaveStates) {
 printf qq|
 struct XSaveRequirementMapping
 {
-    uint64_t cpu_features;
-    uint64_t xsave_state;
+    cpu_features_t cpu_features;
+    cpu_features_t xsave_state;
 };
 
 static const struct XSaveRequirementMapping xsave_requirements[] = {
