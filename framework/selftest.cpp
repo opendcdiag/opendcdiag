@@ -1302,6 +1302,15 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_timedpass_no_fracture",
+    .description = "Runs for the requested time, but doesn't fracture",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
+    .test_run = selftest_timedpass_run<10'000>,
+    .desired_duration = 200,
+    .fracture_loop_count = -1,          /* don't fracture */
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_uses_too_much_mem",
     .description = "Allocates and uses too much memory",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
