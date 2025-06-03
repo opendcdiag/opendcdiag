@@ -105,6 +105,8 @@ static uint8_t progress_bar_needs_flush = false;
 
 static constexpr auto UsedKnobValueLoggingLevel = LOG_LEVEL_VERBOSE(1);
 
+static std::mutex immediate_message_mutex{};
+
 namespace {
 enum LogTypes {
     UserMessages = 0,
@@ -1180,6 +1182,134 @@ void log_message(int thread_num, const char *fmt, ...)
     std::string msg = create_filtered_message_string(fmt, va);
     va_end(va);
     log_message_preformatted(thread_num, msg);
+}
+
+struct pts_stream_def {
+    FILE* file;
+    const char *filename;
+    int descriptor;
+};
+
+static struct pts_stream_def pts_get_stream(int thread_id)
+{
+    // Parse (the list) of output files for CPUs
+    // TODO handling the list of cpu:file for particular cpus
+    UNUSED_ARGS(thread_id);
+
+    static struct pts_stream_def shared = { .file = nullptr, .filename = nullptr, .descriptor = -1 };
+    if (shared.filename == nullptr) {
+        shared.filename = (sApp->pts_arg) ? sApp->pts_arg->c_str() : getenv("PTS");
+        if (shared.filename == nullptr) {
+            shared.filename = "";
+        }
+        // check if descriptor is passed
+        if (*shared.filename) {
+            char *endptr = nullptr;
+            shared.descriptor = strtol(shared.filename, &endptr, 10);
+            if ((endptr != nullptr) && (*endptr != '\0')) {
+                shared.descriptor = -1;
+            }
+        }
+        // open the file for the messages
+        if (shared.descriptor >= 0) {
+            shared.file = fdopen(shared.descriptor, "a");
+            if (shared.file == nullptr) {
+                fprintf(stderr, "pts:: fdopen(%d) failed: %s\n", shared.descriptor, strerror(errno));
+            }
+        } else if (*shared.filename) {
+            shared.file = fopen(shared.filename, "a");
+            if (shared.file == nullptr) {
+                fprintf(stderr, "pts:: fopen(%s) failed: %s\n", shared.filename, strerror(errno));
+            }
+        } else {
+            shared.file = nullptr;
+        }
+    }
+    return { shared.file, *shared.filename ? shared.filename : nullptr, shared.descriptor };
+}
+
+void pts_log_message(int thread_id, const char *fmt, ...)
+{
+    std::lock_guard<std::mutex> lock(immediate_message_mutex);
+    struct pts_stream_def s = pts_get_stream(thread_id);
+    if (s.file) {
+        va_list args;
+        va_start(args, fmt);
+        vfprintf(s.file, fmt, args);
+        va_end(args);
+        if (fmt[strlen(fmt) - 1] != '\n') {
+            fprintf(s.file, "\n");
+        }
+        fflush(s.file);
+    }
+}
+
+void pts_log_jit_code(const char* msg, const void* ptr, size_t size)
+{
+    std::lock_guard<std::mutex> lock(immediate_message_mutex);
+    struct pts_stream_def s = pts_get_stream(thread_num);
+    if (!s.file) {
+        // short-circuit
+        return;
+    }
+
+    // get the script path
+    static const char* cmd = nullptr;
+    if (cmd == nullptr) {
+        if (getenv("PRINT_ASM") != nullptr) {
+            cmd = getenv("PRINT_ASM");
+        } else {
+            cmd = "print_asm.sh";
+        }
+    }
+    // log the message
+    fprintf(s.file, "%s (%" PRIx64 "+%" PRId64 ", cpu %d):\n", msg, (uintptr_t) ptr, size, thread_num);
+    // try to run the script
+    if (*cmd) {
+        // {cmd} {address}: {bytes} 1>&{descriptor/filename}
+        char buf[strlen(cmd) + 1 + 16 + 2 + size * 3 + 4 + strlen(s.filename) + 1];
+        sprintf(buf, "%s %" PRIx64 ": ", cmd, (uintptr_t) ptr);
+        print_hex_bytes_to_buffer(ptr, size, buf + strlen(buf), 0);
+        if (s.descriptor >= 0) {
+            sprintf(buf + strlen(buf), " 1>&%d", s.descriptor);
+        } else {
+            sprintf(buf + strlen(buf), " 1>%s", s.filename);
+        }
+        int ret = system(buf);
+        if (ret == 0) {
+            fflush(s.file);
+            return;
+        }
+        fprintf(s.file, "Cannot print the assembly out: '%s' reported %x\n", cmd, ret);
+        // don't try to execute the command again
+        cmd = "";
+    }
+    // just log the bytes
+    {
+        char buf[size * 3];
+        fprintf(s.file, "%s\n", print_hex_bytes_to_buffer(ptr, size, buf, 32));
+        fflush(s.file);
+    }
+}
+
+const char* print_hex_bytes_to_buffer(const void* ptr, size_t size, char* buf, size_t bytes_in_a_row)
+{
+    if (size == 0) {
+        *buf = '\0';
+        return buf;
+    }
+    const char* pbuf = buf;
+    size_t out = 0;
+    uint8_t* p = (uint8_t*) ptr;
+    do {
+        out++;
+        sprintf(buf, "%02x%c", *p++, (bytes_in_a_row > 0) && (out % bytes_in_a_row == 0) ? '\n' : ' ');
+        size--;
+        buf += 3;
+    } while (size != 0);
+    // cut off the last space
+    *(buf - 1) = '\0';
+    return pbuf;
 }
 
 /// Escapes \c{message} suitable for a single-quote YAML line and returns it.

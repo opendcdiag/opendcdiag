@@ -87,6 +87,7 @@ enum {
     vary_uncore_frequency,
     version_option,
     weighted_testrun_option,
+    pts_option,
 };
 
 void suggest_help(char **argv) {
@@ -525,6 +526,7 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
         { "verbose", no_argument, nullptr, 'v' },
         { "version", no_argument, nullptr, version_option },
         { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
+        { "pts", required_argument, nullptr, pts_option },
         { "yaml", optional_argument, nullptr, 'Y' },
 
 #if defined(__SANITIZE_ADDRESS__)
@@ -916,6 +918,10 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
                 app->max_test_loop_count = ParseIntArgument<>{"--max-test-loop-count"}();
                 if (app->max_test_loop_count == 0)
                         app->max_test_loop_count = std::numeric_limits<int>::max();
+                break;
+
+            case pts_option:
+                sApp->pts_arg = std::make_unique<std::string>(optarg);
                 break;
 
                 /* deprecated options */

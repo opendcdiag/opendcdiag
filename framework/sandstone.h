@@ -65,21 +65,29 @@ extern "C" {
 
 /// logs a formatted error message to the logfile.  log_error accepts a constant format string
 /// followed by 0 or more arguments that provide data for the format string.
+#ifndef log_error
 #define log_error(...)          log_message(thread_num, SANDSTONE_LOG_ERROR __VA_ARGS__)
+#endif
 /// logs a formatted warning message to the logfile.  log_warning accepts a constant format string
 /// followed by 0 or more arguments that provide data for the format string.
+#ifndef log_warning
 #define log_warning(...)        log_message(thread_num, SANDSTONE_LOG_WARNING __VA_ARGS__)
+#endif
 /// logs a formatted info message to the logfile.  log_info accepts a constant format string
 /// followed by 0 or more arguments that provide data for the format string.
+#ifndef log_info
 #define log_info(...)           log_message(thread_num, SANDSTONE_LOG_INFO __VA_ARGS__)
+#endif
 /// logs a formatted debug message to the logfile.  log_debug accepts a constant format string
 /// followed by 0 or more arguments that provide data for the format string.  The message
 /// is only logged in debug builds.  This macro has no effect in release builds and generates
 /// no code.
+#ifndef log_debug
 #ifndef NDEBUG
-#  define log_debug(...)        log_message(thread_num, SANDSTONE_LOG_DEBUG __VA_ARGS__)
+#define log_debug(...)          log_message(thread_num, SANDSTONE_LOG_DEBUG __VA_ARGS__)
 #else
-#  define log_debug( ...)       (void)0
+#define log_debug(...)          do { if (0) { fprintf((FILE*) -1, "" __VA_ARGS__); } } while(0)
+#endif
 #endif
 
 // skip categories
@@ -113,7 +121,9 @@ typedef enum TestQuality {
 /// logs a skip message to the logfile. log_skip accepts the category to which the skip belongs to
 /// and accepts a constant format string followed by 0 or more arguments that provide data for the
 /// format string.
+#ifndef log_skip
 #define log_skip(skip_category, ...)          log_message_skip(thread_num, skip_category, __VA_ARGS__)
+#endif
 
 /// used to determine whether one or more CPU features are available at runtime.  f is a bitmask
 /// of cpu features as defined in the auto-generated cpu_features.h file.  For example, a test
@@ -560,8 +570,42 @@ bool test_is_retry() noexcept __attribute__((pure));
 /// rather than a problem with the CPU.  Examples, of such errors include
 /// failures to allocate memory or create a file.
 extern void log_platform_message(const char *msg, ...) ATTRIBUTE_PRINTF(1, 2);
+
 extern void log_message(int thread_num, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
 extern void log_message_skip(int thread_num, SkipCategory c, const char *msg, ...) ATTRIBUTE_PRINTF(3, 4);
+
+/// @brief Append a message to output file or stream descriptor.
+/// Messages are printed out imediately when they are requested (are not buffered).
+/// `PTS` environment variable and `--pts` option might be used to select the output.
+/// @warning This is debug function, should not be used in production code, it should
+/// be used with `log_debug` macro (e.g. defined in `build-options.sh` file):
+/// `CFLAGS="-Dlog_debug=PTSLOG"`
+void pts_log_message(int thread_num, const char *fmt, ...) ATTRIBUTE_PRINTF(2, 3);
+
+/// Simple wrapper for log_xxx() to log immediately on assinged PTS/console/file/descriptor.
+/// @see pts_log_message()
+#ifndef PTSLOG
+#define PTSLOG(fmt, ...)        pts_log_message(thread_num, "" fmt, ##__VA_ARGS__)
+#endif
+
+/// @brief Append a code (assembly) to output file or stream descriptor.
+/// Script `print_asm.sh` (or any other given with PRINT_ASM environment variable)
+/// is used to convert the binary code to human readable format.
+/// @warning This is debug function, should not be used in production code, it should
+/// be used with `log_jit_code` macro (e.g. defined in `build-options.sh` file):
+/// `CFLAGS="-Dlog_jit_code=pts_log_jit_code"`
+void pts_log_jit_code(const char* msg, const void* ptr, size_t size);
+
+/// Simple wrapper to log binary data (with JITed code block assumed)
+#ifndef log_jit_code
+#define log_jit_code(msg, ptr, size) log_data(msg, ptr, size)
+#endif
+
+/// @brief Prints out the bytes from \c{ptr} to \c{buf} in hex format.
+/// The output is formatted as a series of hex bytes, separated by spaces and newlines.
+/// Appropriate buffer must be available (in the context of size, at least \c{size * 3}).
+const char* print_hex_bytes_to_buffer(const void* ptr, size_t size, char* buf, size_t bytes_in_a_row);
+
 /// logs binary data to the logs.  The data is specified in the data
 /// parameter and the size of the data in bytes in the size parameter.
 /// The message parameter provides a description of the data which
