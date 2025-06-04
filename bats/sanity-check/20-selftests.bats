@@ -291,11 +291,14 @@ tap_negative_check() {
     test_yaml_regexp "/command-line" ".* $args"
     test_yaml_regexp "/version" '.*'
 
-    local os=`uname -sr`
-    if [[ "$SANDSTONE" = "wine "* ]] || [[ "$os" = MINGW* ]]; then
-        os=`wine cmd /c ver | sed -n "s/\r$//;s/.*Windows /Windows v/p"`
+    if $is_windows; then
+        test_yaml_regexp "/os" 'Windows (Server )?v[0-9.]+'
+        test_yaml_regexp "/runtime" 'MSVCRT|UCRT'
+    else
+        test_yaml_regexp "/os" "`uname -s` .*"
+        [[ "${yamldump[/os]}" = "`uname -sr`" ]]    # exact match
+        test_yaml_regexp "/runtime" '.*'            # free form, but must exist
     fi
-    [[ "${yamldump[/os]}" = "$os"* ]]
     test_yaml_regexp "/openssl" "{'version':.*|None"
     test_yaml_numeric "/timing/duration" 'value == 1234'
     test_yaml_numeric "/timing/timeout" 'value == 12345'
