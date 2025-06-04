@@ -216,7 +216,7 @@ default_cpp_warn = [
 # Subdirs can add target dependencies if they wish
 target_deps = []
 
-boost_dep = dependency('boost', version : '>=1.69', required : false)
+boost_dep = dependency('boost', version : '>=1.69', required : false, include_type : 'system')
 # Check for required headers
 # (Also accomodates distributions which do not package a pkg-config file for boost)
 boost_has_hdrs = \
