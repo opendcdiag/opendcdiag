@@ -306,6 +306,8 @@ tap_negative_check() {
         fi
         test_yaml_numeric "/cpu-info/$i/logical" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/package" 'value >= 0'
+        test_yaml_numeric "/cpu-info/$i/numa_node" 'value >= -1'
+        test_yaml_numeric "/cpu-info/$i/module" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/core" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/thread" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/family" 'value >= 0'
