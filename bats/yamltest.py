@@ -45,8 +45,10 @@ def validate_thread(name, thr):
     n = thr['thread']
 
     if type(n) is int:
-        #thr['id']['logical'] # waiting on Windows
+        thr['id']['logical']
         thr['id']['package']
+        thr['id']['numa_node']
+        thr['id']['module']
         thr['id']['core']
         thr['id']['thread']
         thr['id']['family']
