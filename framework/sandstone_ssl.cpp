@@ -5,7 +5,8 @@
 
 #include "sandstone_ssl.h"
 
-#include <exception>
+#include <algorithm>
+
 #ifdef _WIN32
 #  include <windows.h>
 #else
@@ -129,3 +130,84 @@ struct alignas(void*) ElfDlopenMetadata
 static constexpr ElfDlopenMetadata elfDlopenMetadata = {};
 } // unnamed namespace
 #endif
+
+static void add_providers(std::string &info)
+{
+    if (!s_OSSL_PROVIDER_do_all) [[unlikely]]
+        return;
+
+    std::vector<OSSL_PROVIDER *> providers;
+    auto cb = [](OSSL_PROVIDER *provider, void *cbdata) {
+        static_cast<std::vector<OSSL_PROVIDER *> *>(cbdata)->push_back(provider);
+        return 1;
+    };
+    s_OSSL_PROVIDER_do_all(nullptr, cb, &providers);
+
+    char *version;
+    OSSL_PARAM params[] = {
+        s_OSSL_PARAM_utf8_ptr(OSSL_PROV_PARAM_VERSION, &version, 0),
+        OSSL_PARAM_END
+    };
+
+    std::vector<std::string> infos;
+    for (const OSSL_PROVIDER *provider : providers) {
+        std::string_view name = s_OSSL_PROVIDER_get0_name(provider);
+#ifdef NDEBUG
+        // skip uninteresting providers (we keep in debug mode so we can check
+        // the code is working)
+        if (name == "default" || name == "sandstone-rand")
+            continue;
+#endif
+
+        if (s_OSSL_PROVIDER_get_params(provider, params) && ptrdiff_t(params[0].return_size) >= 0)
+            infos.emplace_back(std::string(name) + ' ' + version);
+        else
+            infos.emplace_back(name);
+        params[0].return_size = OSSL_PARAM_UNMODIFIED;
+    }
+
+    if (infos.size() == 0)
+        return;
+
+    std::ranges::sort(infos);
+    info += ", providers: ['";
+    for (size_t i = 0; i < infos.size(); ++i) {
+        if (i)
+            info += "','";
+        info += infos[i];
+    }
+    info += "']";
+}
+
+static void add_engines(std::string &info)
+{
+    if (!s_ENGINE_get_first)
+        return;
+
+    std::vector<std::string_view> engines;
+    for (ENGINE *e = s_ENGINE_get_first(); e; e = s_ENGINE_get_next(e))
+       engines.emplace_back(s_ENGINE_get_id(e));
+
+    std::ranges::sort(engines);
+    info += ", engines: ['";
+    for (size_t i = 0; i < engines.size(); ++i) {
+        if (i)
+            info += "','";
+        info += engines[i];
+    }
+    info += "']";
+}
+
+std::string openssl_info()
+{
+    std::string result;
+    if (!s_OpenSSL_version)
+        return result;
+
+    // Start with the OpenSSL version & date
+    result = s_OpenSSL_version(0);
+    add_providers(result);
+    add_engines(result);
+
+    return result;
+}

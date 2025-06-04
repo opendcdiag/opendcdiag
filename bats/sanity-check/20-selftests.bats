@@ -296,6 +296,7 @@ tap_negative_check() {
         os=`wine cmd /c ver | sed -n "s/\r$//;s/.*Windows /Windows v/p"`
     fi
     [[ "${yamldump[/os]}" = "$os"* ]]
+    test_yaml_regexp "/openssl" "{'version':.*|None"
     test_yaml_numeric "/timing/duration" 'value == 1234'
     test_yaml_numeric "/timing/timeout" 'value == 12345'
 

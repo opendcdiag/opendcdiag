@@ -15,6 +15,7 @@
 #include <openssl/core_names.h>
 #include <openssl/crypto.h>
 #include <openssl/ec.h>
+#include <openssl/engine.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/kdf.h>
@@ -41,6 +42,8 @@
     s_OSSL_PARAM_DEFN((key), OSSL_PARAM_UNSIGNED_INTEGER, (addr), sizeof(size_t))
 # define s_OSSL_PARAM_uint(key, addr) \
     s_OSSL_PARAM_DEFN((key), OSSL_PARAM_UNSIGNED_INTEGER, (addr), sizeof(unsigned int))
+# define s_OSSL_PARAM_utf8_ptr(key, addr, sz) \
+    s_OSSL_PARAM_DEFN((key), OSSL_PARAM_UTF8_PTR, (addr), sz)
 
 #define SANDSTONE_SSL_AES_FUNCTIONS(F)          \
     F(AES_bi_ige_encrypt)                       \
@@ -557,6 +560,12 @@
     F(EC_POINT_set_affine_coordinates)          \
     F(EC_POINT_set_compressed_coordinates)      \
     F(EC_POINT_set_to_infinity)                 \
+    /**/
+
+#define SANDSTONE_SSL_ENGINE_FUNCTIONS(F)       \
+    F(ENGINE_get_first)                         \
+    F(ENGINE_get_id)                            \
+    F(ENGINE_get_next)                          \
     /**/
 
 #define SANDSTONE_SSL_HMAC_FUNCTIONS(F)         \
@@ -2144,6 +2153,9 @@
 
 #define SANDSTONE_SSL_PROVIDER_FUNCTIONS(F)     \
     F(OSSL_PROVIDER_add_builtin)                \
+    F(OSSL_PROVIDER_do_all)                     \
+    F(OSSL_PROVIDER_get0_name)                  \
+    F(OSSL_PROVIDER_get_params)                 \
     F(OSSL_PROVIDER_load)                       \
     F(OSSL_PROVIDER_try_load)                   \
     F(OSSL_PROVIDER_unload)                     \
@@ -2157,6 +2169,7 @@
     SANDSTONE_SSL_CMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_CRYPTO_FUNCTIONS(F)           \
     SANDSTONE_SSL_EC_FUNCTIONS(F)               \
+    SANDSTONE_SSL_ENGINE_FUNCTIONS(F)           \
     SANDSTONE_SSL_EVP_FUNCTIONS(F)              \
     SANDSTONE_SSL_HMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_GENERIC_FUNCTIONS(F)          \
@@ -2188,6 +2201,7 @@ extern bool OpenSSLWorking;
 
 SANDSTONE_SSL_FUNCTIONS(DECLARE_FUNCTIONS)
 void sandstone_ssl_init();
+std::string openssl_info();
 
 #undef DECLARE_FUNCTIONS
 #pragma GCC diagnostic pop

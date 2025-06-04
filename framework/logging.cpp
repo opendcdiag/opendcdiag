@@ -924,13 +924,10 @@ static std::string libc_info()
     return result;
 }
 
-#if SANDSTONE_SSL_BUILD
+#if !SANDSTONE_SSL_BUILD
 static std::string openssl_info()
 {
-    std::string result = "";
-    if (s_OpenSSL_version)
-        result = s_OpenSSL_version(0);
-    return result;
+    return {};
 }
 #endif
 
@@ -939,18 +936,14 @@ static std::string os_info()
     std::string os_info;
     std::string kernel = kernel_info();
     std::string libc = libc_info();
-#if SANDSTONE_SSL_BUILD
     std::string libssl = openssl_info();
-#endif
     if (kernel.empty())
         return "<unknown>";
     os_info = std::move(kernel);
     if (!libc.empty())
         os_info += ", " + libc;
-#if SANDSTONE_SSL_BUILD
     if (!libssl.empty())
         os_info += ", " + libssl;
-#endif
 
     return os_info;
 }
@@ -2521,7 +2514,12 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
 {
     logging_printf(LOG_LEVEL_QUIET, "command-line: '%s'\n", cmdline.data());
     logging_printf(LOG_LEVEL_QUIET, "version: %s\n", program_version);
-    logging_printf(LOG_LEVEL_VERBOSE(1), "os: %s\n", os_info().c_str());
+    logging_printf(LOG_LEVEL_VERBOSE(1), "os: %s\n", kernel_info().c_str());
+    logging_printf(LOG_LEVEL_VERBOSE(1), "runtime: %s\n", libc_info().c_str());
+    if (std::string openssl = openssl_info(); openssl.size())
+        logging_printf(LOG_LEVEL_VERBOSE(1), "openssl: { version: %s }\n", openssl.c_str());
+    else
+        logging_printf(LOG_LEVEL_VERBOSE(1), "openssl: null\n");
     logging_printf(LOG_LEVEL_VERBOSE(1), "timing: { duration: %s, timeout: %s }\n",
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str(),
                    format_duration(test_timeout, FormatDurationOptions::WithoutUnit).c_str());
