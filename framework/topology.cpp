@@ -445,7 +445,10 @@ static bool fill_topo_sysfs(struct cpu_info *info)
         // Linux calls them modules "clusters"
         IGNORE_RETVAL(fscanf(f, "%hd", &info->module_id));
         fclose(f);
-    } else {
+    }
+    if (info->module_id < 0) {
+        // Override the missing information. This is probably a VM without
+        // cache info or an architecture where Linux doesn't have cluster_id.
         info->module_id = info->core_id;
     }
 
