@@ -1178,7 +1178,7 @@ static void slice_plan_init(int max_cores_per_slice)
         }
 
         // set up proper plans
-        std::vector<CpuRange> &fullsocket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
+        std::vector<CpuRange> &isolate_socket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
         std::vector<CpuRange> &split = sApp->slice_plans.plans[SlicePlans::Heuristic];
         auto push_to = [](std::vector<CpuRange> &to, auto start, auto end) {
             int start_cpu = start[0].threads.front().cpu();
@@ -1191,10 +1191,10 @@ static void slice_plan_init(int max_cores_per_slice)
             if (p.cores.size() == 0)
                 continue;       // untested socket
 
-            push_to(fullsocket, p.cores.begin(), p.cores.end());
+            push_to(isolate_socket, p.cores.begin(), p.cores.end());
             if (p.cores.size() <= max_cores_per_slice) {
                 // easy case: package has fewer than max_cores_per_slice
-                split = fullsocket;
+                split = isolate_socket;
                 continue;
             }
 
