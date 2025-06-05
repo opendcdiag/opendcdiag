@@ -31,27 +31,6 @@ static void update_topology(std::span<const struct cpu_info> new_cpu_info,
                             std::span<const Topology::Package> sockets = {});
 
 namespace {
-struct auto_fd
-{
-    int fd = -1;
-    auto_fd(int fd = -1) : fd(fd) {}
-    ~auto_fd() { if (fd != -1) close(fd); }
-
-    // make it movable but not copyable
-    auto_fd(const auto_fd &) = delete;
-    auto_fd &operator=(const auto_fd &) = delete;
-
-    auto_fd(auto_fd &&other) : fd(std::exchange(other.fd, -1)) {}
-    auto_fd &operator=(auto_fd &&other)
-    {
-        auto_fd tmp(std::move(other));
-        std::swap(tmp.fd, fd);
-        return *this;
-    }
-
-    operator int() const { return fd; }
-};
-
 struct linux_cpu_info
 {
     using Fields = std::map<std::string, std::string>;
