@@ -1136,6 +1136,7 @@ void apply_cpuset_param(char *param)
 
 static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 {
+    assert(sApp->thread_count);
     assert(sApp->thread_count == enabled_cpus.count());
     cpu_info = sApp->shmem->cpu_info;
 
@@ -1175,18 +1176,13 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     }
 
     auto detect = [](void *ptr) -> void * {
-        const auto & enabled_cpus = *static_cast<const LogicalProcessorSet *>(ptr);
-        int curr_cpu = 0;
-        for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
-            auto lp = LogicalProcessor(curr_cpu);
-            while (!enabled_cpus.is_set(lp)) {
-                lp = LogicalProcessor(++curr_cpu);
-            }
-
-            pin_to_logical_processor(lp);
-            try_detection<topo_impls>(&cpu_info[i]);
-            try_detection<ppin_impls>(&cpu_info[i]);
-            try_detection<ucode_impls>(&cpu_info[i]);
+        int count = sApp->thread_count;
+        [[assume(count > 0)]];
+        for (Topology::Thread &cpu : std::span(cpu_info, count)) {
+            pin_to_logical_processor(LogicalProcessor(cpu.cpu_number));
+            try_detection<topo_impls>(&cpu);
+            try_detection<ppin_impls>(&cpu);
+            try_detection<ucode_impls>(&cpu);
         }
         return nullptr;
     };
