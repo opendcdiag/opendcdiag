@@ -591,6 +591,7 @@ extern void log_data(const char *message, const void *data, size_t size);
 /// privileges.
 uint64_t retrieve_physical_address(const volatile void *ptr);
 
+#ifdef __linux__
 /// reads the value of the MSR, specified by msr, of CPU cpu.
 /// The value is returned in the value parameter.  The function
 /// returns true if the value can be read and false otherwise.
@@ -602,6 +603,19 @@ bool read_msr(int cpu, uint32_t msr, uint64_t *value);
 /// and false otherwise.   This function is only supported on Linux and
 /// requires root privileges.
 bool write_msr(int cpu, uint32_t msr, uint64_t value);
+#else
+static inline bool read_msr(int cpu, uint32_t msr, uint64_t *value)
+{
+    (void) cpu; (void) msr; (void) value;
+    return false;
+}
+static inline bool write_msr(int cpu, uint32_t msr, uint64_t value)
+{
+    (void) cpu; (void) msr; (void) value;
+    return false;
+}
+#endif
+
 
 /// Calls aligned_alloc but first checks to see whether size is a multiple
 /// of alignment.  If it is not, the requested size of the allocation is increased
