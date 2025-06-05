@@ -860,6 +860,11 @@ static bool fill_topo_cpuid(struct cpu_info *info)
         return value;
     };
 
+    info->hwid = apicid;
+    info->package_id = extract(width(Package), -1);
+    info->thread_id = extract(0, width(Domain::Logical));
+    info->core_id = extract(width(Domain::Logical), width(Package));
+
     uint32_t next = width(Domain::Core);
     if (width(Domain::Module)) {
         info->module_id = extract(next, width(Package));
@@ -881,10 +886,6 @@ static bool fill_topo_cpuid(struct cpu_info *info)
         next = width(Domain::Tile);
     }
 
-    info->package_id = extract(width(Package), -1);
-    info->core_id = extract(width(Domain::Logical), width(Package));
-    info->thread_id = extract(0, width(Domain::Logical));
-    info->hwid = apicid;
     return true;
 }
 
