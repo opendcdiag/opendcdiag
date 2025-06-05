@@ -176,10 +176,16 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
     };
 
     struct cpu_info proto_cpu = { };
+    struct cpu_info *real_cpu = cpu_info;
+    struct cpu_info *const cpu_end = cpu_info + num_cpus();
+    std::fill(std::begin(proto_cpu.cache), std::end(proto_cpu.cache), cache_info{-1, -1});
+
     std::vector<struct cpu_info> mock_cpu_info;
     while (topo && *topo) {
         struct cpu_info *info = &mock_cpu_info.emplace_back(proto_cpu);
-        info->cpu_number = mock_cpu_info.size() - 1;
+        info->cpu_number = real_cpu->cpu_number;
+        if (++real_cpu == cpu_end)
+            break;
 
         // mock cache too (8 kB L1, 32 kB L2, 256 kB L3)
         info->cache[0] = { 0x2000, 0x2000 };
@@ -1147,12 +1153,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     // detect this CPU's family - it's impossible for them to be different
     detect_family_via_cpuid();
 
-    if (SandstoneConfig::Debug) {
-        static auto mock_topology = create_mock_topology(getenv("SANDSTONE_MOCK_TOPOLOGY"));
-        if (mock_topology.size())
-            return apply_mock_topology(mock_topology, enabled_cpus);
-    }
-
     // fill in cpu_info first
     {
         struct cpu_info *info = &cpu_info[0];
@@ -1169,8 +1169,7 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     }
     std::fill_n(&cpu_info[1], sApp->thread_count - 1, cpu_info[0]);
 
-    int curr_cpu = 0;
-    for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
+    for (int i = 0, curr_cpu = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
         auto lp = LogicalProcessor(curr_cpu);
         while (!enabled_cpus.is_set(lp)) {
             lp = LogicalProcessor(++curr_cpu);
@@ -1179,6 +1178,12 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         // set the OS cpu id
         auto info = cpu_info + i;
         info->cpu_number = curr_cpu;
+    }
+
+    if (SandstoneConfig::Debug) {
+        static auto mock_topology = create_mock_topology(getenv("SANDSTONE_MOCK_TOPOLOGY"));
+        if (mock_topology.size())
+            return apply_mock_topology(mock_topology, enabled_cpus);
     }
 
     auto detect = [](void *ptr) -> void * {
