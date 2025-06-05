@@ -35,11 +35,28 @@ struct TopologyDetector
     void sort();
 
 private:
+    bool setup_cpuid_detection();
     bool detect_via_cpuid(Topology::Thread *info);
     bool detect_via_os(Topology::Thread *info);
     bool detect_numa();
 
 #ifdef __x86_64__
+    enum Domain {
+        Invalid = 0,
+        Logical = 1,
+        Core = 2,
+        Module = 3,
+        Tile = 4,
+        Die = 5,
+        DieGrp = 6,
+    };
+    // we only want up to Tile
+    static constexpr Domain Package = Domain(Domain::Tile + 1);
+
+    int8_t topology_leaf;
+    std::array<uint8_t, Package> topology_widths_array;
+    uint8_t &width(Domain domain) { return topology_widths_array[domain - 1]; };
+
     bool detect_cache_via_cpuid(Topology::Thread *info, uint32_t *max_cpus_sharing_l2);
     bool detect_topology_via_cpuid(Topology::Thread *info);
 #endif
@@ -762,87 +779,77 @@ bool TopologyDetector::detect_cache_via_cpuid(Topology::Thread *info,
     return true;
 }
 
+bool TopologyDetector::setup_cpuid_detection()
+{
+    if (SandstoneConfig::Debug) {
+        if (char *str = getenv("SANDSTONE_USE_OS_TOPOLOGY"); str && *str)
+            return false;
+    }
+
+    int8_t &leaf = topology_leaf;
+    uint32_t a, b, c, apicid;
+
+    __cpuid(0, a, b, c, apicid);
+    leaf = -1;
+    if (a >= 0x1f)
+        leaf = 0x1f;        // use V2 Extended Topology
+    else if (a >= 0x0b)
+        leaf = 0x0b;        // use regular Extended Topology
+    else
+        return false;
+
+    int subleaf = 0;
+    __cpuid_count(leaf, subleaf, a, b, c, apicid);
+
+    // extract the domain levels
+    while (b) {
+        Domain domain = Domain((c >> 8) & 0xff);
+        a &= 0xf;
+        switch (domain) {
+        case Domain::Invalid:
+            __builtin_unreachable();
+            break;
+        case Domain::Logical:
+        case Domain::Core:
+        case Domain::Module:
+        case Domain::Tile:
+            width(domain) = a;
+            break;
+
+        case Domain::Die:
+        case Domain::DieGrp:
+            // ignore
+            break;
+        }
+
+        // the package shift is implied by the largest shift
+        width(Package) = std::max(uint8_t(a), width(Package));
+
+        // get next level
+        subleaf++;
+        __cpuid_count(leaf, subleaf, a, b, c, apicid);
+    }
+
+    if (width(Domain::Logical) == 0 || width(Domain::Core) == 0
+            || width(Package) == 0) [[unlikely]] {
+        // no information on CPUID leaf; fallback to OS
+        leaf = -1;
+        return false;
+    }
+    return true;
+}
+
 bool TopologyDetector::detect_topology_via_cpuid(Topology::Thread *info)
 {
-    enum Domain {
-        Invalid = 0,
-        Logical = 1,
-        Core = 2,
-        Module = 3,
-        Tile = 4,
-        Die = 5,
-        DieGrp = 6,
-    };
-    // we only want up to Tile
-    constexpr Domain Package = Domain(Domain::Tile + 1);
-
-    int curr_cpu = info->cpu_number;
     uint32_t a, b, c, apicid;
     uint32_t max_cpus_sharing_l2 = 0;
 
-    if (curr_cpu < 0)
-        return false;
     if (!detect_cache_via_cpuid(info, &max_cpus_sharing_l2))
         return false;
 
-    static int8_t leaf;
-    static std::array<uint8_t, Package> widthsarray;
-    auto width = [](Domain domain) -> uint8_t & { return widthsarray[domain - 1]; };
-
-    if (leaf < 0)
-        return false;
-    if (!leaf) {
-        __cpuid(0, a, b, c, apicid);
-        leaf = -1;
-        if (a >= 0x1f)
-            leaf = 0x1f;        // use V2 Extended Topology
-        else if (a >= 0x0b)
-            leaf = 0x0b;        // use regular Extended Topology
-        else
-            return false;
-
-        int subleaf = 0;
-        __cpuid_count(leaf, subleaf, a, b, c, apicid);
-
-        // extract the domain levels
-        while (b) {
-            Domain domain = Domain((c >> 8) & 0xff);
-            a &= 0xf;
-            switch (domain) {
-            case Domain::Invalid:
-                __builtin_unreachable();
-                break;
-            case Domain::Logical:
-            case Domain::Core:
-            case Domain::Module:
-            case Domain::Tile:
-                width(domain) = a;
-                break;
-
-            case Domain::Die:
-            case Domain::DieGrp:
-                // ignore
-                break;
-            }
-
-            // the package shift is implied by the largest shift
-            width(Package) = std::max(uint8_t(a), width(Package));
-
-            // get next level
-            subleaf++;
-            __cpuid_count(leaf, subleaf, a, b, c, apicid);
-        }
-
-        if (width(Domain::Logical) == 0 || width(Domain::Core) == 0
-                || width(Package) == 0) [[unlikely]] {
-            // no information on CPUID leaf; fallback to OS
-            leaf = -1;
-            return false;
-        }
-    } else {
-        // just get this processor's APIC ID
-        __cpuid_count(leaf, 0, a, b, c, apicid);
-    }
+    // get this processor's APIC ID
+    assert(topology_leaf > 0);
+    __cpuid_count(topology_leaf, 0, a, b, c, apicid);
 
     // process the widths
     auto extract = [&](uint32_t start, uint32_t end) {
@@ -980,10 +987,6 @@ bool TopologyDetector::detect_ppin_via_msr(Topology::Thread *info)
 
 bool TopologyDetector::detect_via_cpuid(Topology::Thread *info)
 {
-    if (SandstoneConfig::Debug) {
-        if (char *str = getenv("SANDSTONE_USE_OS_TOPOLOGY"); str && *str)
-            return false;
-    }
     return detect_topology_via_cpuid(info);     // does cache detection
 }
 #else // !x86-64
@@ -1011,13 +1014,15 @@ bool TopologyDetector::detect_ucode_via_os(Topology::Thread *, int)
     return false;
 }
 
-bool TopologyDetector::detect_via_cpuid(Topology::Thread *)
+bool TopologyDetector::setup_cpuid_detection()
 {
     return false;
 }
 
 bool TopologyDetector::detect_via_cpuid(Topology::Thread *)
 {
+    assert(false && "Should not get here!");
+    __builtin_unreachable();
     return false;
 }
 #endif // !x86-64
@@ -1242,9 +1247,18 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
         return nullptr;
     };
 
-    pthread_t detection_thread;
-    pthread_create(&detection_thread, nullptr, detect, this);
-    pthread_join(detection_thread, nullptr);
+    if (setup_cpuid_detection()) {
+        // Do a per-CPU detection, which requires us to pin an auxiliary
+        // thread to each CPU.
+        pthread_t detection_thread;
+        pthread_create(&detection_thread, nullptr, detect, this);
+        pthread_join(detection_thread, nullptr);
+    } else {
+        // Use OS-level detection only (no pinning, no threads).
+        for (Topology::Thread &cpu : std::span(cpu_info, count)) {
+            detect_via_os(&cpu);
+        }
+    }
 
     detect_numa();
 }
