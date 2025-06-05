@@ -1821,7 +1821,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
     }
     dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, cpu, info->cpu_number);
     dprintf(fd, "%s_messages_thread_%d_family_model_stepping = %02x-%02x-%02x\n", prefix, cpu,
-            info->family, info->model, info->stepping);
+            sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
     dprintf(fd, "%s_messages_thread_%d_topology = phys %d, core %d, thr %d\n",
             prefix, cpu, info->package_id, info->core_id, info->thread_id);
     dprintf(fd, "%s_messages_thread_%d_microcode =", prefix, cpu);
@@ -2069,8 +2069,8 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
     std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", cpu,
             info->cpu_number, info->package_id, info->core_id, info->thread_id);
 
-    line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", info->family, info->model,
-                      info->stepping);
+    line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", sApp->hwinfo.family, sApp->hwinfo.model,
+                      sApp->hwinfo.stepping);
     if (info->microcode)
         line += stdprintf("%#" PRIx64, info->microcode);
     else
@@ -2154,7 +2154,7 @@ std::string YamlLogger::thread_id_header(int cpu, int verbosity)
                 line += "null";
         };
         line += stdprintf(", family: %d, model: %#02x, stepping: %d, microcode: ",
-                          info->family, info->model, info->stepping);
+                          sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
         add_value_or_null("%#" PRIx64, info->microcode);
         line += ", ppin: ";
         add_value_or_null("\"%016" PRIx64 "\"", info->ppin);    // string to prevent loss of precision

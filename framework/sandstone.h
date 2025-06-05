@@ -386,9 +386,6 @@ struct cpu_info {
     int hwid;
 
     struct cache_info cache[3]; ///! Cache info from OS
-    uint8_t family;         ///! CPU family (usually 6)
-    uint8_t stepping;       ///! CPU stepping
-    uint16_t model;         ///! CPU model
 
 #ifdef __cplusplus
     int cpu() const;        ///! Internal CPU number

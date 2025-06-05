@@ -175,14 +175,7 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
         return true;
     };
 
-    struct cpu_info proto_cpu = { .family = 6 };
-#ifdef __AVX2__
-    proto_cpu.model = 0x3c;     // HSW
-#else
-    proto_cpu.model = 0x25;     // WSM
-#endif
-    std::fill(std::begin(proto_cpu.cache), std::end(proto_cpu.cache), cache_info{-1, -1});
-
+    struct cpu_info proto_cpu = { };
     std::vector<struct cpu_info> mock_cpu_info;
     while (topo && *topo) {
         struct cpu_info *info = &mock_cpu_info.emplace_back(proto_cpu);
@@ -201,12 +194,6 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
         }
         info->module_id = info->core_id;
         if (!parse_int_and_advance(&info->thread_id))
-            continue;
-        if (!parse_int_and_advance(&info->model))
-            continue;
-        if (!parse_int_and_advance(&info->stepping))
-            continue;
-        if (!parse_int_and_advance(&info->microcode))
             continue;
     }
 
@@ -641,7 +628,7 @@ static void fill_numa()
 #endif /* __linux__ */
 
 #ifdef __x86_64__
-static bool fill_family_cpuid(struct cpu_info *info)
+static void detect_family_via_cpuid()
 {
     /*
      * EAX layout from the manual:
@@ -655,19 +642,18 @@ static bool fill_family_cpuid(struct cpu_info *info)
      * SDM.
      */
     uint32_t eax, ebx, ecx, edx;
-    uint8_t stepping;
-    uint16_t display_family, family, model;
+    auto &family = sApp->hwinfo.family;
+    auto &model = sApp->hwinfo.model;
+    auto &stepping = sApp->hwinfo.stepping;
 
     eax = ebx = ecx = edx = 0;
     __cpuid(1, eax, ebx, ecx, edx);
-    family = display_family = (eax >> 8) & 0xf;
-    if (family == 0xf) display_family += (eax >> 20) & 0xff;
+    family = (eax >> 8) & 0xf;
+    if (family == 0xf) family += (eax >> 20) & 0xff;
     model = (eax >> 4) & 0xf;
     if (family == 0xf || family == 0x6)
         model += ((eax >> (16-4)) & 0xf0);
     stepping = eax & 0xf;
-
-    return true;
 }
 
 static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_sharing_l2)
@@ -853,7 +839,9 @@ static bool fill_ucode_msr(struct cpu_info *info)
     return true;
 }
 #else
-constexpr auto fill_family_cpuid = nullptr;
+static void detect_family_via_cpuid()
+{
+}
 constexpr auto fill_ucode_msr = nullptr;
 constexpr auto fill_topo_cpuid = nullptr;
 #endif // x86-64
@@ -984,7 +972,6 @@ typedef bool (* fill_ppin_func)(struct cpu_info *);
 typedef bool (* fill_ucode_func)(struct cpu_info *);
 typedef bool (* fill_topo_func)(struct cpu_info *);
 
-static const fill_family_func family_impls[] = { fill_family_cpuid };
 static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
 /* prefer sysfs, fallback to MSR. the latter is not reliable and may require
  * root. */
@@ -1157,6 +1144,9 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     assert(sApp->thread_count == enabled_cpus.count());
     cpu_info = sApp->shmem->cpu_info;
 
+    // detect this CPU's family - it's impossible for them to be different
+    detect_family_via_cpuid();
+
     if (SandstoneConfig::Debug) {
         static auto mock_topology = create_mock_topology(getenv("SANDSTONE_MOCK_TOPOLOGY"));
         if (mock_topology.size())
@@ -1176,9 +1166,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         info->hwid = -1;
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
-
-        // detect this CPU's family - it's impossible for them to be different
-        try_detection<family_impls>(info);
     }
     std::fill_n(&cpu_info[1], sApp->thread_count - 1, cpu_info[0]);
 
