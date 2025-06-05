@@ -667,33 +667,6 @@ static bool fill_family_cpuid(struct cpu_info *info)
         model += ((eax >> (16-4)) & 0xf0);
     stepping = eax & 0xf;
 
-    info->family = display_family;
-    info->model = model;
-    info->stepping = stepping;
-
-    // Report a warning if the information on a socket differs from socket 0.
-    if (info == cpu_info)
-        return true;        // first logical processor, nothing to compare to
-
-    assert(size_t(info - cpu_info) < size_t(num_cpus()));
-    if (info->package_id == info[-1].package_id)
-        return true;        // same socket, so if there's a discrepancy it's already reported
-
-    if (__builtin_expect(cpu_info[0].family != display_family || cpu_info[0].model != model ||
-                         cpu_info[0].stepping != stepping, false)) {
-        /* print reference cpu info once */
-        static bool report_cpu0_once = false;
-        if (!report_cpu0_once) {
-            fprintf(stderr, "WARNING: Inconsistent CPU information detected. "
-                       "Reference socket %d is family 0x%02x, model 0x%02x, stepping 0x%02x\n",
-                    cpu_info[0].package_id, cpu_info[0].family, cpu_info[0].model, cpu_info[0].stepping);
-            report_cpu0_once = true;
-        }
-        fprintf(stderr, "WARNING: CPU %d on socket %d differs from socket %d: family 0x%02x "
-                        "model 0x%02x, stepping 0x%02x.\n", info->cpu_number, info->package_id,
-                cpu_info[0].package_id, display_family, model, stepping);
-    }
-
     return true;
 }
 
@@ -1190,16 +1163,10 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             return apply_mock_topology(mock_topology, enabled_cpus);
     }
 
-    int curr_cpu = 0;
-    for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
-        auto lp = LogicalProcessor(curr_cpu);
-        while (!enabled_cpus.is_set(lp)) {
-            lp = LogicalProcessor(++curr_cpu);
-        }
-
-        /* fill everything with -1 to indicate n/a and set the OS cpu id. */
-        auto info = cpu_info + i;
-        info->cpu_number = curr_cpu;
+    // fill in cpu_info first
+    {
+        struct cpu_info *info = &cpu_info[0];
+        // -1 to indicate unknown yet
         info->package_id = -1;
         info->numa_id = -1;
         info->tile_id = -1;
@@ -1209,6 +1176,22 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         info->hwid = -1;
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
+
+        // detect this CPU's family - it's impossible for them to be different
+        try_detection<family_impls>(info);
+    }
+    std::fill_n(&cpu_info[1], sApp->thread_count - 1, cpu_info[0]);
+
+    int curr_cpu = 0;
+    for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
+        auto lp = LogicalProcessor(curr_cpu);
+        while (!enabled_cpus.is_set(lp)) {
+            lp = LogicalProcessor(++curr_cpu);
+        }
+
+        // set the OS cpu id
+        auto info = cpu_info + i;
+        info->cpu_number = curr_cpu;
     }
 
     auto detect = [](void *ptr) -> void * {
@@ -1222,7 +1205,6 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 
             pin_to_logical_processor(lp);
             try_detection<topo_impls>(&cpu_info[i]);
-            try_detection<family_impls>(&cpu_info[i]);
             try_detection<ppin_impls>(&cpu_info[i]);
             try_detection<ucode_impls>(&cpu_info[i]);
         }
