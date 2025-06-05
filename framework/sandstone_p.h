@@ -303,6 +303,14 @@ protected:
     }
 };
 
+struct HardwareInfo
+{
+    // information for CPUs
+    uint16_t model = 0;
+    uint8_t family = 0;
+    uint8_t stepping = 0;
+};
+
 struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
 {
     enum class OutputFormat : int8_t {
@@ -402,6 +410,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     uint64_t mce_count_last;
     std::vector<uint32_t> mce_counts_start;
     std::vector<uint64_t> smi_counts_start;
+
+    HardwareInfo hwinfo;
 
     int thread_count;
     ForkMode current_fork_mode() const

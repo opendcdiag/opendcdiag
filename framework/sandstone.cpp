@@ -1286,7 +1286,7 @@ static void dump_cpu_info()
                    cpu_features_to_string(arch.features & ~cpu_features).c_str());
     }
     printf("Detected CPU: %s; family-model-stepping (hex): %02x-%02x-%02x; CPU features: %s\n",
-           detected, cpu_info[0].family, cpu_info[0].model, cpu_info[0].stepping,
+           detected, sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping,
            cpu_features_to_string(cpu_features).c_str());
     printf("# CPU\tPkgID\tCoreID\tThrdID\tModId\tNUMAId\tApicId\tMicrocode\tPPIN\n");
     for (i = 0; i < num_cpus(); ++i) {
