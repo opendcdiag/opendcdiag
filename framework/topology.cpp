@@ -49,6 +49,21 @@ private:
     bool detect_ucode_via_msr(Topology::Thread *info);
 
 #ifdef __linux__
+    struct ProcCpuInfoData {
+        using Fields = std::map<std::string, std::string>;
+        Fields general_fields;
+        std::vector<Fields> cpu_fields;
+
+        std::optional<uint64_t> number(int cpu_number, const char *field, int base = 0);
+        void load();
+    } proc_cpuinfo_;
+    ProcCpuInfoData &proc_cpuinfo()
+    {
+        if (proc_cpuinfo_.cpu_fields.size() == 0)
+            proc_cpuinfo_.load();
+        return proc_cpuinfo_;
+    }
+
     bool detect_cache_via_os(Topology::Thread *info, int cpufd);
     bool detect_ppin_via_os(Topology::Thread *info, int cpufd);
     bool detect_topology_via_os(Topology::Thread *info, int cpufd);
@@ -73,35 +88,26 @@ static Topology &cached_topology()
 }
 
 #ifdef __linux__
-namespace {
-struct linux_cpu_info
+std::optional<uint64_t> TopologyDetector::ProcCpuInfoData::number(int cpu_number, const char *field, int base)
 {
-    using Fields = std::map<std::string, std::string>;
-    Fields general_fields;
-    std::vector<Fields> cpu_fields;
-
-    std::optional<uint64_t> number(int cpu_number, const char *field, int base = 0)
-    {
-        const Fields *f;
-        if (cpu_number < 0)
-            f = &general_fields;
-        else if (cpu_number < cpu_fields.size())
-            f = &cpu_fields[cpu_number];
-        else
-            return std::nullopt;
-
-        auto it = f->find(field);
-        if (it == f->end())
-            return std::nullopt;
-
-        // decode using strtoull, which skips spaces and decodes numbers with 0x prefix
-        char *endptr;
-        uint64_t value = strtoull(it->second.c_str(), &endptr, base);
-        if (endptr > it->second.c_str())
-            return value;
+    const Fields *f;
+    if (cpu_number < 0)
+        f = &general_fields;
+    else if (cpu_number < cpu_fields.size())
+        f = &cpu_fields[cpu_number];
+    else
         return std::nullopt;
-    }
-};
+
+    auto it = f->find(field);
+    if (it == f->end())
+        return std::nullopt;
+
+    // decode using strtoull, which skips spaces and decodes numbers with 0x prefix
+    char *endptr;
+    uint64_t value = strtoull(it->second.c_str(), &endptr, base);
+    if (endptr > it->second.c_str())
+        return value;
+    return std::nullopt;
 }
 
 static auto_fd open_sysfs_cpu_dir(int cpu)
@@ -111,14 +117,14 @@ static auto_fd open_sysfs_cpu_dir(int cpu)
     return auto_fd { open(buf, O_PATH | O_CLOEXEC) };
 }
 
-static linux_cpu_info parse_proc_cpuinfo()
+void TopologyDetector::ProcCpuInfoData::load()
 {
     static const char header[] = "processor\t";
     AutoClosingFile f{ fopen("/proc/cpuinfo", "r") };
     assert(f.f && "/proc must be mounted for proper operation");
 
-    linux_cpu_info result;
-    linux_cpu_info::Fields *current = &result.general_fields;
+    auto &result = *this;
+    Fields *current = &general_fields;
 
     char *line = nullptr;
     size_t len = 0;
@@ -161,14 +167,6 @@ static linux_cpu_info parse_proc_cpuinfo()
     }
 
     free(line);
-    return result;
-}
-
-static linux_cpu_info &proc_cpuinfo()
-{
-    static linux_cpu_info r =
-        parse_proc_cpuinfo();
-    return r;
 }
 #endif
 
