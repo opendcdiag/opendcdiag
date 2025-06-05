@@ -30,6 +30,15 @@
 static void update_topology(std::span<const struct cpu_info> new_cpu_info,
                             std::span<const Topology::Package> sockets = {});
 
+struct cpu_info *cpu_info = nullptr;
+
+static Topology &cached_topology()
+{
+    static Topology cached_topology = Topology({});
+    return cached_topology;
+}
+
+#ifdef __linux__
 namespace {
 struct linux_cpu_info
 {
@@ -61,15 +70,6 @@ struct linux_cpu_info
 };
 }
 
-struct cpu_info *cpu_info = nullptr;
-
-static Topology &cached_topology()
-{
-    static Topology cached_topology = Topology({});
-    return cached_topology;
-}
-
-#ifdef __linux__
 static auto_fd open_sysfs_cpu_dir(int cpu)
 {
     char buf[sizeof("/sys/devices/system/cpu/cpu2147483647")];
