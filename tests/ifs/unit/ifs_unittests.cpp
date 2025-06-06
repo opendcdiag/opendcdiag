@@ -161,7 +161,7 @@ TEST(IFSLoadImage, PreviousImageNone)
 
     // Open dir and files
     char sys_path[PATH_MAX];
-    int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
+    IGNORE_RETVAL(snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir));
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
     const char *status_buf = file_contents_by_name(load_test2, "status");
@@ -189,7 +189,7 @@ TEST(IFSLoadImage, PreviousImageCannotBeParsed)
 
     // Open dir and files
     char sys_path[PATH_MAX];
-    int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
+    IGNORE_RETVAL(snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir));
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
     const char *status_buf = file_contents_by_name(load_test3, "status");
@@ -217,7 +217,7 @@ TEST(IFSLoadImage, PreviousImageUntested)
 
     // Open dir and files
     char sys_path[PATH_MAX];
-    int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
+    IGNORE_RETVAL(snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir));
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
     const char *status_buf = file_contents_by_name(load_test4, "status");
@@ -245,7 +245,7 @@ TEST(IFSLoadImage, LoadNextImage)
 
     // Open dir and files
     char sys_path[PATH_MAX];
-    int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
+    IGNORE_RETVAL(snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir));
     int ifs_fd = open_sysfs_ifs_base(sys_path);
     int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
     const char *status_buf = file_contents_by_name(load_test5, "status");
