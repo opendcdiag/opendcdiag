@@ -208,7 +208,7 @@ static int scan_run(struct test *test, int cpu)
 
         /* HACK: Shadows global variable that log_warning() uses
          * DON'T use report_fail_msg() */
-        int thread_num = cpu;
+        (void) thread_num;
 
         if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
