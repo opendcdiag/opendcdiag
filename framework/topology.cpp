@@ -216,8 +216,11 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
 
         if (!parse_int_and_advance(&info->package_id))
             continue;
-        if (!parse_int_and_advance(&info->core_id))
+        if (!parse_int_and_advance(&info->core_id)) {
+            info->module_id = info->core_id;
             continue;
+        }
+        info->module_id = info->core_id;
         if (!parse_int_and_advance(&info->thread_id))
             continue;
         if (!parse_int_and_advance(&info->model))
