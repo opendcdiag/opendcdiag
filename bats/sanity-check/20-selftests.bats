@@ -1719,7 +1719,7 @@ function check_gdb_usable() {
 @test "crash backtrace multi-slice" {
     # We need GDB and at least two cores
     check_gdb_usable
-    export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
+    export SANDSTONE_MOCK_TOPOLOGY='0 1'
     run $SANDSTONE --cpuset=t0 --dump-cpu-info
     if [[ "$output" != *$'\n1\t'* ]]; then
         skip "Test only works with multiple cores or a debug build"
