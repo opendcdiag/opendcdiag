@@ -173,11 +173,14 @@ public:
     static void print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout);
 
 private:
+    int init_skip_message_bytes = 0;
     bool file_printed_messages_header = false;
     bool stdout_printed_messages_header = false;
 
     static std::string thread_id_header(int cpu, int verbosity);
     void maybe_print_messages_header(int fd);
+    void print_fixed();
+    void print_thread_messages();
     void print_thread_header(int fd, int cpu, int verbosity);
     void maybe_print_slice_resource_usage(int fd, int slice);
     static int print_test_knobs(int fd, mmap_region r);
@@ -2446,11 +2449,10 @@ std::string YamlLogger::get_current_time()
              iso8601_time_now(Iso8601Format::WithoutMs));
 }
 
-void YamlLogger::print()
+void YamlLogger::print_fixed()
 {
     Duration test_duration = MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
-    int init_skip_message_bytes = 0;
     print_result_line(init_skip_message_bytes);
     if (should_print_fail_info())
         logging_printf(LOG_LEVEL_QUIET, "%s", fail_info_details().c_str());
@@ -2477,9 +2479,12 @@ void YamlLogger::print()
             munmap_file(main_mmap);
         }
     }
+}
 
+void YamlLogger::print_thread_messages()
+{
     // print the thread messages
-    auto doprint = [this, init_skip_message_bytes](PerThreadData::Common *data, int s_tid) {
+    auto doprint = [this](PerThreadData::Common *data, int s_tid) {
         struct mmap_region r = maybe_mmap_log(data);
 
         /* for main threads (negative ids) adjust the message size to account
@@ -2502,11 +2507,15 @@ void YamlLogger::print()
     };
     for_each_main_thread(doprint, slices.size());
     for_each_test_thread(doprint);
+}
 
+void YamlLogger::print()
+{
+    print_fixed();
+    print_thread_messages();
     print_child_stderr_common([](int fd) {
         writeln(fd, indent_spaces(), "  stderr messages: |");
     });
-
     logging_flush();
 }
 
