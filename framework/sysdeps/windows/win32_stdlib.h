@@ -13,6 +13,8 @@
 #include <stdlib.h>
 
 #ifdef __cplusplus
+#include <string>
+using last_error_t = unsigned;
 extern "C" {
 #endif
 
@@ -35,6 +37,9 @@ void *valloc(size_t size);
 void win32_perror(const char *s);
 
 #ifdef __cplusplus
+/* not stdlib.h, but injected here because we're lazy;
+ * returns last-error code value as a std:string. */
+std::string win32_strerror(last_error_t last_err);
 }
 #endif
 
