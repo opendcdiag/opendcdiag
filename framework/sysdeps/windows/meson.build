@@ -17,6 +17,7 @@ framework_files += \
         'ucrt-mapping.c',
         'unistd.c',
         'win32_perror.c',
+        'win32_strerror.cpp',
         '../generic/kvm.c',
         '../generic/memfpt.c',
         '../generic/msr.c',
