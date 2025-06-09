@@ -8,6 +8,16 @@
 
 #include <windows.h>
 
+void win32_perror(const char *msg)
+{
+    DWORD dwMessageId = GetLastError();
+    if (msg)
+        fprintf(stderr, "%s: ", msg);
+    fprintf(stderr, "%s\n", win32_strerror(dwMessageId).c_str());
+
+    SetLastError(dwMessageId);      /* restore */
+}
+
 std::string win32_strerror(last_error_t last_err)
 {
     DWORD dwFlags = FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS |
