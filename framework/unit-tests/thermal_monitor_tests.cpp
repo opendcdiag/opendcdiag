@@ -5,6 +5,7 @@
 
 #include "gtest/gtest.h"
 #include <algorithm>
+#include <sandstone.h>
 #include "sysdeps/linux/thermal_monitor.hpp"
 
 namespace LinuxTesting {
@@ -17,19 +18,19 @@ namespace LinuxTesting {
             std::string type_file = base_dir + "/type";
             std::string temp_file = base_dir + "/temp";
 
-            system(("mkdir -p " + base_dir).c_str());
-            system(("echo " + type + " > " + type_file).c_str());
-            system(("echo " + temperature + " > " + temp_file).c_str());
+            IGNORE_RETVAL(system(("mkdir -p " + base_dir).c_str()));
+            IGNORE_RETVAL(system(("echo " + type + " > " + type_file).c_str()));
+            IGNORE_RETVAL(system(("echo " + temperature + " > " + temp_file).c_str()));
 
         }
 
         void SetUp() override {
             fake_thermal_root_dir = "/tmp/sandstone_unittest_temps_" + std::to_string(getpid()) + "/";
-            system(("rm -rf " + fake_thermal_root_dir).c_str());  // Clean out old results if present
+            IGNORE_RETVAL(system(("rm -rf " + fake_thermal_root_dir).c_str()));  // Clean out old results if present
         }
 
         void TearDown() override {
-            system(("rm -rf " + fake_thermal_root_dir).c_str());
+            IGNORE_RETVAL(system(("rm -rf " + fake_thermal_root_dir).c_str()));
         }
     };
 
