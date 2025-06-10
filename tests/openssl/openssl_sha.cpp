@@ -14,7 +14,7 @@
 
 #include "sandstone.h"
 
-#if defined(__linux__)
+#if SANDSTONE_SSL_BUILD
 
 #include "sandstone_ssl.h"
 
@@ -153,7 +153,7 @@ static int ssl_sha_run(struct test* test, int cpu)
     return EXIT_SUCCESS;
 }
 
-#else // !__linux__
+#else // !SANDSTONE_SSL_BUILD
 
 static int ssl_sha_init(struct test *test)
 {
