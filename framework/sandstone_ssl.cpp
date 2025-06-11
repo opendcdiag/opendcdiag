@@ -89,6 +89,27 @@ void sandstone_ssl_init()
     }
 }
 
+std::string openssl_error_string()
+{
+    std::vector<std::string> errors;
+    auto cb = [](const char *str, size_t len, void *ptr) {
+        auto &vec = *static_cast<decltype(errors) *>(ptr);
+        vec.emplace_back(str, len);
+        return 1;
+    };
+    s_ERR_print_errors_cb(cb, &errors);
+
+    if (errors.size() == 0)
+        return "<no error>";
+
+    std::string result = std::move(errors[0]);
+    for (size_t i = 1; i < errors.size(); ++i) {
+        result += "; ";
+        result += std::move(errors[i]);
+    }
+    return result;
+}
+
 #if SANDSTONE_SSL_LINKED == 0 && defined(__ELF__)
 // Add metadata indicating we do dlopen() OpenSSL
 // https://systemd.io/ELF_DLOPEN_METADATA/
