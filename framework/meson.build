@@ -49,8 +49,10 @@ framework_config.set10('SANDSTONE_STATIC', false) # sysdeps may override
 
 if device_type == 'cpu'
     framework_config.set10('SANDSTONE_DEVICE_CPU', true)
-else
+elif device_type == 'gpu'
     framework_config.set10('SANDSTONE_DEVICE_GPU', true)
+else
+    error('Unknown device type: ' + device_type)
 endif
 
 sysdeps_dir = 'sysdeps/' + target_machine.system()
@@ -312,6 +314,10 @@ framework_a = static_library(
 )
 
 unittests_sources += files(
+    'sandstone_chrono.cpp',
+    'sandstone_data.cpp',
+    'sandstone_utils.cpp',
+    'test_knobs.cpp',
     'unit-tests/sandstone_data_tests.cpp',
     'unit-tests/sandstone_test_utils_tests.cpp',
     'unit-tests/sandstone_utils_tests.cpp',
@@ -319,8 +325,4 @@ unittests_sources += files(
     'unit-tests/tests_dummy.cpp',
     'unit-tests/thermal_monitor_tests.cpp',
     'unit-tests/topology_tests.cpp',
-    'sandstone_chrono.cpp',
-    'sandstone_data.cpp',
-    'sandstone_utils.cpp',
-    'test_knobs.cpp',
 )
