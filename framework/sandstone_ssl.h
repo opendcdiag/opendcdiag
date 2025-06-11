@@ -1137,7 +1137,7 @@
     /**/
 
 #define SANDSTONE_SSL_GENERIC_FUNCTIONS(F)      \
-    F(OPENSSL_init)                             \
+    F(OPENSSL_config)                           \
     F(OPENSSL_init_crypto)                      \
     F(OPENSSL_INIT_free)                        \
     F(OPENSSL_INIT_new)                         \
