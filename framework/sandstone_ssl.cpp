@@ -83,7 +83,8 @@ void sandstone_ssl_init()
 
     SANDSTONE_SSL_GENERIC_FUNCTIONS(CHECK_SSL_POINTERS)
     if (!failed) {
-        s_OPENSSL_init();
+        s_OPENSSL_init_crypto(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr);
+        s_OPENSSL_config(SANDSTONE_EXECUTABLE_NAME);
         OpenSSLWorking = true;
     }
 }
