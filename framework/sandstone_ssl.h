@@ -1137,6 +1137,7 @@
     /**/
 
 #define SANDSTONE_SSL_GENERIC_FUNCTIONS(F)      \
+    F(ERR_print_errors_cb)                      \
     F(OPENSSL_config)                           \
     F(OPENSSL_init_crypto)                      \
     F(OPENSSL_INIT_free)                        \
@@ -2201,6 +2202,7 @@ extern bool OpenSSLWorking;
 
 SANDSTONE_SSL_FUNCTIONS(DECLARE_FUNCTIONS)
 void sandstone_ssl_init();
+std::string openssl_error_string();
 std::string openssl_info();
 
 #undef DECLARE_FUNCTIONS
