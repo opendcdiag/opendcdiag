@@ -795,7 +795,7 @@ static int selftest_libc_fatal_run(struct test *, int)
 }
 #endif
 
-#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
 BEGIN_ASM_FUNCTION(payload_long_64bit)
     asm("movabs $0x1234deadbeaf5678, %rax\n"
         "mov    $0x12345, %ebx\n"
@@ -1008,12 +1008,10 @@ const static test_group group_random = {
     .description = "Self-tests that use random input and may or may not fail"
 };
 
-#ifdef SANDSTONE_DEVICE_CPU
 const static test_group group_kvm = {
     .id = "kvm",
     .description = "Self-tests that launch virtual machines"
 };
-#endif
 
 static struct test selftests_array[] = {
 {
@@ -1330,7 +1328,7 @@ static struct test selftests_array[] = {
     .flags = test_schedule_sequential,
 },
 
-#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
 {
     .id = "kvm_long_64bit",
     .description = "Runs simple 64-bit KVM workload successfully",
@@ -1713,7 +1711,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .quality_level = TEST_QUALITY_PROD,
 },
 
-#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
+#if defined(__linux__) && defined(__x86_64__) && !defined(__clang__)
 {
     .id = "kvm_prot_64bit_fail",
     .description = "Runs simple 64-bit KVM workload that fails",
