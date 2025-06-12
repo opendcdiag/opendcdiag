@@ -543,6 +543,7 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
     int coptind = -1;
 
     if constexpr (!SandstoneConfig::RestrictedCommandLine) {
+#if !SANDSTONE_RESTRICTED_CMDLINE
         while ((opt = simple_getopt(argc, argv, long_options, &coptind)) != -1) {
             switch (opt) {
             case disable_option:
@@ -940,6 +941,7 @@ int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ParsedCmdLin
                 return EX_USAGE;
             }
         }
+#endif // !SANDSTONE_RESTRICTED_CMDLINE
     } else {
         // Default options for the simplified OpenDCDiag cmdline
         static struct option restricted_long_options[] = {

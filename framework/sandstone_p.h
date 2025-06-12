@@ -453,6 +453,9 @@ struct SandstoneApplication::SharedMemory
     int verbosity = -1;
     int max_messages_per_thread = 5;
     unsigned max_logdata_per_thread = 128;
+#if SANDSTONE_RESTRICTED_CMDLINE
+    static constexpr
+#endif
     OutputFormat output_format = DefaultOutputFormat;
     uint8_t output_yaml_indent = 0;
     bool log_test_knobs = false;
