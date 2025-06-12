@@ -110,7 +110,7 @@ using namespace std::chrono_literals;
 char *program_invocation_name;
 #endif
 
-uint64_t cpu_features;
+cpu_feature_t cpu_features;
 static const struct test *current_test = nullptr;
 #ifdef __llvm__
 thread_local int thread_num __attribute__((tls_model("initial-exec")));
@@ -1256,7 +1256,7 @@ __attribute__((weak, noclone, noinline)) int print_application_footer(int exit_c
     return exit_code;
 }
 
-static std::string cpu_features_to_string(uint64_t f)
+static std::string cpu_features_to_string(cpu_feature_t f)
 {
     std::string result;
     const char *comma = "";
@@ -2766,7 +2766,7 @@ skip_wait:
     return true;
 }
 
-extern constexpr const uint64_t minimum_cpu_features = _compilerCpuFeatures;
+extern constexpr const cpu_feature_t minimum_cpu_features = _compilerCpuFeatures;
 int main(int argc, char **argv)
 {
     // initialize the main application
