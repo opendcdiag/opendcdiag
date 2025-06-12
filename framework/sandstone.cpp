@@ -1194,7 +1194,7 @@ static void slice_plan_init(int max_cores_per_slice)
             push_to(isolate_socket, p.cores.begin(), p.cores.end());
             if (p.cores.size() <= max_cores_per_slice) {
                 // easy case: package has fewer than max_cores_per_slice
-                split = isolate_socket;
+                push_to(split, p.cores.begin(), p.cores.end());
                 continue;
             }
 
