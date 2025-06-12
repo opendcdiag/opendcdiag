@@ -36,6 +36,11 @@ if [[ "$SANDSTONE_BIN" = *.exe ]]; then
 fi
 SANDSTONE="$SANDSTONE --on-crash=core --on-hang=kill"
 
+function setup()
+{
+    outputfile=
+}
+
 function teardown()
 {
     rm -f /tmp/output.yaml /tmp/output.tap
@@ -106,7 +111,13 @@ function run_sandstone_yaml()
         return 1
     fi
 
-    : ${VALIDATION:=1}          # in case it isn't set
+    if [[ -z "$VALIDATION" ]]; then
+        VALIDATION=1
+        if declare -p yamldump > /dev/null 2>&1; then
+            VALIDATION=dump
+        fi
+    fi
+
     if [[ "$VALIDATION" = "dump" ]]; then
         # Load the YAML structure into the $yamldump associative array variable
         declare -p yamldump > /dev/null # errors out if variable is not pre-declared
@@ -114,12 +125,48 @@ function run_sandstone_yaml()
         eval "yamldump=($structure)"
     elif [[ "$VALIDATION" != 0 ]]; then
         python3 $BATS_TEST_COMMONDIR/yamltest.py $outputfile
-        if type -p yq > /dev/null; then
-            yq . $outputfile > /dev/null
-        fi
+    fi
+    if type -p yq > /dev/null; then
+        # detect which yq tool we have
+        local out=`yq . <<<"a: b" 2>/dev/null`
+        if [[ "$out" = "a:"* ]]; then
+            # the one from https://mikefarah.gitbook.io/yq/
+            yq -ojson .
+        else
+            # the one from https://github.com/kislyuk/yq
+            yq .
+        fi > ${outputfile%.yaml}.json < $outputfile
     fi
     run_sandstone_yaml_post
     status=$sss
+}
+
+function sandstone_yq()
+{
+    type -p yq > /dev/null || skip "yq not installed"
+    run_sandstone_yaml "$@"
+}
+
+function query_jq()
+{
+    local json=${outputfile%.yaml}.json
+    if ! [[ -r $json ]]; then
+        false "Cannot find output contents. Did you run a query using sandstone_yq?"
+    fi
+
+    local -a args=()
+    while [[ $# ]]; do
+        if ! [[ "$1" = -* ]]; then
+            break
+        fi
+        args+=($1)
+        shift
+    done
+    if (( $# == 1 )); then
+        jq < $json "${args[@]}" "$@"
+    else
+        jq < $json "${args[@]}" -e "($1) == $2"
+    fi
 }
 
 setup_sandstone
