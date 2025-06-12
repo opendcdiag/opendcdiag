@@ -4,7 +4,7 @@
 
 sandstone_selftest() {
     VALIDATION=dump
-    run_sandstone_yaml -n$MAX_PROC --disable=mce_check --selftests --timeout=20s --retest-on-failure=0 -Y2 "$@"
+    run_sandstone_yaml ${MAX_PROC:+-n$MAX_PROC} --disable=mce_check --selftests --timeout=20s --retest-on-failure=0 -Y2 "$@"
 }
 
 extract_from_yaml() {

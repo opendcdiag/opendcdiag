@@ -4,6 +4,13 @@
 # SPDX-License-Identifier: Apache-2.0
 load ../testenv
 load helpers
+MAX_PROC=`nproc`
+
+setup_file() {
+    if [[ -e /sys/devices/system/cpu/cpu0 ]] && [[ -e /sys/devices/system/cpu/cpu$n ]]; then
+        false "Don't run this bats under taskset"
+    fi
+}
 
 test_run_fakesockets() {
     if $is_debug; then
@@ -378,7 +385,7 @@ selftest_cpuset_negated() {
     nproc=${#cpuset[@]}
 
     declare -A yamldump
-    sandstone_selftest -e selftest_logs_reschedule -s LCG:232155056 --reschedule=queue
+    sandstone_selftest -e selftest_logs_reschedule -n4 -s LCG:232155056 --reschedule=queue
 
     # Did we get anything?
     if [[ ${yamldump[/tests/0/result]} = skip ]]; then
