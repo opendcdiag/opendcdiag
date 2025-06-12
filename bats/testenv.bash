@@ -7,6 +7,7 @@ BATS_TEST_COMMONDIR=${BASH_SOURCE[0]%/*}
 is_asan=false
 is_debug=false
 is_windows=false
+declare outputfile=""
 
 MAX_PROC=`nproc`
 [[ $MAX_PROC -le 4 ]] || MAX_PROC=4
@@ -76,6 +77,7 @@ function run_sandstone_yaml()
 
     # bats' "run" function would help, but it fails on older bats...
     local yamlfile=`mktempfile output-XXXXXX.yaml`
+    outputfile=`mktempfile output-XXXXXX.yaml`
     local command="$SANDSTONE -Y -o - \"\$@\" >&3; echo \$?"
     if [[ -n "$TASKSET" ]]; then
         command="taskset ${TASKSET} $command"
@@ -83,12 +85,12 @@ function run_sandstone_yaml()
     local sss=$(bash -xc "$command" argv0 "$@" 3> $yamlfile)
 
     # Strip CR from CRLF
-    sed 's/\r$//' $yamlfile > /tmp/output.yaml
+    sed 's/\r$//' $yamlfile > $outputfile
     rm -- $yamlfile
-    (echo ---; cat /tmp/output.yaml) | \
+    (echo ---; cat $outputfile) | \
         tee -a total_log_output.yaml # for bats' logger
 
-    local exit=$(sed -En '/^ *exit: (.*)$/s//\1/p' /tmp/output.yaml)
+    local exit=$(sed -En '/^ *exit: (.*)$/s//\1/p' $outputfile)
     # confirm exit status
     case "$exit" in
         pass) expected=0 ;;
@@ -108,12 +110,12 @@ function run_sandstone_yaml()
     if [[ "$VALIDATION" = "dump" ]]; then
         # Load the YAML structure into the $yamldump associative array variable
         declare -p yamldump > /dev/null # errors out if variable is not pre-declared
-        local structure=$(python3 $BATS_TEST_COMMONDIR/dumpyaml.py < /tmp/output.yaml)
+        local structure=$(python3 $BATS_TEST_COMMONDIR/dumpyaml.py < $outputfile)
         eval "yamldump=($structure)"
     elif [[ "$VALIDATION" != 0 ]]; then
-        python3 $BATS_TEST_COMMONDIR/yamltest.py /tmp/output.yaml
+        python3 $BATS_TEST_COMMONDIR/yamltest.py $outputfile
         if type -p yq > /dev/null; then
-	    yq . /tmp/output.yaml > /dev/null
+            yq . $outputfile > /dev/null
         fi
     fi
     run_sandstone_yaml_post

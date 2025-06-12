@@ -1105,7 +1105,7 @@ fail_common() {
         test_yaml_regexp "/tests/$i/state/retry" True
         test_yaml_numeric "/tests/$i/state/iteration" "value == $i"
     done
-    grep -e '# Test failed 4 out of 4' /tmp/output.yaml
+    grep -e '# Test failed 4 out of 4' $outputfile
 
     # confirm it retested - second selftest_fail
     for ((i = 5; i <= 6; ++i)); do
@@ -1118,7 +1118,7 @@ fail_common() {
         test_yaml_regexp "/tests/$i/state/retry" True
         test_yaml_numeric "/tests/$i/state/iteration" "value == $i - 4"
     done
-    grep -e '# Test failed 3 out of 3' /tmp/output.yaml
+    grep -e '# Test failed 3 out of 3' $outputfile
 }
 
 function selftest_logerror_common() {
