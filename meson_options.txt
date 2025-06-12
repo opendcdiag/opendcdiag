@@ -32,5 +32,3 @@ option('afl_inc', type : 'string', value : '',
     description : '(Optional) Directory with AFL header files (absolute path).')
 option('coverage', type : 'boolean', value : false,
     description : 'Enable code coverage (default false)')
-option('device_type', type: 'combo', choices : ['cpu', 'gpu'], value: 'cpu',
-    description : 'Device type for the build (default cpu).')

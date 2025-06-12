@@ -4,17 +4,13 @@
 if (host_machine.cpu_family() == 'x86_64')
     framework_files += files(
         'interrupt_monitor.cpp',
+        'kvm.c',
         'msr.c',
     )
 else
     framework_files += files(
+        '../generic/kvm.c',
         '../generic/msr.c',
-    )
-endif
-
-if device_type == 'cpu' and host_machine.cpu_family() == 'x86_64'
-    framework_files += files(
-        'kvm.c',
     )
 endif
 
@@ -32,7 +28,9 @@ if get_option('cpp_link_args').contains('-static')
 
     # Need to extract malloc.o from libc.a and transform it
     # Step 1: find libc.a by asking the compiler
-    libc_a = run_command(cc.cmd_array(), '-print-file-name=libc.a', check: true)
+    libc_a = run_command(cc.cmd_array(), '-print-file-name=libc.a',
+           check: true
+    )
 
     # Step 2: run our extractor script
     glibc_malloc_o = custom_target(
