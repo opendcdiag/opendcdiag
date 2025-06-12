@@ -394,6 +394,8 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     std::string gdb_server_comm;
 #endif
 
+    std::unique_ptr<std::string> pts_arg;
+
     static constexpr int DefaultTemperatureThreshold = -1;
     int thermal_throttle_temp = DefaultTemperatureThreshold;
     int threshold_time_remaining = 30000;
