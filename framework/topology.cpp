@@ -401,9 +401,7 @@ static bool fill_numa()
             } else {
                 // no such luck, scan forward from the last cpu we marked
                 for ( ; cpu < end; ++cpu) {
-                    if (cpu->cpu_number >= stop)
-                        cpu = end;  // we're past the end already
-                    else if (cpu->cpu_number >= start)
+                    if (cpu->cpu_number >= start)
                         break;
                 }
             }
