@@ -18,6 +18,7 @@
 #include <stdarg.h>
 #include <sysexits.h>
 #include <unistd.h>
+#include <utility>
 
 /*
  * Extra exit codes, from systemd.exec(3)
@@ -71,6 +72,27 @@ struct AutoClosingFile
         return *this;
     }
     operator FILE *() const { return f; }
+};
+
+struct auto_fd
+{
+    int fd = -1;
+    auto_fd(int fd = -1) : fd(fd) {}
+    ~auto_fd() { if (fd != -1) close(fd); }
+
+    // make it movable but not copyable
+    auto_fd(const auto_fd &) = delete;
+    auto_fd &operator=(const auto_fd &) = delete;
+
+    auto_fd(auto_fd &&other) : fd(std::exchange(other.fd, -1)) {}
+    auto_fd &operator=(auto_fd &&other)
+    {
+        auto_fd tmp(std::move(other));
+        std::swap(tmp.fd, fd);
+        return *this;
+    }
+
+    operator int() const { return fd; }
 };
 
 #endif //SANDSTONE_UTILS_H_INCLUDED
