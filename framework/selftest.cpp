@@ -1069,7 +1069,6 @@ static struct test selftests_array[] = {
     .test_init = selftest_logs_init,
     .test_run = selftest_logs_run,
     .desired_duration = -1,
-    .max_threads = 3,
     .quality_level = TEST_QUALITY_PROD,
 },
 {
@@ -1363,7 +1362,6 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_random),
     .test_run = selftest_randomfail_run<std::ratio<1, 2>>,
     .desired_duration = -1,
-    .max_threads = 3,
     .quality_level = TEST_QUALITY_PROD,
 },
 {
@@ -1372,7 +1370,6 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_random),
     .test_run = selftest_randomfail_run<std::ratio<1, 1024>>,
     .desired_duration = -1,
-    .max_threads = 3,
     .quality_level = TEST_QUALITY_PROD,
 },
 {
