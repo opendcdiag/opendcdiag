@@ -777,7 +777,7 @@ void prepare_test(/*nonconst*/ struct test *test)
     if (test->groups)
         apply_group_inits(test);
 
-#ifdef SANDSTONE
+#if defined(SANDSTONE) and defined(SANDSTONE_DEVICE_CPU)
     if (test->flags & test_type_kvm) {
         if (!test->test_init) {
             test->test_init = kvm_generic_init;
