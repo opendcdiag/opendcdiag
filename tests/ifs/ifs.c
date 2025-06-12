@@ -206,9 +206,12 @@ static int scan_run(struct test *test, int cpu)
         char result[BUFLEN] = {}, my_cpu[BUFLEN] = {};
         unsigned long long code;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
         /* HACK: Shadows global variable that log_warning() uses
          * DON'T use report_fail_msg() */
         int thread_num = cpu;
+#pragma GCC diagnostic pop
 
         if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
