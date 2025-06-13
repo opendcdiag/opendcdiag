@@ -47,6 +47,20 @@ test_yaml_numeric() {
     return 1
 }
 
+test_yaml_expr() {
+    local query=$1
+    local value
+    extract_from_yaml "$query"
+    shift
+    if test "$value" "$@"; then
+        return 0
+    fi
+    printf "Expression test failed:\n"
+    printf "query:      %s\n" "$query"
+    printf "expression: %s\n" "$value $*"
+    return 1
+}
+
 test_yaml_regexp() {
     local value
     extract_from_yaml "$1"
