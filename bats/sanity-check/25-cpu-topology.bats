@@ -125,6 +125,33 @@ test_fail_socket1() {
     ); done
 }
 
+@test "NUMA node parsing when first block skipped" {
+    declare -A yamldump
+    if ! [[ /sys/devices/system/node ]]; then
+        skip "Test only works on Linux with /sys mounted"
+    fi
+    if ! [[ /sys/devices/system/node/node1 ]]; then
+        skip "Test needs two or more NUMA nodes"
+    fi
+    if ! type -p taskset > /dev/null; then
+        skip "taskset not installed"
+    fi
+
+    local node0=`cat /sys/devices/system/node/node0/cpulist`
+    if ! [[ "$node0" = *,* ]]; then
+        skip "Test only works with non-contiguous CPU ranges in NUMA nodes (node0 is $node0)"
+    fi
+
+    local node1=`cat /sys/devices/system/node/node1/cpulist`
+    local TASKSET="-c ${node1},${node0#*,}"
+
+    run_sandstone_yaml --disable=\*
+    local i
+    for ((i=0; i < ${yamldump[/cpu-info@len]}; ++i)); do
+        test_yaml_expr "/cpu-info/$i/numa_node" -ne -1
+    done
+}
+
 @test "obey taskset single" {
     if $is_windows; then
         skip "taskset does not apply to Windows"
