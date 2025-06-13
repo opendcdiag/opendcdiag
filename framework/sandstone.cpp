@@ -1208,7 +1208,7 @@ static void slice_plan_init(int max_cores_per_slice)
                 ptrdiff_t slice_count = n.cores.size() / max_cores_per_slice;
                 if (n.cores.size() % max_cores_per_slice)
                     ++slice_count;  // round up (also makes at least 1)
-                ptrdiff_t slice_size = n.cores.size() / slice_count;
+                ptrdiff_t slice_size = (n.cores.size() + slice_count - 1) / slice_count;
 
                 // populate slices of roughly slice_size cores, but keep
                 // modules within the same slice
