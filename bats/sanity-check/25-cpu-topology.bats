@@ -12,6 +12,20 @@ setup_file() {
     fi
 }
 
+numa_nodes() {
+    echo '('
+    if type -p numactl >/dev/null; then
+        numactl -H | awk '/node [0-9]+ cpus:/ {
+            node=$2;
+            sub(/.*: /, "");
+            split($0, cpus);
+            for (cpu in cpus)
+                printf "  [%d]=%d\n", cpus[cpu], node
+            }'
+    fi
+    echo ')'
+}
+
 test_run_fakesockets() {
     if $is_debug; then
         if (( MAX_PROC < 4 )); then
@@ -33,6 +47,82 @@ test_fail_socket1() {
 
     # only one socket should have had problems
     test_yaml_regexp "/tests/0/fail/cpu-mask" 'None|\.+:\.*X[.X]*(:.+)?'
+}
+
+@test "cpu-info packages (fake)" {
+    declare -A yamldump
+    $is_debug || skip "Test only works with Debug builds to mock the topology"
+
+    export SANDSTONE_MOCK_TOPOLOGY=`seq 0 $MAX_PROC | xargs`
+    echo "SANDSTONE_MOCK_TOPOLOGY=\"$SANDSTONE_MOCK_TOPOLOGY\""
+    run_sandstone_yaml --disable=\*
+
+    local i
+    for ((i=0; i < ${yamldump[/cpu-info@len]}; ++i)); do
+        test_yaml_numeric "/cpu-info/$i/package" "value == $i"
+    done
+}
+
+@test "cpu-info cores and threads (fake)" {
+    declare -A yamldump
+    $is_debug || skip "Test only works with Debug builds to mock the topology"
+
+    export SANDSTONE_MOCK_TOPOLOGY=`seq 0 $MAX_PROC | xargs printf '0:%d:1 '`
+    echo "SANDSTONE_MOCK_TOPOLOGY=\"$SANDSTONE_MOCK_TOPOLOGY\""
+    run_sandstone_yaml --disable=\*
+
+    local i
+    for ((i=0; i < ${yamldump[/cpu-info@len]}; ++i)); do
+        test_yaml_numeric "/cpu-info/$i/core" "value == $i"
+        test_yaml_numeric "/cpu-info/$i/thread" "value == 1"
+    done
+}
+
+@test "cpu-info real topology" {
+    if ! [[ -f /sys/devices/system/cpu ]]; then
+        skip "Test only works on Linux with /sys mounted"
+    fi
+    declare -A yamldump
+    run_sandstone_yaml --disable=\*
+
+    # Get the NUMA node assignments
+    eval local -A numa=`numa_nodes`
+
+    local i
+    for ((i=0; i < ${yamldump[/cpu-info@len]}; ++i)); do (
+        local v
+        local n=${yamldump[/cpu-info/$i/logical]}
+        cd /sys/devices/system/cpu/cpu$n/
+
+        test_yaml_expr "/cpu-info/$i/package" -eq `cat topology/physical_package_id`
+        test_yaml_expr "/cpu-info/$i/core" -eq `cat topology/core_id`
+
+        v=`cat topology/thread_siblings_list`
+        (
+            bats::on_failure() { echo thread_siblings_list: $v; }
+            if [[ "$v" == "$n" ]] || [[ "$v" == "$n",* ]]; then
+                test_yaml_expr "/cpu-info/$i/thread" = 0
+            else
+                test_yaml_expr "/cpu-info/$i/thread" = 1
+            fi
+        )
+
+        # Our module ID from CPUID differs from what Linux reports in topology/cluster_id
+
+        if v=`cat microcode/version 2>/dev/null`; then
+            test_yaml_numeric "/cpu-info/$i/microcode" "value == $v"
+        fi
+        if v=`cat topology/ppin 2>/dev/null`; then
+            test_yaml_expr "/cpu-info/$i/ppin" = "${v#0x}"
+        else
+            test_yaml_expr "/cpu-info/$i/ppin" = None
+        fi
+
+        v=${numa[$n]}
+        if [[ -n "$v" ]]; then
+            test_yaml_expr "/cpu-info/$i/numa_node" = $v
+        fi
+    ); done
 }
 
 @test "obey taskset single" {
