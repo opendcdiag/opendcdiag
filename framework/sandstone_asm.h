@@ -17,7 +17,7 @@
 #define BEGIN_ASM_FUNCTION(name, ...)                                                       \
     extern const unsigned char __attribute__((visibility("internal"))) name, name ## _end;  \
     extern const size_t __attribute__((visibility("internal"))) name ## _size;              \
-    static void __attribute__((aligned(32), naked, noreturn, used, nothrow, flatten, nocf_check, ##__VA_ARGS__)) __ ## name(void) \
+    static void __attribute__((aligned(32), naked, noreturn, used, nothrow, flatten, ##__VA_ARGS__)) __ ## name(void) \
     {                                                                                       \
         asm (".set " SANDSTONE_STRINGIFY(name) "_end, 1999f\n\t"                            \
              ".set " SANDSTONE_STRINGIFY(name) "_size, 1997f\n"                             \
