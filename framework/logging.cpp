@@ -1806,7 +1806,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
         return;
     }
 
-    struct cpu_info *info = cpu_info + cpu;
+    const auto& info = cpu_info[cpu];
     PerThreadData::Test *thr = sApp->test_thread_data(cpu);
     if (std::string time = format_duration(thr->fail_time); time.size()) {
         dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, cpu, time.c_str());
@@ -1816,18 +1816,18 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
         dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
                 thr->inner_loop_count);
     }
-    dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, cpu, info->cpu_number);
+    dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, cpu, info.cpu_number);
     dprintf(fd, "%s_messages_thread_%d_family_model_stepping = %02x-%02x-%02x\n", prefix, cpu,
-            info->family, info->model, info->stepping);
+            info.family, info.model, info.stepping);
     dprintf(fd, "%s_messages_thread_%d_topology = phys %d, core %d, thr %d\n",
-            prefix, cpu, info->package_id, info->core_id, info->thread_id);
+            prefix, cpu, info.package_id, info.core_id, info.thread_id);
     dprintf(fd, "%s_messages_thread_%d_microcode =", prefix, cpu);
-    if (info->microcode)
-        dprintf(fd, " 0x%" PRIx64, info->microcode);
+    if (info.microcode)
+        dprintf(fd, " 0x%" PRIx64, info.microcode);
     dprintf(fd, "\n%s_messages_thread_%d_ppin =",
             prefix, cpu);
-    if (info->ppin)
-        dprintf(fd, " 0x%" PRIx64, info->ppin);
+    if (info.ppin)
+        dprintf(fd, " 0x%" PRIx64, info.ppin);
     dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
 }
 
@@ -2062,18 +2062,18 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
         return;
     }
 
-    struct cpu_info *info = cpu_info + cpu;
+    const auto& info = cpu_info[cpu];
     std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", cpu,
-            info->cpu_number, info->package_id, info->core_id, info->thread_id);
+            info.cpu_number, info.package_id, info.core_id, info.thread_id);
 
-    line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", info->family, info->model,
-                      info->stepping);
-    if (info->microcode)
-        line += stdprintf("%#" PRIx64, info->microcode);
+    line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", info.family, info.model,
+                      info.stepping);
+    if (info.microcode)
+        line += stdprintf("%#" PRIx64, info.microcode);
     else
         line += "N/A";
-    if (info->ppin)
-        line += stdprintf(", PPIN %016" PRIx64 "):", info->ppin);
+    if (info.ppin)
+        line += stdprintf(", PPIN %016" PRIx64 "):", info.ppin);
     else
         line += ", PPIN N/A):";
 
@@ -2131,18 +2131,18 @@ void YamlLogger::maybe_print_messages_header(int fd)
 
 std::string YamlLogger::thread_id_header(int cpu, int verbosity)
 {
-    struct cpu_info *info = cpu_info + cpu;
+    const auto& info = cpu_info[cpu];
     std::string line;
 #ifdef _WIN32
     line = stdprintf("{ logical-group: %2u, logical: %2u, ",
                      // see win32/cpu_affinity.cpp
-                     info->cpu_number / 64u, info->cpu_number % 64u);
+                     info.cpu_number / 64u, info.cpu_number % 64u);
 #else
-    line = stdprintf("{ logical: %*d, ", thread_core_spacing().logical, info->cpu_number);
+    line = stdprintf("{ logical: %*d, ", thread_core_spacing().logical, info.cpu_number);
 #endif
     line += stdprintf("package: %d, numa_node: %d, module: %*d, core: %*d, thread: %d",
-                      info->package_id, info->numa_id, thread_core_spacing().core, info->module_id,
-                      thread_core_spacing().core, info->core_id, info->thread_id);
+                      info.package_id, info.numa_id, thread_core_spacing().core, info.module_id,
+                      thread_core_spacing().core, info.core_id, info.thread_id);
     if (verbosity > 1) {
         auto add_value_or_null = [&line](const char *fmt, uint64_t value) {
             if (value)
@@ -2151,10 +2151,10 @@ std::string YamlLogger::thread_id_header(int cpu, int verbosity)
                 line += "null";
         };
         line += stdprintf(", family: %d, model: %#02x, stepping: %d, microcode: ",
-                          info->family, info->model, info->stepping);
-        add_value_or_null("%#" PRIx64, info->microcode);
+                          info.family, info.model, info.stepping);
+        add_value_or_null("%#" PRIx64, info.microcode);
         line += ", ppin: ";
-        add_value_or_null("\"%016" PRIx64 "\"", info->ppin);    // string to prevent loss of precision
+        add_value_or_null("\"%016" PRIx64 "\"", info.ppin);    // string to prevent loss of precision
     }
     line += " }";
     return line;

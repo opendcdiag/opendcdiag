@@ -82,7 +82,7 @@ struct linux_cpu_info
 };
 }
 
-struct cpu_info *cpu_info = nullptr;
+std::span<struct cpu_info> cpu_info = {};
 
 static Topology &cached_topology()
 {
@@ -178,7 +178,7 @@ static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2
 
 static void reorder_cpus()
 {
-    std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
+    std::sort(cpu_info.begin(), cpu_info.end(), cpu_compare);
 }
 
 static std::vector<struct cpu_info> create_mock_topology(const char *topo)
@@ -206,28 +206,28 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
 
     std::vector<struct cpu_info> mock_cpu_info;
     while (topo && *topo) {
-        struct cpu_info *info = &mock_cpu_info.emplace_back(proto_cpu);
-        info->cpu_number = mock_cpu_info.size() - 1;
+        auto& info = mock_cpu_info.emplace_back(proto_cpu);
+        info.cpu_number = mock_cpu_info.size() - 1;
 
         // mock cache too (8 kB L1, 32 kB L2, 256 kB L3)
-        info->cache[0] = { 0x2000, 0x2000 };
-        info->cache[1] = { 0x8000, 0x8000 };
-        info->cache[2] = { 0x40000, 0x40000 };
+        info.cache[0] = { 0x2000, 0x2000 };
+        info.cache[1] = { 0x8000, 0x8000 };
+        info.cache[2] = { 0x40000, 0x40000 };
 
-        if (!parse_int_and_advance(&info->package_id))
+        if (!parse_int_and_advance(&info.package_id))
             continue;
-        if (!parse_int_and_advance(&info->core_id)) {
-            info->module_id = info->core_id;
+        if (!parse_int_and_advance(&info.core_id)) {
+            info.module_id = info.core_id;
             continue;
         }
-        info->module_id = info->core_id;
-        if (!parse_int_and_advance(&info->thread_id))
+        info.module_id = info.core_id;
+        if (!parse_int_and_advance(&info.thread_id))
             continue;
-        if (!parse_int_and_advance(&info->model))
+        if (!parse_int_and_advance(&info.model))
             continue;
-        if (!parse_int_and_advance(&info->stepping))
+        if (!parse_int_and_advance(&info.stepping))
             continue;
-        if (!parse_int_and_advance(&info->microcode))
+        if (!parse_int_and_advance(&info.microcode))
             continue;
     }
 
@@ -261,7 +261,7 @@ static FILE *fopenat(int dfd, const char *name)
     return f;
 };
 
-static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
+static bool fill_cache_info_sysfs(struct cpu_info& info, int cpufd)
 {
     FILE *f;
     char buf[256];  // size repeated in fscanf below
@@ -281,7 +281,7 @@ static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
         IGNORE_RETVAL(fscanf(f, "%d", &level));
         fclose(f);
 
-        if (level <= int(sizeof(info->cache) / sizeof(info->cache[0]))) {
+        if (level <= int(sizeof(info.cache) / sizeof(info.cache[0]))) {
             int size;
             char suffix = '\0';
             f = fopenat(cachefd, "size");
@@ -302,12 +302,12 @@ static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
             fclose(f);
 
             if (strcmp(buf, "Instruction") == 0)
-                info->cache[level - 1].cache_instruction = size;
+                info.cache[level - 1].cache_instruction = size;
             else if (strcmp(buf, "Data") == 0)
-                info->cache[level - 1].cache_data = size;
+                info.cache[level - 1].cache_data = size;
             else
-                info->cache[level - 1].cache_instruction =
-                        info->cache[level - 1].cache_data = size;
+                info.cache[level - 1].cache_instruction =
+                        info.cache[level - 1].cache_data = size;
         }
     }
     return true;
@@ -386,10 +386,10 @@ static bool fill_numa()
         }
 
         // Parse the list. This will *usually* be one or two ranges.
-        struct cpu_info *cpu = &cpu_info[0];
-        struct cpu_info *const end = cpu_info + sApp->thread_count;
+        auto it = cpu_info.begin();
+        auto end = cpu_info.end();
         const char *ptr = cpulist.c_str();
-        while (*ptr && cpu != end) {
+        while (*ptr && it != end) {
             auto [start, stop] = parse_cpulist_range(ptr);
 
             // Find the starting CPU.
@@ -397,18 +397,18 @@ static bool fill_numa()
             // if we're running over the entire system, the array index
             // matches the cpu_number too.
             if (start < sApp->thread_count && cpu_info[start].cpu_number == start) {
-                cpu = &cpu_info[start];
+                *it = cpu_info[start];
             } else {
                 // no such luck, scan forward from the last cpu we marked
-                for ( ; cpu < end; ++cpu) {
-                    if (cpu->cpu_number >= start)
+                for ( ; it != end; ++it) {
+                    if (it->cpu_number >= start)
                         break;
                 }
             }
 
             // Mark the range until stop
-            for ( ; cpu < end && cpu->cpu_number <= stop; ++cpu)
-                cpu->numa_id = id;
+            for ( ; it < end && it->cpu_number <= stop; ++it)
+                it->numa_id = id;
         }
     }
 
@@ -416,11 +416,11 @@ static bool fill_numa()
     return true;
 }
 
-static bool fill_topo_sysfs(struct cpu_info *info)
+static bool fill_topo_sysfs(struct cpu_info& info)
 {
     FILE *f;
 
-    auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
+    auto_fd cpufd = open_sysfs_cpu_dir(info.cpu_number);
     if (cpufd < 0)
         return false;
     if (!fill_cache_info_sysfs(info, cpufd))
@@ -430,7 +430,7 @@ static bool fill_topo_sysfs(struct cpu_info *info)
     f = fopenat(cpufd, "topology/physical_package_id");
     if (!f)
         return false;
-    IGNORE_RETVAL(fscanf(f, "%hd", &info->package_id));
+    IGNORE_RETVAL(fscanf(f, "%hd", &info.package_id));
     fclose(f);
 
     // Linux doesn't appear to have information about tiles
@@ -438,39 +438,39 @@ static bool fill_topo_sysfs(struct cpu_info *info)
     f = fopenat(cpufd, "topology/core_id");
     if (!f)
         return false;
-    IGNORE_RETVAL(fscanf(f, "%hd", &info->core_id));
+    IGNORE_RETVAL(fscanf(f, "%hd", &info.core_id));
     fclose(f);
 
     f = fopenat(cpufd, "topology/cluster_id");
     if (f) {
         // Linux calls them modules "clusters"
-        IGNORE_RETVAL(fscanf(f, "%hd", &info->module_id));
+        IGNORE_RETVAL(fscanf(f, "%hd", &info.module_id));
         fclose(f);
     }
-    if (info->module_id < 0) {
+    if (info.module_id < 0) {
         // Override the missing information. This is probably a VM without
         // cache info or an architecture where Linux doesn't have cluster_id.
-        info->module_id = info->core_id;
+        info.module_id = info.core_id;
     }
 
     f = fopenat(cpufd, "topology/thread_siblings_list");
     if (!f)
         return false;
-    info->thread_id = 0;
+    info.thread_id = 0;
     while (!feof(f)) {
         int n;
         IGNORE_RETVAL(fscanf(f, "%d", &n));
-        if (n == info->cpu_number)
+        if (n == info.cpu_number)
             break;
-        ++info->thread_id;
+        ++info.thread_id;
         fgetc(f);
 
-        assert(info->thread_id < MAX_HWTHREADS_PER_CORE);
+        assert(info.thread_id < MAX_HWTHREADS_PER_CORE);
     }
     fclose(f);
 
-    if (std::optional apicid = proc_cpuinfo().number(info->cpu_number, "apicid", 10))
-        info->hwid = *apicid;
+    if (std::optional apicid = proc_cpuinfo().number(info.cpu_number, "apicid", 10))
+        info.hwid = *apicid;
     return true;
 }
 #elif defined(_WIN32)
@@ -517,10 +517,8 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
     static constexpr unsigned CpusPerGroup =
             std::numeric_limits<KAFFINITY>::digits;
 
-    struct cpu_info *const info = cpu_info;
-    std::span infos(info, info + num_cpus());
-    auto first_cpu_for_group = [infos](unsigned group) -> struct cpu_info * {
-        for (struct cpu_info &info : infos) {
+    auto first_cpu_for_group = [&](unsigned group) -> struct cpu_info* {
+        for (auto& info : cpu_info) {
             if (info.cpu_number / CpusPerGroup == group)
                 return &info;
         }
@@ -530,7 +528,7 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
     auto for_each_proc_in = [&](unsigned groupCount, GROUP_AFFINITY *groups, auto lambda) {
         // find the first CPU matching this group
         for (GROUP_AFFINITY &ga : std::span(groups, groupCount)) {
-            struct cpu_info *info = first_cpu_for_group(ga.Group);
+            struct cpu_info* info = first_cpu_for_group(ga.Group);
             if (!info)
                 continue;
 
@@ -540,7 +538,7 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
                 mask &= ~(1 << n);
 
                 // find the CPU matching this number in this group
-                for ( ; info < std::to_address(infos.end()); ++info) {
+                for ( ; info < std::to_address(cpu_info.end()); ++info) {
                     unsigned group = info->cpu_number / CpusPerGroup;
                     unsigned number = info->cpu_number % CpusPerGroup;
                     if (group == ga.Group && number < n)
@@ -626,22 +624,22 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
         }
     }
 
-    if (info->core_id == -1)
+    if (cpu_info[0].core_id == -1)
         return false;       // failed; we got no RelationProcessorCore results
 
-    if (info->module_id == -1) {
+    if (cpu_info[0].module_id == -1) {
         // we got no RelationProcessorModule, so "fake" them by assuming
         // core_ids == module_ids
-        for (struct cpu_info &cpu : infos)
+        for (auto& cpu : cpu_info)
             cpu.module_id = cpu.core_id;
     }
     return true;
 }
 
-static bool fill_topo_sysfs(struct cpu_info *info)
+static bool fill_topo_sysfs(struct cpu_info& info)
 {
-    if (info != &cpu_info[0])
-        return info->core_id != -1; // we only need to run once
+    if (info.cpu() != 0)
+        return info.core_id != -1; // we only need to run once
 
     return detect_topology_via_os(RelationAll);
 }
@@ -662,7 +660,7 @@ static void fill_numa()
 #endif /* __linux__ */
 
 #ifdef __x86_64__
-static bool fill_family_cpuid(struct cpu_info *info)
+static bool fill_family_cpuid(struct cpu_info& info)
 {
     /*
      * EAX layout from the manual:
@@ -688,40 +686,41 @@ static bool fill_family_cpuid(struct cpu_info *info)
         model += ((eax >> (16-4)) & 0xf0);
     stepping = eax & 0xf;
 
-    info->family = display_family;
-    info->model = model;
-    info->stepping = stepping;
+    info.family = display_family;
+    info.model = model;
+    info.stepping = stepping;
 
     // Report a warning if the information on a socket differs from socket 0.
-    if (info == cpu_info)
+    if (info.cpu() == 0)
         return true;        // first logical processor, nothing to compare to
 
-    assert(size_t(info - cpu_info) < size_t(num_cpus()));
-    if (info->package_id == info[-1].package_id)
+    assert(size_t(info.cpu()) < size_t(num_cpus()));
+    if (info.package_id == (&info)[-1].package_id) // ?????
         return true;        // same socket, so if there's a discrepancy it's already reported
 
-    if (__builtin_expect(cpu_info[0].family != display_family || cpu_info[0].model != model ||
-                         cpu_info[0].stepping != stepping, false)) {
+    const auto& first_cpu = cpu_info[0];
+    if (__builtin_expect(first_cpu.family != display_family || first_cpu.model != model ||
+                         first_cpu.stepping != stepping, false)) {
         /* print reference cpu info once */
         static bool report_cpu0_once = false;
         if (!report_cpu0_once) {
             fprintf(stderr, "WARNING: Inconsistent CPU information detected. "
                        "Reference socket %d is family 0x%02x, model 0x%02x, stepping 0x%02x\n",
-                    cpu_info[0].package_id, cpu_info[0].family, cpu_info[0].model, cpu_info[0].stepping);
+                    first_cpu.package_id, first_cpu.family, first_cpu.model, first_cpu.stepping);
             report_cpu0_once = true;
         }
         fprintf(stderr, "WARNING: CPU %d on socket %d differs from socket %d: family 0x%02x "
-                        "model 0x%02x, stepping 0x%02x.\n", info->cpu_number, info->package_id,
-                cpu_info[0].package_id, display_family, model, stepping);
+                        "model 0x%02x, stepping 0x%02x.\n", info.cpu_number, info.package_id,
+                first_cpu.package_id, display_family, model, stepping);
     }
 
     return true;
 }
 
-static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_sharing_l2)
+static bool fill_cache_info_cpuid(struct cpu_info& info, uint32_t *max_cpus_sharing_l2)
 {
-    /* since info->cache is statically allocated */
-    static int max_levels = sizeof(info->cache) / sizeof(*info->cache);
+    /* since info.cache is statically allocated */
+    static int max_levels = sizeof(info.cache) / sizeof(*info.cache);
 
     /* read the leaf 0x04: deterministic cache parameters */
     uint32_t a, b, c, d; /* eax, ebx, ecx, edx */
@@ -750,14 +749,14 @@ static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_shar
 
         switch (a & 0xf) { /* first four eax bits are type */
             case 1: /* data */
-                info->cache[level - 1].cache_data = size;
+                info.cache[level - 1].cache_data = size;
                 break;
             case 2: /* instruction */
-                info->cache[level - 1].cache_instruction = size;
+                info.cache[level - 1].cache_instruction = size;
                 break;
             case 3: /* unified */
-                info->cache[level - 1].cache_data =
-                    info->cache[level - 1].cache_instruction =
+                info.cache[level - 1].cache_data =
+                    info.cache[level - 1].cache_instruction =
                     size;
                 break;
             default: /* at this point it's > 3, i.e. a reserved value. */
@@ -770,7 +769,7 @@ static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_shar
     return true;
 }
 
-static bool fill_topo_cpuid(struct cpu_info *info)
+static bool fill_topo_cpuid(struct cpu_info& info)
 {
     enum Domain {
         Invalid = 0,
@@ -784,7 +783,7 @@ static bool fill_topo_cpuid(struct cpu_info *info)
     // we only want up to Tile
     constexpr Domain Package = Domain(Domain::Tile + 1);
 
-    int curr_cpu = info->cpu_number;
+    int curr_cpu = info.cpu_number;
     uint32_t a, b, c, apicid;
     uint32_t max_cpus_sharing_l2 = 0;
 
@@ -861,14 +860,14 @@ static bool fill_topo_cpuid(struct cpu_info *info)
         return value;
     };
 
-    info->hwid = apicid;
-    info->package_id = extract(width(Package), -1);
-    info->thread_id = extract(0, width(Domain::Logical));
-    info->core_id = extract(width(Domain::Logical), width(Package));
+    info.hwid = apicid;
+    info.package_id = extract(width(Package), -1);
+    info.thread_id = extract(0, width(Domain::Logical));
+    info.core_id = extract(width(Domain::Logical), width(Package));
 
     uint32_t next = width(Domain::Core);
     if (width(Domain::Module)) {
-        info->module_id = extract(next, width(Package));
+        info.module_id = extract(next, width(Package));
         next = width(Domain::Module);
     } else if (max_cpus_sharing_l2) {
         // CPUID didn't provide module information, we assume that a module is
@@ -877,26 +876,26 @@ static bool fill_topo_cpuid(struct cpu_info *info)
         // RelationProcessorModule is a guess). Intel docs say "the nearest
         // power-of-2 not smaller than".
         int l2_sharing_width = 31 - std::countl_zero(max_cpus_sharing_l2);
-        info->module_id = extract(l2_sharing_width, width(Package));
+        info.module_id = extract(l2_sharing_width, width(Package));
     } else {
         // if neither CPUID nor cache provide module information, we assume module == core
-        info->module_id = info->core_id;
+        info.module_id = info.core_id;
     }
     if (width(Domain::Tile)) {
-        info->tile_id = extract(next, width(Package));
+        info.tile_id = extract(next, width(Package));
         next = width(Domain::Tile);
     }
 
     return true;
 }
 
-static bool fill_ucode_msr(struct cpu_info *info)
+static bool fill_ucode_msr(struct cpu_info& info)
 {
     uint64_t ucode = 0;
 
-    if (!read_msr(info->cpu_number, 0x8B, &ucode))
+    if (!read_msr(info.cpu_number, 0x8B, &ucode))
         return false;
-    info->microcode = (uint32_t)(ucode >> 32);
+    info.microcode = (uint32_t)(ucode >> 32);
 
     return true;
 }
@@ -906,25 +905,25 @@ constexpr auto fill_ucode_msr = nullptr;
 constexpr auto fill_topo_cpuid = nullptr;
 #endif // x86-64
 
-static bool fill_ucode_sysfs(struct cpu_info *info)
+static bool fill_ucode_sysfs(struct cpu_info& info)
 {
 #ifdef __linux__
     FILE *f;
-    auto_fd cpufd { open_sysfs_cpu_dir(info->cpu_number) };
+    auto_fd cpufd { open_sysfs_cpu_dir(info.cpu_number) };
     if (cpufd < 0)
         return false;
 
     // Read Microcode version
     f = fopenat(cpufd, "microcode/version");
     if (f) {
-        IGNORE_RETVAL(fscanf(f, "%" PRIx64 , &info->microcode));
+        IGNORE_RETVAL(fscanf(f, "%" PRIx64 , &info.microcode));
         fclose(f);
     } else {
         // Prior to Linux 4.19, the microcode/version sysfs node was not world-readable
-        if (auto opt = proc_cpuinfo().number(info->cpu_number, "microcode"))
-            info->microcode = *opt;
+        if (auto opt = proc_cpuinfo().number(info.cpu_number, "microcode"))
+            info.microcode = *opt;
     }
-    return info->microcode != 0;
+    return info.microcode != 0;
 #elif defined(_WIN32)
     HKEY hKey = (HKEY)-1;
     LONG lResult = ERROR_SUCCESS;
@@ -957,7 +956,7 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
                 // See C:\>reg query HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\CentralProcessor\0
                 memcpy(&update_revision, (unsigned char*)keybuf + 4, sizeof(uint32_t));
 
-                info->microcode = (uint32_t)update_revision;
+                info.microcode = (uint32_t)update_revision;
 
                 ok = true;
             }
@@ -976,24 +975,24 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
 }
 
 #ifdef __x86_64__
-static bool fill_ppin_msr(struct cpu_info *info)
+static bool fill_ppin_msr(struct cpu_info& info)
 {
-    info->ppin = 0;
-    return read_msr(info->cpu_number, 0x4F, &info->ppin); /* MSR_PPIN */
+    info.ppin = 0;
+    return read_msr(info.cpu_number, 0x4F, &info.ppin); /* MSR_PPIN */
 }
 #else
 constexpr auto fill_ppin_msr = nullptr;
 #endif // __x86_64__
 
-static bool fill_ppin_sysfs(struct cpu_info *info)
+static bool fill_ppin_sysfs(struct cpu_info& info)
 {
 #if defined(__linux__) && defined(__x86_64__)
-    auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
+    auto_fd cpufd = open_sysfs_cpu_dir(info.cpu_number);
     if (cpufd < 0)
         return false;
 
     if (AutoClosingFile f { fopenat(cpufd, "topology/ppin") }) {
-        if (fscanf(f, "%" PRIx64, &info->ppin) > 0)
+        if (fscanf(f, "%" PRIx64, &info.ppin) > 0)
             return true;
     }
 #endif
@@ -1001,7 +1000,7 @@ static bool fill_ppin_sysfs(struct cpu_info *info)
     return false;
 }
 
-template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
+template <auto &fnArray> static bool try_detection(struct cpu_info& cpu)
 {
     using DetectorFunction = std::decay_t<decltype(fnArray[0])>;
     if (std::size(fnArray) > 0) {
@@ -1027,10 +1026,10 @@ template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
     return false;
 }
 
-typedef bool (* fill_family_func)(struct cpu_info *);
-typedef bool (* fill_ppin_func)(struct cpu_info *);
-typedef bool (* fill_ucode_func)(struct cpu_info *);
-typedef bool (* fill_topo_func)(struct cpu_info *);
+typedef bool (* fill_family_func)(struct cpu_info&);
+typedef bool (* fill_ppin_func)(struct cpu_info&);
+typedef bool (* fill_ucode_func)(struct cpu_info&);
+typedef bool (* fill_topo_func)(struct cpu_info&);
 
 static const fill_family_func family_impls[] = { fill_family_cpuid };
 static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
@@ -1051,7 +1050,7 @@ void apply_cpuset_param(char *param)
     if (SandstoneConfig::RestrictedCommandLine)
         return;
 
-    std::span<struct cpu_info> old_cpu_info(cpu_info, sApp->thread_count);
+    std::span<struct cpu_info> old_cpu_info = cpu_info;
     std::vector<struct cpu_info> new_cpu_info;
     int total_matches = 0;
 
@@ -1203,7 +1202,7 @@ void apply_cpuset_param(char *param)
 static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 {
     assert(sApp->thread_count == enabled_cpus.count());
-    cpu_info = sApp->shmem->cpu_info;
+    cpu_info = {sApp->shmem->cpu_info, sApp->shmem->cpu_info + num_cpus()};
 
     if (SandstoneConfig::Debug) {
         static auto mock_topology = create_mock_topology(getenv("SANDSTONE_MOCK_TOPOLOGY"));
@@ -1219,17 +1218,17 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
         }
 
         /* fill everything with -1 to indicate n/a and set the OS cpu id. */
-        auto info = cpu_info + i;
-        info->cpu_number = curr_cpu;
-        info->package_id = -1;
-        info->numa_id = -1;
-        info->tile_id = -1;
-        info->module_id = -1;
-        info->core_id = -1;
-        info->thread_id = -1;
-        info->hwid = -1;
+        auto& info = cpu_info[i];
+        info.cpu_number = curr_cpu;
+        info.package_id = -1;
+        info.numa_id = -1;
+        info.tile_id = -1;
+        info.module_id = -1;
+        info.core_id = -1;
+        info.thread_id = -1;
+        info.hwid = -1;
 
-        std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
+        std::fill(std::begin(info.cache), std::end(info.cache), cache_info{-1, -1});
     }
 
     auto detect = [](void *ptr) -> void * {
@@ -1242,10 +1241,10 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
             }
 
             pin_to_logical_processor(lp);
-            try_detection<topo_impls>(&cpu_info[i]);
-            try_detection<family_impls>(&cpu_info[i]);
-            try_detection<ppin_impls>(&cpu_info[i]);
-            try_detection<ucode_impls>(&cpu_info[i]);
+            try_detection<topo_impls>(cpu_info[i]);
+            try_detection<family_impls>(cpu_info[i]);
+            try_detection<ppin_impls>(cpu_info[i]);
+            try_detection<ucode_impls>(cpu_info[i]);
         }
         return nullptr;
     };
@@ -1257,74 +1256,73 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     fill_numa();
 }
 
-static void populate_core_group(Topology::CoreGrouping *group, const Topology::Thread *begin,
-                                const Topology::Thread *end)
+static void populate_core_group(Topology::CoreGrouping& group, int index_begin, int index_end)
 {
     // fill in the threads
     auto fill_in_threads = [&](auto &where, auto what) {
-        const Topology::Thread *first = begin;
-        const Topology::Thread *last = first;
-        for ( ; last != end; ++last) {
-            if (last->*what == first->*what)
+        auto first = index_begin;
+        auto last = first;
+        for ( ; last != index_end; ++last) {
+            if (cpu_info[last].*what == cpu_info[first].*what) // ?
                 continue;
-            where.push_back({ { first, last } });
+            where.emplace_back(std::span{cpu_info.begin() + first, cpu_info.begin() + last});
             first = last;
         }
         // add any remainders
-        where.push_back({ { first, end } });
+        where.emplace_back(std::span{cpu_info.begin() + first, cpu_info.begin() + index_end});
     };
 
-    fill_in_threads(group->cores, &Topology::Thread::core_id);
-    // fill_in_threads(group->modules, &Topology::Thread::module_id);
+    fill_in_threads(group.cores, &Topology::Thread::core_id);
+    // fill_in_threads(group.modules, &Topology::Thread::module_id);
 }
 
 static Topology build_topology()
 {
-    struct cpu_info *info = cpu_info;
-    const struct cpu_info *const end = cpu_info + num_cpus();
+    auto index = 0;
+    auto index_end = num_cpus() - 1;
 
     std::vector<Topology::Package> packages;
-    if (int max_package_id = end[-1].package_id; max_package_id >= 0)
+    if (int max_package_id = cpu_info[index_end].package_id; max_package_id >= 0)
         packages.reserve(max_package_id + 1);
     else
         return Topology({});
 
-    while (info != end) {
-        if (info->package_id < 0 || info->core_id < 0 || info->thread_id < 0)
+    while (index <= index_end) {
+        if (cpu_info[index].package_id < 0 || cpu_info[index].core_id < 0 || cpu_info[index].thread_id < 0)
             return Topology({});
 
-        Topology::Package *pkg = &packages.emplace_back();
+        auto& pkg = packages.emplace_back();
 
         // scan forward to the end of this package
-        Topology::Thread *first = info;
-        Topology::Thread *numafirst = info;
+        auto first = index;
+        auto numafirst = index;
         int core_count = 0;
-        for (int last_core_id = -1; info != end; ++info) {
-            if (info->core_id < 0 || info->thread_id < 0)
+        for (int last_core_id = -1; index <= index_end; ++index) {
+            if (cpu_info[index].core_id < 0 || cpu_info[index].thread_id < 0)
                 return Topology({});
-            if (info->package_id != first->package_id)
+            if (cpu_info[index].package_id != cpu_info[first].package_id)
                 break;
-            if (info->core_id != last_core_id) {
+            if (cpu_info[index].core_id != last_core_id) {
                 ++core_count;
-                last_core_id = info->core_id;
+                last_core_id = cpu_info[index].core_id;
             }
-            if (info->numa_id != numafirst->numa_id) {
+            if (cpu_info[index].numa_id != cpu_info[numafirst].numa_id) {
                 // start of a new NUMA node inside of this Package
-                populate_core_group(&pkg->numa_domains.emplace_back(), numafirst, info);
-                numafirst = info;
+                populate_core_group(pkg.numa_domains.emplace_back(), numafirst, index);
+                numafirst = index;
             }
         }
 
         // populate the full core
-        pkg->cores.reserve(core_count + 1);
-        populate_core_group(pkg, first, info);
+        pkg.cores.reserve(core_count + 1);
+        populate_core_group(pkg, first, index);
 
         // populate the last NUMA node, which may be the only one too
-        Topology::NumaNode *numa = &pkg->numa_domains.emplace_back();
-        if (pkg->numa_domains.size() == 1)
-            numa->CoreGrouping::operator=(*pkg);    // just copy the Package
+        auto& numa = pkg.numa_domains.emplace_back();
+        if (pkg.numa_domains.size() == 1)
+            numa.CoreGrouping::operator=(pkg);    // just copy the Package
         else
-            populate_core_group(numa, numafirst, info);
+            populate_core_group(numa, numafirst, index);
     }
 
     return Topology(std::move(packages));
@@ -1338,7 +1336,7 @@ const Topology &Topology::topology()
 Topology::Data Topology::clone() const
 {
     Data result;
-    result.all_threads.assign(cpu_info, cpu_info + num_cpus());
+    result.all_threads = {cpu_info.begin(), cpu_info.end()};
     result.packages = packages;
 
     // now update all spans to point to the data we carry
@@ -1356,10 +1354,10 @@ Topology::Data Topology::clone() const
 void update_topology(std::span<const struct cpu_info> new_cpu_info,
                      std::span<const Topology::Package> packages)
 {
-    struct cpu_info *end;
+    decltype(cpu_info.begin()) end;
     if (packages.empty()) {
         // copy all
-        end = std::copy(new_cpu_info.begin(), new_cpu_info.end(), cpu_info);
+        end = std::copy(new_cpu_info.begin(), new_cpu_info.end(), cpu_info.begin());
     } else {
         // copy only if matching the socket ID
         auto matching = [=](const struct cpu_info &ci) {
@@ -1369,10 +1367,10 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
             }
             return false;
         };
-        end = std::copy_if(new_cpu_info.begin(), new_cpu_info.end(), cpu_info, matching);
+        end = std::copy_if(new_cpu_info.begin(), new_cpu_info.end(), cpu_info.begin(), matching);
     }
 
-    int new_thread_count = end - cpu_info;
+    int new_thread_count = end - cpu_info.begin();
     if (int excess = sApp->thread_count - new_thread_count; excess > 0)
         std::fill_n(end, excess, (struct cpu_info){});
 
@@ -1390,13 +1388,14 @@ void init_topology(const LogicalProcessorSet &enabled_cpus)
 void restrict_topology(CpuRange range)
 {
     assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
-    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_cpu);
+    auto old_cpu_info = cpu_info;
+    cpu_info = {sApp->shmem->cpu_info + range.starting_cpu, sApp->shmem->cpu_info + num_cpus()};
     int old_thread_count = std::exchange(sApp->thread_count, range.cpu_count);
 
     Topology &topo = cached_topology();
-    if (old_cpu_info != cpu_info || old_thread_count != sApp->thread_count ||
-            topo.packages.size() == 0)
+    if (old_cpu_info.data() != cpu_info.data() || old_thread_count != sApp->thread_count || topo.packages.size() == 0) {
         topo = build_topology();
+    }
 }
 
 static char character_for_mask(uint32_t mask)
