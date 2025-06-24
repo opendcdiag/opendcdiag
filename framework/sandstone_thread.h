@@ -14,12 +14,16 @@
 struct SandstoneTestThread
 {
     using RunnerFunction = uintptr_t (int);
-    void start(RunnerFunction *, int cpu);
-    uintptr_t join();
+    SandstoneTestThread(RunnerFunction *f, int cpu = 0);
+    ~SandstoneTestThread();
+
+    bool join();
 
     pthread_t thread;
-    RunnerFunction *target;
-    int thread_num;
+    RunnerFunction* const target{ nullptr };
+
+    const int thread_num{ -1 };
+    bool started{ false };
 };
 
 #endif // SANDSTONE_THREAD

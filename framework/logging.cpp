@@ -1836,6 +1836,10 @@ void KeyValuePairLogger::print_thread_messages()
     auto doprint = [this](PerThreadData::Common *data, int i) {
         struct mmap_region r = maybe_mmap_log(data);
 
+        if ((r.size == 0) && (i >= 0) && (sApp->test_thread_data(i)->assigned_device <= PerThreadData::Test::NO_DEVICE_ASSIGNED)) {
+            // workload thread was not started
+            return;
+        }
         if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
             return;           /* nothing to be printed, on any level */
 
@@ -2094,6 +2098,11 @@ void TapFormatLogger::print_thread_messages()
 {
     auto doprint = [this](PerThreadData::Common *data, int i) {
         struct mmap_region r = maybe_mmap_log(data);
+
+        if ((r.size == 0) && (i >= 0) && (sApp->test_thread_data(i)->assigned_device <= PerThreadData::Test::NO_DEVICE_ASSIGNED)) {
+            // workload thread was not started
+            return;
+        }
 
         if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
             return;             /* nothing to be printed, on any level */
@@ -2488,6 +2497,12 @@ void YamlLogger::print()
         if (r.size - (s_tid < 0 ? init_skip_message_bytes : 0) == 0 && !data->has_failed() && sApp->shmem->verbosity < 3) {
             munmap_and_truncate_log(data, r);
             return;             /* nothing to be printed, on any level */
+        }
+
+        if ((r.size == 0) && (s_tid >= 0) && (sApp->test_thread_data(s_tid)->assigned_device <= PerThreadData::Test::NO_DEVICE_ASSIGNED)) {
+            // workload thread was not started
+            munmap_and_truncate_log(data, r);
+            return;
         }
 
         print_thread_header(file_log_fd, s_tid, INT_MAX);

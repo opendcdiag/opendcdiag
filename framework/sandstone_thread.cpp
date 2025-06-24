@@ -81,7 +81,9 @@ void SandstoneTestThreadAttributes::update_with_stack_for(int)
 #endif
 }
 
-void SandstoneTestThread::start(RunnerFunction *f, int cpu)
+SandstoneTestThread::SandstoneTestThread(RunnerFunction *f, int cpu):
+    target(f),
+    thread_num(cpu)
 {
     assert(check_run_from_correct_thread());
 
@@ -94,15 +96,28 @@ void SandstoneTestThread::start(RunnerFunction *f, int cpu)
         return reinterpret_cast<void *>(self->target(self->thread_num));
     };
 
-    thread_num = cpu;
-    target = f;
     thread_attributes.update_with_stack_for(cpu);
-    pthread_create(&thread, &thread_attributes.thread_attr, runner, this);
+    int err = pthread_create(&thread, &thread_attributes.thread_attr, runner, this);
+    if (err == 0) {
+        started = true;
+    } else {
+        errno = err; perror("SandstoneTestThread");
+    }
 }
 
-uintptr_t SandstoneTestThread::join()
+SandstoneTestThread::~SandstoneTestThread()
 {
-    void *result;
-    pthread_join(thread, &result);
-    return uintptr_t(result);
+    // join if not joined explicitly yet..
+    join();
+}
+
+bool SandstoneTestThread::join()
+{
+    if (started) {
+        void *result = nullptr;
+        pthread_join(thread, &result);
+        started = false;
+        return true;
+    }
+    return false;
 }

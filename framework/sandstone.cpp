@@ -965,11 +965,6 @@ static uintptr_t thread_runner(int thread_number)
     after.Snapshot(thread_number);
     this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
 
-    if (sApp->shmem->verbosity >= 3)
-        log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
-                    thread_number, this_thread->inner_loop_count);
-
-
     // our caller doesn't care what we return, but the returned value helps if
     // you're running strace
     return ret;
@@ -1305,48 +1300,50 @@ static void restart_init(int iterations)
 {
 }
 
-static void run_threads_in_parallel(const struct test *test)
+static bool run_threads_in_parallel(const struct test *test)
 {
-    SandstoneTestThread thr[num_cpus()];    // NOLINT: -Wvla
+    std::vector<SandstoneTestThread> threads;
     int i;
 
     for (i = 0; i < num_cpus(); i++) {
-        thr[i].start(thread_runner, i);
+        if (sApp->test_thread_data(i)->assigned_device > PerThreadData::Test::NO_DEVICE_ASSIGNED) {
+            threads.emplace_back(thread_runner, i);
+            if (!threads.back().started) {
+                // thread **not** started successfully, do not keep it in the list
+                log_warning("Thread not started successfully");
+                threads.pop_back();
+            }
+        }
     }
     /* wait for threads to end */
-    for (i = 0; i < num_cpus(); i++) {
-        thr[i].join();
+    for (auto& thr: threads) {
+        thr.join();
     }
+    return !threads.empty();
 }
 
-static void run_threads_sequentially(const struct test *test)
+static bool run_threads_sequentially(const struct test *test)
 {
     // we still start one thread, in case the test uses report_fail_msg()
     // (which uses pthread_cancel())
-    SandstoneTestThread thread;
-    thread.start([](int cpu) {
-        for ( ; cpu != num_cpus(); thread_num = ++cpu)
-            thread_runner(cpu);
-        return uintptr_t(cpu);
-    }, 0);
-    thread.join();
+    SandstoneTestThread thread{
+        [](int cpu) {
+            for ( ; cpu != num_cpus(); thread_num = ++cpu)
+                thread_runner(cpu);
+            return uintptr_t(cpu);
+        }};
+    return thread.join();
 }
 
-static void run_threads(const struct test *test)
+static bool run_threads(const struct test *test)
 {
-    current_test = test;
-
     switch (test->flags & test_schedule_mask) {
     default:
-        run_threads_in_parallel(test);
-        break;
+        return run_threads_in_parallel(test);
 
     case test_schedule_sequential:
-        run_threads_sequentially(test);
-        break;
+        return run_threads_sequentially(test);
     }
-
-    current_test = nullptr;
 }
 
 namespace {
@@ -1677,7 +1674,13 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
             break;
         }
 
-        run_threads(test);
+        current_test = test;
+        bool any_run = run_threads(test);
+        current_test = nullptr;
+        if (!any_run) {
+            log_skip(RuntimeSkipCategory, "Neither thread has been run");
+            state = TestResult::Skipped;
+        }
 
         if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime)){
             // skip cleanup on the last test when using strict runtime
@@ -2197,6 +2200,7 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures
         if ((sApp->shmem->current_max_loop_count > 0
              && MonotonicTimePoint::clock::now() < first_iteration_target && auto_fracture))
             sApp->shmem->current_max_loop_count *= 2;
+
 
         /* don't repeat skipped tests */
         if (state == TestResult::Skipped)
@@ -3011,4 +3015,96 @@ int main(int argc, char **argv)
 
     // done running all the tests, clean up and exit
     return cleanup_global(exit_code, std::move(per_cpu_failures));
+}
+
+
+__attribute__((weak, noclone, noinline))
+int get_first_matching_device(int cpu, const std::vector<int>& devices, bool numa_match) {
+    if (devices.empty()) {
+        return -1;
+    }
+    return devices.at(0);
+}
+
+__attribute__((weak, noclone, noinline))
+int parse_device(const char* device) {
+    if (device == nullptr) {
+        return 0; // no devices in the system
+    } else {
+        return -1; // cannot parse the device
+    }
+}
+
+int disable_cpus_over_count(int count) {
+    int i;
+    int enabled = 0;
+    for (i = 0; i < num_cpus(); i++) {
+        if (sApp->test_thread_data(i)->assigned_device > PerThreadData::Test::NO_DEVICE_ASSIGNED) {
+            enabled++;
+        }
+    }
+    if (enabled <= count) {
+        // disable all CPUs
+        for (i = 0; i < num_cpus(); i++) {
+            sApp->test_thread_data(i)->assigned_device = PerThreadData::Test::NO_DEVICE_ASSIGNED;
+        }
+        return EXIT_SKIP;
+    }
+    while (enabled > count) {
+        i = random() % num_cpus();
+        while (sApp->test_thread_data(i)->assigned_device <= PerThreadData::Test::NO_DEVICE_ASSIGNED) {
+            i++;
+            if (i >= num_cpus()) {
+                i = 0;
+            }
+        }
+        sApp->test_thread_data(i)->assigned_device = PerThreadData::Test::NO_DEVICE_ASSIGNED;
+        enabled--;
+    }
+    return EXIT_SUCCESS;
+}
+
+int disable_cpus_with_no_matching_devices(bool numa_match) {
+    int status = EXIT_SKIP;
+    std::vector<int> devices{};
+    if (sApp->enabled_devices_list) {
+        devices.assign(sApp->enabled_devices_list->cbegin(), sApp->enabled_devices_list->cend());
+    } else {
+        int num = parse_device(nullptr);
+        devices.reserve(num);
+        for (int device = 0; device < num; device++) {
+            devices.push_back(device);
+        }
+    }
+    for (int cpu = 0; cpu < num_cpus(); cpu++) {
+        int device = get_first_matching_device(cpu, devices, numa_match);
+        if (device < 0) {
+            // cannot match any device to the CPU, disable the CPU
+            sApp->test_thread_data(cpu)->assigned_device = PerThreadData::Test::NO_DEVICE_ASSIGNED;
+        } else {
+            sApp->test_thread_data(cpu)->assigned_device = device;
+            devices.erase(std::find(devices.begin(), devices.end(), device));
+            status = EXIT_SUCCESS;
+        }
+    }
+    return status;
+}
+
+int get_assigned_device(int cpu) {
+    int device = -1;
+    if ((0 <= cpu) && (cpu < num_cpus())) {
+        device = sApp->test_thread_data(cpu)->assigned_device;
+    } else if (cpu == -1) {
+        // find very first CPU with a device assigned
+        for (cpu = 0; cpu < num_cpus(); cpu++) {
+            device = sApp->test_thread_data(cpu)->assigned_device;
+            if (device > PerThreadData::Test::NO_DEVICE_ASSIGNED) {
+                if (device == PerThreadData::Test::ALL_DEVICES_ALLOWED) {
+                    device = 0;
+                }
+                break;
+            }
+        }
+    }
+    return device;
 }

@@ -875,4 +875,33 @@ public:
 };
 #endif // __cplusplus
 
+int apply_devices_param(char* param);
+
+#ifdef __cplusplus
+// parse the device string or return the number of devices found in the system
+// to override with framework-overrides
+int parse_device(const char* device);
+
+// get first suitable device for the CPU (only for 1:1 cpu-device mapping)
+// to override with framework-overrides
+int get_first_matching_device(int cpu, const std::vector<int>& devices, bool numa_match);
+
+// don't run any workload on CPUs without matching devices (for 1:1 cpu-device mapping)
+int disable_cpus_with_no_matching_devices(bool numa_match = false);
+
+// Run the workload on given number of CPUs. If there are fewer CPUs with devices
+// the function returns SKIP and disables all the CPUs
+int disable_cpus_over_count(int num_cpus);
+
+// get assigned device handle for the CPU. If no device is assigned (or "run on all
+// devices" is assumed) it returns nullptr. If CPU -1 is passed, it returns the first
+// assigned device (to any CPU).
+int get_assigned_device(int cpu = -1);
+
+template<class T>
+const T* get_assigned_device(int cpu = -1);
+
+#endif // __cplusplus
+
+
 #endif  /* __INCLUDE_GUARD_SANDSTONE_H_ */

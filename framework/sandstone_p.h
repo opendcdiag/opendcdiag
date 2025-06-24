@@ -223,6 +223,9 @@ struct alignas(64) Test : Common
     double effective_freq_mhz;
 
     /* Thread ID */
+    static constexpr const int NO_DEVICE_ASSIGNED = -2;
+    static constexpr const int ALL_DEVICES_ALLOWED = -1;
+    int assigned_device;
     std::atomic<tid_t> tid;
 
     void init()
@@ -230,6 +233,7 @@ struct alignas(64) Test : Common
         Common::init();
         inner_loop_count = inner_loop_count_at_fail = 0;
         effective_freq_mhz = 0.0;
+        assigned_device = ALL_DEVICES_ALLOWED;
     }
 };
 } // namespace PerThreadData
@@ -425,6 +429,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     SandstoneBackgroundScan background_scan;
 
     std::unique_ptr<DeviceSchedule> device_schedule = nullptr;
+    std::unique_ptr<std::vector<int>> enabled_devices_list;
 
 private:
     SandstoneApplication() = default;
