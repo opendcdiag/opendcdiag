@@ -177,6 +177,9 @@ static line_type parse_test_list_line(std::string line, SandstoneTestSet *test_s
     while (is_ignored(*it)) ++it;
     if (*it == '#' || it == line.end()) return LT_EMPTY;
     for (; ; ++it) {
+        // skip ignored characters before token contents
+        while (it != line.end() && is_ignored(*it)) ++it;
+        if (it == line.end()) break;
         auto cit = it;
         /* scroll while it's valid token contents: till end of line, a
          * terminator, or a space. */
