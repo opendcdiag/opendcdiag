@@ -2429,8 +2429,9 @@ static int exec_mode_run(int argc, char **argv)
     int child_number = parse_int(argv[3]);
 
     attach_shmem(parse_int(argv[2]));
-    cpu_info = sApp->shmem->cpu_info;
+
     sApp->thread_count = sApp->shmem->total_cpu_count;
+    cpu_info = {sApp->shmem->cpu_info, sApp->shmem->cpu_info + num_cpus()};
     sApp->user_thread_data.resize(sApp->thread_count);
 
     test_set = new SandstoneTestSet({ .is_selftest = sApp->shmem->selftest, }, SandstoneTestSet::enable_all_tests);

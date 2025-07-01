@@ -33,6 +33,7 @@
 
 #ifdef __cplusplus
 #include <atomic>
+#include <span>
 using std::atomic_int;
 extern "C" {
 #else
@@ -671,12 +672,6 @@ extern thread_local int thread_num;
 extern __thread int thread_num __attribute__((tls_model("initial-exec")));
 #endif
 
-/// cpu_info is an array of cpu_info structures.  Each element of the array
-/// contains information about a logical CPU that will be used to
-/// execute a test's test_run function.  The size of this array is
-/// equal to the value returned by num_cpus().
-extern struct cpu_info *cpu_info;
-
 /// Returns the number of hardware threads (logical CPUs) available to a
 /// test.  It is equal to the number of test threads the framework runs.
 /// Normally, this value is equal to the number of CPU threads in the
@@ -694,9 +689,16 @@ void reschedule();
 
 #ifdef __cplusplus
 }
+
+/// cpu_info is an array of cpu_info structures.  Each element of the array
+/// contains information about a logical CPU that will be used to
+/// execute a test's test_run function. The size of this array is
+/// equal to the value returned by num_cpus().
+extern std::span<struct cpu_info> cpu_info;
+
 inline int cpu_info::cpu() const
 {
-    return this - ::cpu_info;
+    return this - ::cpu_info.data();
 }
 
 constexpr inline test_flags operator|(test_flag f1, test_flag f2)

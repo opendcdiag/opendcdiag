@@ -40,14 +40,8 @@
 #if defined(__x86_64__)
 #if defined(__linux__)
 
-#include <assert.h>
-#include <dirent.h>
-#include <errno.h>
+#include <cassert>
 #include <fcntl.h>
-#include <limits.h>
-#include <paths.h>
-#include <stdio.h>
-#include <unistd.h>
 
 #include "sandstone_ifs.h"
 

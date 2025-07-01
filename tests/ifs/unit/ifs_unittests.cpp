@@ -8,11 +8,11 @@
 #include "gtest/gtest.h"
 #include "sandstone_unittests_utils.h"
 
-#include "../sandstone_ifs.c"
+#include "../sandstone_ifs.cpp"
 #undef PATH_SYS_IFS_BASE
 #define PATH_SYS_IFS_BASE
 
-#include "../ifs.c"
+#include "../ifs.cpp"
 #include "ifs_test_cases.h"
 #include "ifs_unit_utils.h"
 
@@ -274,7 +274,8 @@ TEST(IFSTrigger, AllCoresPass)
 
     // Setup dummy cpu_info array
     int cpu_num = 2;
-    cpu_info = new struct cpu_info[cpu_num];
+    auto* dummy = new struct cpu_info[cpu_num];
+    cpu_info = {dummy, dummy + cpu_num};
     cpu_info[1].cpu_number = 1;
 
     // Loop over each cpu
@@ -289,7 +290,7 @@ TEST(IFSTrigger, AllCoresPass)
         EXPECT_STREQ(contents, expected);
     }
 
-    delete [] cpu_info;
+    delete [] dummy;
     test_cleanup(test_t, ifs_info, trigger_test1);
 }
 
@@ -304,7 +305,8 @@ TEST(IFSTrigger, AllCoresFail)
 
     // Setup dummy cpu_info array
     int cpu_num = 2;
-    cpu_info = new struct cpu_info[cpu_num];
+    auto* dummy = new struct cpu_info[cpu_num];
+    cpu_info = {dummy, dummy + cpu_num};
     cpu_info[1].cpu_number = 1;
 
     // Loop over each cpu
@@ -319,7 +321,7 @@ TEST(IFSTrigger, AllCoresFail)
         EXPECT_STREQ(contents, expected);
     }
 
-    delete [] cpu_info;
+    delete [] dummy;
     test_cleanup(test_t, ifs_info, trigger_test2);
 }
 
@@ -334,7 +336,8 @@ TEST(IFSTrigger, SingleCoreFail)
 
     // Setup dummy cpu_info array
     int cpu_num = 2;
-    cpu_info = new struct cpu_info[cpu_num];
+    auto* dummy = new struct cpu_info[cpu_num];
+    cpu_info = {dummy, dummy + cpu_num};
     cpu_info[1].cpu_number = 1;
 
     // First run is expected to pass
@@ -344,7 +347,7 @@ TEST(IFSTrigger, SingleCoreFail)
     setup_sysfs_file(ifs_info->sys_dir, "status", "fail");
     EXPECT_EQ(scan_run(test_t, 1), EXIT_FAILURE);
 
-    delete [] cpu_info;
+    delete [] dummy;
     test_cleanup(test_t, ifs_info, trigger_test3);
 }
 
@@ -359,7 +362,8 @@ TEST(IFSTrigger, AllCoresUntested)
 
     // Setup dummy cpu_info array
     int cpu_num = 2;
-    cpu_info = new struct cpu_info[cpu_num];
+    auto* dummy = new struct cpu_info[cpu_num];
+    cpu_info = {dummy, dummy + cpu_num};
     cpu_info[1].cpu_number = 1;
 
     // Loop over each cpu
@@ -374,7 +378,7 @@ TEST(IFSTrigger, AllCoresUntested)
         EXPECT_STREQ(contents, expected);
     }
 
-    delete [] cpu_info;
+    delete [] dummy;
     test_cleanup(test_t, ifs_info, trigger_test4);
 }
 
