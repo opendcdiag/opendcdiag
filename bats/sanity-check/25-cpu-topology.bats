@@ -497,7 +497,7 @@ selftest_cpuset_negated() {
 # Confirm we are rescheduling properly
 @test "thread queue reschedule" {
     run $SANDSTONE -n1 --selftests -e selftest_logs_reschedule --reschedule=queue
-    if [[ $status == 64 ]]; then
+    if [[ $status == 64 ]] || [[ "`uname -m`" != x86_64 ]]; then
        skip "Not supported"
     fi
 
