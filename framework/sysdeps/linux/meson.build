@@ -6,10 +6,6 @@ if (host_machine.cpu_family() == 'x86_64')
         'interrupt_monitor.cpp',
         'msr.c',
     )
-else
-    framework_files += files(
-        '../generic/msr.c',
-    )
 endif
 
 if device_type == 'cpu' and host_machine.cpu_family() == 'x86_64'
