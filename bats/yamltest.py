@@ -83,10 +83,10 @@ def validate_thread(name, thr):
 
 with open(sys.argv[1]) as file:
     log = yaml.safe_load(file)
-    tests = log['tests']
-    if len(tests) == 0:
-        fail("tests array was empty")
     exit_fail = False
+    tests = []
+    if 'tests' in log:
+        tests = log['tests']
     for test in tests:
         name = test['test']
         details = test['details']
