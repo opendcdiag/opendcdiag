@@ -683,6 +683,8 @@ static void cause_sigill()
                 "x" (f),
                 "x" (one)
                 );
+#elif defined(__aarch64__)
+    asm("udf #0x1234");
 #else
     __builtin_trap();
 #endif
