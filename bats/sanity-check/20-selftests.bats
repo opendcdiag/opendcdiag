@@ -662,9 +662,11 @@ selftest_pass() {
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 421843888 386376794 2046232626 184745881"
 
-    sandstone_selftest -e selftest_logs_random_init -s AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
-    [[ "$status" -eq 0 ]]
-    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1242137224 1378217084 1525375882 474233533"
+    if [[ "`uname -m`" = x86_64 ]]; then
+        sandstone_selftest -e selftest_logs_random_init -s AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1242137224 1378217084 1525375882 474233533"
+    fi
 }
 
 test_random() {
@@ -724,6 +726,10 @@ test_random() {
 }
 
 @test "selftest_logs_random_aes" {
+    if [[ "`uname -m`" != x86_64 ]]; then
+        skip "AES engine is only present on x86-64"
+    fi
+
     local -r SEED=AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
     local -Ar random_results=(
         [0:0:0]="1442152966 848034066 1178242204 1152613460"
@@ -735,7 +741,7 @@ test_random() {
         [1:0:0]="672773493 1071973933 867607355 1164627367"
         [2:0:0]="65707667 538845702 2142028653 158189198"
         [3:0:0]="647518054 617961218 490776568 784171714"
-    )
+    )    
 
     # Mocking 4 sockets of 1 core each
     test_random $SEED 0:0:0 1:0:0 2:0:0 3:0:0
