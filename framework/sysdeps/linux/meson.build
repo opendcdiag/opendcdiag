@@ -8,10 +8,16 @@ if (host_machine.cpu_family() == 'x86_64')
     )
 endif
 
-if device_type == 'cpu' and host_machine.cpu_family() == 'x86_64'
-    framework_files += files(
-        'kvm.c',
-    )
+if device_type == 'cpu'
+    if host_machine.cpu_family() == 'x86_64'
+        framework_files += files(
+            'kvm.c',
+        )
+    else
+        framework_files += files(
+            '../generic/kvm.c',
+        )
+    endif
 endif
 
 framework_files += \
