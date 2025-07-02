@@ -578,7 +578,7 @@ extern void log_data(const char *message, const void *data, size_t size);
 /// privileges.
 uint64_t retrieve_physical_address(const volatile void *ptr);
 
-#ifdef __linux__
+#if defined(__linux__) && defined(__x86_64__)
 /// reads the value of the MSR, specified by msr, of CPU cpu.
 /// The value is returned in the value parameter.  The function
 /// returns true if the value can be read and false otherwise.
