@@ -229,7 +229,7 @@ default_cpp_warn = [
 # Subdirs can add target dependencies if they wish
 target_deps = []
 
-boost_dep = dependency('boost', version : '>=1.69', required : false, include_type : 'system')
+boost_dep = dependency('boost', version : '>=1.69', required : false)
 # Check for required headers
 # (Also accomodates distributions which do not package a pkg-config file for boost)
 boost_has_hdrs = cpp.check_header('boost/algorithm/string.hpp') and cpp.check_header('boost/type_traits/is_complex.hpp')

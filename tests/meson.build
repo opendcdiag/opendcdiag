@@ -90,7 +90,7 @@ tests_set_skx.add(
     )
 )
 
-zstd_dep = dependency('libzstd', include_type : 'system', static : dep_static)
+zstd_dep = dependency('libzstd', static : dep_static)
 tests_set_base.add(
     when : zstd_dep,
     if_true : files(
@@ -98,7 +98,7 @@ tests_set_base.add(
     )
 )
 
-zlib_dep = dependency('zlib', include_type : 'system', static : dep_static)
+zlib_dep = dependency('zlib', static : dep_static)
 tests_set_base.add(
     when : zlib_dep,
     if_true : files(
