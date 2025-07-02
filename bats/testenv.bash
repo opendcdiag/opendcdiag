@@ -123,7 +123,8 @@ function run_sandstone_yaml()
         declare -p yamldump > /dev/null # errors out if variable is not pre-declared
         local structure=$(python3 $BATS_TEST_COMMONDIR/dumpyaml.py < $outputfile)
         eval "yamldump=($structure)"
-    elif [[ "$VALIDATION" != 0 ]]; then
+    fi
+    if [[ "$VALIDATION" != 0 ]]; then
         python3 $BATS_TEST_COMMONDIR/yamltest.py $outputfile
     fi
     if type -p yq > /dev/null; then

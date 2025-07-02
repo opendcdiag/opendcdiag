@@ -83,6 +83,8 @@ def validate_thread(name, thr):
 
 with open(sys.argv[1]) as file:
     log = yaml.safe_load(file)
+    ignoring_timeouts = '--ignore-timeout' in log['command-line'] or '--ignore-os-error' in log['command-line']
+    fatal_skips = '--fatal-skips' in log['command-line']
     exit_fail = False
     tests = []
     if 'tests' in log:
@@ -115,6 +117,10 @@ with open(sys.argv[1]) as file:
             any_failed = validate_thread(name, thr) or any_failed
         if any_failed and result in ('pass', 'skip'):
             fail("found at least one failing thread for test {} but it was not a failure (was: {})".format(name, result))
+        if any_failed and ignoring_timeouts and result == 'timed out':
+            any_failed = False
+        if result == 'skip' and fatal_skips:
+            any_failed = True
         exit_fail = exit_fail or any_failed
 
     exitmsg = log['exit']
