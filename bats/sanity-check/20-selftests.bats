@@ -1330,6 +1330,9 @@ selftest_crash_common() {
 }
 
 @test "selftest_sigsegv_instruction" {
+    if [[ "`uname -m`" != x86_64 ]]; then
+        skip "On some architectures, this causes signals other than SIGSEGV"
+    fi
     selftest_crash_common selftest_sigsegv_instruction SIGSEGV 0xC0000005 'Access violation'
 }
 
