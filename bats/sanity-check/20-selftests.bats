@@ -1307,6 +1307,9 @@ selftest_crash_common() {
 }
 
 @test "selftest_sigfpe" {
+    if [[ "`uname -m`" != x86_64 ]]; then
+        skip "Divisions by zero sometimes succeed outside of x86-64"
+    fi
     selftest_crash_common selftest_sigfpe SIGFPE 0xC0000094 'Integer division by zero'
 }
 
