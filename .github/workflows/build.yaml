@@ -14,13 +14,14 @@ permissions:
 
 jobs:
   Linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04${{ matrix.archsuffix }}
     container: debian:sid
     strategy:
       matrix:
         include:
-        - { name: GCC, selftests: "selftests" }
-        - { name: Clang, env: "CC=clang-19 CXX=clang++-19" }
+        - { name: GCC, unittests: "unittests", selftests: "selftests" }
+        - { name: Clang, unittests: "unittests", env: "CC=clang-19 CXX=clang++-19" }
+        - { archsuffix: "-arm", selftests: "selftests" }
     steps:
     - name: setup environment
       run: printf '%s\n' ${{ matrix.env }} | tee -a ${GITHUB_ENV}
@@ -59,8 +60,10 @@ jobs:
         builddir/opendcdiag --version
         builddir/opendcdiag --dump-cpu-info
     - name: ninja build unittests
+      if: ${{ matrix.unittests }}
       run: ninja -C builddir unittests
     - name: run unittests
+      if: ${{ matrix.unittests }}
       run: |
         ./builddir/unittests \
           --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
