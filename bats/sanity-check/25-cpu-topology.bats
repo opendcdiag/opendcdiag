@@ -446,19 +446,22 @@ selftest_cpuset_negated() {
 }
 
 @test "num_packages" {
+    export SANDSTONE_MOCK_TOPOLOGY='0 1 0:1 1:1'
+
+    # Get the first and last logical processors (might be what we mocked)
+    local -a first=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
+    local -a last=(`$SANDSTONE --dump-cpu-info | sed -n '$p'`)
+
     declare -A yamldump
-    sandstone_selftest -e selftest_skip --cpuset=p0
+    sandstone_selftest -e selftest_skip --cpuset=p${first[1]}
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*"packages":\s*1\b.*'
 
-    # attempt to run on two sockets
-    export SANDSTONE_MOCK_TOPOLOGY='0 1 0:1 1:1'
-    run $SANDSTONE --cpuset=p1 --dump-cpu-info
-    if [[ $status -ne 0 ]]; then
+    if [[ ${first[1]} -eq ${last[1]} ]]; then
         skip "Test only works with Debug builds (to mock the topology) or multi-socket systems"
     fi
 
-    sandstone_selftest -e selftest_skip --cpuset=p0c0,p1c0 --no-slicing
+    sandstone_selftest -e selftest_skip --cpuset=p${first[1]}c0,p${last[1]}c0 --no-slicing
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*"packages":\s*2\b.*'
 
     # now let's try 4 sockets
