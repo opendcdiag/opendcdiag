@@ -32,23 +32,28 @@ template <typename SVD, int Dim> struct EigenSVDTest
     }
 
     template <typename FP> static inline std::enable_if_t<boost::is_complex<FP>::value>
-    compare_or_fail(const FP *actual, const FP *expected, const char *name)
+    compare_or_fail(const FP *actual, const FP *expected, typename Mat::Index rows,
+                    typename Mat::Index cols, const char *name)
     {
         memcmp_or_fail(reinterpret_cast<const typename FP::value_type *>(actual),
                        reinterpret_cast<const typename FP::value_type *>(expected),
-                       2 * Dim * Dim, name);
+                       2 * rows * cols, name);
     }
 
     template <typename FP> static inline std::enable_if_t<!boost::is_complex<FP>::value>
-    compare_or_fail(const FP *actual, const FP *expected, const char *name)
+    compare_or_fail(const FP *actual, const FP *expected, typename Mat::Index rows,
+                    typename Mat::Index cols, const char *name)
     {
-        memcmp_or_fail(actual, expected, Dim * Dim, name);
+        memcmp_or_fail(actual, expected, rows * cols, name);
     }
 
     static int init(struct test *test)
     {
         auto d = new eigen_test_data;
-        d->orig_matrix = Mat::Random(Dim, Dim);
+        typename Mat::Index dim = Dim;
+        if constexpr (Mat::RowsAtCompileTime == Eigen::Dynamic)
+            dim = get_testspecific_knob_value_int(test, "Dim", dim);
+        d->orig_matrix = Mat::Random(dim, dim);
         calculate_once(d->orig_matrix, d->u_matrix, d->v_matrix);
         test->data = d;
         return EXIT_SUCCESS;
@@ -67,8 +72,8 @@ template <typename SVD, int Dim> struct EigenSVDTest
             Mat u, v;
             calculate_once(d->orig_matrix, u, v);
 
-            compare_or_fail(u.data(), d->u_matrix.data(), "Matrix U");
-            compare_or_fail(v.data(), d->v_matrix.data(), "Matrix V");
+            compare_or_fail(u.data(), d->u_matrix.data(), u.rows(), u.cols(), "Matrix U");
+            compare_or_fail(v.data(), d->v_matrix.data(), v.rows(), v.cols(), "Matrix V");
         } while (test_time_condition(test));
         return EXIT_SUCCESS;
     }
