@@ -154,7 +154,7 @@ def main():
 
         # per-gen list definition
         f.write('typedef struct BuiltinTestSet {\n')
-        f.write('    uint64_t features;\n')
+        f.write('    cpu_features_t features;\n')
         f.write('    const char* name;\n')
         f.write('    const std::optional<std::vector<struct test *>> tests;\n')
         f.write('} BuiltinTestSet ;\n\n')

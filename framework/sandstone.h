@@ -458,7 +458,7 @@ typedef const kvm_config_t *(*kvmconfigfunc)(void);
 struct test {
     /* metadata */
     /// filled in by the DECLARE_TEST macro
-    uint64_t compiler_minimum_cpu;
+    cpu_features_t compiler_minimum_cpu;
 
     /// Identifier of the test.  Each test must have a unique string identifier
     const char *id;
@@ -480,7 +480,7 @@ struct test {
     /* filled in by framework, used by framework and tests */
 
     /// minimum CPU required to be run, skipped if too old
-    uint64_t minimum_cpu;
+    cpu_features_t minimum_cpu;
 
     /// duration (in ms) the test wants to run for
     /// Special values:
@@ -662,7 +662,7 @@ static inline long double frandoml()
 /// least significant 8 bits are randomly set and all other bits are 0.
 uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth);
 
-extern uint64_t cpu_features;
+extern cpu_features_t cpu_features;
 /// thread_num always contains the integer identifier for the executing
 /// thread.  It can be used to index the cpu_info array and is equivalent
 /// to the cpu parameter in the test_run function.
