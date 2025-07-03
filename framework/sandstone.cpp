@@ -832,22 +832,23 @@ static int cleanup_global(int exit_code, SandstoneApplication::PerCpuFailures pe
     return logging_close_global(exit_code);
 }
 
-template <uint64_t X, uint64_t Y, typename P = int>
+template <uint32_t X, uint32_t Y, typename P = int>
 static void inline __attribute__((always_inline)) assembly_marker(P param = 0)
 {
 #ifdef __x86_64__
-    __asm__("cmpxchg %%eax, %%eax"      // just an expensive no-op
-            : : "D" (param), "a" (X), "d" (Y)
-            : "cc");
+    // GCC doesn't provide __SSC_MARK in <x86gprintrin.h>
+    asm ("movl %0, %%ebx\n\t"
+         "fs addr32 nop"
+        : : "i" (X ^ Y), "D" (param) : "ebx");
 #endif
 }
 
 namespace AssemblyMarker {
-static constexpr uint64_t Test = 0x4e49414d54534554;        // "TESTMAIN"
-static constexpr uint64_t TestLoop = 0x504f4f4c54534554;    // "TESTLOOP"
-static constexpr uint32_t Start = 0x54525453;               // "STRT"
-static constexpr uint64_t Iterate = 0x0045544152455449;     // "ITERATE\0"
-static constexpr uint32_t End = 0x00444e45;                 // "END\0";
+static constexpr uint32_t Test = 0x00;
+static constexpr uint32_t TestLoop = 0x100;
+static constexpr uint32_t Start = 0x53;             // "S"
+static constexpr uint32_t Iterate = 0x49;           // "I"
+static constexpr uint32_t End = 0x45;               // "E";
 }
 
 extern "C" {
