@@ -172,6 +172,9 @@ public:
     void print();
     static void print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout);
 
+    enum TestHeaderTime { AtStart, OnFirstFail };
+    static void print_tests_header(TestHeaderTime mode);
+
 private:
     int init_skip_message_bytes = 0;
     bool file_printed_messages_header = false;
@@ -188,9 +191,6 @@ private:
     static void format_and_print_skip_reason(int fd, std::string_view message);
     int print_one_thread_messages(int fd, mmap_region r, int level);
     void print_result_line(int &init_skip_message_bytes);
-
-    enum TestHeaderTime { AtStart, OnFirstFail };
-    static void print_tests_header(TestHeaderTime mode);
 };
 
 class KeyValuePairLogger : public AbstractLogger
@@ -1089,7 +1089,7 @@ void logging_init(const struct test *test)
         logging_printf(LOG_LEVEL_VERBOSE(2), "# Seed: %s \n", random_format_seed().c_str());
         break;
     case SandstoneApplication::OutputFormat::yaml:
-        // note: see comments in YamlLogger::print() on this first line
+        YamlLogger::print_tests_header(YamlLogger::AtStart);
         logging_printf(LOG_LEVEL_VERBOSE(1), "- test: %s\n", test->id);
         logging_printf(LOG_LEVEL_VERBOSE(3), "  details: { quality: %s, description: \"%s\" }\n",
                        quality_string(test), test->description);
@@ -2560,8 +2560,6 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                    make_plan_string(fullsocket).c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  heuristic: [ %s ]\n",
                    make_plan_string(heuristic).c_str());
-
-    print_tests_header(AtStart);
 }
 
 void YamlLogger::print_tests_header(TestHeaderTime mode)
