@@ -1005,7 +1005,8 @@ struct ProgramOptionsParser {
             app->shmem->log_test_knobs = true;
             for (auto knob : std::get<std::vector<const char*>>(it->second)) {
                 if (!set_knob_from_key_value_string(knob)) {
-                    fprintf(stderr, "Malformed test knob: %s (should be in the form KNOB=VALUE)\n", optarg);
+                    fprintf(stderr, "%s: Malformed test knob: \"%s\" (should be in the form KNOB=VALUE)\n",
+                            argv[0], knob);
                     return EX_USAGE;
                 }
             }
