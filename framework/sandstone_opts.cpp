@@ -551,12 +551,12 @@ struct ProgramOptionsParser {
 
     std::map<int, std::variant<bool, int, const char*, std::vector<const char*>, ShortDuration>> opts_map;
 
-    void add_to_map_as_vec(int opt, const char *optarg) {
+    void add_to_map_as_vec(int opt, const char *arg) {
         auto map = opts_map.find(opt);
         if (map == opts_map.end()) {
-            opts_map.emplace(opt, std::vector<const char*>{optarg});
+            opts_map.emplace(opt, std::vector<const char*>{arg});
         } else {
-            std::get<std::vector<const char*>>(map->second).emplace_back(optarg);
+            std::get<std::vector<const char*>>(map->second).emplace_back(arg);
         }
     };
 
