@@ -4,6 +4,7 @@
  */
 
 #include <topology.h>
+#include "devicedeps/device_topology.h"
 
 #include <sched.h>
 #include <stdio.h>
