@@ -21,70 +21,14 @@
 
 #include "gettid.h"
 
-class LogicalProcessorSet;
-
-class Topology
-{
-public:
-    using Thread = struct cpu_info;
-    struct Core {
-        std::span<const Thread> threads;
-    };
-    struct Module {
-        std::span<const Thread> threads;
-    };
-
-    struct CoreGrouping {
-        std::vector<Core> cores;
-        // std::vector<Module> modules;
-    };
-
-    struct NumaNode : CoreGrouping {
-        int id() const
-        { return cores.size() ? cores.front().threads.front().numa_id : -1; }
-    };
-
-    struct Package : CoreGrouping {
-        std::vector<NumaNode> numa_domains;
-        int id() const
-        { return cores.size() ? cores.front().threads.front().package_id : -1; }
-    };
-
-    std::vector<Package> packages;
-
-    Topology(std::vector<Package> pkgs)
-    {
-        packages = std::move(pkgs);
-    }
-
-    bool isValid() const        { return !packages.empty(); }
-    std::string build_falure_mask(const struct test *test) const;
-
-    static const Topology &topology();
-    struct Data;
-    Data clone() const;
-};
-struct Topology::Data
-{
-    // this type is move-only (not copyable)
-    Data() = default;
-    Data(const Data &) = delete;
-    Data(Data &&) = default;
-    Data &operator=(const Data &) = delete;
-    Data &operator=(Data &&) = default;
-
-    std::vector<Package> packages;
-    std::vector<Topology::Thread> all_threads;
-};
-
-enum class LogicalProcessor : int {};
-
 struct CpuRange
 {
     // a contiguous range
     int starting_cpu;
     int cpu_count;
 };
+
+enum class LogicalProcessor : int {};
 
 struct LogicalProcessorSetOps
 {
@@ -129,16 +73,29 @@ public:
     }
 
     void clear()
-    { *this = LogicalProcessorSet{}; }
+    {
+        *this = LogicalProcessorSet{};
+    }
+
     size_t size_bytes() const
-    { return unsigned(array.size()) * sizeof(Word); }
+    {
+        return unsigned(array.size()) * sizeof(Word);
+    }
 
     void set(LogicalProcessor n)
-    { wordFor(n) |= bitFor(n); }
+    {
+        wordFor(n) |= bitFor(n);
+    }
+
     void unset(LogicalProcessor n)
-    { wordFor(n) &= ~bitFor(n); }
+    {
+        wordFor(n) &= ~bitFor(n);
+    }
+
     bool is_set(LogicalProcessor n) const
-    { return wordFor(n) & bitFor(n); }
+    {
+        return wordFor(n) & bitFor(n);
+    }
 
     int count() const
     {
@@ -187,11 +144,13 @@ private:
         if (idx >= array.size())
             array.resize(std::max(idx + 1, MinSizeCount));
     }
+
     Word &wordFor(LogicalProcessor n)
     {
         ensureSize(int(n));
         return wordForInArray(array, n);
     }
+
     Word wordFor(LogicalProcessor n) const noexcept
     {
         return constWordForInArray(array, n);
@@ -200,7 +159,6 @@ private:
 
 LogicalProcessorSet ambient_logical_processor_set();
 bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullptr);
-bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const char *thread_name = nullptr);
 bool pin_to_logical_processors(CpuRange, const char *thread_name);
 
 void apply_cpuset_param(char *param);

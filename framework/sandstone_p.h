@@ -35,6 +35,8 @@
 #include <span>
 #include <vector>
 
+#include "device/device_topology.h"
+
 #include <sandstone_config.h>
 #include <sandstone_chrono.h>
 #include <sandstone_iovec.h>
@@ -114,6 +116,11 @@ size_t memfpt_current_high_water_mark(void);
 /* tmpfile.c */
 enum MemfdCloexecFlag { MemfdInheritOnExec, MemfdCloseOnExec };
 int open_memfd(enum MemfdCloexecFlag);
+
+/*
+* Dump device info
+*/
+void dump_device_info();
 
 #ifdef __cplusplus
 }
@@ -287,20 +294,6 @@ struct SandstoneBackgroundScan
     static constexpr float load_idle_threshold_inc_val = 0.05;
     static constexpr float load_idle_threshold_max = 0.8;
 #endif
-};
-
-class DeviceSchedule {
-public:
-    virtual void reschedule_to_next_device() = 0;
-    virtual void finish_reschedule() = 0;
-    virtual ~DeviceSchedule() = default;
-protected:
-    void pin_to_next_cpu(int next_cpu, tid_t thread_id=0)
-    {
-        if (!pin_thread_to_logical_processor(LogicalProcessor(next_cpu), thread_id)) {
-            log_warning("Failed to reschedule %d (%tu) to CPU %d", thread_id, (uintptr_t)pthread_self(), next_cpu);
-        }
-    }
 };
 
 struct HardwareInfo
