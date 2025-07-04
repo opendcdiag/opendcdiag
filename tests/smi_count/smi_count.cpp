@@ -12,40 +12,53 @@
  */
 
 #include "sandstone_p.h"
+#include "test_base.hpp"
+
 #include <vector>
-#include <numeric>
-#include <cassert>
-#include <inttypes.h>
-#include <limits.h>
-#include <map>
+#include <cinttypes>
 
 extern void initialize_smi_counts();
 
-static int smi_count_run(struct test *test, int cpu)
+namespace {
+class SmiCountTest : public SandstoneTest::Base
 {
-    (void) test;
+public:
+    static constexpr auto quality_level = TestQuality::Production;
+    static constexpr char description[] = "Counts SMI events";
+    static constexpr SandstoneTest::Base::Parameters parameters{
+        .desired_duration = -1,
+        .fracture_loop_count = -1,
+    };
 
-    if (sApp->smi_counts_start.size() > cpu) {
-        int real_cpu_number = cpu_info[cpu].cpu_number;
-        auto initial_count = sApp->smi_counts_start[cpu];
-        auto current_count = sApp->count_smi_events(real_cpu_number);
-        if (current_count) {
-            uint64_t difference = *current_count - initial_count;
+    int init()
+    {
+        return InterruptMonitor::InterruptMonitorWorks ? EXIT_SUCCESS : EXIT_SKIP;
+    }
 
-            if (difference) {
-                log_platform_message(SANDSTONE_LOG_INFO "SMI count difference detected: %" PRIu64 " new SMI detected on thread %d cpu_number %d\n",
-                                     difference, cpu, real_cpu_number);
+    int run(const Device& device)
+    {
+        if (sApp->smi_counts_start.size() > device.id) {
+            int real_cpu_number = cpu_info[device.id].cpu_number;
+            auto initial_count = sApp->smi_counts_start[device.id];
+            auto current_count = sApp->count_smi_events(real_cpu_number);
+            if (current_count) {
+                uint64_t difference = *current_count - initial_count;
+
+                if (difference) {
+                    log_platform_message(SANDSTONE_LOG_INFO "SMI count difference detected: %" PRIu64 " new SMI detected on thread %d cpu_number %d\n",
+                                        difference, device.id, real_cpu_number);
+                }
             }
         }
+        return EXIT_SUCCESS;
     }
-    return EXIT_SUCCESS;
+
+    int cleanup()
+    {
+        initialize_smi_counts();
+        return EXIT_SUCCESS;
+    }
+};
 }
 
-DECLARE_TEST(smi_count, "Counts SMI events")
-    .test_init = [](struct test *t) { return InterruptMonitor::InterruptMonitorWorks ? EXIT_SUCCESS : EXIT_SKIP; },
-    .test_run = smi_count_run,
-    .test_cleanup = [](struct test * t) { initialize_smi_counts(); return EXIT_SUCCESS; },
-    .desired_duration = -1,
-    .fracture_loop_count = -1,
-    .quality_level = TEST_QUALITY_PROD,
-END_DECLARE_TEST
+DECLARE_TEST_CLASS(smi_count, SmiCountTest);

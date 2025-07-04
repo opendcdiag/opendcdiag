@@ -35,23 +35,19 @@ struct LogicalProcessorSetOps
     using Word = unsigned long long;
     static constexpr int ProcessorsPerWord = CHAR_BIT * sizeof(Word);
 
-    static constexpr Word bitFor(LogicalProcessor n)
-    {
+    static constexpr Word bitFor(LogicalProcessor n) {
         return 1ULL << (unsigned(n) % ProcessorsPerWord);
     }
 
-    static void setInArray(std::span<Word> array, LogicalProcessor n)
-    {
+    static void setInArray(std::span<Word> array, LogicalProcessor n) {
         wordForInArray(array, n) |= bitFor(n);
     }
 
-    static Word &wordForInArray(std::span<Word> array, LogicalProcessor n)
-    {
+    static Word &wordForInArray(std::span<Word> array, LogicalProcessor n) {
         return array[int(n) / ProcessorsPerWord];
     }
 
-    static Word constWordForInArray(std::span<const Word> array, LogicalProcessor n)
-    {
+    static Word constWordForInArray(std::span<const Word> array, LogicalProcessor n) {
         int idx = int(n) / ProcessorsPerWord;
         return idx < array.size() ? array[idx] : 0;
     }
