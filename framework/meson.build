@@ -196,7 +196,6 @@ framework_files += files(
     'sandstone_utils.cpp',
     'static_vectors.c',
     'test_knobs.cpp',
-    'topology.cpp',
 )
 
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
