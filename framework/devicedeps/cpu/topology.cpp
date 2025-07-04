@@ -1,24 +1,16 @@
 /*
- * Copyright 2022 Intel Corporation.
+ * Copyright 2025 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cpu_device.h"
 #include "topology.h"
 #include "sandstone_p.h"
 
-#include <algorithm>
 #include <map>
-#include <string>
-#include <vector>
-#include <utility>
 
-#include <assert.h>
 #include <dirent.h>
-#include <fcntl.h>
 #include <inttypes.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #ifdef __x86_64__
 #  include <cpuid.h>
@@ -27,21 +19,34 @@
 #   include <windows.h>
 #endif
 
+
 static void update_topology(std::span<const struct cpu_info> new_cpu_info,
                             std::span<const Topology::Package> sockets = {});
 
+int num_cpus() {
+    return sApp->thread_count;
+}
+
+int num_packages() {
+    return Topology::topology().packages.size();
+}
+
+void reschedule() {
+    if (sApp->device_schedule == nullptr) return;
+    sApp->device_schedule->reschedule_to_next_device();
+    return;
+}
+
 struct cpu_info *cpu_info = nullptr;
 
-static Topology &cached_topology()
-{
+static Topology &cached_topology() {
     static Topology cached_topology = Topology({});
     return cached_topology;
 }
 
 #ifdef __linux__
 namespace {
-struct linux_cpu_info
-{
+struct linux_cpu_info {
     using Fields = std::map<std::string, std::string>;
     Fields general_fields;
     std::vector<Fields> cpu_fields;
@@ -68,17 +73,14 @@ struct linux_cpu_info
         return std::nullopt;
     }
 };
-}
 
-static auto_fd open_sysfs_cpu_dir(int cpu)
-{
+auto_fd open_sysfs_cpu_dir(int cpu) {
     char buf[sizeof("/sys/devices/system/cpu/cpu2147483647")];
     sprintf(buf, "/sys/devices/system/cpu/cpu%d", cpu);
     return auto_fd { open(buf, O_PATH | O_CLOEXEC) };
 }
 
-static linux_cpu_info parse_proc_cpuinfo()
-{
+linux_cpu_info parse_proc_cpuinfo() {
     static const char header[] = "processor\t";
     AutoClosingFile f{ fopen("/proc/cpuinfo", "r") };
     assert(f.f && "/proc must be mounted for proper operation");
@@ -130,16 +132,16 @@ static linux_cpu_info parse_proc_cpuinfo()
     return result;
 }
 
-static linux_cpu_info &proc_cpuinfo()
-{
+linux_cpu_info &proc_cpuinfo() {
     static linux_cpu_info r =
         parse_proc_cpuinfo();
     return r;
 }
-#endif
+}
+#endif /* __linux__ */
 
-static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2)
-{
+namespace {
+bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2) {
     static_assert(offsetof(struct cpu_info, numa_id) + 2 == offsetof(struct cpu_info, package_id));
     static_assert(offsetof(struct cpu_info, tile_id) + 4 == offsetof(struct cpu_info, package_id));
     static_assert(offsetof(struct cpu_info, module_id) + 6 == offsetof(struct cpu_info, package_id));
@@ -155,13 +157,11 @@ static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2
     return cpu_tuple(cpu1) < cpu_tuple(cpu2);
 };
 
-static void reorder_cpus()
-{
+void reorder_cpus() {
     std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
 }
 
-static std::vector<struct cpu_info> create_mock_topology(const char *topo)
-{
+std::vector<struct cpu_info> create_mock_topology(const char *topo) {
     auto parse_int_and_advance = [&topo](auto *ptr) {
         char *end;
         *ptr = strtoll(topo, &end, 0);
@@ -200,8 +200,7 @@ static std::vector<struct cpu_info> create_mock_topology(const char *topo)
     return mock_cpu_info;
 }
 
-static void apply_mock_topology(const std::vector<struct cpu_info> &mock_topology, const LogicalProcessorSet &enabled_cpus)
-{
+void apply_mock_topology(const std::vector<struct cpu_info> &mock_topology, const LogicalProcessorSet &enabled_cpus) {
     // similar to init_topology_internal()'s loop below
     int count = sApp->thread_count = std::min<int>(mock_topology.size(), enabled_cpus.count());
     for (int i = 0, curr_cpu = 0; i < count; ++i, ++curr_cpu) {
@@ -212,11 +211,12 @@ static void apply_mock_topology(const std::vector<struct cpu_info> &mock_topolog
         cpu_info[i] = mock_topology[curr_cpu];
     }
 }
+} // end anonymous namespace
 
 #ifdef __linux__
+namespace {
 /* this is only used to read sysfs, hence inside __linux__ */
-static FILE *fopenat(int dfd, const char *name)
-{
+FILE *fopenat(int dfd, const char *name) {
     FILE *f = nullptr;
     int fd = openat(dfd, name, O_RDONLY | O_CLOEXEC);
     if (fd < 0)
@@ -227,8 +227,7 @@ static FILE *fopenat(int dfd, const char *name)
     return f;
 };
 
-static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
-{
+bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd) {
     FILE *f;
     char buf[256];  // size repeated in fscanf below
 
@@ -279,8 +278,7 @@ static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
     return true;
 }
 
-static bool fill_numa()
-{
+bool fill_numa() {
     auto parse_cpulist_range = [](const char *&ptr) {
         // parses one range (which can be a single number) and advances ptr to
         // the next range
@@ -382,7 +380,7 @@ static bool fill_numa()
     return true;
 }
 
-static bool fill_topo_sysfs(struct cpu_info *info)
+bool fill_topo_sysfs(struct cpu_info *info)
 {
     FILE *f;
 
@@ -439,8 +437,10 @@ static bool fill_topo_sysfs(struct cpu_info *info)
         info->hwid = *apicid;
     return true;
 }
-#elif defined(_WIN32)
+} // end anonymous namespace
 
+#elif defined(_WIN32)
+namespace {
 // The definition of CACHE_RELATIONSHIP in MinGW's headers is outdated
 struct CACHE_RELATIONSHIP_2 {
     BYTE Level;
@@ -467,8 +467,7 @@ struct NUMA_NODE_RELATIONSHIP_2 {
   } DUMMYUNIONNAME;
 };
 
-static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
-{
+bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships) {
     DWORD length = 0;
     GetLogicalProcessorInformationEx(relationships, nullptr, &length);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
@@ -604,32 +603,35 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
     return true;
 }
 
-static bool fill_topo_sysfs(struct cpu_info *info)
-{
+bool fill_topo_sysfs(struct cpu_info *info) {
     if (info != &cpu_info[0])
         return info->core_id != -1; // we only need to run once
 
     return detect_topology_via_os(RelationAll);
 }
 
-static void fill_numa()
-{
+void fill_numa() {
     if (cpu_info[0].numa_id >= 0)
         return;         // already filled in above
 
     detect_topology_via_os(RelationNumaNodeEx);
 }
+} // end anonymous namespace
+
 #else /* __linux__ */
-static auto fill_topo_sysfs = nullptr;
-static void fill_numa()
-{
+
+namespace {
+auto fill_topo_sysfs = nullptr;
+void fill_numa() {
     // unimplemented
 }
+} // end anonymous namespace
+
 #endif /* __linux__ */
 
 #ifdef __x86_64__
-static void detect_family_via_cpuid()
-{
+namespace {
+void detect_family_via_cpuid() {
     /*
      * EAX layout from the manual:
      *  31    28 27       20 19      16 15 14 13     8 7     4 3    0
@@ -656,8 +658,7 @@ static void detect_family_via_cpuid()
     stepping = eax & 0xf;
 }
 
-static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_sharing_l2)
-{
+bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_sharing_l2) {
     /* since info->cache is statically allocated */
     static int max_levels = sizeof(info->cache) / sizeof(*info->cache);
 
@@ -708,8 +709,7 @@ static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_shar
     return true;
 }
 
-static bool fill_topo_cpuid(struct cpu_info *info)
-{
+bool fill_topo_cpuid(struct cpu_info *info) {
     enum Domain {
         Invalid = 0,
         Logical = 1,
@@ -828,8 +828,7 @@ static bool fill_topo_cpuid(struct cpu_info *info)
     return true;
 }
 
-static bool fill_ucode_msr(struct cpu_info *info)
-{
+bool fill_ucode_msr(struct cpu_info *info) {
     uint64_t ucode = 0;
 
     if (!read_msr(info->cpu_number, 0x8B, &ucode))
@@ -838,16 +837,17 @@ static bool fill_ucode_msr(struct cpu_info *info)
 
     return true;
 }
+} // end anonymous namespace
 #else
-static void detect_family_via_cpuid()
-{
-}
+namespace {
+static void detect_family_via_cpuid() {}
 constexpr auto fill_ucode_msr = nullptr;
 constexpr auto fill_topo_cpuid = nullptr;
+} // end anonymous namespace
 #endif // x86-64
 
-static bool fill_ucode_sysfs(struct cpu_info *info)
-{
+namespace {
+bool fill_ucode_sysfs(struct cpu_info *info) {
 #ifdef __linux__
     FILE *f;
     auto_fd cpufd { open_sysfs_cpu_dir(info->cpu_number) };
@@ -916,8 +916,7 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
 }
 
 #ifdef __x86_64__
-static bool fill_ppin_msr(struct cpu_info *info)
-{
+bool fill_ppin_msr(struct cpu_info *info) {
     info->ppin = 0;
     return read_msr(info->cpu_number, 0x4F, &info->ppin); /* MSR_PPIN */
 }
@@ -925,8 +924,7 @@ static bool fill_ppin_msr(struct cpu_info *info)
 constexpr auto fill_ppin_msr = nullptr;
 #endif // __x86_64__
 
-static bool fill_ppin_sysfs(struct cpu_info *info)
-{
+bool fill_ppin_sysfs(struct cpu_info *info) {
 #if defined(__linux__) && defined(__x86_64__)
     auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
     if (cpufd < 0)
@@ -941,8 +939,7 @@ static bool fill_ppin_sysfs(struct cpu_info *info)
     return false;
 }
 
-template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
-{
+template <auto &fnArray> bool try_detection(struct cpu_info *cpu) {
     using DetectorFunction = std::decay_t<decltype(fnArray[0])>;
     if (std::size(fnArray) > 0) {
         if (std::size(fnArray) == 1) {
@@ -966,6 +963,7 @@ template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
     }
     return false;
 }
+} // end anonymous namespace
 
 typedef bool (* fill_family_func)(struct cpu_info *);
 typedef bool (* fill_ppin_func)(struct cpu_info *);
@@ -979,8 +977,7 @@ static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr 
 /* prefer CPUID, fallback to sysfs. */
 static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
 
-void apply_cpuset_param(char *param)
-{
+void apply_cpuset_param(char *param) {
     struct MatchCpuInfoByCpuNumber {
         int cpu_number;
         bool operator()(const struct cpu_info &cpu)
@@ -1139,8 +1136,8 @@ void apply_cpuset_param(char *param)
     update_topology(new_cpu_info);
 }
 
-static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
-{
+namespace {
+void init_topology_internal(const LogicalProcessorSet &enabled_cpus) {
     assert(sApp->thread_count == enabled_cpus.count());
     cpu_info = sApp->shmem->cpu_info;
 
@@ -1205,9 +1202,8 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     fill_numa();
 }
 
-static void populate_core_group(Topology::CoreGrouping *group, const Topology::Thread *begin,
-                                const Topology::Thread *end)
-{
+void populate_core_group(Topology::CoreGrouping *group, const Topology::Thread *begin,
+                                const Topology::Thread *end) {
     // fill in the threads
     auto fill_in_threads = [&](auto &where, auto what) {
         const Topology::Thread *first = begin;
@@ -1226,8 +1222,7 @@ static void populate_core_group(Topology::CoreGrouping *group, const Topology::T
     // fill_in_threads(group->modules, &Topology::Thread::module_id);
 }
 
-static Topology build_topology()
-{
+Topology build_topology() {
     struct cpu_info *info = cpu_info;
     const struct cpu_info *const end = cpu_info + num_cpus();
 
@@ -1277,14 +1272,13 @@ static Topology build_topology()
 
     return Topology(std::move(packages));
 }
+} // end anonymous namespace
 
-const Topology &Topology::topology()
-{
+const Topology &Topology::topology() {
     return cached_topology();
 }
 
-Topology::Data Topology::clone() const
-{
+Topology::Data Topology::clone() const {
     Data result;
     result.all_threads.assign(cpu_info, cpu_info + num_cpus());
     result.packages = packages;
@@ -1302,8 +1296,7 @@ Topology::Data Topology::clone() const
 }
 
 void update_topology(std::span<const struct cpu_info> new_cpu_info,
-                     std::span<const Topology::Package> packages)
-{
+                     std::span<const Topology::Package> packages) {
     struct cpu_info *end;
     if (packages.empty()) {
         // copy all
@@ -1328,15 +1321,13 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
     cached_topology() = build_topology();
 }
 
-void init_topology(const LogicalProcessorSet &enabled_cpus)
-{
+void init_topology(const LogicalProcessorSet &enabled_cpus) {
     init_topology_internal(enabled_cpus);
     reorder_cpus();
     cached_topology() = build_topology();
 }
 
-void restrict_topology(CpuRange range)
-{
+void restrict_topology(CpuRange range) {
     assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
     auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_cpu);
     int old_thread_count = std::exchange(sApp->thread_count, range.cpu_count);
@@ -1347,14 +1338,14 @@ void restrict_topology(CpuRange range)
         topo = build_topology();
 }
 
-static char character_for_mask(uint32_t mask)
-{
+namespace {
+char character_for_mask(uint32_t mask) {
     static_assert((1 << MAX_HWTHREADS_PER_CORE) <= 36, "Cannot represent this many threads");
     return mask < 0xa ? '0' + mask : 'a' + mask - 0xa;
 }
+} // end anonymous namespace
 
-std::string Topology::build_falure_mask(const struct test *test) const
-{
+std::string Topology::build_falure_mask(const struct test *test) const {
     std::string result;
     if (!isValid())
         return result;
@@ -1422,4 +1413,115 @@ std::string Topology::build_falure_mask(const struct test *test) const
     // remove last ':'
     result.resize(result.size() - 1);
     return result;
+}
+
+
+void DeviceSchedule::pin_to_next_cpu(int next_cpu, tid_t thread_id) {
+    if (!pin_thread_to_logical_processor(LogicalProcessor(next_cpu), thread_id)) {
+        log_warning("Failed to reschedule %d (%tu) to CPU %d", thread_id, (uintptr_t)pthread_self(), next_cpu);
+    }
+}
+
+void BarrierDeviceSchedule::reschedule_to_next_device() {
+    auto on_completion = [&]() noexcept {
+        std::unique_lock lock(groups_mutex);
+        int g_idx = thread_num / members_per_group;
+        GroupInfo &group = groups[g_idx];
+
+        // Rotate cpus vector so reschedule group members to a different cpu
+        std::rotate(group.next_cpu.begin(), group.next_cpu.begin() + 1, group.next_cpu.end());
+        lock.unlock();
+
+        // Reschedule group members
+        for (int i=0; i<group.tid.size(); i++) {
+            pin_to_next_cpu(cpu_info[group.next_cpu[i]].cpu_number, group.tid[i]);
+        }
+    };
+
+    std::unique_lock lock(groups_mutex);
+    // Initialize groups on first run
+    if (groups.empty()) {
+        int full_groups = num_cpus() / members_per_group;
+        int partial_group_members = num_cpus() % members_per_group;
+
+        groups.reserve(full_groups + (partial_group_members > 0));
+        for (int i=0; i<full_groups; i++) {
+            groups.emplace_back(members_per_group, on_completion);
+        }
+        if (partial_group_members > 0) {
+            groups.emplace_back(partial_group_members, on_completion);
+        }
+    }
+
+    // Fill thread info if not done already
+    int g_idx = thread_num / members_per_group;
+    GroupInfo &group = groups[g_idx];
+    int thread_info_idx = thread_num % members_per_group;
+    if (group.tid[thread_info_idx] == 0) {
+        group.tid[thread_info_idx] = sApp->test_thread_data(thread_num)->tid.load();
+        group.next_cpu[thread_info_idx] = thread_num;
+    }
+
+    lock.unlock();
+
+    // Wait on proper barrier
+    group.barrier->arrive_and_wait();
+    return;
+}
+
+void BarrierDeviceSchedule::finish_reschedule() {
+    // Don't clean up when test does not support rescheduling
+    if (groups.size() == 0) return;
+
+    // When thread finishes, unsubscribe it from barrier
+    // this avoid partners deadlocks
+    int g_idx = thread_num / members_per_group;
+    GroupInfo &group = groups[g_idx];
+
+    // Remove thread info from groups
+    std::unique_lock lock(groups_mutex);
+    int thread_info_idx = thread_num % members_per_group;
+    group.tid.erase(group.tid.begin() + thread_info_idx);
+
+    // Remove CPU information only if the thread failed, as it likely indicates a problematic device;
+    // otherwise, keep it for execution.
+    if(sApp->test_thread_data(thread_num)->has_failed())
+        group.next_cpu.erase(group.next_cpu.begin() + thread_info_idx);
+    lock.unlock();
+
+    group.barrier->arrive_and_drop();
+}
+
+void QueueDeviceSchedule::reschedule_to_next_device() {
+    // Select a cpu from the queue
+    std::lock_guard lock(q_mutex);
+    if (q_idx == 0)
+        shuffle_queue();
+
+    int next_idx = queue[q_idx];
+    if (++q_idx == queue.size())
+        q_idx = 0;
+
+    pin_to_next_cpu(cpu_info[next_idx].cpu_number);
+    return;
+}
+
+void QueueDeviceSchedule::shuffle_queue() {
+    // Must be called with mutex locked
+    if (queue.size() == 0) {
+        // First use: populate queue with the indexes available
+        for (int i=0; i<num_cpus(); i++)
+            queue.push_back(i);
+    }
+
+    std::default_random_engine rng(random32());
+    std::shuffle(queue.begin(), queue.end(), rng);
+}
+
+void RandomDeviceSchedule::reschedule_to_next_device() {
+    // Select a random cpu index among the ones available
+    int next_idx = unsigned(random()) % num_cpus();
+    pin_to_next_cpu(cpu_info[next_idx].cpu_number);
+
+    return;
 }
