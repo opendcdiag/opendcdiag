@@ -47,15 +47,4 @@ std::string format_duration(std::chrono::nanoseconds ns,
 
 #endif // __cplusplus
 
-/* C-interface to measure cpu/wall-clock time in [us]. */
-#ifdef __cplusplus
-extern "C" {
-#endif
-uint64_t sandstone_user_cpu_time(uint64_t from);
-uint64_t sandstone_sys_cpu_time(uint64_t from);
-uint64_t sandstone_wall_clock_time(uint64_t from);
-#ifdef __cplusplus
-}
-#endif
-
 #endif // SANDSTONE_CHRONO_H
