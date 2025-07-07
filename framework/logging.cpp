@@ -1821,6 +1821,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
     }
 
     struct cpu_info *info = cpu_info + cpu;
+    const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
     PerThreadData::Test *thr = sApp->test_thread_data(cpu);
     if (std::string time = format_duration(thr->fail_time); time.size()) {
         dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, cpu, time.c_str());
@@ -1840,8 +1841,8 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
         dprintf(fd, " 0x%" PRIx64, info->microcode);
     dprintf(fd, "\n%s_messages_thread_%d_ppin =",
             prefix, cpu);
-    if (info->ppin)
-        dprintf(fd, " 0x%" PRIx64, info->ppin);
+    if (pkg->ppin)
+        dprintf(fd, " 0x%" PRIx64, pkg->ppin);
     dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
 }
 
@@ -2080,14 +2081,15 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
     std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", cpu,
             info->cpu_number, info->package_id, info->core_id, info->thread_id);
 
+    const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
     line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", sApp->hwinfo.family, sApp->hwinfo.model,
                       sApp->hwinfo.stepping);
     if (info->microcode)
         line += stdprintf("%#" PRIx64, info->microcode);
     else
         line += "N/A";
-    if (info->ppin)
-        line += stdprintf(", PPIN %016" PRIx64 "):", info->ppin);
+    if (pkg->ppin)
+        line += stdprintf(", PPIN %016" PRIx64 "):", pkg->ppin);
     else
         line += ", PPIN N/A):";
 
@@ -2164,11 +2166,12 @@ std::string YamlLogger::thread_id_header(int cpu, int verbosity)
             else
                 line += "null";
         };
+        const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
         line += stdprintf(", family: %d, model: %#02x, stepping: %d, microcode: ",
                           sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
         add_value_or_null("%#" PRIx64, info->microcode);
         line += ", ppin: ";
-        add_value_or_null("\"%016" PRIx64 "\"", info->ppin);    // string to prevent loss of precision
+        add_value_or_null("\"%016" PRIx64 "\"", pkg->ppin);     // string to prevent loss of precision
     }
     line += " }";
     return line;
