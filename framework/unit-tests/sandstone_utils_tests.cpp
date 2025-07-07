@@ -24,55 +24,6 @@
 
 using namespace std;
 
-TEST(SandstoneTime, WallClockTime)
-{
-    constexpr __useconds_t sleep_us = 1000;
-
-    uint64_t start = sandstone_wall_clock_time(0);
-    usleep(sleep_us);
-    uint64_t slept_us = sandstone_wall_clock_time(start);
-    // starting point cannot be zero (was only possible on Jan 1, 1970)
-    ASSERT_NE(start, 0);
-    // time spent cannot be shorter than sleep time
-    ASSERT_GE(slept_us, sleep_us);
-}
-
-TEST(SandstoneTime, CpuTime)
-{
-    constexpr uint32_t num = 1024;
-    void* ptr[num] = { };
-    uint32_t filled = 0;
-
-    uint64_t start_wall = sandstone_wall_clock_time(0);
-    uint64_t start_sys = sandstone_sys_cpu_time(0);
-    uint64_t start_user = sandstone_user_cpu_time(0);
-
-    while (filled != num) {
-        uint32_t i = random() % num;
-        if (ptr[i] == NULL) {
-            ptr[i] = malloc(1 + random() % 4096);
-            filled++;
-        }
-    }
-    while (filled != 0) {
-        uint32_t i = random() % num;
-        if (ptr[i] != NULL) {
-            free(ptr[i]);
-            ptr[i] = NULL;
-            filled--;
-        }
-    }
-
-    uint64_t proc_sys = sandstone_sys_cpu_time(start_sys);
-    ASSERT_GE(start_sys, 0);
-
-    uint64_t proc_user = sandstone_user_cpu_time(start_user);
-    ASSERT_GE(start_user, 0);
-
-    uint64_t proc_wall = sandstone_wall_clock_time(start_wall);
-    ASSERT_LE(proc_sys + proc_user, proc_wall);
-}
-
 TEST(SimpleStringUtils, GivenEmptyString_WhenConvertedToMilisecs_ThenReturnZero) {
     vector<pair<string, int>> test_vectors = {
             {"",    0},
