@@ -137,7 +137,6 @@ struct cache_info
 /// cpu_info contains information about a logical CPU
 struct cpu_info
 {
-    uint64_t ppin;          ///! Processor ID read from MSR
     uint64_t microcode;     ///! Microcode version read from /sys
 
     /// Logical OS processor number.
