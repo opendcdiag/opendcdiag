@@ -44,8 +44,9 @@ struct eigen_test_data {
 static int eigen_gemm_cdouble_dynamic_square_init(struct test *test) {
     test->data = new(eigen_test_data);
     try {
-        CAST(test->data)->lhs = Mat::Random(M_DIM, M_DIM);
-        CAST(test->data)->rhs = Mat::Random(M_DIM, M_DIM);
+        Mat::Index dim = get_testspecific_knob_value_int(test, "Dim", M_DIM);
+        CAST(test->data)->lhs = Mat::Random(dim, dim);
+        CAST(test->data)->rhs = Mat::Random(dim, dim);
         CAST(test->data)->prod = CAST(test->data)->lhs * CAST(test->data)->rhs;
     } catch (...) {
         report_fail_msg("Exception on Eigen code, most probably OOM");
@@ -62,7 +63,7 @@ static int eigen_gemm_cdouble_dynamic_square_run(struct test *test, int cpu) {
         x = testdata->lhs * testdata->rhs;
 
         memcmp_or_fail(reinterpret_cast<double *>(x.data()),
-                       reinterpret_cast<double *>(testdata->prod.data()), 2 * M_DIM * M_DIM);
+                       reinterpret_cast<double *>(testdata->prod.data()), 2 * x.rows() * x.cols());
     } while (test_time_condition(test));
     //log_info("Num iters = %i\n", i);
     return EXIT_SUCCESS;
