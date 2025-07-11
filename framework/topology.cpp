@@ -27,6 +27,72 @@
 #   include <windows.h>
 #endif
 
+namespace {
+struct TopologyDetector
+{
+    TopologyDetector();
+    void detect(const LogicalProcessorSet &enabled_cpus);
+    void sort();
+
+private:
+    bool setup_cpuid_detection();
+    bool detect_via_cpuid(Topology::Thread *info);
+    bool detect_via_os(Topology::Thread *info);
+    bool detect_numa();
+
+#ifdef __x86_64__
+    enum Domain {
+        Invalid = 0,
+        Logical = 1,
+        Core = 2,
+        Module = 3,
+        Tile = 4,
+        Die = 5,
+        DieGrp = 6,
+    };
+    // we only want up to Tile
+    static constexpr Domain Package = Domain(Domain::Tile + 1);
+
+    int8_t topology_leaf;
+    std::array<uint8_t, Package> topology_widths_array;
+    uint8_t &width(Domain domain) { return topology_widths_array[domain - 1]; };
+
+    bool detect_cache_via_cpuid(Topology::Thread *info, uint32_t *max_cpus_sharing_l2);
+    bool detect_topology_via_cpuid(Topology::Thread *info);
+#endif
+
+    void detect_family_via_cpuid();
+    bool detect_ppin_via_msr(Topology::Thread *info);
+    bool detect_ucode_via_msr(Topology::Thread *info);
+
+#ifdef __linux__
+    struct ProcCpuInfoData {
+        using Fields = std::map<std::string, std::string>;
+        Fields general_fields;
+        std::vector<Fields> cpu_fields;
+
+        std::optional<uint64_t> number(int cpu_number, const char *field, int base = 0);
+        void load();
+    } proc_cpuinfo_;
+    ProcCpuInfoData &proc_cpuinfo()
+    {
+        if (proc_cpuinfo_.cpu_fields.size() == 0)
+            proc_cpuinfo_.load();
+        return proc_cpuinfo_;
+    }
+
+    bool detect_cache_via_os(Topology::Thread *info, int cpufd);
+    bool detect_ppin_via_os(Topology::Thread *info, int cpufd);
+    bool detect_topology_via_os(Topology::Thread *info, int cpufd);
+    bool detect_ucode_via_os(Topology::Thread *info, int cpufd);
+#elif defined(_WIN32)
+    bool detect_ucode_via_os(Topology::Thread *info);
+#endif
+
+    bool create_mock_topology(const char *topo);
+};
+} // unnamed namespace
+
 static void update_topology(std::span<const struct cpu_info> new_cpu_info,
                             std::span<const Topology::Package> sockets = {});
 
@@ -39,35 +105,26 @@ static Topology &cached_topology()
 }
 
 #ifdef __linux__
-namespace {
-struct linux_cpu_info
+std::optional<uint64_t> TopologyDetector::ProcCpuInfoData::number(int cpu_number, const char *field, int base)
 {
-    using Fields = std::map<std::string, std::string>;
-    Fields general_fields;
-    std::vector<Fields> cpu_fields;
-
-    std::optional<uint64_t> number(int cpu_number, const char *field, int base = 0)
-    {
-        const Fields *f;
-        if (cpu_number < 0)
-            f = &general_fields;
-        else if (cpu_number < cpu_fields.size())
-            f = &cpu_fields[cpu_number];
-        else
-            return std::nullopt;
-
-        auto it = f->find(field);
-        if (it == f->end())
-            return std::nullopt;
-
-        // decode using strtoull, which skips spaces and decodes numbers with 0x prefix
-        char *endptr;
-        uint64_t value = strtoull(it->second.c_str(), &endptr, base);
-        if (endptr > it->second.c_str())
-            return value;
+    const Fields *f;
+    if (cpu_number < 0)
+        f = &general_fields;
+    else if (cpu_number < cpu_fields.size())
+        f = &cpu_fields[cpu_number];
+    else
         return std::nullopt;
-    }
-};
+
+    auto it = f->find(field);
+    if (it == f->end())
+        return std::nullopt;
+
+    // decode using strtoull, which skips spaces and decodes numbers with 0x prefix
+    char *endptr;
+    uint64_t value = strtoull(it->second.c_str(), &endptr, base);
+    if (endptr > it->second.c_str())
+        return value;
+    return std::nullopt;
 }
 
 static auto_fd open_sysfs_cpu_dir(int cpu)
@@ -77,14 +134,14 @@ static auto_fd open_sysfs_cpu_dir(int cpu)
     return auto_fd { open(buf, O_PATH | O_CLOEXEC) };
 }
 
-static linux_cpu_info parse_proc_cpuinfo()
+void TopologyDetector::ProcCpuInfoData::load()
 {
     static const char header[] = "processor\t";
     AutoClosingFile f{ fopen("/proc/cpuinfo", "r") };
     assert(f.f && "/proc must be mounted for proper operation");
 
-    linux_cpu_info result;
-    linux_cpu_info::Fields *current = &result.general_fields;
+    auto &result = *this;
+    Fields *current = &general_fields;
 
     char *line = nullptr;
     size_t len = 0;
@@ -127,14 +184,6 @@ static linux_cpu_info parse_proc_cpuinfo()
     }
 
     free(line);
-    return result;
-}
-
-static linux_cpu_info &proc_cpuinfo()
-{
-    static linux_cpu_info r =
-        parse_proc_cpuinfo();
-    return r;
 }
 #endif
 
@@ -155,12 +204,12 @@ static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2
     return cpu_tuple(cpu1) < cpu_tuple(cpu2);
 };
 
-static void reorder_cpus()
+void TopologyDetector::sort()
 {
     std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
 }
 
-static bool create_mock_topology(const char *topo)
+bool TopologyDetector::create_mock_topology(const char *topo)
 {
     auto parse_int_and_advance = [&topo](auto *ptr) {
         char *end;
@@ -222,7 +271,7 @@ static FILE *fopenat(int dfd, const char *name)
     return f;
 };
 
-static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
+bool TopologyDetector::detect_cache_via_os(Topology::Thread *info, int cpufd)
 {
     FILE *f;
     char buf[256];  // size repeated in fscanf below
@@ -274,7 +323,7 @@ static bool fill_cache_info_sysfs(struct cpu_info *info, int cpufd)
     return true;
 }
 
-static bool fill_numa()
+bool TopologyDetector::detect_numa()
 {
     auto parse_cpulist_range = [](const char *&ptr) {
         // parses one range (which can be a single number) and advances ptr to
@@ -377,15 +426,9 @@ static bool fill_numa()
     return true;
 }
 
-static bool fill_topo_sysfs(struct cpu_info *info)
+bool TopologyDetector::detect_topology_via_os(Topology::Thread *info, int cpufd)
 {
     FILE *f;
-
-    auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
-    if (cpufd < 0)
-        return false;
-    if (!fill_cache_info_sysfs(info, cpufd))
-        return false;
 
     // Read the topology
     f = fopenat(cpufd, "topology/physical_package_id");
@@ -432,6 +475,32 @@ static bool fill_topo_sysfs(struct cpu_info *info)
 
     if (std::optional apicid = proc_cpuinfo().number(info->cpu_number, "apicid", 10))
         info->hwid = *apicid;
+    return true;
+}
+
+bool TopologyDetector::detect_via_os(Topology::Thread *info)
+{
+    auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
+    if (cpufd < 0)
+        return false;
+
+    if (info->cache[0].cache_data < 0)
+        detect_cache_via_os(info, cpufd);
+    if (info->core_id < 0)
+        detect_topology_via_os(info, cpufd);
+
+    if (!detect_ucode_via_os(info, cpufd))
+        detect_ucode_via_msr(info);
+
+    if (info->ppin == 0) {
+        if (info != &cpu_info[0] && info->package_id == info[-1].package_id) {
+            // same package, so just copy
+            info->ppin = info[-1].ppin;
+        } else if (!detect_ppin_via_os(info, cpufd)) {
+            detect_ppin_via_msr(info);
+        }
+    }
+
     return true;
 }
 #elif defined(_WIN32)
@@ -599,31 +668,37 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
     return true;
 }
 
-static bool fill_topo_sysfs(struct cpu_info *info)
+bool TopologyDetector::detect_via_os(Topology::Thread *info)
 {
+    detect_ucode_via_os(info);
     if (info != &cpu_info[0])
         return info->core_id != -1; // we only need to run once
 
     return detect_topology_via_os(RelationAll);
 }
 
-static void fill_numa()
+bool TopologyDetector::detect_numa()
 {
     if (cpu_info[0].numa_id >= 0)
-        return;         // already filled in above
+        return true;            // already filled in above
 
-    detect_topology_via_os(RelationNumaNodeEx);
+    return detect_topology_via_os(RelationNumaNodeEx);
 }
-#else /* __linux__ */
-static auto fill_topo_sysfs = nullptr;
-static void fill_numa()
+#else /* !__linux__ and !_WIN32 */
+bool TopologyDetector::detect_via_os(Topology::Thread *info)
+{
+    return false;
+}
+
+bool TopologyDetector::detect_numa()
 {
     // unimplemented
+    return false;
 }
 #endif /* __linux__ */
 
 #ifdef __x86_64__
-static void detect_family_via_cpuid()
+void TopologyDetector::detect_family_via_cpuid()
 {
     /*
      * EAX layout from the manual:
@@ -651,7 +726,8 @@ static void detect_family_via_cpuid()
     stepping = eax & 0xf;
 }
 
-static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_sharing_l2)
+bool TopologyDetector::detect_cache_via_cpuid(Topology::Thread *info,
+                                              uint32_t *max_cpus_sharing_l2)
 {
     /* since info->cache is statically allocated */
     static int max_levels = sizeof(info->cache) / sizeof(*info->cache);
@@ -703,87 +779,77 @@ static bool fill_cache_info_cpuid(struct cpu_info *info, uint32_t *max_cpus_shar
     return true;
 }
 
-static bool fill_topo_cpuid(struct cpu_info *info)
+bool TopologyDetector::setup_cpuid_detection()
 {
-    enum Domain {
-        Invalid = 0,
-        Logical = 1,
-        Core = 2,
-        Module = 3,
-        Tile = 4,
-        Die = 5,
-        DieGrp = 6,
-    };
-    // we only want up to Tile
-    constexpr Domain Package = Domain(Domain::Tile + 1);
+    if (SandstoneConfig::Debug) {
+        if (char *str = getenv("SANDSTONE_USE_OS_TOPOLOGY"); str && *str)
+            return false;
+    }
 
-    int curr_cpu = info->cpu_number;
+    int8_t &leaf = topology_leaf;
+    uint32_t a, b, c, apicid;
+
+    __cpuid(0, a, b, c, apicid);
+    leaf = -1;
+    if (a >= 0x1f)
+        leaf = 0x1f;        // use V2 Extended Topology
+    else if (a >= 0x0b)
+        leaf = 0x0b;        // use regular Extended Topology
+    else
+        return false;
+
+    int subleaf = 0;
+    __cpuid_count(leaf, subleaf, a, b, c, apicid);
+
+    // extract the domain levels
+    while (b) {
+        Domain domain = Domain((c >> 8) & 0xff);
+        a &= 0xf;
+        switch (domain) {
+        case Domain::Invalid:
+            __builtin_unreachable();
+            break;
+        case Domain::Logical:
+        case Domain::Core:
+        case Domain::Module:
+        case Domain::Tile:
+            width(domain) = a;
+            break;
+
+        case Domain::Die:
+        case Domain::DieGrp:
+            // ignore
+            break;
+        }
+
+        // the package shift is implied by the largest shift
+        width(Package) = std::max(uint8_t(a), width(Package));
+
+        // get next level
+        subleaf++;
+        __cpuid_count(leaf, subleaf, a, b, c, apicid);
+    }
+
+    if (width(Domain::Logical) == 0 || width(Domain::Core) == 0
+            || width(Package) == 0) [[unlikely]] {
+        // no information on CPUID leaf; fallback to OS
+        leaf = -1;
+        return false;
+    }
+    return true;
+}
+
+bool TopologyDetector::detect_topology_via_cpuid(Topology::Thread *info)
+{
     uint32_t a, b, c, apicid;
     uint32_t max_cpus_sharing_l2 = 0;
 
-    if (curr_cpu < 0)
-        return false;
-    if (!fill_cache_info_cpuid(info, &max_cpus_sharing_l2))
+    if (!detect_cache_via_cpuid(info, &max_cpus_sharing_l2))
         return false;
 
-    static int8_t leaf;
-    static std::array<uint8_t, Package> widthsarray;
-    auto width = [](Domain domain) -> uint8_t & { return widthsarray[domain - 1]; };
-
-    if (leaf < 0)
-        return false;
-    if (!leaf) {
-        __cpuid(0, a, b, c, apicid);
-        leaf = -1;
-        if (a >= 0x1f)
-            leaf = 0x1f;        // use V2 Extended Topology
-        else if (a >= 0x0b)
-            leaf = 0x0b;        // use regular Extended Topology
-        else
-            return false;
-
-        int subleaf = 0;
-        __cpuid_count(leaf, subleaf, a, b, c, apicid);
-
-        // extract the domain levels
-        while (b) {
-            Domain domain = Domain((c >> 8) & 0xff);
-            a &= 0xf;
-            switch (domain) {
-            case Domain::Invalid:
-                __builtin_unreachable();
-                break;
-            case Domain::Logical:
-            case Domain::Core:
-            case Domain::Module:
-            case Domain::Tile:
-                width(domain) = a;
-                break;
-
-            case Domain::Die:
-            case Domain::DieGrp:
-                // ignore
-                break;
-            }
-
-            // the package shift is implied by the largest shift
-            width(Package) = std::max(uint8_t(a), width(Package));
-
-            // get next level
-            subleaf++;
-            __cpuid_count(leaf, subleaf, a, b, c, apicid);
-        }
-
-        if (width(Domain::Logical) == 0 || width(Domain::Core) == 0
-                || width(Package) == 0) [[unlikely]] {
-            // no information on CPUID leaf; fallback to OS
-            leaf = -1;
-            return false;
-        }
-    } else {
-        // just get this processor's APIC ID
-        __cpuid_count(leaf, 0, a, b, c, apicid);
-    }
+    // get this processor's APIC ID
+    assert(topology_leaf > 0);
+    __cpuid_count(topology_leaf, 0, a, b, c, apicid);
 
     // process the widths
     auto extract = [&](uint32_t start, uint32_t end) {
@@ -823,7 +889,7 @@ static bool fill_topo_cpuid(struct cpu_info *info)
     return true;
 }
 
-static bool fill_ucode_msr(struct cpu_info *info)
+[[maybe_unused]] bool TopologyDetector::detect_ucode_via_msr(Topology::Thread *info)
 {
     uint64_t ucode = 0;
 
@@ -833,19 +899,20 @@ static bool fill_ucode_msr(struct cpu_info *info)
 
     return true;
 }
-#else
-static void detect_family_via_cpuid()
-{
-}
-constexpr auto fill_ucode_msr = nullptr;
-constexpr auto fill_topo_cpuid = nullptr;
-#endif // x86-64
 
-static bool fill_ucode_sysfs(struct cpu_info *info)
+#  if defined(__linux__)
+bool TopologyDetector::detect_ppin_via_os(Topology::Thread *info, int cpufd)
 {
-#ifdef __linux__
+    if (AutoClosingFile f { fopenat(cpufd, "topology/ppin") }) {
+        if (fscanf(f, "%" PRIx64, &info->ppin) > 0)
+            return true;
+    }
+    return false;
+}
+
+bool TopologyDetector::detect_ucode_via_os(Topology::Thread *info, int cpufd)
+{
     FILE *f;
-    auto_fd cpufd { open_sysfs_cpu_dir(info->cpu_number) };
     if (cpufd < 0)
         return false;
 
@@ -860,7 +927,10 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
             info->microcode = *opt;
     }
     return info->microcode != 0;
-#elif defined(_WIN32)
+}
+#  elif defined(_WIN32)
+bool TopologyDetector::detect_ucode_via_os(Topology::Thread *info)
+{
     HKEY hKey = (HKEY)-1;
     LONG lResult = ERROR_SUCCESS;
     bool ok = false;
@@ -905,74 +975,61 @@ static bool fill_ucode_sysfs(struct cpu_info *info)
     }
 
     return ok;
-#else
-    return false;
-#endif /* __linux__ */
 }
+#  endif // Linux or Windows
 
-#ifdef __x86_64__
-static bool fill_ppin_msr(struct cpu_info *info)
+[[maybe_unused]]
+bool TopologyDetector::detect_ppin_via_msr(Topology::Thread *info)
 {
     info->ppin = 0;
     return read_msr(info->cpu_number, 0x4F, &info->ppin); /* MSR_PPIN */
 }
-#else
-constexpr auto fill_ppin_msr = nullptr;
-#endif // __x86_64__
 
-static bool fill_ppin_sysfs(struct cpu_info *info)
+bool TopologyDetector::detect_via_cpuid(Topology::Thread *info)
 {
-#if defined(__linux__) && defined(__x86_64__)
-    auto_fd cpufd = open_sysfs_cpu_dir(info->cpu_number);
-    if (cpufd < 0)
-        return false;
+    return detect_topology_via_cpuid(info);     // does cache detection
+}
+#else // !x86-64
+void TopologyDetector::detect_family_via_cpuid()
+{
+}
 
-    if (AutoClosingFile f { fopenat(cpufd, "topology/ppin") }) {
-        if (fscanf(f, "%" PRIx64, &info->ppin) > 0)
-            return true;
-    }
-#endif
-
+bool TopologyDetector::detect_ppin_via_msr(Topology::Thread *)
+{
     return false;
 }
 
-template <auto &fnArray> static bool try_detection(struct cpu_info *cpu)
+bool TopologyDetector::detect_ucode_via_msr(Topology::Thread *)
 {
-    using DetectorFunction = std::decay_t<decltype(fnArray[0])>;
-    if (std::size(fnArray) > 0) {
-        if (std::size(fnArray) == 1) {
-            // no need to cache, there's only one implementation
-            DetectorFunction fn = fnArray[0];
-            return fn ? fn(cpu) : true;
-        }
-
-        static DetectorFunction cached_fn = nullptr;
-        if (cached_fn)
-            return cached_fn(cpu);
-
-        for (DetectorFunction fn : fnArray) {
-            if (!fn)
-                continue;
-            if (fn(cpu)) {
-                cached_fn = fn;
-                return true;
-            }
-        }
-    }
     return false;
 }
 
-typedef bool (* fill_family_func)(struct cpu_info *);
-typedef bool (* fill_ppin_func)(struct cpu_info *);
-typedef bool (* fill_ucode_func)(struct cpu_info *);
-typedef bool (* fill_topo_func)(struct cpu_info *);
+bool TopologyDetector::detect_ppin_via_os(Topology::Thread *, int)
+{
+    return false;
+}
 
-static const fill_ppin_func ppin_impls[] = { fill_ppin_sysfs, fill_ppin_msr };
-/* prefer sysfs, fallback to MSR. the latter is not reliable and may require
- * root. */
-static const fill_ucode_func ucode_impls[] = { fill_ucode_sysfs, fill_ucode_msr };
-/* prefer CPUID, fallback to sysfs. */
-static const fill_topo_func topo_impls[] = { fill_topo_cpuid, fill_topo_sysfs };
+bool TopologyDetector::detect_ucode_via_os(Topology::Thread *, int)
+{
+    return false;
+}
+
+bool TopologyDetector::setup_cpuid_detection()
+{
+    return false;
+}
+
+bool TopologyDetector::detect_via_cpuid(Topology::Thread *)
+{
+    assert(false && "Should not get here!");
+    __builtin_unreachable();
+    return false;
+}
+#endif // !x86-64
+
+TopologyDetector::TopologyDetector()
+{
+}
 
 void apply_cpuset_param(char *param)
 {
@@ -1134,13 +1191,17 @@ void apply_cpuset_param(char *param)
     update_topology(new_cpu_info);
 }
 
-static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
+void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
 {
+    assert(sApp->thread_count);
     assert(sApp->thread_count == enabled_cpus.count());
     cpu_info = sApp->shmem->cpu_info;
 
     // detect this CPU's family - it's impossible for them to be different
     detect_family_via_cpuid();
+
+    int count = sApp->thread_count;
+    [[assume(count > 0)]];
 
     // fill in cpu_info first
     {
@@ -1156,9 +1217,9 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
     }
-    std::fill_n(&cpu_info[1], sApp->thread_count - 1, cpu_info[0]);
+    std::fill_n(&cpu_info[1], count - 1, cpu_info[0]);
 
-    for (int i = 0, curr_cpu = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
+    for (int i = 0, curr_cpu = 0; i < count; ++i, ++curr_cpu) {
         auto lp = LogicalProcessor(curr_cpu);
         while (!enabled_cpus.is_set(lp)) {
             lp = LogicalProcessor(++curr_cpu);
@@ -1175,27 +1236,31 @@ static void init_topology_internal(const LogicalProcessorSet &enabled_cpus)
     }
 
     auto detect = [](void *ptr) -> void * {
-        const auto & enabled_cpus = *static_cast<const LogicalProcessorSet *>(ptr);
-        int curr_cpu = 0;
-        for (int i = 0; i < sApp->thread_count; ++i, ++curr_cpu) {
-            auto lp = LogicalProcessor(curr_cpu);
-            while (!enabled_cpus.is_set(lp)) {
-                lp = LogicalProcessor(++curr_cpu);
-            }
-
-            pin_to_logical_processor(lp);
-            try_detection<topo_impls>(&cpu_info[i]);
-            try_detection<ppin_impls>(&cpu_info[i]);
-            try_detection<ucode_impls>(&cpu_info[i]);
+        auto self = static_cast<TopologyDetector *>(ptr);
+        int count = sApp->thread_count;
+        [[assume(count > 0)]];
+        for (Topology::Thread &cpu : std::span(cpu_info, count)) {
+            pin_to_logical_processor(LogicalProcessor(cpu.cpu_number));
+            self->detect_via_cpuid(&cpu);
+            self->detect_via_os(&cpu);
         }
         return nullptr;
     };
 
-    pthread_t detection_thread;
-    pthread_create(&detection_thread, nullptr, detect, const_cast<LogicalProcessorSet *>(&enabled_cpus));
-    pthread_join(detection_thread, nullptr);
+    if (setup_cpuid_detection()) {
+        // Do a per-CPU detection, which requires us to pin an auxiliary
+        // thread to each CPU.
+        pthread_t detection_thread;
+        pthread_create(&detection_thread, nullptr, detect, this);
+        pthread_join(detection_thread, nullptr);
+    } else {
+        // Use OS-level detection only (no pinning, no threads).
+        for (Topology::Thread &cpu : std::span(cpu_info, count)) {
+            detect_via_os(&cpu);
+        }
+    }
 
-    fill_numa();
+    detect_numa();
 }
 
 static void populate_core_group(Topology::CoreGrouping *group, const Topology::Thread *begin,
@@ -1323,8 +1388,9 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
 
 void init_topology(const LogicalProcessorSet &enabled_cpus)
 {
-    init_topology_internal(enabled_cpus);
-    reorder_cpus();
+    TopologyDetector detector;
+    detector.detect(enabled_cpus);
+    detector.sort();
     cached_topology() = build_topology();
 }
 
