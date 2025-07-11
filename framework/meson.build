@@ -19,6 +19,8 @@ assert(is_variable('cc'), 'C compiler not configured!')
 assert(is_variable('cpp'), 'C++ compiler not configured!')
 assert(is_variable('boost_dep'), 'boost dependency not found!')
 
+fs = import('fs')
+
 # Optional variables, set default values if not set
 if is_variable('unittests_sources') == false
     unittests_sources = []
@@ -55,10 +57,16 @@ else
     error('Unknown device type: ' + device_type)
 endif
 
-sysdeps_dir = 'sysdeps/' + target_machine.system()
+sysdeps_dir = 'sysdeps' / target_machine.system()
+devicedeps_dir = 'devicedeps' / device_type
+devicedeps_sys_dir = ''
+if fs.is_dir(devicedeps_dir / target_machine.system())
+    devicedeps_sys_dir = devicedeps_dir / target_machine.system()
+endif
 
 if target_machine.system() == 'cygwin'
     sysdeps_dir = 'sysdeps/windows'
+    devicedeps_sys_dir = 'devicedeps' / device_type / 'windows'
 endif
 
 framework_incdir = [
@@ -67,6 +75,8 @@ framework_incdir = [
         [
             '.',
             sysdeps_dir,
+            devicedeps_dir,
+            devicedeps_sys_dir,
         ],
     ),
 ]
@@ -87,6 +97,12 @@ generated_cpu_features_h = configure_file(
         '@OUTPUT@',
     ],
 )
+
+framework_files = files()
+
+# Run device-specific build steps early to ensure that any auto-generated
+# file is available before anything else.
+subdir(devicedeps_dir)
 
 if meson.current_source_dir() == join_paths(meson.project_source_root(), 'framework')
     configure_file(
@@ -171,7 +187,7 @@ framework_config.set10(
     or get_option('ssl_link_type') == 'dynamic',
 )
 
-framework_files = files(
+framework_files += files(
     'Floats.cpp',
     'generated_vectors.c',
     'logging.cpp',
@@ -216,7 +232,9 @@ if framework_config.get('SANDSTONE_SSL_BUILD') == 1
 endif
 
 if get_option('selftests')
-    framework_files += files('selftest.cpp')
+    framework_files += files(
+        'selftest.cpp'
+    )
 else
     default_c_flags += [
         '-DNO_SELF_TESTS',
@@ -257,8 +275,14 @@ endif
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
     subdir('sysdeps/unix')
+    if fs.is_dir('devicedeps' / device_type / 'unix')
+        subdir('devicedeps' / device_type / 'unix')
+    endif
 endif
 subdir(sysdeps_dir)
+if devicedeps_sys_dir.contains('devicedeps')
+    subdir(devicedeps_sys_dir)
+endif
 
 configure_file(
     input: 'sandstone_config.h.in',
@@ -266,11 +290,16 @@ configure_file(
     configuration: framework_config,
 )
 
+premain_file = files()
+if device_type == 'cpu'
+    premain_file += files(
+        'main.cpp',
+    )
+endif
+
 framework_main_a = static_library(
     'framework_main',
-    files(
-        'main.cpp',
-    ),
+    premain_file,
     build_by_default: false,
     include_directories: [
         framework_incdir,
