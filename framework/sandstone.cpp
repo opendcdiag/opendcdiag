@@ -996,6 +996,11 @@ static LogicalProcessorSet init_cpus()
 {
     LogicalProcessorSet result = ambient_logical_processor_set();
     sApp->thread_count = result.count();
+    if (sApp->thread_count == 0) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
+                program_invocation_name);
+        exit(EX_OSERR);
+    }
     sApp->user_thread_data.resize(sApp->thread_count);
 #ifdef M_ARENA_MAX
     mallopt(M_ARENA_MAX, sApp->thread_count * 2);
