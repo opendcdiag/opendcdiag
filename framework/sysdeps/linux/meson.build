@@ -25,7 +25,6 @@ framework_files += \
         'cpu_affinity.cpp',
         'malloc.cpp',
         'memfpt.cpp',
-        'physicaladdress.cpp',
     )
 
 if get_option('cpp_link_args').contains('-static')

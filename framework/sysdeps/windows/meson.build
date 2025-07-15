@@ -19,5 +19,4 @@ framework_files += \
         'win32_perror.cpp',
         '../generic/kvm.c',
         '../generic/memfpt.c',
-        '../generic/physicaladdress.c',
     )
