@@ -1055,7 +1055,7 @@ static void init_shmem()
 static void commit_shmem()
 {
     // the most detailed plan is the last
-    const std::vector<CpuRange> &plan = sApp->slice_plans.plans.end()[-1];
+    const std::vector<DeviceRange> &plan = sApp->slice_plans.plans.end()[-1];
     size_t main_thread_count = plan.size();
     sApp->shmem->main_thread_count = main_thread_count;
     sApp->shmem->total_cpu_count = num_cpus();
@@ -1119,11 +1119,11 @@ static void slice_plan_init(int max_cores_per_slice)
 {
     auto set_to_full_system = []() {
         // only one plan and that's the full system
-        std::vector plan = { CpuRange{ 0, num_cpus() } };
+        std::vector plan = { DeviceRange{ 0, num_cpus() } };
         sApp->slice_plans.plans.fill(plan);
         return;
     };
-    for (std::vector<CpuRange> &plan : sApp->slice_plans.plans)
+    for (std::vector<DeviceRange> &plan : sApp->slice_plans.plans)
         plan.clear();
 
     if (sApp->current_fork_mode() == SandstoneApplication::no_fork || max_cores_per_slice < 0)
@@ -1167,13 +1167,13 @@ static void slice_plan_init(int max_cores_per_slice)
         }
 
         // set up proper plans
-        std::vector<CpuRange> &isolate_socket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
-        std::vector<CpuRange> &split = sApp->slice_plans.plans[SlicePlans::Heuristic];
-        auto push_to = [](std::vector<CpuRange> &to, auto start, auto end) {
+        std::vector<DeviceRange> &isolate_socket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
+        std::vector<DeviceRange> &split = sApp->slice_plans.plans[SlicePlans::Heuristic];
+        auto push_to = [](std::vector<DeviceRange> &to, auto start, auto end) {
             int start_cpu = start[0].threads.front().cpu();
             int end_cpu = end[-1].threads.back().cpu();
             assert(end_cpu >= start_cpu);
-            to.push_back(CpuRange{ start_cpu, end_cpu + 1 - start_cpu });
+            to.push_back(DeviceRange{ start_cpu, end_cpu + 1 - start_cpu });
         };
 
         for (const Topology::Package &p : topology.packages) {
@@ -1220,14 +1220,14 @@ static void slice_plan_init(int max_cores_per_slice)
     } else {
         // dumb plan, not *cores*
         int slice_count = (max_cpu - 1) / max_cores_per_slice + 1;
-        std::vector<CpuRange> plan;
+        std::vector<DeviceRange> plan;
         plan.reserve(slice_count);
 
         int slice_size = max_cpu / slice_count;
         int cpu = 0;
         for ( ; cpu < max_cpu - slice_size; cpu += slice_size)
-            plan.push_back(CpuRange{ cpu, slice_size });
-        plan.push_back(CpuRange{ cpu, max_cpu - cpu });
+            plan.push_back(DeviceRange{ cpu, slice_size });
+        plan.push_back(DeviceRange{ cpu, max_cpu - cpu });
         sApp->slice_plans.plans.fill(plan);
     }
 }
@@ -1862,7 +1862,7 @@ static int slices_for_test(const struct test *test)
         return 1;
     }
 
-    const std::vector<CpuRange> &plan = sApp->slice_plans.plans[type];
+    const std::vector<DeviceRange> &plan = sApp->slice_plans.plans[type];
     for (size_t i = 0; i < plan.size(); ++i)
         sApp->main_thread_data(i)->cpu_range = plan[i];
 

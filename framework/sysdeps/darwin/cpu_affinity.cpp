@@ -41,7 +41,7 @@ bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const 
     return true;
 }
 
-bool pin_to_logical_processors(CpuRange range, const char *thread_name)
+bool pin_to_logical_processors(DeviceRange range, const char *thread_name)
 {
     // nothing
     (void) range;

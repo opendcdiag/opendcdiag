@@ -221,7 +221,7 @@ struct Common
 
 struct alignas(64) Main : Common
 {
-    CpuRange cpu_range;
+    DeviceRange cpu_range;
 };
 
 struct alignas(64) Test : Common
@@ -334,7 +334,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
             IsolateSockets,
             Heuristic,
         };
-        using Slices = std::vector<CpuRange>;
+        using Slices = std::vector<DeviceRange>;
         std::array<Slices, 2> plans;
     };
 
@@ -527,7 +527,7 @@ inline void SandstoneApplication::select_main_thread(int slice)
 {
     assert(current_fork_mode() != no_fork || slice == 0);
     main_thread_data_ptr += slice;
-    test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_cpu;
+    test_thread_data_ptr += main_thread_data_ptr->cpu_range.starting_device;
 }
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_slices = INT_MAX)

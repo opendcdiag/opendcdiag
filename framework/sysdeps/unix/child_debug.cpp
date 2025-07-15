@@ -283,7 +283,7 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     CrashContext::Fixed fixed = {
         .crash_address = si->si_addr,
         .rip = si->si_addr,
-        .thread_num = ::thread_num + sApp->main_thread_data()->cpu_range.starting_cpu,
+        .thread_num = ::thread_num + sApp->main_thread_data()->cpu_range.starting_device,
         .signum = si->si_signo,
         .signal_code = si->si_code,
     };
