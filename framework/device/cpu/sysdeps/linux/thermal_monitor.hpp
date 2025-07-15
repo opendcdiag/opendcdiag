@@ -8,7 +8,7 @@
 
 #include <glob.h>
 #include <fstream>
-
+#include <vector>
 
 #define DEFAULT_SYS_THERMAL_PATH "/sys/devices/virtual/thermal/"
 #define INVALID_TEMPERATURE  -999999

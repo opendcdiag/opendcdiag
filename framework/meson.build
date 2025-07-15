@@ -10,6 +10,7 @@
 # framework is included. This is mostly for the application developer's benefit,
 # because without these variables, the compilation will fail either way.
 
+fs = import('fs')
 
 # Required variables, assert if not set
 assert(is_variable('top_incdir'), 'top_incdir is not set!')
@@ -57,6 +58,10 @@ endif
 
 sysdeps_dir = 'sysdeps' / target_machine.system()
 devicedeps_dir = 'device' / device_type
+devicedeps_sys_dir = ''
+if fs.is_dir(devicedeps_dir / 'sysdeps' / target_machine.system())
+    devicedeps_sys_dir = devicedeps_dir / 'sysdeps' / target_machine.system()
+endif
 
 if target_machine.system() == 'cygwin'
     sysdeps_dir = 'sysdeps/windows'
@@ -69,28 +74,13 @@ framework_incdir = [
             '.',
             sysdeps_dir,
             devicedeps_dir,
+            devicedeps_sys_dir,
         ],
     ),
 ]
 
-# Must be a configure_file, not custom_target, so it's created at
-# meson time and thus before everything
-generated_cpu_features_h = configure_file(
-    output: 'cpu_features.h',
-    encoding: 'ascii',
-    input: files(
-        'simd.conf',
-    ),
-    capture: true,
-    command: [
-        perl,
-        files('scripts/x86simd_generate.pl'),
-        '@INPUT@',
-        '@OUTPUT@',
-    ],
-)
-
 framework_files = files()
+generated_files = files()
 
 # Run device-specific build steps early to ensure that any auto-generated
 # file is available before anything else.
@@ -115,9 +105,8 @@ else
     message('opendcdiag: not generating gitid.h -- likely included as subdir')
 endif
 
-generated_builtin_test_list = []
 builtin_test_list_inputs = get_option('builtin_test_list')
-generated_builtin_test_list += custom_target(
+generated_files += custom_target(
     'sandstone_test_lists.h',
     input: [],
     output: [
@@ -266,8 +255,14 @@ endif
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
     subdir('sysdeps/unix')
+    if fs.is_dir('device' / device_type / 'sysdeps' / 'unix')
+        subdir('device' / device_type / 'sysdeps' / 'unix')
+    endif
 endif
 subdir(sysdeps_dir)
+if devicedeps_sys_dir.contains('device')
+    subdir(devicedeps_sys_dir)
+endif
 
 configure_file(
     input: 'sandstone_config.h.in',
@@ -300,8 +295,7 @@ framework_main_a = static_library(
 framework_a = static_library(
     'framework',
     framework_files,
-    generated_builtin_test_list,
-    generated_cpu_features_h,
+    generated_files,
     build_by_default: false,
     include_directories: [
         framework_incdir,
