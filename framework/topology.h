@@ -21,11 +21,11 @@
 
 #include "gettid.h"
 
-struct CpuRange
+struct DeviceRange
 {
     // a contiguous range
-    int starting_cpu;
-    int cpu_count;
+    int starting_device;
+    int device_count;
 };
 
 enum class LogicalProcessor : int {};
@@ -159,10 +159,10 @@ private:
 
 LogicalProcessorSet ambient_logical_processor_set();
 bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullptr);
-bool pin_to_logical_processors(CpuRange, const char *thread_name);
+bool pin_to_logical_processors(DeviceRange, const char *thread_name);
 
 void apply_cpuset_param(char *param);
 void init_topology(const LogicalProcessorSet &enabled_cpus);
-void restrict_topology(CpuRange range);
+void restrict_topology(DeviceRange range);
 
 #endif /* INC_TOPOLOGY_H */

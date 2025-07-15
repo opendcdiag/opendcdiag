@@ -1394,11 +1394,11 @@ void init_topology(const LogicalProcessorSet &enabled_cpus)
     cached_topology() = build_topology();
 }
 
-void restrict_topology(CpuRange range)
+void restrict_topology(DeviceRange range)
 {
-    assert(range.starting_cpu + range.cpu_count <= sApp->thread_count);
-    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_cpu);
-    int old_thread_count = std::exchange(sApp->thread_count, range.cpu_count);
+    assert(range.starting_device + range.device_count <= sApp->thread_count);
+    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_device);
+    int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
 
     Topology &topo = cached_topology();
     if (old_cpu_info != cpu_info || old_thread_count != sApp->thread_count ||
