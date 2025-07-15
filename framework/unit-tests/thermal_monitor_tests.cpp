@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "device/cpu/sysdeps/linux/thermal_monitor.hpp"
+#include "sandstone.h"
+
 #include "gtest/gtest.h"
+
 #include <algorithm>
-#include <sandstone.h>
-#include "sysdeps/linux/thermal_monitor.hpp"
 
 namespace LinuxTesting {
     class LinuxThermalFixture : public ::testing::Test {
@@ -111,7 +113,7 @@ namespace LinuxTesting {
 // We will populate this when we implement it
 namespace WindowsBuild {
 
-#include "sysdeps/windows/thermal_monitor.hpp"
+#include "device/cpu/sysdeps/windows/thermal_monitor.hpp"
 
     class WindowsThermalFixture : public ::testing::Test {
     };
