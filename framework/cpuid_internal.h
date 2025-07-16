@@ -227,7 +227,7 @@ static void check_missing_features(cpu_features_t features, cpu_features_t minim
     cpuid_errmsg("Cannot run on this CPU.\n"
                  "This application requires certain features not found in your CPU:");
     for (i = 0; i < x86_locator_count; ++i) {
-        if (missing & (UINT64_C(1) << i))
+        if (missing & (CPU_FEATURE_CONSTANT(1) << i))
             fputs(features_string + features_indices[i], stderr);
     }
     fputs("\nexit: invalid\n", stderr);
