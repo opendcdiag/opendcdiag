@@ -16,6 +16,7 @@ my %leaves = (
     Leaf07_01EDX        => "CPUID Leaf 7, Sub-leaf 1, EDX",
     Leaf0D_01EAX        => "CPUID Leaf 0Dh, Sub-leaf 1, EAX",
     Leaf1E_01EAX        => "CPUID Leaf 1Eh, Sub-leaf 1, EAX",
+    Leaf24_00EBX        => "CPUID Leaf 24h, Sub-leaf 0, EBX",
     Leaf80000001ECX     => "CPUID Leaf 80000001h, ECX",
     Leaf80000008EBX     => "CPUID Leaf 80000008h, EBX",
 );
@@ -273,8 +274,12 @@ printf "\nstatic const %s x86_locators[] = {\n",
     $type, $type;
 for (my $j = 0; $j < scalar @features; ++$j) {
     my $feature = $features[$j];
-    printf "    %s*32 + %2d, %s// %s\n",
-        $feature->{leaf}, $feature->{bit}, ' ' x (24 - length($feature->{leaf})), $feature->{name};
+    if ($feature->{bit} =~ /==/) {
+        printf "    UINT16_MAX,                       // %s (specially-handled)\n", $feature->{name};
+    } else {
+        printf "    %s*32 + %2d, %s// %s\n",
+            $feature->{leaf}, $feature->{bit}, ' ' x (24 - length($feature->{leaf})), $feature->{name};
+    }
 }
 print '};';
 
