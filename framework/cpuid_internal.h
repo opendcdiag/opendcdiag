@@ -178,10 +178,28 @@ static cpu_features_t detect_cpu()
     }
     if (max_level >= 0x1e) {
         __cpuid_count(0x1e, 0, eax, ebx, ecx, edx);
-        features |= parse_register(Leaf1Eh_01EAX, eax);
+        features |= parse_register(Leaf1E_01EAX, eax);
     }
     __cpuid(0x80000001, eax, ebx, ecx, edx);
     features |= parse_register(Leaf80000001ECX, ecx);
+
+    if (max_level >= 0x24 && features & cpu_feature_avx10_1) {
+        // extract the version number from CPUID
+        __cpuid_count(0x24, 0, eax, ebx, ecx, edx);
+
+        int avx10ver = ebx & 0xff;
+        if (avx10ver >= 2)
+            features |= cpu_feature_avx10_2;
+#ifdef cpu_feature_avx10_3
+        if (avx10ver >= 3)
+            features |= cpu_feature_avx10_3;
+#endif
+#ifdef cpu_feature_avx10_4
+        if (avx10ver >= 4)
+            features |= cpu_feature_avx10_4;
+#endif
+        assert(avx10ver < 5 && "Internal error: update code above!");
+    }
 
     if (osxsave) {
         uint64_t xcr0 = 0;
