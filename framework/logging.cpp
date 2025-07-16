@@ -779,7 +779,7 @@ void logging_mark_thread_failed(int thread_num)
     }
 }
 
-static void logging_mark_thread_skipped(int thread_num)
+void logging_mark_thread_skipped(int thread_num)
 {
     PerThreadData::Common *thr = sApp->thread_data(thread_num);
     if (thr->has_failed())
