@@ -2472,11 +2472,15 @@ void YamlLogger::print_fixed()
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str());
 
     double freqs = 0.0;
-    for_each_test_thread([&freqs](const PerThreadData::Test *data, int) {
-        freqs += data->effective_freq_mhz;
+    int cpus_measured = 0;
+    for_each_test_thread([&](const PerThreadData::Test *data, int) {
+        if (!data->has_skipped()) {
+            freqs += data->effective_freq_mhz;
+            ++cpus_measured;
+        }
     });
 
-    const double freq_avg = freqs / num_cpus();
+    const double freq_avg = freqs / cpus_measured;
     if (std::isfinite(freq_avg) && freq_avg != 0.0)
         logging_printf(LOG_LEVEL_VERBOSE(1), "  avg-freq-mhz: %.1f\n", freq_avg);
 
