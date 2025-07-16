@@ -14,10 +14,10 @@ my %leaves = (
     Leaf07_00EDX        => "CPUID Leaf 7, Sub-leaf 0, EDX",
     Leaf07_01EAX        => "CPUID Leaf 7, Sub-leaf 1, EAX",
     Leaf07_01EDX        => "CPUID Leaf 7, Sub-leaf 1, EDX",
-    Leaf13_01EAX        => "CPUID Leaf 13, Sub-leaf 1, EAX",
-    Leaf1E_01EAX        => "CPUID Leaf 1e, Sub-leaf 1, EAX",
-    Leaf80000001hECX    => "CPUID Leaf 80000001h, ECX",
-    Leaf80000008hEBX    => "CPUID Leaf 80000008h, EBX",
+    Leaf0D_01EAX        => "CPUID Leaf 0Dh, Sub-leaf 1, EAX",
+    Leaf1E_01EAX        => "CPUID Leaf 1Eh, Sub-leaf 1, EAX",
+    Leaf80000001ECX     => "CPUID Leaf 80000001h, ECX",
+    Leaf80000008EBX     => "CPUID Leaf 80000008h, EBX",
 );
 my @leafNames = sort keys %leaves;
 

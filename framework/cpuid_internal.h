@@ -172,12 +172,12 @@ static cpu_features_t detect_cpu()
             features |= parse_register(Leaf07_01EDX, edx);
         }
     }
-    if (max_level >= 13) {
-        __cpuid_count(13, 1, eax, ebx, ecx, edx);
-        features |= parse_register(Leaf13_01EAX, eax);
+    if (max_level >= 0x0d) {
+        __cpuid_count(0x0d, 1, eax, ebx, ecx, edx);
+        features |= parse_register(Leaf0D_01EAX, eax);
     }
     __cpuid(0x80000001, eax, ebx, ecx, edx);
-    features |= parse_register(Leaf80000001hECX, ecx);
+    features |= parse_register(Leaf80000001ECX, ecx);
 
     if (osxsave) {
         uint64_t xcr0 = 0;
