@@ -12,12 +12,12 @@ extern constexpr const cpu_features_t minimum_cpu_features = _compilerCpuFeature
 
 cpu_features_t cpu_features = 0;
 
-std::string cpu_features_to_string(uint64_t f)
+std::string cpu_features_to_string(cpu_features_t f)
 {
     std::string result;
     const char *comma = "";
     for (size_t i = 0; i < std::size(x86_locators); ++i) {
-        if (f & (UINT64_C(1) << i)) {
+        if (f & CPU_FEATURE_CONSTANT(i)) {
             result += comma;
             result += features_string + features_indices[i] + 1;
             comma = ",";
