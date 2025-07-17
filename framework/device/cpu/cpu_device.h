@@ -180,7 +180,7 @@ inline int cpu_info::cpu() const
     return this - ::cpu_info;
 }
 
-std::string cpu_features_to_string(uint64_t f);
+std::string cpu_features_to_string(cpu_features_t f);
 
 extern "C" {
 #endif // __cplusplus
