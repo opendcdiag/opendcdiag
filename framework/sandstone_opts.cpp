@@ -1029,7 +1029,7 @@ struct ProgramOptionsParser {
             case 'h':
                 usage(argv);
                 opts.action = Action::exit;
-                return opt == 'h' ? EXIT_SUCCESS : EX_USAGE;
+                return EXIT_SUCCESS;
             default:
                 suggest_help(argv);
                 opts.action = Action::exit;
