@@ -244,8 +244,6 @@ static_assert(NARGS(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
 /// Macro to build mask value for particular number of bits.
 #define MASK(bits) (((bits) == 64) ? 0xffffffffffffffffULL : ((1ULL << ((bits == 64) ? 0 : (bits))) - 1))
 
-
-
 struct test;
 
 typedef int (*initfunc)(struct test *test);

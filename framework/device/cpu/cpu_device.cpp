@@ -50,8 +50,9 @@ void dump_device_info()
                cpu_info[i].package_id, cpu_info[i].core_id, cpu_info[i].thread_id,
                cpu_info[i].module_id, cpu_info[i].numa_id, cpu_info[i].hwid,
                cpu_info[i].microcode);
-        if (cpu_info[i].ppin)
-            printf("\t%016" PRIx64, cpu_info[i].ppin);
+        const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(cpu_info[i].package_id);
+        if (pkg && pkg->ppin)
+            printf("\t%016" PRIx64, pkg->ppin);
         puts("");
     }
 }
