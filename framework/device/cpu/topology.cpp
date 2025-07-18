@@ -515,8 +515,10 @@ bool TopologyDetector::detect_numa()
         cpulist.resize(cpulist.capacity());
         while (true) {
             ssize_t n = pread(listfd, &cpulist[0], cpulist.size(), 0);
-            if (n <= 0) [[unlikely]]
+            if (n <= 0) [[unlikely]] {
+                closedir(dir);
                 return false;
+            }
 
             if (cpulist[n - 1] == '\n') {
                 // it fit
