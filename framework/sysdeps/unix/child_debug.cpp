@@ -510,13 +510,17 @@ static std::string run_process(const char *args[])
     int ret = run_process(stdout_fd, args);
 
     std::string log;
-    if (ret < 0)
+    if (ret < 0) {
+        close(stdout_fd);
         return log;
+    }
 
     // read the entire output
     struct stat st;
-    if (fstat(stdout_fd, &st) < 0 || st.st_size == 0)
+    if (fstat(stdout_fd, &st) < 0 || st.st_size == 0) {
+        close(stdout_fd);
         return log;
+    }
 
     ssize_t total_read = 0;
     log.resize(st.st_size);
@@ -526,6 +530,8 @@ static std::string run_process(const char *args[])
             break;
     }
     log.resize(total_read);
+
+    close(stdout_fd);
     return log;
 }
 
