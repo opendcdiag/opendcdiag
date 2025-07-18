@@ -621,7 +621,7 @@ static void kvm_log_registers(const kvm_ctx_t *ctx, const struct kvm_regs *gprs)
         void *xsave_area;
         int xsave_get = KVM_GET_XSAVE2;
         int xsave_size = ioctl(ctx->vm_fd, KVM_CHECK_EXTENSION, KVM_CAP_XSAVE2);
-        if (xsave_size == 0) {
+        if (xsave_size <= 0) {
             /* pre-5.16 kernel (no AMX support) */
             xsave_size = sizeof(struct kvm_xsave);
             xsave_get = KVM_GET_XSAVE;
