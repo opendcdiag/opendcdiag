@@ -506,17 +506,19 @@ static std::string run_process(const char *args[])
 {
     // Not using a pipe here because we don't know how much the child process
     // will write, and run_process() above waits for it to end.
-    int stdout_fd = open_memfd(MemfdCloseOnExec);
+    auto_fd stdout_fd = open_memfd(MemfdCloseOnExec);
     int ret = run_process(stdout_fd, args);
 
     std::string log;
-    if (ret < 0)
+    if (ret < 0) {
         return log;
+    }
 
     // read the entire output
     struct stat st;
-    if (fstat(stdout_fd, &st) < 0 || st.st_size == 0)
+    if (fstat(stdout_fd, &st) < 0 || st.st_size == 0) {
         return log;
+    }
 
     ssize_t total_read = 0;
     log.resize(st.st_size);
@@ -526,6 +528,7 @@ static std::string run_process(const char *args[])
             break;
     }
     log.resize(total_read);
+
     return log;
 }
 
