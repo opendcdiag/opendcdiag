@@ -544,7 +544,6 @@ static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
     } result;
 
     ssize_t ret;
-    char buf[4096];
     auto deadline = coarse_steady_clock::now() + GdbCommunicationTimeout;
     struct pollfd pfd[1] = {
         { .fd = in, .events = POLLIN }
@@ -563,85 +562,71 @@ static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
         return 0;           // timed out
     };
 
-    // drain gdb's start
-    set_nonblock(in);
-    for (;;) {
-        static const char needle[] = "(gdb) ";
-        ret = wait_for_more();
-        if (ret <= 0)
-            return result;
+    auto read_until = [&wait_for_more](int in, std::string &buf, auto needle) {
+        // read and accumulate into buf until we find the needle
+        constexpr bool ReadUntilEof = std::is_same_v<decltype(needle), decltype(EOF)>;
+        buf.resize(0);
 
-        ret = read(in, buf, sizeof(buf) - 1);
-        if (ret <= 0)
-            return result;
-        buf[ret] = '\0';
+        for (;;) {
+            ssize_t ret = wait_for_more();
+            if (ret <= 0)
+                return false;
 
-        // ### the needle may be split between buffers!
-        // but experience says gdb writes only a handful of bytes
-        if (size_t(ret) >= strlen(needle)) {
-            if (strcmp(buf + (ret - strlen(needle)), needle) == 0)
-                break;
+            constexpr size_t more = 4096;
+
+            size_t old_size = buf.size();
+            buf.resize(old_size + more);
+            ret = read(in, &buf[old_size], more);
+            if (ret < 0)
+                return false;
+            if (ret == 0)
+                return ReadUntilEof;
+
+            buf.resize(old_size + ret);
+
+            if constexpr (!ReadUntilEof) {
+                std::string_view n = needle;
+                if (buf.ends_with(n)) {
+                    // chop the needle off the end
+                    buf.resize(buf.size() - n.size());
+                    return true;
+                }
+            }
         }
-    }
+    };
+
+    set_nonblock(in);
+
+    // drain gdb's start
+    std::string buf;
+    if (!read_until(in, buf, "\n(gdb) "))
+        return result;
 
     // send a python command setting the search handle
     ret = dprintf(out, gdb_preamble_commands, handle);
     if (ret <= 0)
         return result;
-    ret = wait_for_more();
-    if (ret <= 0)
+    if (!read_until(in, buf, std::string_view()))
         return result;
 
-    ret = read(in, buf, sizeof(buf) - 1);
-    if (ret <= 0)
-        return result;
-    buf[ret] = '\0';
-
-    bool send_python = handle && (strcmp(buf, "ok\n") == 0);
+    bool send_python = handle && (buf == "ok\n");
     if (send_python) {
         ret = write(out, gdb_python_commands, strlen(gdb_python_commands));
         if (ret != ssize_t(strlen(gdb_python_commands)))
             return result;
 
-        // skip the >>>>> caused by the multi-line python command
-        for (;;) {
-            ret = wait_for_more();
-            if (ret <= 0)
-                return result;
+        // read and accumulate until the Python reply is complete
+        static const char needle[] = "\n..Done..\n";
+        if (!read_until(in, buf, needle))
+            return result;
 
-            ret = read(in, buf, sizeof(buf) - 1);
-            if (ret <= 0)
-                return result;
-            buf[ret] = '\0';
-
-            char *msg = buf;
-            while (*msg == '>' || *msg == '\n')
-                ++msg;
-            if (*msg != '\0') {
-                ret -= msg - buf;
-                memmove(buf, msg, ret);
-                break;
-            }
-        }
-
-        // wait until the Python reply is complete
-        for (;;) {
-            static const char needle[] = "..Done..\n";
-            if (ret >= strlen(needle) && strcmp(buf + ret - strlen(needle), needle) == 0) {
-                result.thread_info = std::string_view(buf, ret - strlen(needle));
-                break;
-            }
-
-            ssize_t ret2 = wait_for_more();
-            if (ret2 <= 0)
-                return result;
-
-            ret2 = read(in, buf + ret, sizeof(buf) - ret);
-            if (ret2 <= 0)
-                return result;
-            buf[ret + ret2] = '\0';
-            ret += ret2;
-        }
+        // skip the >>>>> caused by the multi-line Python command
+        size_t start = buf.find_first_not_of('>');
+        if (start == std::string::npos)
+            start = buf.size();
+        buf.erase(0, start);
+        buf.shrink_to_fit();
+        result.thread_info = std::move(buf);
     }
 
     // now get the actual backtrace (includes "quit")
@@ -649,20 +634,8 @@ static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
     if (ret != ssize_t(strlen(gdb_bt_commands)))
         return result;
 
-    // splice backtrace from gdb to our log file
-    for (;;) {
-        ret = wait_for_more();
-        if (ret <= 0)
-            return result;
-
-        ret = read(in, buf, sizeof(buf));
-        if (ret == -1 && (errno == EINTR || errno == EWOULDBLOCK))
-            continue;
-        if (ret <= 0)
-            return result;
-
-        result.backtrace += std::string_view(buf, ret);
-    }
+    // read until EOF as the backtrace
+    read_until(in, result.backtrace, EOF);
 
     return result;
 }
