@@ -773,6 +773,7 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
             break;
         }
 
+        case RelationNumaNode:
         case RelationNumaNodeEx: {
             // this only works for Windows 20H2 or later, otherwise GroupCount = 0
             auto &numa = *reinterpret_cast<NUMA_NODE_RELATIONSHIP_2 *>(&lpi->NumaNode);
