@@ -2267,7 +2267,7 @@ static void list_tests(const ProgramOptions& opts)
     if (opts.list_tests_include_groups && !groups.empty()) {
         if (opts.list_tests_include_descriptions)
             printf("\nGroups:\n");
-        for (auto pair : groups) {
+        for (const auto &pair : groups) {
             const auto &g = pair.second;
             if (opts.list_tests_include_descriptions) {
                 printf("@%-21s \"%s\"\n", g.definition->id, g.definition->description);
