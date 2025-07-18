@@ -1584,6 +1584,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
     }
 }
 
+
 static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
@@ -1606,6 +1607,21 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         init_per_thread_data();
 
         sApp->test_tests_init(test);
+
+        auto has_smt = []() -> bool {
+            for(int idx = 0; idx < num_cpus() - 1; idx++) {
+                if(cpu_info[idx].thread_id + 1 == cpu_info[idx + 1].thread_id)
+                    return true;
+            }
+            return false;
+        };
+
+        if (test->flags & test_requires_smt && !has_smt()) {
+            log_skip(CpuTopologyIssueSkipCategory, "Test requires SMT (hyperthreading)");
+            state = TestResult::Skipped;
+            break;
+        }
+
         if (test->test_init) {
             // ensure the init function is run pinned to a specific logical
             // processor but its pinning doesn't affect this control thread
