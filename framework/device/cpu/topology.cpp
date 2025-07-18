@@ -700,7 +700,7 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
             KAFFINITY mask = ga.Mask;
             while (mask) {
                 int n = std::countr_zero(mask);
-                mask &= ~(1 << n);
+                mask &= ~(KAFFINITY(1) << n);
 
                 // find the CPU matching this number in this group
                 for ( ; info < std::to_address(infos.end()); ++info) {
