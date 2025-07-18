@@ -516,6 +516,7 @@ bool TopologyDetector::detect_numa()
         while (true) {
             ssize_t n = pread(listfd, &cpulist[0], cpulist.size(), 0);
             if (n <= 0) [[unlikely]]
+                closedir(dir);
                 return false;
 
             if (cpulist[n - 1] == '\n') {
