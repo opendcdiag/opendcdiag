@@ -804,6 +804,8 @@ static bool detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP relationships)
 bool TopologyDetector::detect_via_os(Topology::Thread *info)
 {
     detect_ucode_via_os(info);
+    if (info->core_id >= 0)
+        return true;                // detect_via_cpuid() has succeeded
     if (info != &cpu_info[0])
         return info->core_id != -1; // we only need to run once
 
