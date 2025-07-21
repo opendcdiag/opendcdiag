@@ -9,14 +9,18 @@ MAX_PROC=`nproc`
 @test "crash backtrace multi-slice" {
     # We need GDB and at least two cores
     check_gdb_usable
-    export SANDSTONE_MOCK_TOPOLOGY='0 1'
-    run $SANDSTONE --cpuset=t0 --dump-cpu-info
-    if [[ "$output" != *$'\n1\t'* ]]; then
-        skip "Test only works with multiple cores or a debug build"
+    export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
+
+    # Find a different module
+    sandstone_yq --cpuset=t0 '--disable=*'
+    local cpuset='p0c0t0,'$(query_jq -r '[."cpu-info"[] | select(.module > 0)][0] |
+        "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"')
+    if [[ "$cpuset" = *, ]]; then
+        skip "Test only works with multiple cores/modules or a debug build"
     fi
 
     declare -A yamldump
-    selftest_crash_context_common --cpuset=t0 -n2 --timeout=5m -e selftest_sigsegv --on-crash=backtrace --max-cores-per-slice=1
+    selftest_crash_context_common --cpuset=$cpuset -n2 --timeout=5m -e selftest_sigsegv --on-crash=backtrace --max-cores-per-slice=1
 
     # We should have as output two main threads and two worker threads
     test_yaml_regexp "/tests/0/threads/0/thread" "main"
@@ -82,12 +86,21 @@ MAX_PROC=`nproc`
 
     # attempt to run on two sockets
     export SANDSTONE_MOCK_TOPOLOGY='0 0:1 0:2 1'
-    run $SANDSTONE --cpuset=p1 --dump-cpu-info
-    if [[ $status -ne 0 ]]; then
+    sandstone_yq --cpuset=t0 '--disable=*'
+    set $(query_jq -r '."cpu-info" as $info |
+        [
+            # the first three different modules
+            $info | unique_by(.module)[0:3][],
+            # the first core of the second package
+            [$info[] | select(.package != $info[0].package)][0]
+        ][] | "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
+    )
+    if [[ $# -ne 4 ]]; then
         skip "Test only works with Debug builds (to mock the topology) w/ 4 CPUs or multi-socket systems"
     fi
 
-    sandstone_yq --disable=\* --max-cores-per-slice=2 --cpuset=p0c0,p0c1,p0c2,p1c0
+    IFS=,
+    sandstone_yq --disable=\* --max-cores-per-slice=2 "--cpuset=$*"
     test_yaml_numeric "/test-plans/fullsocket@len" 'value == 2'
     test_yaml_numeric "/test-plans/heuristic@len" 'value == 3'
 }
