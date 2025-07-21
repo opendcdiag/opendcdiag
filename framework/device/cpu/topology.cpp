@@ -743,7 +743,6 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
         lpi = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(ptr);
         switch (lpi->Relationship) {
         case RelationProcessorPackage:
-            package_for_id(pkg_id);
             for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
                              [&](struct cpu_info *info) {
                                  info->package_id = pkg_id;
