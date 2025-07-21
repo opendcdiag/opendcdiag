@@ -53,8 +53,8 @@ private:
     // we only want up to Tile
     static constexpr Domain Package = Domain(Domain::Tile + 1);
 
-    int8_t topology_leaf;
-    std::array<uint8_t, Package> topology_widths_array;
+    int8_t topology_leaf = -1;
+    std::array<uint8_t, Package> topology_widths_array = {};
     uint8_t &width(Domain domain) { return topology_widths_array[domain - 1]; };
 
     bool detect_cache_via_cpuid(Topology::Thread *info, uint32_t *max_cpus_sharing_l2);
