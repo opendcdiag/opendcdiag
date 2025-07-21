@@ -182,6 +182,8 @@ void BarrierDeviceSchedule::reschedule_to_next_device()
 
 void BarrierDeviceSchedule::finish_reschedule()
 {
+    std::unique_lock lock(groups_mutex);
+
     // Don't clean up when test does not support rescheduling
     if (groups.size() == 0) return;
 
@@ -191,7 +193,6 @@ void BarrierDeviceSchedule::finish_reschedule()
     GroupInfo &group = groups[g_idx];
 
     // Remove thread info from groups
-    std::unique_lock lock(groups_mutex);
     int thread_info_idx = thread_num % members_per_group;
     group.tid.erase(group.tid.begin() + thread_info_idx);
 
