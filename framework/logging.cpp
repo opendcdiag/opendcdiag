@@ -1841,7 +1841,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
         dprintf(fd, " 0x%" PRIx64, info->microcode);
     dprintf(fd, "\n%s_messages_thread_%d_ppin =",
             prefix, cpu);
-    if (pkg->ppin)
+    if (pkg && pkg->ppin)
         dprintf(fd, " 0x%" PRIx64, pkg->ppin);
     dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
 }
@@ -2088,7 +2088,7 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
         line += stdprintf("%#" PRIx64, info->microcode);
     else
         line += "N/A";
-    if (pkg->ppin)
+    if (pkg && pkg->ppin)
         line += stdprintf(", PPIN %016" PRIx64 "):", pkg->ppin);
     else
         line += ", PPIN N/A):";
@@ -2171,7 +2171,7 @@ std::string YamlLogger::thread_id_header(int cpu, int verbosity)
                           sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
         add_value_or_null("%#" PRIx64, info->microcode);
         line += ", ppin: ";
-        add_value_or_null("\"%016" PRIx64 "\"", pkg->ppin);     // string to prevent loss of precision
+        add_value_or_null("\"%016" PRIx64 "\"", pkg ? pkg->ppin : 0);   // string to prevent loss of precision
     }
     line += " }";
     return line;
