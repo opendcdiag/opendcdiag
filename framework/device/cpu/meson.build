@@ -26,3 +26,24 @@ framework_files += files(
 unittests_sources += files(
     'unit-tests/thermal_monitor_tests.cpp',
 )
+
+premain_files = files(
+    'premain.cpp',
+)
+
+framework_main_a = static_library(
+    'framework_main',
+    premain_files,
+    build_by_default: false,
+    include_directories: [
+        framework_incdir,
+    ],
+    cpp_args: [
+        debug_c_flags,
+        march_generic_flags,
+        default_cpp_flags,
+        default_cpp_warn,
+    ],
+)
+
+extra_objects += framework_main_a.extract_all_objects(recursive: false)
