@@ -173,7 +173,7 @@ static int xsave_size = 0;
 static const char gdb_preamble_commands[] = R"(set prompt
 set pagination off
 set confirm off
-python handle = %#tx; print('ok')
+python handle = %#tx; print("\1")
 )";
 static const char gdb_bt_commands[] =
 #ifndef __x86_64__
@@ -203,7 +203,7 @@ if thr is not None:
         gdb.execute("x/i $pc")
     except gdb.MemoryError as e:
         print(e)
-print("..Done..")
+print("\1")
 end
 )gdb";
 
@@ -612,14 +612,14 @@ static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
     if (!read_until(in, buf, std::string_view()))
         return result;
 
-    bool send_python = handle && (buf == "ok\n");
+    bool send_python = handle && (buf == "\1\n");
     if (send_python) {
         ret = write(out, gdb_python_commands, strlen(gdb_python_commands));
         if (ret != ssize_t(strlen(gdb_python_commands)))
             return result;
 
         // read and accumulate until the Python reply is complete
-        static const char needle[] = "\n..Done..\n";
+        constexpr std::string_view needle = "\n\1\n";
         if (!read_until(in, buf, needle))
             return result;
 
