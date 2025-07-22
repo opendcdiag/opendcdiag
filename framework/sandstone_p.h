@@ -42,12 +42,14 @@
 #include <sandstone_iovec.h>
 #include <sandstone_utils.h>
 
-#include "effective_cpu_freq.hpp"
 #include "gettid.h"
 #include "topology.h"
 #include "interrupt_monitor.hpp"
-#include "thermal_monitor.hpp"
-#include "frequency_manager.hpp"
+#ifdef SANDSTONE_DEVICE_CPU
+#   include "thermal_monitor.hpp"
+#   include "effective_cpu_freq.hpp"
+#   include "frequency_manager.hpp"
+#endif
 
 #ifdef _WIN32
 struct rusage
