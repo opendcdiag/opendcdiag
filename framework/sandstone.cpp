@@ -1581,8 +1581,8 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
         protect_shmem();
         sApp->select_main_thread(child_number);
-        pin_to_logical_processors(sApp->main_thread_data()->cpu_range, "control");
-        restrict_topology(sApp->main_thread_data()->cpu_range);
+        pin_to_logical_processors(sApp->main_thread_data()->device_range, "control");
+        restrict_topology(sApp->main_thread_data()->device_range);
         signals_init_child();
         debug_init_child();
     }
@@ -1860,13 +1860,13 @@ static int slices_for_test(const struct test *test)
         return SandstoneApplication::SlicePlans::Heuristic;
     }();
     if (type == SandstoneApplication::SlicePlans::FullSystem) {
-        sApp->main_thread_data()->cpu_range = { 0, num_cpus() };
+        sApp->main_thread_data()->device_range = { 0, num_cpus() };
         return 1;
     }
 
     const std::vector<DeviceRange> &plan = sApp->slice_plans.plans[type];
     for (size_t i = 0; i < plan.size(); ++i)
-        sApp->main_thread_data(i)->cpu_range = plan[i];
+        sApp->main_thread_data(i)->device_range = plan[i];
 
     return plan.size();
 }
