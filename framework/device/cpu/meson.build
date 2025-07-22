@@ -22,3 +22,7 @@ framework_files += files(
     'cpu_device.cpp',
     'topology.cpp',
 )
+
+unittests_sources += files(
+    'unit-tests/thermal_monitor_tests.cpp',
+)
