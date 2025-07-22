@@ -29,6 +29,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
+#include <sys/ioctl.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -572,7 +573,9 @@ static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
             if (ret <= 0)
                 return false;
 
-            constexpr size_t more = 4096;
+            unsigned more = 0;
+            if (ioctl(in, FIONREAD, &more) != 0)
+                more = 128;         // guess a value
 
             size_t old_size = buf.size();
             buf.resize(old_size + more);
