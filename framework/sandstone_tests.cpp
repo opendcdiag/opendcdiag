@@ -31,8 +31,7 @@ struct test mce_test = {
 
 void SandstoneTestSet::load_all_tests()
 {
-    std::span<struct test> known_tests = cfg.is_selftest ? selftests : regular_tests;
-    for (struct test &t : known_tests) {
+    auto push_test = [&](auto& t) {
         all_tests.push_back(&t);
         if (!SandstoneConfig::RestrictedCommandLine) {
             // only populate all_group_map if we're parsing command-line
@@ -40,6 +39,13 @@ void SandstoneTestSet::load_all_tests()
                 all_group_map[(*ptr)->id].push_back(&t);
             }
         }
+    };
+
+    std::span<struct test> known_tests = cfg.is_selftest ? selftests : regular_tests;
+    std::for_each(known_tests.begin(), known_tests.end(), push_test);
+
+    if (cfg.is_selftest) {
+        std::for_each(selftests_device.begin(), selftests_device.end(), push_test);
     }
 
     /* add "special" mce_check as well */
@@ -76,14 +82,21 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
 SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) : cfg(cfg), flags(flags) {
     load_all_tests(); /* initialize the catalog */
     if (!(flags & enable_all_tests)) return;
-    std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
-    for (struct test &test : source) {
+
+    auto push_test = [&](auto& test) {
         if (test.quality_level < sApp->requested_quality)
-            continue;
+            return;
         struct test_cfg_info ti;
         ti.status = test_cfg_info::enabled;
         ti.test = &test;
         test_set.push_back(&test);
+    };
+
+    std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
+    std::for_each(source.begin(), source.end(), push_test);
+
+    if (cfg.is_selftest) {
+        std::for_each(selftests_device.begin(), selftests_device.end(), push_test);
     }
 };
 

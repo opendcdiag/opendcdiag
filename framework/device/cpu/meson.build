@@ -23,6 +23,12 @@ framework_files += files(
     'topology.cpp',
 )
 
+if get_option('selftests')
+    framework_files += files(
+        'selftest.cpp'
+    )
+endif
+
 unittests_sources += files(
     'unit-tests/thermal_monitor_tests.cpp',
 )

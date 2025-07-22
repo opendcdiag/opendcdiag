@@ -60,7 +60,9 @@
 #include "sandstone.h"
 #include "sandstone_p.h"
 #include "sandstone_opts.hpp"
-#include "sandstone_kvm.h"
+#ifdef SANDSTONE_DEVICE_CPU
+#   include "device/cpu/sandstone_kvm.h"
+#endif
 #include "sandstone_system.h"
 #include "sandstone_thread.h"
 #include "sandstone_tests.h"

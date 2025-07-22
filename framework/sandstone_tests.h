@@ -59,8 +59,10 @@ __attribute__((weak)) extern const struct test_group __stop_test_group;
 inline std::span<struct test> regular_tests = { &__start_tests, &__stop_tests };
 #ifdef NO_SELF_TESTS
 constexpr const std::span<struct test> selftests = {};
+constexpr const std::span<struct test> selftests_device = {};
 #else
 extern const std::span<struct test> selftests;
+extern const std::span<struct test> selftests_device; // device-specific tests
 #endif
 
 class SandstoneTestSet
