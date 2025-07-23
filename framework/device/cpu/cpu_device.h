@@ -167,6 +167,9 @@ struct cpu_info
 #endif
 };
 
+// Alias for use in common framework code
+typedef struct cpu_info device_info;
+
 /// cpu_info is an array of cpu_info structures.  Each element of the array
 /// contains information about a logical CPU that will be used to
 /// execute a test's test_run function.  The size of this array is

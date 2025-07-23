@@ -545,7 +545,7 @@ void random_init_thread(int thread_num)
     // Create a pattern based exclusively on the topology that we'll use
     // to seed the thread's generator. Algorithm very loosely inspired by
     // https://en.wikipedia.org/wiki/MurmurHash version 3.
-    struct cpu_info &info = cpu_info[thread_num];
+    device_info &info = cpu_info[thread_num];
     auto scramble = [](uint32_t k) {
         k *= 0xcc9e2d51;
         k = (k << 15) | (k >> 17);              // rotl(mixin, 15);
