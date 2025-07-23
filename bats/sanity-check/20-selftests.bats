@@ -1286,6 +1286,28 @@ function selftest_logerror_common() {
     done
 }
 
+@test "selftest_freeze_exit_on_termination" {
+    if $is_windows; then
+        skip "Unix-only test"
+    fi
+    declare -A yamldump
+    sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_exit_on_termination --timeout=500
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result" 'timed out'
+}
+
+@test "selftest_freeze_ignore_termination" {
+    if $is_windows; then
+        skip "Unix-only test"
+    fi
+    declare -A yamldump
+    sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_ignore_termination --timeout=500
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result" 'timed out'
+}
+
 @test "selftest_freeze_fork" {
     if $is_windows; then
         skip "Unix-only test"

@@ -836,6 +836,18 @@ static int selftest_oserror_run(struct test *test, int cpu)
 }
 
 #ifdef __unix__
+static int selftest_exit_on_termination_init(struct test *)
+{
+    signal(SIGQUIT, [](int) { _exit(EXIT_SUCCESS); });
+    return EXIT_SUCCESS;
+}
+
+static int selftest_ignore_termination_init(struct test *)
+{
+    signal(SIGQUIT, SIG_IGN);
+    return EXIT_SUCCESS;
+}
+
 template <runfunc ParentFunc, runfunc ChildFunc = ParentFunc>
 static int selftest_fork_run(struct test *test, int cpu)
 {
@@ -1855,6 +1867,24 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .quality_level = TEST_QUALITY_PROD,
 },
 #ifdef __unix__
+{
+    .id = "selftest_freeze_exit_on_termination",
+    .description = "Freezes and _exit()s on SIGQUIT",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_exit_on_termination_init,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_freeze_ignore_termination",
+    .description = "Freezes and ignore SIGQUITs",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_ignore_termination_init,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
 {
     .id = "selftest_freeze_fork",
     .description = "Freezes after forking",
