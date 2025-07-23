@@ -819,7 +819,7 @@ static void cleanup_internal(const struct test *test)
     logging_finish();
 }
 
-static int cleanup_global(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures)
+static int cleanup_global(int exit_code, SandstoneApplication::PerThreadFailures per_thread_failures)
 {
     if (sApp->vary_frequency_mode)
         sApp->frequency_manager->restore_core_frequency_initial_state();
@@ -827,7 +827,7 @@ static int cleanup_global(int exit_code, SandstoneApplication::PerCpuFailures pe
     if (sApp->vary_uncore_frequency_mode)
         sApp->frequency_manager->restore_uncore_frequency_initial_state();
 
-    exit_code = print_application_footer(exit_code, std::move(per_cpu_failures));
+    exit_code = print_application_footer(exit_code, std::move(per_thread_failures));
     return logging_close_global(exit_code);
 }
 
@@ -1242,7 +1242,7 @@ __attribute__((weak, noclone, noinline)) void cpu_specific_init()
 {
 }
 
-__attribute__((weak, noclone, noinline)) int print_application_footer(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures)
+__attribute__((weak, noclone, noinline)) int print_application_footer(int exit_code, SandstoneApplication::PerThreadFailures per_thread_failures)
 {
     return exit_code;
 }
@@ -1959,7 +1959,7 @@ static TestResult run_one_test_once(const struct test *test)
 }
 
 static void analyze_test_failures(const struct test *test, int fail_count, int attempt_count,
-                                  const SandstoneApplication::PerCpuFailures &per_cpu_failures)
+                                  const SandstoneApplication::PerThreadFailures &per_thread_failures)
 {
     logging_printf(LOG_LEVEL_VERBOSE(1), "# Test failed %d out of %d times"
                                          " (%.1f%%)\n", fail_count, attempt_count,
@@ -1971,10 +1971,10 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
     uint64_t fail_pattern = 0;
     int nfailures = 0;
     for (size_t i = 0; i < num_cpus() && all_cpus_failed_equally; ++i) {
-        if (per_cpu_failures[i]) {
+        if (per_thread_failures[i]) {
             if (++nfailures == 1)
-                fail_pattern = per_cpu_failures[i];
-            else if (per_cpu_failures[i] != fail_pattern)
+                fail_pattern = per_thread_failures[i];
+            else if (per_thread_failures[i] != fail_pattern)
                 all_cpus_failed_equally = false;
         }
     }
@@ -2008,7 +2008,7 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
             for (size_t c = 0; c < pkg->cores.size(); ++c) {
                 Topology::Core *core = &pkg->cores[c];
                 for (const Topology::Thread &thr : core->threads) {
-                    if (per_cpu_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
+                    if (per_thread_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
                         last_bad_package = pkg->id();
                         failed_packages++;
                         pkg_failures[p] = pkg->id();
@@ -2037,7 +2037,7 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
                 int nthreads = 0;
                 fail_pattern = 0;
                 for (const Topology::Thread &thr : core->threads) {
-                    auto this_pattern = per_cpu_failures[thr.cpu()];
+                    auto this_pattern = per_thread_failures[thr.cpu()];
                     if (this_pattern == 0)
                         all_threads_failed_once = false;
                     if (++nthreads == 1) {
@@ -2072,7 +2072,7 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
 }
 
 static TestResult
-run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures &per_cpu_fails)
+run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerThreadFailures &per_thread_failures)
 {
     const struct test *test = test_cfg.test;
     TestResult state = TestResult::Skipped;
@@ -2083,20 +2083,20 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures
     Duration runtime = 0ms;
 
     // resize and zero the storage
-    if (per_cpu_fails.size() == num_cpus()) {
-        std::fill_n(per_cpu_fails.begin(), num_cpus(), 0);
+    if (per_thread_failures.size() == num_cpus()) {
+        std::fill_n(per_thread_failures.begin(), num_cpus(), 0);
     } else {
-        per_cpu_fails.clear();
-        per_cpu_fails.resize(num_cpus(), 0);
+        per_thread_failures.clear();
+        per_thread_failures.resize(num_cpus(), 0);
     }
-    auto mark_up_per_cpu_fail = [&per_cpu_fails, &fail_count](int i) {
+    auto mark_up_per_cpu_fail = [&per_thread_failures, &fail_count](int i) {
         ++fail_count;
         if (i >= SandstoneApplication::MaxRetestCount)
             return;
         for_each_test_thread([&](PerThreadData::Test *data, int i) {
-            using U = SandstoneApplication::PerCpuFailures::value_type;
+            using U = SandstoneApplication::PerThreadFailures::value_type;
             if (data->has_failed())
-                per_cpu_fails[i] |= U(1) << i;
+                per_thread_failures[i] |= U(1) << i;
         });
     };
 
@@ -2209,7 +2209,7 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerCpuFailures
                 mark_up_per_cpu_fail(iterations);
         }
 
-        analyze_test_failures(test, fail_count, iterations, per_cpu_fails);
+        analyze_test_failures(test, fail_count, iterations, per_thread_failures);
         state = TestResult::Failed;
     }
 
@@ -2914,7 +2914,7 @@ int main(int argc, char **argv)
 
     logging_print_header(argc, argv, test_duration(), test_timeout(test_duration()));
 
-    SandstoneApplication::PerCpuFailures per_cpu_failures;
+    SandstoneApplication::PerThreadFailures per_thread_failures;
 
     sApp->current_test_count = 0;
     int total_tests_run = 0;
@@ -2937,7 +2937,7 @@ int main(int argc, char **argv)
             }
         }
 
-        lastTestResult = run_one_test(*it, per_cpu_failures);
+        lastTestResult = run_one_test(*it, per_thread_failures);
 
         total_tests_run++;
         if (lastTestResult == TestResult::Failed) {
@@ -2967,5 +2967,5 @@ int main(int argc, char **argv)
         exit_code = EXIT_FAILURE;
 
     // done running all the tests, clean up and exit
-    return cleanup_global(exit_code, std::move(per_cpu_failures));
+    return cleanup_global(exit_code, std::move(per_thread_failures));
 }
