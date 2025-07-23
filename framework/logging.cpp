@@ -1820,7 +1820,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix
         return;
     }
 
-    struct cpu_info *info = cpu_info + cpu;
+    device_info *info = cpu_info + cpu;
     const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
     PerThreadData::Test *thr = sApp->test_thread_data(cpu);
     if (std::string time = format_duration(thr->fail_time); time.size()) {
@@ -2077,7 +2077,7 @@ void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
         return;
     }
 
-    struct cpu_info *info = cpu_info + cpu;
+    device_info *info = cpu_info + cpu;
     std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", cpu,
             info->cpu_number, info->package_id, info->core_id, info->thread_id);
 
@@ -2147,7 +2147,7 @@ void YamlLogger::maybe_print_messages_header(int fd)
 
 std::string YamlLogger::thread_id_header(int cpu, int verbosity)
 {
-    struct cpu_info *info = cpu_info + cpu;
+    device_info *info = cpu_info + cpu;
     std::string line;
 #ifdef _WIN32
     line = stdprintf("{ logical-group: %2u, logical: %2u, ",

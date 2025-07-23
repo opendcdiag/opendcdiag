@@ -499,7 +499,7 @@ struct SandstoneApplication::SharedMemory
     // per-thread & variable length
     int main_thread_count = 0;
     int total_cpu_count = 0;
-    alignas(64) struct cpu_info cpu_info[];         // C99 Flexible Array Member
+    alignas(64) device_info cpu_info[];         // C99 Flexible Array Member
 
 #if 0
     // in/out per-thread data allocated dynamically;
