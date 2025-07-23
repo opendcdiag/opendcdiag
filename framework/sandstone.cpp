@@ -67,6 +67,8 @@
 #include "sandstone_utils.h"
 #include "topology.h"
 
+#include "device/device_topology.h"
+
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
 #  include "sandstone_ssl_rand.h"
@@ -938,22 +940,6 @@ static uintptr_t thread_runner(int thread_number)
     // our caller doesn't care what we return, but the returned value helps if
     // you're running strace
     return ret;
-}
-
-static LogicalProcessorSet init_cpus()
-{
-    LogicalProcessorSet result = ambient_logical_processor_set();
-    sApp->thread_count = result.count();
-    if (sApp->thread_count == 0) [[unlikely]] {
-        fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
-                program_invocation_name);
-        exit(EX_OSERR);
-    }
-    sApp->user_thread_data.resize(sApp->thread_count);
-#ifdef M_ARENA_MAX
-    mallopt(M_ARENA_MAX, sApp->thread_count * 2);
-#endif
-    return result;
 }
 
 static void attach_shmem_internal(int fd, size_t size)
@@ -2568,9 +2554,9 @@ int main(int argc, char **argv)
     }
 
     {
-        LogicalProcessorSet enabled_cpus = init_cpus();
+        auto enabled_devices = detect_devices<EnabledDevices>();
         init_shmem();
-        init_topology(std::move(enabled_cpus));
+        setup_devices(std::move(enabled_devices));
     }
 
     ProgramOptions opts;
