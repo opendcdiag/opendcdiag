@@ -152,7 +152,7 @@ enum ThreadState : int {
 
 struct ChildExitStatus
 {
-    TestResult result;
+    TestResult result = TestResult{-127};
 
     // for TestKilled and TestCoreDumped, on Unix it's the signal number;
     // on Windows it's an NTSTATUS
@@ -401,6 +401,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     ShortDuration current_test_duration;
     ShortDuration test_time = {};
     ShortDuration max_test_time = {};
+    ShortDuration timeout_to_kill = std::chrono::seconds(20);
     ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;

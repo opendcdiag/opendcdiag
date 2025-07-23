@@ -304,6 +304,14 @@ static ChildExitStatus test_result_from_exit_code(DWORD status)
 }
 #endif // _WIN32
 
+static void merge_test_result(ChildExitStatus &current, ChildExitStatus incoming)
+{
+    // don't decrease a previously-stored severity
+    if (current.result < incoming.result)
+        current = incoming;
+    current.endtime = MonotonicTimePoint::clock::now();
+}
+
 static inline __attribute__((always_inline, noreturn)) void ud2()
 {
     __builtin_trap();
@@ -1392,7 +1400,6 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
             }
         }
 
-        auto now = MonotonicTimePoint::clock::now();
         if (pollfd &pfd = children.pollfds.back(); pfd.revents & POLLIN) {
             // one child (or more than one) is crashing
             debug_crashed_child(children.handles);
@@ -1418,8 +1425,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
             pfd.fd = -1;
             pfd.events = 0;
             children.handles[i] = 0;
-            children.results[i] = test_result_from_exit_code(info);
-            children.results[i].endtime = now;
+            merge_test_result(children.results[i], test_result_from_exit_code(info));
             children.results[i].usage = usage;
             --children_left;
         }
@@ -1474,7 +1480,6 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
         }
 
         auto childResult = test_result_from_exit_code(result);
-        childResult.endtime = MonotonicTimePoint::clock::now();
         if (FILETIME dummy, stime, utime; GetProcessTimes(hExited, &dummy, &dummy, &stime, &utime)) {
             auto cvt = [](FILETIME f) {
                 // FILETIME stores tenths of microseconds (100 ns) granularity
@@ -1498,7 +1503,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
             if (hExited == HANDLE(children.handles[idx])) {
                 CloseHandle(hExited);
                 children.handles[idx] = intptr_t(INVALID_HANDLE_VALUE);
-                children.results[idx] = childResult;
+                merge_test_result(children.results[idx], childResult);
                 --children_left;
                 return 0;
             }
@@ -1522,6 +1527,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
 #else
                 log_message(-int(i) - 1, SANDSTONE_LOG_ERROR "Child %d did not exit, sending signal SIGQUIT", child);
 #endif
+                children.results[i].result = TestResult::TimedOut;
             }
         }
         kill_children(TimeoutSignal);
