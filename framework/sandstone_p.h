@@ -559,7 +559,7 @@ template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_
 
 template <typename Lambda> static void for_each_test_thread(Lambda &&l)
 {
-    for (int i = 0; i < num_cpus(); i++)
+    for (int i = 0; i < num_devices(); i++)
         l(sApp->test_thread_data(i), i);
 }
 

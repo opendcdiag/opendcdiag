@@ -108,7 +108,13 @@ private:
 static void update_topology(std::span<const struct cpu_info> new_cpu_info,
                             std::span<const Topology::Package> sockets = {});
 
-int num_cpus()
+/// Returns the number of hardware threads (logical CPUs) available to a
+/// test.  It is equal to the number of test threads the framework runs.
+/// Normally, this value is equal to the number of CPU threads in the
+/// device under test but the value can be lower if --cpuset option
+/// is used, the tests specifies a value for test.max_threads or the OS
+/// restricts the number of CPUs sandstone can see.
+int num_devices()
 {
     return sApp->thread_count;
 }
@@ -152,8 +158,8 @@ void BarrierDeviceSchedule::reschedule_to_next_device()
     std::unique_lock lock(groups_mutex);
     // Initialize groups on first run
     if (groups.empty()) {
-        int full_groups = num_cpus() / members_per_group;
-        int partial_group_members = num_cpus() % members_per_group;
+        int full_groups = num_devices() / members_per_group;
+        int partial_group_members = num_devices() % members_per_group;
 
         groups.reserve(full_groups + (partial_group_members > 0));
         for (int i=0; i<full_groups; i++) {
@@ -225,7 +231,7 @@ void QueueDeviceSchedule::shuffle_queue()
     // Must be called with mutex locked
     if (queue.size() == 0) {
         // First use: populate queue with the indexes available
-        for (int i=0; i<num_cpus(); i++)
+        for (int i = 0; i < num_devices(); i++)
             queue.push_back(i);
     }
 
@@ -236,7 +242,7 @@ void QueueDeviceSchedule::shuffle_queue()
 void RandomDeviceSchedule::reschedule_to_next_device()
 {
     // Select a random cpu index among the ones available
-    int next_idx = unsigned(random()) % num_cpus();
+    int next_idx = unsigned(random()) % num_devices();
     pin_to_next_cpu(cpu_info[next_idx].cpu_number);
 
     return;
@@ -352,7 +358,7 @@ static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2
 
 void TopologyDetector::sort()
 {
-    std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
+    std::sort(cpu_info, cpu_info + num_devices(), cpu_compare);
 }
 
 bool TopologyDetector::create_mock_topology(const char *topo)
@@ -699,7 +705,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
             std::numeric_limits<KAFFINITY>::digits;
 
     struct cpu_info *const info = cpu_info;
-    std::span infos(info, info + num_cpus());
+    std::span infos(info, info + num_devices());
     auto first_cpu_for_group = [infos](unsigned group) -> struct cpu_info * {
         for (struct cpu_info &info : infos) {
             if (info.cpu_number / CpusPerGroup == group)
@@ -1443,7 +1449,7 @@ static void populate_core_group(Topology::CoreGrouping *group, const Topology::T
 static Topology build_topology()
 {
     struct cpu_info *info = cpu_info;
-    const struct cpu_info *const end = cpu_info + num_cpus();
+    const struct cpu_info *const end = cpu_info + num_devices();
 
     std::vector<Topology::Package> packages;
     if (int max_package_id = end[-1].package_id; max_package_id >= 0)
@@ -1500,7 +1506,7 @@ const Topology &Topology::topology()
 Topology::Data Topology::clone() const
 {
     Data result;
-    result.all_threads.assign(cpu_info, cpu_info + num_cpus());
+    result.all_threads.assign(cpu_info, cpu_info + num_devices());
     result.packages = packages;
 
     // now update all spans to point to the data we carry

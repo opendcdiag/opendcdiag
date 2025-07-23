@@ -11,7 +11,7 @@
 device_info *cpu_info = nullptr;
 
 /* Define dummy number of dummy cpus */
-int num_cpus() { return UNITTESTS_NUM_CPUS; }
+int num_devices() { return UNITTESTS_NUM_CPUS; }
 
 bool test_is_retry() noexcept { return false; }
 

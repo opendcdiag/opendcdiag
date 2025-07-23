@@ -173,7 +173,7 @@ typedef struct cpu_info device_info;
 /// cpu_info is an array of cpu_info structures.  Each element of the array
 /// contains information about a logical CPU that will be used to
 /// execute a test's test_run function.  The size of this array is
-/// equal to the value returned by num_cpus().
+/// equal to the value returned by num_devices().
 extern struct cpu_info *cpu_info;
 
 #ifdef __cplusplus
@@ -186,14 +186,6 @@ std::string cpu_features_to_string(cpu_features_t f);
 
 extern "C" {
 #endif // __cplusplus
-
-/// Returns the number of hardware threads (logical CPUs) available to a
-/// test.  It is equal to the number of test threads the framework runs.
-/// Normally, this value is equal to the number of CPU threads in the
-/// device under test but the value can be lower if --cpuset option
-/// is used, the tests specifies a value for test.max_threads or the OS
-/// restricts the number of CPUs sandstone can see.
-int num_cpus() __attribute__((pure));
 
 /// Returns the number of physical CPU packages (a.k.a. sockets) available to a
 /// test.

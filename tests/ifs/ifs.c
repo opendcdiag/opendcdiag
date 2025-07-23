@@ -291,10 +291,10 @@ static int scan_preinit(struct test *test)
 {
     /*
      * Intel documentation says that each core can take up to 200 ms to run.
-     * Note num_cpus() counts logical processors, so this may overestimate the
+     * Note num_devices() counts logical processors, so this may overestimate the
      * number of cores.
      */
-    test->minimum_duration = num_cpus() * 200;
+    test->minimum_duration = num_devices() * 200;
     return EXIT_SUCCESS;
 }
 
