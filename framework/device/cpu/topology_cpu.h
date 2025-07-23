@@ -16,6 +16,8 @@
 #include <functional>
 #include <span>
 
+using EnabledDevices = LogicalProcessorSet;
+
 class Topology
 {
 public:
