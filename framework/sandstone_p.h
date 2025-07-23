@@ -357,7 +357,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         std::array<Slices, 2> plans;
     };
 
-    using PerCpuFailures = std::vector<__uint128_t>;
+    using PerThreadFailures = std::vector<__uint128_t>;
     struct SharedMemory;
 
     SlicePlans slice_plans;
@@ -387,7 +387,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool vary_frequency_mode = false;
     bool vary_uncore_frequency_mode = false;
     int inject_idle = 0;
-    static constexpr int MaxRetestCount = sizeof(PerCpuFailures::value_type) * 8;
+    static constexpr int MaxRetestCount = sizeof(PerThreadFailures::value_type) * 8;
     int retest_count = 10;
     int total_retest_count = -2;
     int max_test_count = INT_MAX;
@@ -688,7 +688,7 @@ std::string random_format_seed();
 void random_init_thread(int thread_num);
 
 /* sandstone.cpp */
-TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerCpuFailures &per_cpu_fails);
+TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerThreadFailures &per_thread_fails);
 
 /*
  * Called from sandstone_main() before logging_global_init() and before
@@ -696,7 +696,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
  * careful about corrupting the log output.
  */
 void print_application_banner();
-int print_application_footer(int exit_code, SandstoneApplication::PerCpuFailures per_cpu_failures);
+int print_application_footer(int exit_code, SandstoneApplication::PerThreadFailures per_thread_failures);
 
 #endif
 
