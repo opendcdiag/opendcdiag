@@ -28,7 +28,7 @@ enum {
     two_min_option,
     five_min_option,
 
-    cpuset_option,
+    deviceset_option,
     disable_option,
     dump_cpu_info_option,
     fatal_skips_option,
@@ -107,7 +107,8 @@ static struct option long_options[]  = {
     { "5min", no_argument, nullptr, five_min_option },
     { "alpha", no_argument, &sApp->requested_quality, int(TEST_QUALITY_SKIP) },
     { "beta", no_argument,  &sApp->requested_quality, int(TEST_QUALITY_BETA) },
-    { "cpuset", required_argument, nullptr, cpuset_option },
+    { "cpuset", required_argument, nullptr, deviceset_option },
+    { "deviceset", required_argument, nullptr, deviceset_option },
     { "disable", required_argument, nullptr, disable_option },
     { "dump-cpu-info", no_argument, nullptr, dump_cpu_info_option },
     { "enable", required_argument, nullptr, 'e' },
@@ -229,7 +230,7 @@ Common command-line options are:
      limit to the number of loop iterations.  This special value can be
      used to disable test fracturing.  When specified tests will not be
      fractured and their execution will be time limited.
- --cpuset=<set>
+ --cpuset=<set>, --deviceset=<set>
      Selects the CPUs to run tests on. The <set> option may be a comma-separated
      list of either plain numbers that select based on the system's logical
      processor number, or a letter  followed by a number to select based on
@@ -430,8 +431,8 @@ struct ProgramOptionsParser {
                 opts_map.insert_or_assign(opt, string_to_millisecs(optarg));
                 break;
 
-            case cpuset_option:
-                opts_map.insert_or_assign(cpuset_option, optarg);
+            case deviceset_option:
+                opts_map.insert_or_assign(deviceset_option, optarg);
                 break;
 
             // boolean options
@@ -664,8 +665,8 @@ struct ProgramOptionsParser {
             app->requested_quality = std::min<int>(app->requested_quality, TEST_QUALITY_OPTIONAL);
         }
 
-        // cpuset (before dump_cpu_info)
-        opts.cpuset = string_opt_for<std::string>(cpuset_option);
+        // deviceset (before dump_cpu_info)
+        opts.deviceset = string_opt_for<std::string>(deviceset_option);
 
         // selftest (before test listing)
 #ifndef NO_SELF_TESTS

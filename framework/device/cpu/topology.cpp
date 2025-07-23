@@ -1185,7 +1185,7 @@ TopologyDetector::TopologyDetector()
 {
 }
 
-void apply_cpuset_param(char *param)
+void apply_deviceset_param(char *param)
 {
     struct MatchCpuInfoByCpuNumber {
         int cpu_number;
