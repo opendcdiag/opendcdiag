@@ -985,22 +985,6 @@ static uintptr_t thread_runner(int thread_number)
     return ret;
 }
 
-static LogicalProcessorSet init_cpus()
-{
-    LogicalProcessorSet result = ambient_logical_processor_set();
-    sApp->thread_count = result.count();
-    if (sApp->thread_count == 0) [[unlikely]] {
-        fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
-                program_invocation_name);
-        exit(EX_OSERR);
-    }
-    sApp->user_thread_data.resize(sApp->thread_count);
-#ifdef M_ARENA_MAX
-    mallopt(M_ARENA_MAX, sApp->thread_count * 2);
-#endif
-    return result;
-}
-
 static void attach_shmem_internal(int fd, size_t size)
 {
     void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -2639,11 +2623,10 @@ int main(int argc, char **argv)
         return exec_mode_run(argc - 2, argv + 2);
     }
 
-    {
-        LogicalProcessorSet enabled_cpus = init_cpus();
-        init_shmem();
-        init_topology(std::move(enabled_cpus));
-    }
+    // this order is required
+    init_num_devices();
+    init_shmem(); // this uses num_devices
+    init_topology(); // this uses shmem
 
     ProgramOptions opts;
     if (int ret = parse_cmdline(argc, argv, sApp, opts); ret != EXIT_SUCCESS) {

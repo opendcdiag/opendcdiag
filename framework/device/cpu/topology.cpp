@@ -1661,8 +1661,31 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
     cached_topology() = build_topology();
 }
 
-void init_topology(const LogicalProcessorSet &enabled_cpus)
+// TODO this is rather trivial workaroud for double use in init_num_devices() and init_topology()
+static const LogicalProcessorSet& ambient_logical_processor_set_internal()
 {
+    static LogicalProcessorSet ret = ambient_logical_processor_set();
+    return ret;
+}
+
+void init_num_devices()
+{
+    const auto& result = ambient_logical_processor_set_internal();
+    sApp->thread_count = result.count();
+    if (sApp->thread_count == 0) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
+                program_invocation_name);
+        exit(EX_OSERR);
+    }
+    sApp->user_thread_data.resize(sApp->thread_count);
+#ifdef M_ARENA_MAX
+    mallopt(M_ARENA_MAX, sApp->thread_count * 2);
+#endif
+}
+
+void init_topology()
+{
+    const auto& enabled_cpus = ambient_logical_processor_set_internal();
     TopologyDetector detector;
     detector.detect(enabled_cpus);
     detector.sort();
