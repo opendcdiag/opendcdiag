@@ -2761,8 +2761,8 @@ int main(int argc, char **argv)
         return ret;
     }
 
-    if (!opts.cpuset.empty()) {
-        apply_cpuset_param(&opts.cpuset[0]);
+    if (!opts.deviceset.empty()) {
+        apply_deviceset_param(&opts.deviceset[0]);
     }
 
     switch (opts.action) {
