@@ -79,6 +79,7 @@ enum {
     test_list_randomize_option,
     test_tests_option,
     timeout_option,
+    timeout_kill_option,
     total_retest_on_failure,
     triage_option,
     ud_on_failure_option,
@@ -166,6 +167,7 @@ static struct option long_options[]  = {
     { "threads", required_argument, nullptr, 'n' },
     { "time", required_argument, nullptr, 't' },        // repeated above
     { "timeout", required_argument, nullptr, timeout_option },
+    { "timeout-kill", required_argument, nullptr, timeout_kill_option },
     { "total-retest-on-failure", required_argument, nullptr, total_retest_on_failure },
     { "total-time", required_argument, nullptr, 'T' },
     { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
@@ -424,6 +426,7 @@ struct ProgramOptionsParser {
             case 't':
             case test_delay_option:
             case timeout_option:
+            case timeout_kill_option:
                 opts_map.insert_or_assign(opt, string_to_millisecs(optarg));
                 break;
 
@@ -728,6 +731,10 @@ struct ProgramOptionsParser {
 
         if (auto it = opts_map.find(timeout_option); it != opts_map.end()) {
             app->max_test_time = std::get<ShortDuration>(it->second);
+        }
+
+        if (auto it = opts_map.find(timeout_kill_option); it != opts_map.end()) {
+            app->timeout_to_kill = std::get<ShortDuration>(it->second);
         }
 
         if (auto it = opts_map.find(_duration_option); it != opts_map.end()) {
