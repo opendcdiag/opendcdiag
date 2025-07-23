@@ -1559,7 +1559,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
     terminate_children();
 
     /* wait for the termination to take effect */
-    wait_for_all_children(20s);
+    wait_for_all_children(sApp->timeout_to_kill);
     if (children_left) {
         /* timed out again, take drastic measures */
         kill_children();
