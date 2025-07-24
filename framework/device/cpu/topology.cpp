@@ -1689,6 +1689,95 @@ void restrict_topology(DeviceRange range)
         topo = build_topology();
 }
 
+void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
+{
+    Topology topology  = Topology::topology();
+    if (!topology.isValid()) {
+        // can't use this information
+        return;
+    } else if (test->flags & test_failure_package_only) {
+        // Failure cannot be attributed to a single thread or core.  Let's see if it
+        // can be pinned down to a single package.
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
+
+        // Analysis is not needed if there's only a single package.
+        if (topology.packages.size() == 1) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failures localised to package %d\n",
+                           topology.packages[0].id());
+            return;
+        }
+
+        std::vector<int> pkg_failures(topology.packages.size(), -1);
+        int failed_packages = 0;
+        int last_bad_package = -1;
+        for (size_t p = 0; p < topology.packages.size(); ++p) {
+            Topology::Package *pkg = &topology.packages[p];
+            for (size_t c = 0; c < pkg->cores.size(); ++c) {
+                Topology::Core *core = &pkg->cores[c];
+                for (const Topology::Thread &thr : core->threads) {
+                    if (per_thread_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
+                        last_bad_package = pkg->id();
+                        failed_packages++;
+                        pkg_failures[p] = pkg->id();
+                    }
+                }
+            }
+        }
+        if (failed_packages == 1) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failures localised to package %d\n", last_bad_package);
+        } else {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failure detected on multiple packages:\n");
+            for (int p : pkg_failures) {
+                if (pkg_failures[p] >= 0)
+                    logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Package %d failed\n", p);
+            }
+        }
+    } else {
+        // valid topology, we can do more a interesting analysis
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
+        for (size_t p = 0; p < topology.packages.size(); ++p) {
+            Topology::Package *pkg = &topology.packages[p];
+            for (size_t c = 0; c < pkg->cores.size(); ++c) {
+                Topology::Core *core = &pkg->cores[c];
+                bool all_threads_failed_once = true;
+                bool all_threads_failed_equally = true;
+                int nthreads = 0;
+                PerThreadFailures::value_type fail_pattern = 0;
+                for (const Topology::Thread &thr : core->threads) {
+                    auto this_pattern = per_thread_failures[thr.cpu()];
+                    if (this_pattern == 0)
+                        all_threads_failed_once = false;
+                    if (++nthreads == 1) {
+                        // first thread of this core (maybe only)
+                        fail_pattern = this_pattern;
+                    } else {
+                        if (this_pattern != fail_pattern)
+                            all_threads_failed_equally = false;
+                        if (this_pattern && !fail_pattern)
+                            fail_pattern = this_pattern;
+                    }
+                }
+
+                if (fail_pattern == 0) {
+                    continue;       // no failure
+                } else if (nthreads == 1) {
+                    logging_printf(LOG_LEVEL_VERBOSE(1), "# - Only thread of package %d core %d\n",
+                                   int(p), int(c));
+                } else if (all_threads_failed_equally) {
+                    logging_printf(LOG_LEVEL_VERBOSE(1), "# - All threads of package %d core %d failed exactly the same way\n",
+                                   int(p), int(c));
+                } else if (all_threads_failed_once) {
+                    logging_printf(LOG_LEVEL_VERBOSE(1), "# - All threads of package %d core %d failed at least once\n",
+                                   int(p), int(c));
+                } else {
+                    logging_printf(LOG_LEVEL_VERBOSE(1), "# - Some threads of package %d core %d failed but some others succeeded\n",
+                                   int(p), int(c));
+                }
+            }
+        }
+    }
+}
+
 static char character_for_mask(uint32_t mask)
 {
     static_assert((1 << MAX_HWTHREADS_PER_CORE) <= 36, "Cannot represent this many threads");

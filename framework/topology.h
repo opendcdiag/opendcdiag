@@ -31,6 +31,8 @@ public:
 
 std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode);
 
+using PerThreadFailures = std::vector<__uint128_t>;
+
 struct DeviceRange
 {
     // a contiguous range
@@ -175,5 +177,6 @@ void apply_deviceset_param(char *param);
 void slice_plan_init(int max_cores_per_slice);
 void init_topology(const LogicalProcessorSet &enabled_cpus);
 void restrict_topology(DeviceRange range);
+void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures);
 
 #endif /* INC_TOPOLOGY_H */

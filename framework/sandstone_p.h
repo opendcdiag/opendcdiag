@@ -356,7 +356,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
         std::array<Slices, 2> plans;
     };
 
-    using PerThreadFailures = std::vector<__uint128_t>;
     struct SharedMemory;
 
     SlicePlans slice_plans;
@@ -689,7 +688,7 @@ std::string random_format_seed();
 void random_init_thread(int thread_num);
 
 /* sandstone.cpp */
-TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::PerThreadFailures &per_thread_fails);
+TestResult run_one_test(int *tc, const struct test *test, PerThreadFailures &per_thread_fails);
 
 /*
  * Called from sandstone_main() before logging_global_init() and before
@@ -697,7 +696,7 @@ TestResult run_one_test(int *tc, const struct test *test, SandstoneApplication::
  * careful about corrupting the log output.
  */
 void print_application_banner();
-int print_application_footer(int exit_code, SandstoneApplication::PerThreadFailures per_thread_failures);
+int print_application_footer(int exit_code, PerThreadFailures per_thread_failures);
 
 #endif
 
