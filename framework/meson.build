@@ -81,6 +81,7 @@ framework_incdir = [
 
 framework_files = files()
 generated_files = files()
+extra_objects = []
 
 # Run device-specific build steps early to ensure that any auto-generated
 # file is available before anything else.
@@ -270,28 +271,6 @@ configure_file(
     configuration: framework_config,
 )
 
-premain_file = files()
-if device_type == 'cpu'
-    premain_file += files(
-        'main.cpp',
-    )
-endif
-
-framework_main_a = static_library(
-    'framework_main',
-    premain_file,
-    build_by_default: false,
-    include_directories: [
-        framework_incdir,
-    ],
-    cpp_args: [
-        debug_c_flags,
-        march_generic_flags,
-        default_cpp_flags,
-        default_cpp_warn,
-    ],
-)
-
 framework_a = static_library(
     'framework',
     framework_files,
@@ -300,9 +279,7 @@ framework_a = static_library(
     include_directories: [
         framework_incdir,
     ],
-    objects: [
-        framework_main_a.extract_all_objects(recursive: false),
-    ],
+    objects: extra_objects,
     dependencies: [
         boost_dep,
     ],
