@@ -84,8 +84,10 @@ enum {
     triage_option,
     ud_on_failure_option,
     use_builtin_test_list_option,
+#if SANDSTONE_FREQUENCY_MANAGER
     vary_frequency,
     vary_uncore_frequency,
+#endif
     version_option,
     weighted_testrun_option,
     alpha_option,
@@ -173,8 +175,10 @@ static struct option long_options[]  = {
     { "total-time", required_argument, nullptr, 'T' },
     { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
     { "use-builtin-test-list", optional_argument, nullptr, use_builtin_test_list_option },
+#if SANDSTONE_FREQUENCY_MANAGER
     { "vary-frequency", no_argument, nullptr, vary_frequency},
     { "vary-uncore-frequency", no_argument, nullptr, vary_uncore_frequency},
+#endif
     { "verbose", no_argument, nullptr, 'v' },
     { "version", no_argument, nullptr, version_option },
     { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
@@ -488,6 +492,7 @@ struct ProgramOptionsParser {
                 opts_map.insert_or_assign(use_builtin_test_list_option, optarg ? optarg : "auto");
                 break;
 
+#if SANDSTONE_FREQUENCY_MANAGER
             case vary_frequency:
                 if (!FrequencyManager::FrequencyManagerWorks) {
                     fprintf(stderr, "%s: --vary-frequency works only on Linux\n", program_invocation_name);
@@ -503,6 +508,7 @@ struct ProgramOptionsParser {
                 }
                 opts_map.emplace(vary_uncore_frequency, true);
                 break;
+#endif
 
             case max_test_count_option:
                 opts_map.insert_or_assign(max_test_count_option, optarg);
@@ -794,8 +800,10 @@ struct ProgramOptionsParser {
         app->fatal_skips = opts_map.contains(fatal_skips_option);
         app->ignore_mce_errors = opts_map.contains(ignore_mce_errors_option);
         app->ignore_os_errors = opts_map.contains(ignore_os_errors_option);
+#if SANDSTONE_FREQUENCY_MANAGER
         app->vary_frequency_mode = opts_map.contains(vary_frequency);
         app->vary_uncore_frequency_mode = opts_map.contains(vary_uncore_frequency);
+#endif
 
         app->shmem->use_strict_runtime = opts_map.contains(strict_runtime_option);
         app->shmem->ud_on_failure = opts_map.contains(ud_on_failure_option);
