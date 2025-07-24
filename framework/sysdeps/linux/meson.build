@@ -54,6 +54,6 @@ if get_option('cpp_link_args').contains('-static')
         ]
     )
 
-    # Step 3: add this file to the file listing
-    framework_files += glibc_malloc_o
+    # Step 3: add this file to exta_objects list
+    extra_objects += glibc_malloc_o
 endif # if static
