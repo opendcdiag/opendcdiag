@@ -45,7 +45,7 @@
 #include "gettid.h"
 #include "topology.h"
 #include "interrupt_monitor.hpp"
-#ifdef SANDSTONE_DEVICE_CPU
+#if SANDSTONE_DEVICE_CPU
 #   include "thermal_monitor.hpp"
 #   include "effective_cpu_freq.hpp"
 #   include "frequency_manager.hpp"
@@ -304,7 +304,7 @@ struct SandstoneBackgroundScan
 
 struct HardwareInfo
 {
-#ifdef SANDSTONE_DEVICE_CPU
+#if SANDSTONE_DEVICE_CPU
     // information for CPUs
     struct PackageInfo {
         int id;
@@ -323,7 +323,7 @@ struct HardwareInfo
         return it == package_infos.cend() ? nullptr : std::to_address(it);
     }
 #endif
-#ifdef SANDSTONE_DEVICE_GPU
+#if SANDSTONE_DEVICE_GPU
 #endif
 };
 

@@ -6,8 +6,10 @@
 #ifndef INC_DEVICE_TOPOLOGY_H
 #define INC_DEVICE_TOPOLOGY_H
 
-// #ifdef SANDSTONE_DEVICE_CPU
+#include "sandstone_config.h"
+
+#if SANDSTONE_DEVICE_CPU
 #include <device/cpu/topology_cpu.h>
-// #endif
+#endif
 
 #endif /* INC_DEVICE_TOPOLOGY_H */

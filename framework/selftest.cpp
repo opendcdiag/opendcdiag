@@ -1090,7 +1090,7 @@ const static test_group group_random = {
     .description = "Self-tests that use random input and may or may not fail"
 };
 
-#ifdef SANDSTONE_DEVICE_CPU
+#if SANDSTONE_DEVICE_CPU
 const static test_group group_kvm = {
     .id = "kvm",
     .description = "Self-tests that launch virtual machines"
