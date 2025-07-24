@@ -118,19 +118,27 @@ int num_packages()
     return Topology::topology().packages.size();
 }
 
-void reschedule()
+std::unique_ptr<DeviceSchedule> make_rescheduler(std::string_view mode)
 {
-    if (sApp->device_schedule == nullptr) return;
-    sApp->device_schedule->reschedule_to_next_device();
-    return;
+    std::unique_ptr<DeviceSchedule> res;
+    if (mode == "barrier") {
+        res = std::make_unique<BarrierDeviceSchedule>();
+    } else if (mode == "queue") {
+        res = std::make_unique<QueueDeviceSchedule>();
+    } else if (mode == "random") {
+        res = std::make_unique<RandomDeviceSchedule>();
+    }
+    return res;
 }
 
-void DeviceSchedule::pin_to_next_cpu(int next_cpu, tid_t thread_id)
+namespace {
+void pin_to_next_cpu(int next_cpu, tid_t thread_id = 0)
 {
     if (!pin_thread_to_logical_processor(LogicalProcessor(next_cpu), thread_id)) {
         log_warning("Failed to reschedule %d (%tu) to CPU %d", thread_id, (uintptr_t)pthread_self(), next_cpu);
     }
 }
+} // end anonymous namespace
 
 void BarrierDeviceSchedule::reschedule_to_next_device()
 {

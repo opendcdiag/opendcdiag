@@ -951,7 +951,7 @@ static uintptr_t thread_runner(int thread_number)
         test_end(new_state);
 
         // If rescheduling, do cleanup
-        if (sApp->device_schedule != nullptr)
+        if (sApp->device_schedule)
             sApp->device_schedule->finish_reschedule();
     });
 

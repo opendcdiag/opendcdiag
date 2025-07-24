@@ -836,26 +836,20 @@ struct ProgramOptionsParser {
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
         }
+
         if (auto value = string_opt_for(reschedule_option)) {
             if (opts.thread_count < 2) {
                 fprintf(stderr, "%s: --reschedule is only useful with at least 2 threads\n", argv[0]);
                 return EX_USAGE;
             }
 
-            std::string_view mode = value;
-            if (mode == "none") {
-                // Default option, so do nothing
-            } else if (mode =="barrier") {
-                app->device_schedule = std::make_unique<BarrierDeviceSchedule>();
-            } else if (mode == "queue") {
-                app->device_schedule = std::make_unique<QueueDeviceSchedule>();
-            } else if (mode == "random") {
-                app->device_schedule = std::make_unique<RandomDeviceSchedule>();
-            } else {
-                fprintf(stderr, "%s: unknown reschedule option: %s. Available options: queue, random and none(default)\n", argv[0], value);
+            sApp->device_schedule = make_rescheduler(value);
+            if (!sApp->device_schedule) {
+                fprintf(stderr, "%s: unknown reschedule option: %s\n", argv[0], value);
                 return EX_USAGE;
             }
         }
+
         if (auto it = opts_map.find('O'); it != opts_map.end()) {
             app->shmem->log_test_knobs = true;
             for (auto knob : std::get<std::vector<const char*>>(it->second)) {
