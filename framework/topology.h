@@ -21,6 +21,8 @@
 
 #include "gettid.h"
 
+using PerThreadFailures = std::vector<__uint128_t>;
+
 struct DeviceRange
 {
     // a contiguous range
@@ -164,5 +166,6 @@ bool pin_to_logical_processors(DeviceRange, const char *thread_name);
 void apply_deviceset_param(char *param);
 void init_topology(const LogicalProcessorSet &enabled_cpus);
 void restrict_topology(DeviceRange range);
+void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures);
 
 #endif /* INC_TOPOLOGY_H */
