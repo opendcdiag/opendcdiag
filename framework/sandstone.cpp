@@ -1467,7 +1467,6 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
     }
 }
 
-
 static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
@@ -1493,7 +1492,7 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 
         auto has_smt = []() -> bool {
             for(int idx = 0; idx < num_cpus() - 1; idx++) {
-                if(cpu_info[idx].thread_id + 1 == cpu_info[idx + 1].thread_id)
+                if (cpu_info[idx].core_id == cpu_info[idx + 1].core_id)
                     return true;
             }
             return false;
