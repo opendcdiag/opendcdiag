@@ -827,7 +827,7 @@ static void cleanup_internal(const struct test *test)
     logging_finish();
 }
 
-static int cleanup_global(int exit_code, SandstoneApplication::PerThreadFailures per_thread_failures)
+static int cleanup_global(int exit_code, PerThreadFailures per_thread_failures)
 {
 #if SANDSTONE_FREQUENCY_MANAGER
     if (sApp->vary_frequency_mode)
@@ -1135,7 +1135,7 @@ __attribute__((weak, noclone, noinline)) void cpu_specific_init()
 {
 }
 
-__attribute__((weak, noclone, noinline)) int print_application_footer(int exit_code, SandstoneApplication::PerThreadFailures per_thread_failures)
+__attribute__((weak, noclone, noinline)) int print_application_footer(int exit_code, PerThreadFailures per_thread_failures)
 {
     return exit_code;
 }
@@ -1850,120 +1850,35 @@ static TestResult run_one_test_once(const struct test *test)
 }
 
 static void analyze_test_failures(const struct test *test, int fail_count, int attempt_count,
-                                  const SandstoneApplication::PerThreadFailures &per_thread_failures)
+                                  const PerThreadFailures &per_thread_failures)
 {
     logging_printf(LOG_LEVEL_VERBOSE(1), "# Test failed %d out of %d times"
                                          " (%.1f%%)\n", fail_count, attempt_count,
                    fail_count * 100.0 / attempt_count);
     logging_restricted(LOG_LEVEL_QUIET, "Test failed (#%s%x).", test->id, fail_count - 1);
 
-    // First, determine if all CPUs failed the exact same way
-    bool all_cpus_failed_equally = true;
-    uint64_t fail_pattern = 0;
+    // First, determine if all threads failed the exact same way
+    bool all_threads_failed_equally = true;
+    PerThreadFailures::value_type fail_pattern = 0;
     int nfailures = 0;
-    for (size_t i = 0; i < thread_count() && all_cpus_failed_equally; ++i) {
+    for (size_t i = 0; i < thread_count() && all_threads_failed_equally; ++i) {
         if (per_thread_failures[i]) {
             if (++nfailures == 1)
                 fail_pattern = per_thread_failures[i];
             else if (per_thread_failures[i] != fail_pattern)
-                all_cpus_failed_equally = false;
+                all_threads_failed_equally = false;
         }
     }
-    if (all_cpus_failed_equally && nfailures == thread_count()) {
-        logging_printf(LOG_LEVEL_VERBOSE(1), "# All CPUs failed equally. This is highly unlikely (SW bug?)\n");
+    if (all_threads_failed_equally && nfailures == thread_count()) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# All threads failed equally. This is highly unlikely (SW bug?)\n");
         return;
     }
 
-    Topology topology  = Topology::topology();
-    if (!topology.isValid()) {
-        // can't use this information
-        if (all_cpus_failed_equally)
-            logging_printf(LOG_LEVEL_VERBOSE(1), "# All failing CPUs failed equally.\n");
-    } else if (test->flags & test_failure_package_only) {
-        // Failure cannot be attributed to a single thread or core.  Let's see if it
-        // can be pinned down to a single package.
-        logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
-
-        // Analysis is not needed if there's only a single package.
-        if (topology.packages.size() == 1) {
-            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failures localised to package %d\n",
-                           topology.packages[0].id());
-            return;
-        }
-
-        std::vector<int> pkg_failures(topology.packages.size(), -1);
-        int failed_packages = 0;
-        int last_bad_package = -1;
-        for (size_t p = 0; p < topology.packages.size(); ++p) {
-            Topology::Package *pkg = &topology.packages[p];
-            for (size_t c = 0; c < pkg->cores.size(); ++c) {
-                Topology::Core *core = &pkg->cores[c];
-                for (const Topology::Thread &thr : core->threads) {
-                    if (per_thread_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
-                        last_bad_package = pkg->id();
-                        failed_packages++;
-                        pkg_failures[p] = pkg->id();
-                    }
-                }
-            }
-        }
-        if (failed_packages == 1) {
-            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failures localised to package %d\n", last_bad_package);
-        } else {
-            logging_printf(LOG_LEVEL_VERBOSE(1), "# - Failure detected on multiple packages:\n");
-            for (int p : pkg_failures) {
-                if (pkg_failures[p] >= 0)
-                    logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Package %d failed\n", p);
-            }
-        }
-    } else {
-        // valid topology, we can do more a interesting analysis
-        logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
-        for (size_t p = 0; p < topology.packages.size(); ++p) {
-            Topology::Package *pkg = &topology.packages[p];
-            for (size_t c = 0; c < pkg->cores.size(); ++c) {
-                Topology::Core *core = &pkg->cores[c];
-                bool all_threads_failed_once = true;
-                bool all_threads_failed_equally = true;
-                int nthreads = 0;
-                fail_pattern = 0;
-                for (const Topology::Thread &thr : core->threads) {
-                    auto this_pattern = per_thread_failures[thr.cpu()];
-                    if (this_pattern == 0)
-                        all_threads_failed_once = false;
-                    if (++nthreads == 1) {
-                        // first thread of this core (maybe only)
-                        fail_pattern = this_pattern;
-                    } else {
-                        if (this_pattern != fail_pattern)
-                            all_threads_failed_equally = false;
-                        if (this_pattern && !fail_pattern)
-                            fail_pattern = this_pattern;
-                    }
-                }
-
-                if (fail_pattern == 0) {
-                    continue;       // no failure
-                } else if (nthreads == 1) {
-                    logging_printf(LOG_LEVEL_VERBOSE(1), "# - Only thread of package %d core %d\n",
-                                   int(p), int(c));
-                } else if (all_threads_failed_equally) {
-                    logging_printf(LOG_LEVEL_VERBOSE(1), "# - All threads of package %d core %d failed exactly the same way\n",
-                                   int(p), int(c));
-                } else if (all_threads_failed_once) {
-                    logging_printf(LOG_LEVEL_VERBOSE(1), "# - All threads of package %d core %d failed at least once\n",
-                                   int(p), int(c));
-                } else {
-                    logging_printf(LOG_LEVEL_VERBOSE(1), "# - Some threads of package %d core %d failed but some others succeeded\n",
-                                   int(p), int(c));
-                }
-            }
-        }
-    }
+    analyze_test_failures_for_topology(test, per_thread_failures);
 }
 
 static TestResult
-run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerThreadFailures &per_thread_failures)
+run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failures)
 {
     const struct test *test = test_cfg.test;
     TestResult state = TestResult::Skipped;
@@ -1985,7 +1900,7 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerThreadFailu
         if (i >= SandstoneApplication::MaxRetestCount)
             return;
         for_each_test_thread([&](PerThreadData::Test *data, int i) {
-            using U = SandstoneApplication::PerThreadFailures::value_type;
+            using U = PerThreadFailures::value_type;
             if (data->has_failed())
                 per_thread_failures[i] |= U(1) << i;
         });
@@ -2816,7 +2731,7 @@ int main(int argc, char **argv)
 
     logging_print_header(argc, argv, test_duration(), test_timeout(test_duration()));
 
-    SandstoneApplication::PerThreadFailures per_thread_failures;
+    PerThreadFailures per_thread_failures;
 
     sApp->current_test_count = 0;
     int total_tests_run = 0;
