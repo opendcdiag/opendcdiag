@@ -81,16 +81,6 @@ struct Topology::Data
 
 bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const char *thread_name = nullptr);
 
-class DeviceSchedule
-{
-public:
-    virtual void reschedule_to_next_device() = 0;
-    virtual void finish_reschedule() = 0;
-    virtual ~DeviceSchedule() = default;
-protected:
-    void pin_to_next_cpu(int next_cpu, tid_t thread_id = 0);
-};
-
 class BarrierDeviceSchedule : public DeviceSchedule
 {
 public:

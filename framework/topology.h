@@ -21,6 +21,15 @@
 
 #include "gettid.h"
 
+class DeviceSchedule {
+public:
+    virtual ~DeviceSchedule() = default;
+    virtual void reschedule_to_next_device() = 0;
+    virtual void finish_reschedule() = 0;
+};
+
+std::unique_ptr<DeviceSchedule> make_rescheduler(std::string_view mode);
+
 struct DeviceRange
 {
     // a contiguous range
