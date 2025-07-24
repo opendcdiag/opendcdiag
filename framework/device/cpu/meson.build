@@ -27,6 +27,18 @@ unittests_sources += files(
     'unit-tests/thermal_monitor_tests.cpp',
 )
 
+device_flags = [
+    '-DSANDSTONE_DEVICE_CPU',
+]
+
+default_c_flags += [
+    device_flags
+]
+
+default_cpp_flags += [
+    device_flags
+]
+
 premain_files = files(
     'premain.cpp',
 )
