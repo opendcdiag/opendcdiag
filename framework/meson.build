@@ -50,6 +50,10 @@ framework_config.set10('SANDSTONE_STATIC', false) # sysdeps may override
 
 if device_type == 'cpu'
     framework_config.set10('SANDSTONE_DEVICE_CPU', true)
+    framework_config.set10(
+        'SANDSTONE_FREQUENCY_MANAGER',
+        not get_option('framework_options').contains('restricted-cmdline')
+    )
 elif device_type == 'gpu'
     framework_config.set10('SANDSTONE_DEVICE_GPU', true)
 else
