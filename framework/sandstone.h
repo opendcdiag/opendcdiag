@@ -526,6 +526,8 @@ extern __thread int thread_num __attribute__((tls_model("initial-exec")));
 #ifdef __cplusplus
 }
 
+using PerThreadFailures = std::vector<__uint128_t>;
+
 constexpr inline test_flags operator|(test_flag f1, test_flag f2)
 {
     return test_flags(unsigned(f1) | unsigned(f2));
