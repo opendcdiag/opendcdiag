@@ -317,6 +317,7 @@ executable(
     cpp_args: [
         '-march=haswell',
         debug_c_flags,
+        device_flags,
         default_cpp_warn,
         '-USANDSTONE',
     ],
