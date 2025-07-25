@@ -293,6 +293,9 @@ typedef enum test_flag {
     /// Indicates that a test can only attribute failure to a particular
     /// package and not to threads or cores.
     test_failure_package_only       = 0x1000,
+
+    test_requires_smt               = 0x4000,
+
 } test_flags;
 
 struct test_data_per_thread

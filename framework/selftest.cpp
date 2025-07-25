@@ -1823,6 +1823,15 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
+{
+    .id = "selftest_test_smt",
+    .description = "Test the flag test_requires_smt",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_requires_smt,
+},
 #ifdef _WIN32
 {
     .id = "selftest_fastfail",
