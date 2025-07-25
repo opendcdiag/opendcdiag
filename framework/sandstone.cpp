@@ -408,8 +408,8 @@ inline void test_the_test_data<true>::test_tests_init(const struct test *the_tes
         return;
 
     hwm_at_start = memfpt_current_high_water_mark();
-    per_thread.resize(num_cpus());
-    std::fill_n(per_thread.begin(), num_cpus(), PerThread{});
+    per_thread.resize(num_devices());
+    std::fill_n(per_thread.begin(), num_devices(), PerThread{});
 }
 
 inline void test_the_test_data<true>::test_tests_iteration(const struct test *the_test)
@@ -448,14 +448,14 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
         log_warning("High water mark memory footprinting failed (%zu kB at start, %zu kB now)",
                     hwm_at_start, current_hwm);
     } else if (current_hwm) {
-        size_t per_thread_avg = (current_hwm - hwm_at_start) / num_cpus();
+        size_t per_thread_avg = (current_hwm - hwm_at_start) / num_devices();
         if (per_thread_avg < MaxAcceptableMemoryUseKB)
             log_info("Test memory use: (%zu - %zu) / %d = %zu kB",
-                     current_hwm, hwm_at_start, num_cpus(), per_thread_avg);
+                     current_hwm, hwm_at_start, num_devices(), per_thread_avg);
         else
             maybe_log_error(test_flag_ignore_memory_use,
                             "Test uses too much memory: (%zu - %zu) / %d = %zu kB",
-                            current_hwm, hwm_at_start, num_cpus(), per_thread_avg);
+                            current_hwm, hwm_at_start, num_devices(), per_thread_avg);
     }
 
     // check if the test has failed
@@ -498,7 +498,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
         Duration average = {};
         int average_counts = 0;
         int while_loops = 0;
-        for (int cpu = 0; cpu < num_cpus(); ++cpu) {
+        for (int cpu = 0; cpu < num_devices(); ++cpu) {
             PerThread &thr = per_thread[cpu];
             if (thr.iteration_times[0].time_since_epoch().count() == 0)
                 continue;
@@ -538,7 +538,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
                                 "run() function appears to use while (test_time_condition()) instead of do {} while");
 
             // find the threads where test_time_condition() wasn't called
-            for (int cpu = 0; average_counts != num_cpus() && cpu < num_cpus(); ++cpu) {
+            for (int cpu = 0; average_counts != num_devices() && cpu < num_devices(); ++cpu) {
                 PerThread &thr = per_thread[cpu];
                 if (thr.iteration_times[0].time_since_epoch().count() == 0)
                     log_message(cpu, SANDSTONE_LOG_WARNING "run() function did not call test_time_condition() in this thread");
@@ -816,9 +816,9 @@ void initialize_smi_counts()
     std::optional<uint64_t> v = sApp->count_smi_events(cpu_info[0].cpu_number);
     if (!v)
         return;
-    sApp->smi_counts_start.resize(num_cpus());
+    sApp->smi_counts_start.resize(num_devices());
     sApp->smi_counts_start[0] = *v;
-    for (int i = 1; i < num_cpus(); i++)
+    for (int i = 1; i < num_devices(); i++)
         sApp->smi_counts_start[i] = sApp->count_smi_events(cpu_info[i].cpu_number).value_or(0);
 }
 
@@ -1030,15 +1030,15 @@ static void init_shmem()
             "PerThreadData::Test size grew, please check if it was intended");
     assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test);
     assert(sApp->shmem == nullptr);
-    assert(num_cpus());
+    assert(num_devices());
 
     unsigned per_thread_size = sizeof(PerThreadData::Main);
     per_thread_size = ROUND_UP_TO(per_thread_size, alignof(PerThreadData::Test));
-    per_thread_size += sizeof(PerThreadData::Test) * num_cpus();
+    per_thread_size += sizeof(PerThreadData::Test) * num_devices();
     per_thread_size = ROUND_UP_TO_PAGE(per_thread_size);
 
     unsigned thread_data_offset = sizeof(SandstoneApplication::SharedMemory) +
-            sizeof(Topology::Thread) * num_cpus();
+            sizeof(Topology::Thread) * num_devices();
     thread_data_offset = ROUND_UP_TO_PAGE(thread_data_offset);
 
     size_t size = thread_data_offset;
@@ -1068,7 +1068,7 @@ static void commit_shmem()
     const std::vector<DeviceRange> &plan = sApp->slice_plans.plans.end()[-1];
     size_t main_thread_count = plan.size();
     sApp->shmem->main_thread_count = main_thread_count;
-    sApp->shmem->total_cpu_count = num_cpus();
+    sApp->shmem->total_cpu_count = num_devices();
 
     // unmap the current area, because Windows doesn't allow us to have two
     // blocks for this file
@@ -1078,7 +1078,7 @@ static void commit_shmem()
     // enlarge the file and map the extra data
     size_t size = sizeof(PerThreadData::Main) * main_thread_count;
     size = ROUND_UP_TO_PAGE(size);
-    size += sizeof(PerThreadData::Test) * num_cpus();
+    size += sizeof(PerThreadData::Test) * num_devices();
     size = ROUND_UP_TO_PAGE(size);
 
     if (ftruncate(sApp->shmemfd, offset + size) < 0) {
@@ -1093,7 +1093,7 @@ static void commit_shmem()
     }
 
     // sApp->shmem has probably moved
-    restrict_topology({ 0, num_cpus() });
+    restrict_topology({ 0, num_devices() });
 }
 
 static void attach_shmem(int fd)
@@ -1129,7 +1129,7 @@ static void slice_plan_init(int max_cores_per_slice)
 {
     auto set_to_full_system = []() {
         // only one plan and that's the full system
-        std::vector plan = { DeviceRange{ 0, num_cpus() } };
+        std::vector plan = { DeviceRange{ 0, num_devices() } };
         sApp->slice_plans.plans.fill(plan);
         return;
     };
@@ -1161,7 +1161,7 @@ static void slice_plan_init(int max_cores_per_slice)
     // as described above. Be aware bypasses the minimum average processor per
     // socket check.
 
-    int max_cpu = num_cpus();
+    int max_cpu = num_devices();
     const Topology &topology = Topology::topology();
     while (topology.isValid()) {     // not a loop, just so we can use break
         using SlicePlans = SandstoneApplication::SlicePlans;
@@ -1262,14 +1262,14 @@ static void restart_init(int iterations)
 
 static void run_threads_in_parallel(const struct test *test)
 {
-    SandstoneTestThread thr[num_cpus()];    // NOLINT: -Wvla
+    SandstoneTestThread thr[num_devices()];    // NOLINT: -Wvla
     int i;
 
-    for (i = 0; i < num_cpus(); i++) {
+    for (i = 0; i < num_devices(); i++) {
         thr[i].start(thread_runner, i);
     }
     /* wait for threads to end */
-    for (i = 0; i < num_cpus(); i++) {
+    for (i = 0; i < num_devices(); i++) {
         thr[i].join();
     }
 }
@@ -1279,10 +1279,10 @@ static void run_threads_sequentially(const struct test *test)
     // we still start one thread, in case the test uses report_fail_msg()
     // (which uses pthread_cancel())
     SandstoneTestThread thread;
-    thread.start([](int cpu) {
-        for ( ; cpu != num_cpus(); thread_num = ++cpu)
-            thread_runner(cpu);
-        return uintptr_t(cpu);
+    thread.start([](int t) {
+        for ( ; t != num_devices(); thread_num = ++t)
+            thread_runner(t);
+        return uintptr_t(t);
     }, 0);
     thread.join();
 }
@@ -1866,7 +1866,7 @@ static int slices_for_test(const struct test *test)
         return SandstoneApplication::SlicePlans::Heuristic;
     }();
     if (type == SandstoneApplication::SlicePlans::FullSystem) {
-        sApp->main_thread_data()->device_range = { 0, num_cpus() };
+        sApp->main_thread_data()->device_range = { 0, num_devices() };
         return 1;
     }
 
@@ -1976,7 +1976,7 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
     bool all_cpus_failed_equally = true;
     uint64_t fail_pattern = 0;
     int nfailures = 0;
-    for (size_t i = 0; i < num_cpus() && all_cpus_failed_equally; ++i) {
+    for (size_t i = 0; i < num_devices() && all_cpus_failed_equally; ++i) {
         if (per_thread_failures[i]) {
             if (++nfailures == 1)
                 fail_pattern = per_thread_failures[i];
@@ -1984,7 +1984,7 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
                 all_cpus_failed_equally = false;
         }
     }
-    if (all_cpus_failed_equally && nfailures == num_cpus()) {
+    if (all_cpus_failed_equally && nfailures == num_devices()) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "# All CPUs failed equally. This is highly unlikely (SW bug?)\n");
         return;
     }
@@ -2089,11 +2089,11 @@ run_one_test(const test_cfg_info &test_cfg, SandstoneApplication::PerThreadFailu
     Duration runtime = 0ms;
 
     // resize and zero the storage
-    if (per_thread_failures.size() == num_cpus()) {
-        std::fill_n(per_thread_failures.begin(), num_cpus(), 0);
+    if (per_thread_failures.size() == num_devices()) {
+        std::fill_n(per_thread_failures.begin(), num_devices(), 0);
     } else {
         per_thread_failures.clear();
-        per_thread_failures.resize(num_cpus(), 0);
+        per_thread_failures.resize(num_devices(), 0);
     }
     auto mark_up_per_cpu_fail = [&per_thread_failures, &fail_count](int i) {
         ++fail_count;
@@ -2485,9 +2485,9 @@ static void loadavg_windows_callback(PVOID, BOOLEAN)
     // We divide by 100.0 to get value in range (0.0;1.0) instead of percents.
     //
     // We also mutliply by number of cpus to make the metric behave more like the
-    // /proc/loadavg from Linux, so we get value from range (0.0;num_cpus()), where
-    // num_cpus() value means all cores at 100% utilization.
-    const double current_avg_cpu_usage = (vpt.doubleValue * num_cpus() / 100.0);
+    // /proc/loadavg from Linux, so we get value from range (0.0;num_devices()), where
+    // num_devices() value means all cores at 100% utilization.
+    const double current_avg_cpu_usage = (vpt.doubleValue * num_devices() / 100.0);
     const double current_proc_queue    = vpql.doubleValue;
     const double current_avg_load      = current_avg_cpu_usage + current_proc_queue;
 
@@ -2497,10 +2497,10 @@ static void loadavg_windows_callback(PVOID, BOOLEAN)
     const double sample_windows_count  = tick_diff_seconds / static_cast<double>(SAMPLE_INTERVAL_SECONDS);
     const double efactor               = 1.0 / pow(EXP_LOADAVG, sample_windows_count);
 
-    // Exponential moving average, but don't allow values outside of range (0.0;num_cpus()*2)
+    // Exponential moving average, but don't allow values outside of range (0.0;num_devices()*2)
     double loadavg_ = loadavg.load(std::memory_order::relaxed);
     loadavg_ = loadavg_ * efactor + current_avg_load * (1.0 - efactor);
-    loadavg_ = std::clamp(loadavg_, 0.0, static_cast<double>(num_cpus()*2));
+    loadavg_ = std::clamp(loadavg_, 0.0, static_cast<double>(num_devices()*2));
 
     last_tick_seconds = current_tick_seconds;
     loadavg.store(loadavg_, std::memory_order::relaxed);
