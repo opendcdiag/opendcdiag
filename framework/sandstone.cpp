@@ -950,9 +950,11 @@ static uintptr_t thread_runner(int thread_number)
         }
         test_end(new_state);
 
+#ifdef SANDSTONE_DEVICE_CPU
         // If rescheduling, do cleanup
         if (sApp->device_schedule != nullptr)
             sApp->device_schedule->finish_reschedule();
+#endif
     });
 
     // indicate to SIGQUIT handler that we're running
@@ -2797,11 +2799,13 @@ int main(int argc, char **argv)
                     program_invocation_name);
             return EX_USAGE;
         }
+#ifdef SANDSTONE_DEVICE_CPU
         if (sApp->device_schedule) {
             fprintf(stderr, "%s: error: --reschedule is not supported in this configuration\n",
                     program_invocation_name);
             return EX_USAGE;
         }
+#endif
     }
 
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)

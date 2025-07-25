@@ -6,8 +6,8 @@
 #ifndef INC_DEVICE_H
 #define INC_DEVICE_H
 
-// #ifdef SANDSTONE_DEVICE_CPU
+#ifdef SANDSTONE_DEVICE_CPU
 #include <device/cpu/cpu_device.h>
-// #endif
+#endif
 
 #endif /* INC_DEVICE_H */
