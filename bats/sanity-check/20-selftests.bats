@@ -1286,6 +1286,22 @@ function selftest_logerror_common() {
     done
 }
 
+@test "ps on selftest_freeze" {
+    local psver=`LC_ALL=C.UTF-8 ps --version`
+    if [[ "$psver" != *procps* ]]; then
+        skip "Test requires procps (Linux)"
+    fi
+
+    local newline=$'\n'
+    declare -A yamldump
+    sandstone_selftest -vvv --on-crash=kill --on-hang=ps -e selftest_freeze --timeout=500
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result" 'timed out'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" 'info'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" ".*\bPID\b.*\bCOMMAND\b.*${newline}.*\bcontrol\b.*"
+}
+
 @test "selftest_freeze_exit_on_termination" {
     if $is_windows; then
         skip "Unix-only test"

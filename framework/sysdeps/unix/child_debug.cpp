@@ -508,10 +508,9 @@ static std::string run_process(const char *args[])
     // Not using a pipe here because we don't know how much the child process
     // will write, and run_process() above waits for it to end.
     auto_fd stdout_fd = open_memfd(MemfdCloseOnExec);
-    int ret = run_process(stdout_fd, args);
-
     std::string log;
-    if (ret < 0) {
+    if (int ret = run_process(stdout_fd, args); ret < 0) {
+        // fork failed?
         return log;
     }
 
@@ -523,10 +522,15 @@ static std::string run_process(const char *args[])
 
     ssize_t total_read = 0;
     log.resize(st.st_size);
+    lseek(stdout_fd, 0, SEEK_SET);
     while (total_read < log.size()) {
-        EINTR_LOOP(ret, read(stdout_fd, log.data() + total_read, log.size() - total_read));
-        if (ret <= 0)
-            break;
+        ssize_t ret = read(stdout_fd, log.data() + total_read, log.size() - total_read);
+        if (ret <= 0) {
+            if (errno != EINTR)
+                break;
+        } else {
+            total_read += ret;
+        }
     }
     log.resize(total_read);
 
