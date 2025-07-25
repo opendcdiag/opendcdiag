@@ -6,15 +6,20 @@ load ../testenv
 load helpers
 MAX_PROC=`nproc`
 
+function cpuset_two_modules() {
+    # Find a different module
+    sandstone_yq --cpuset=t0 '--disable=*'
+    echo -n 'p0c0t0,'
+    query_jq -r '[."cpu-info"[] | select(.module > 0)][0] |
+        "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
+}
+
 @test "crash backtrace multi-slice" {
     # We need GDB and at least two cores
     check_gdb_usable
     export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
 
-    # Find a different module
-    sandstone_yq --cpuset=t0 '--disable=*'
-    local cpuset='p0c0t0,'$(query_jq -r '[."cpu-info"[] | select(.module > 0)][0] |
-        "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"')
+    local cpuset=`cpuset_two_modules`
     if [[ "$cpuset" = *, ]]; then
         skip "Test only works with multiple cores/modules or a debug build"
     fi
@@ -33,6 +38,31 @@ MAX_PROC=`nproc`
 
     test_yaml_regexp "/tests/0/threads/2/thread" "0"
     test_yaml_regexp "/tests/0/threads/3/thread" "1"
+}
+
+@test "ps on selftest_freeze multi-slice" {
+    local psver=`LC_ALL=C.UTF-8 ps --version`
+    if [[ "$psver" != *procps* ]]; then
+        skip "Test requires procps (Linux)"
+    fi
+
+    export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
+    local cpuset=`cpuset_two_modules`
+    if [[ "$cpuset" = *, ]]; then
+        skip "Test only works with multiple cores/modules or a debug build"
+    fi
+
+    local newline=$'\n'
+    declare -A yamldump
+
+    sandstone_selftest -vvv --on-crash=kill --on-hang=ps -e selftest_freeze --timeout=500 --max-cores-per-slice=1
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result" 'timed out'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" 'info'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" ".*\bPID\b.*\bCOMMAND\b.*${newline}.*\bcontrol\b.*"
+    test_yaml_regexp "/tests/0/threads/1/messages/0/level" 'info'
+    test_yaml_regexp "/tests/0/threads/1/messages/0/text" ".*\bPID\b.*\bCOMMAND\b.*${newline}.*\bcontrol\b.*"
 }
 
 @test "no slicing if too few cores per socket" {
