@@ -177,7 +177,7 @@ public:
         populate_frequency_levels(min_max_frequency, true, total_core_frequency_levels);
 
         // save states
-        for (int cpu = 0; cpu < num_cpus(); cpu++) {
+        for (int cpu = 0; cpu < num_devices(); cpu++) {
             //save scaling governor for every cpu
             std::string scaling_governor_path = BASE_CORE_FREQ_PATH;
             scaling_governor_path += std::to_string(cpu_info[cpu].cpu_number);
@@ -205,7 +205,7 @@ public:
             std::unordered_set<int> found_socket_ids;
             uint16_t total_sockets = 0;
 
-            for (size_t cpu = 0; cpu < num_cpus(); cpu++) {
+            for (size_t cpu = 0; cpu < num_devices(); cpu++) {
                 int socket_id = cpu_info[cpu].package_id;
                 if (found_socket_ids.count(socket_id) == 0) {
                     total_sockets++;
@@ -242,7 +242,7 @@ public:
 #ifdef __linux__
         current_set_frequency = core_frequency_levels[core_frequency_level_idx++ % total_core_frequency_levels];
 
-        for (int cpu = 0; cpu < num_cpus(); cpu++) {
+        for (int cpu = 0; cpu < num_devices(); cpu++) {
             std::string scaling_setspeed = BASE_CORE_FREQ_PATH;
             scaling_setspeed += std::to_string(cpu_info[cpu].cpu_number);
             scaling_setspeed += SCALING_SETSPEED;
@@ -271,7 +271,7 @@ public:
     void restore_core_frequency_initial_state()
     {
 #ifdef __linux__
-        for (int cpu = 0; cpu < num_cpus(); cpu++) {
+        for (int cpu = 0; cpu < num_devices(); cpu++) {
             //restore saved scaling governor for every cpu
             std::string scaling_governor_path = BASE_CORE_FREQ_PATH;
             scaling_governor_path += std::to_string(cpu_info[cpu].cpu_number);
