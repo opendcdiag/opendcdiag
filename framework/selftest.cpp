@@ -1342,7 +1342,15 @@ static struct test selftests_array[] = {
     .desired_duration = 750,
     .quality_level = TEST_QUALITY_PROD,
 },
-
+{
+    .id = "selftest_requires_smt",
+    .description = "Test the flag test_requires_smt",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_requires_smt,
+},
 {
     .id = "selftest_timedpass_busywait",
     .description = "Runs for the requested time, but busy-waiting", // or practically so
@@ -1822,15 +1830,6 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .test_run = selftest_crash_run<cause_sigtrap_int3>,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
-},
-{
-    .id = "selftest_test_smt",
-    .description = "Test the flag test_requires_smt",
-    .groups = DECLARE_TEST_GROUPS(&group_positive),
-    .test_run = selftest_pass_run,
-    .desired_duration = -1,
-    .quality_level = TEST_QUALITY_PROD,
-    .flags = test_requires_smt,
 },
 #ifdef _WIN32
 {
