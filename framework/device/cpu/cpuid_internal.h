@@ -201,40 +201,34 @@ static cpu_features_t detect_cpu()
         assert(avx10ver < 5 && "Internal error: update code above!");
     }
 
-    if (osxsave) {
-        uint64_t xcr0 = 0;
-        uint64_t xcr0_wanted = 0;
-
-        if (features & XSaveReq_AvxState)
-            xcr0_wanted |= XSave_AvxState;
-        if (features & XSaveReq_Avx512State)
-            xcr0_wanted |= XSave_Avx512State;
-        if (features & XSaveReq_AmxState)
-            xcr0_wanted |= XSave_AmxState;
-
-        if (xcr0_wanted) {
-            uint32_t xcr0_low, xcr0_high;
-            asm("xgetbv" : "=a" (xcr0_low), "=d" (xcr0_high) : "c" (0));
-            xcr0 = xcr0_low;
-            if (xcr0_wanted != (uint32_t)xcr0_wanted)
-                xcr0 |= (uint64_t)xcr0_high << 32;      // don't discard %edx
-            xcr0 = adjusted_xcr0(xcr0, xcr0_wanted);
-        }
-
-        // Check what XSAVE features this OS supports and we're allowed to use.
-        // For AMX, we (currently) allow gracefully degrading. For AVX512 and
-        // earlier, we stop execution.
-        if ((xcr0 & XSave_AmxState) != XSave_AmxState) {
-            xcr0_wanted &= ~XSave_AmxState;
-            features &= ~XSaveReq_AmxState;
-        }
-
-        if (xcr0_wanted && (xcr0 & xcr0_wanted) != xcr0_wanted)
-            detect_cpu_not_supported("This kernel did not enable necessary AVX or AMX state-saving."
-                                     " Cannot run.\n");
-
+    uint64_t xcr0 = 0;
+    uint64_t xcr0_wanted = 0;
+    for (const XSaveRequirementMapping xsavereq : xsave_requirements) {
+        if (features & xsavereq.cpu_features)
+            xcr0_wanted |= xsavereq.xsave_state;
     }
 
+    if (xcr0_wanted && osxsave) {
+        uint32_t xcr0_low, xcr0_high;
+        asm("xgetbv" : "=a" (xcr0_low), "=d" (xcr0_high) : "c" (0));
+        xcr0 = xcr0_low;
+        if (xcr0_wanted != (uint32_t)xcr0_wanted)
+            xcr0 |= (uint64_t)xcr0_high << 32;      // don't discard %edx
+        xcr0 = adjusted_xcr0(xcr0, xcr0_wanted);
+    }
+
+    // Check what XSAVE features this OS supports and we're allowed to use.
+    // We do not support running on AVX or AVX512-capable processors without
+    // the corresponding OS support.
+    if ((xcr0_wanted & XSave_Avx512State) != (xcr0 & XSave_Avx512State))
+        detect_cpu_not_supported("This kernel did not enable necessary AVX state-saving."
+                                 " Cannot run.\n");
+
+    // For everything else, gracefully degrade by disabling the feature.
+    for (const XSaveRequirementMapping xsavereq : xsave_requirements) {
+        if ((xcr0 & xsavereq.xsave_state) != xsavereq.xsave_state)
+            features &= ~xsavereq.cpu_features;
+    }
     return features;
 }
 
