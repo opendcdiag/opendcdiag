@@ -143,6 +143,10 @@ framework_config.set10(
     'SANDSTONE_RESTRICTED_CMDLINE',
     get_option('framework_options').contains('restricted-cmdline'),
 )
+framework_config.set10(
+    'SANDSTONE_ALLOW_STDOUT_FROM_TESTS',
+    get_option('framework_options').contains('allow-stdout-from-tests')
+)
 if get_option('framework_options').contains('no-child-debug')
     framework_config.set10('SANDSTONE_CHILD_DEBUG_CRASHES', false)
     framework_config.set10('SANDSTONE_CHILD_DEBUG_HANGS', false)

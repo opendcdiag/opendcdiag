@@ -7,7 +7,8 @@ option('march_base', type : 'string', value : '',
     description : 'Build framework with this base optimization -march= value (default: "haswell").')
 option('framework_options', type : 'array', value : [],
     description : 'Configuration options for the framework. ' +
-    'Possible options: restricted-cmdline, no-child-debug{,-crashes,-hangs}, no-child-backtrace, no-triage')
+    'Possible options: restricted-cmdline, no-child-debug{,-crashes,-hangs}, no-child-backtrace, ' +
+    'allow-stdout-from-tests')
 option('dependency_link', type : 'combo', choices : ['dynamic', 'static'], value : 'dynamic',
     description : 'Link preference for dependencies: dynamic (default) or static')
 option('docdir', type : 'string', value : 'doc/dcdiag',
