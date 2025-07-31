@@ -162,7 +162,8 @@ bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullpt
 bool pin_to_logical_processors(DeviceRange, const char *thread_name);
 
 void apply_deviceset_param(char *param);
-void init_topology(const LogicalProcessorSet &enabled_cpus);
+void init_num_devices();
+void init_topology();
 void restrict_topology(DeviceRange range);
 
 #endif /* INC_TOPOLOGY_H */
