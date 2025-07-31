@@ -84,23 +84,31 @@ MAX_PROC=`nproc`
 @test "slicing cores" {
     declare -A yamldump
 
-    # attempt to run on two sockets
-    export SANDSTONE_MOCK_TOPOLOGY='0 0:1 0:2 1'
+    # attempt to run on four cores (on different modules), but accept two
+    export SANDSTONE_MOCK_TOPOLOGY='0:0 0:1 0:2 0:3'
     sandstone_yq --cpuset=t0 '--disable=*'
-    set $(query_jq -r '."cpu-info" as $info |
-        [
-            # the first three different modules
-            $info | unique_by(.module)[0:3][],
-            # the first core of the second package
-            [$info[] | select(.package != $info[0].package)][0]
-        ][] | "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
+    set $(query_jq -r '."cpu-info" |
+            # the first four different modules
+            unique_by(.module)[0:4][]
+        | "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
     )
-    if [[ $# -ne 4 ]]; then
-        skip "Test only works with Debug builds (to mock the topology) w/ 4 CPUs or multi-socket systems"
+
+    local cores_per_slice=2
+    if [[ $# -eq 2 ]]; then
+        cores_per_slice=1
+    elif [[ $# -lt 2 ]]; then
+        skip "Test only works with Debug builds (to mock the topology) or at least 2 different modules"
     fi
 
     IFS=,
-    sandstone_yq --disable=\* --max-cores-per-slice=2 "--cpuset=$*"
-    test_yaml_numeric "/test-plans/fullsocket@len" 'value == 2'
-    test_yaml_numeric "/test-plans/heuristic@len" 'value == 3'
+    sandstone_yq --disable=\* --max-cores-per-slice=$cores_per_slice "--cpuset=$*"
+    test_yaml_numeric "/test-plans/heuristic@len" 'value == 2'
+
+    # The first slice has $cores_per_slice cores
+    test_yaml_numeric "/test-plans/heuristic/0/starting_cpu" 'value == 0'
+    test_yaml_numeric "/test-plans/heuristic/0/count" "value == $cores_per_slice"
+
+    # The second has the remainder (1 or 2)
+    test_yaml_numeric "/test-plans/heuristic/1/starting_cpu" "value == $cores_per_slice"
+    test_yaml_numeric "/test-plans/heuristic/1/count" "value == $# - $cores_per_slice"
 }
