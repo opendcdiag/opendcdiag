@@ -6,12 +6,12 @@ load ../testenv
 load helpers
 MAX_PROC=`nproc`
 
-function cpuset_two_modules() {
-    # Find a different module
+function cpuset_unique_modules() {
+    # Make a list of cores that are in unique modules
     sandstone_yq --cpuset=t0 '--disable=*' > /dev/null
-    echo -n 'p0c0t0,'
-    query_jq -r '[."cpu-info"[] | select(.module > 0)][0] |
-        "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
+
+    query_jq -r '."cpu-info" | unique_by(.module)[0:'$1'][]
+        | "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
 }
 
 @test "crash backtrace multi-slice" {
@@ -19,13 +19,14 @@ function cpuset_two_modules() {
     check_gdb_usable
     export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
 
-    local cpuset=`cpuset_two_modules`
-    if [[ "$cpuset" = *, ]]; then
+    set `cpuset_unique_modules`
+    if [[ $# -lt 2 ]]; then
         skip "Test only works with multiple cores/modules or a debug build"
     fi
 
     declare -A yamldump
-    selftest_crash_context_common --cpuset=$cpuset -n2 --timeout=5m -e selftest_sigsegv --on-crash=backtrace --max-cores-per-slice=1
+    IFS=,
+    selftest_crash_context_common "--cpuset=$*" -n2 --timeout=5m -e selftest_sigsegv --on-crash=backtrace --max-cores-per-slice=1
 
     # We should have as output two main threads and two worker threads
     test_yaml_regexp "/tests/0/threads/0/thread" "main"
@@ -47,15 +48,16 @@ function cpuset_two_modules() {
     fi
 
     export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
-    local cpuset=`cpuset_two_modules`
-    if [[ "$cpuset" = *, ]]; then
+    set `cpuset_unique_modules`
+    if [[ $# -lt 2 ]]; then
         skip "Test only works with multiple cores/modules or a debug build"
     fi
 
     local newline=$'\n'
     declare -A yamldump
 
-    sandstone_selftest -vvv --on-crash=kill --on-hang=ps -e selftest_freeze --timeout=500 --max-cores-per-slice=1
+    IFS=,
+    sandstone_selftest -vvv "--cpuset=$*" -n2 --on-crash=kill --on-hang=ps -e selftest_freeze --timeout=500 --max-cores-per-slice=1
     [[ "$status" -eq 2 ]]
     test_yaml_regexp "/exit" invalid
     test_yaml_regexp "/tests/0/result" 'timed out'
@@ -116,12 +118,7 @@ function cpuset_two_modules() {
 
     # attempt to run on four cores (on different modules), but accept two
     export SANDSTONE_MOCK_TOPOLOGY='0:0 0:1 0:2 0:3'
-    sandstone_yq --cpuset=t0 '--disable=*'
-    set $(query_jq -r '."cpu-info" |
-            # the first four different modules
-            unique_by(.module)[0:4][]
-        | "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
-    )
+    set `cpuset_unique_modules 4`
 
     local cores_per_slice=2
     if [[ $# -eq 2 ]]; then
