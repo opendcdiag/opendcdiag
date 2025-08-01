@@ -8,7 +8,7 @@ MAX_PROC=`nproc`
 
 function cpuset_two_modules() {
     # Find a different module
-    sandstone_yq --cpuset=t0 '--disable=*'
+    sandstone_yq --cpuset=t0 '--disable=*' > /dev/null
     echo -n 'p0c0t0,'
     query_jq -r '[."cpu-info"[] | select(.module > 0)][0] |
         "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
