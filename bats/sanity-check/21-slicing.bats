@@ -8,7 +8,7 @@ MAX_PROC=`nproc`
 
 function cpuset_unique_modules() {
     # Make a list of cores that are in unique modules
-    sandstone_yq --cpuset=t0 '--disable=*' > /dev/null
+    VALIDATION=0 sandstone_yq --cpuset=t0 '--disable=*' > /dev/null
 
     query_jq -r '."cpu-info" | unique_by(.module)[0:'$1'][]
         | "p" + (.package|tostring) + "c" + (.core|tostring) + "t0"'
