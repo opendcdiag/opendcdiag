@@ -347,7 +347,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     struct SlicePlans {
         static constexpr int MinimumCpusPerSocket = 8;
         static constexpr int DefaultMaxCoresPerSlice = 32;
-        static constexpr int SecondaryMaxCoresPerSlice = DefaultMaxCoresPerSlice * 3 / 4;
         enum Type : int8_t {
             FullSystem = -1,
             IsolateSockets,
