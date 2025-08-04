@@ -384,6 +384,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     bool service_background_scan = false;
     bool vary_frequency_mode = false;
     bool vary_uncore_frequency_mode = false;
+    bool include_optional = false;
     int inject_idle = 0;
     static constexpr int MaxRetestCount = sizeof(PerThreadFailures::value_type) * 8;
     int retest_count = 10;
