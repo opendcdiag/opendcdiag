@@ -1111,7 +1111,8 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
     .test_run = selftest_pass_run,
     .desired_duration = -1,
-    .quality_level = TEST_QUALITY_OPTIONAL,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_is_optional,
 },
 {
     .id = "selftest_pass_beta",
