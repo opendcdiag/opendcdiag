@@ -669,6 +669,7 @@ struct ProgramOptionsParser {
         if (auto it = opts_map.find(include_optional_option); it != opts_map.end()) {
             /* do not override lower quality levels if they were requested */
             app->requested_quality = std::min<int>(app->requested_quality, TEST_QUALITY_OPTIONAL);
+            app->include_optional = true;
         }
 
         // deviceset (before dump_cpu_info)

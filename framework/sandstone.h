@@ -294,6 +294,10 @@ typedef enum test_flag {
     /// package and not to threads or cores.
     test_failure_package_only       = 0x1000,
 
+    /// Indicates the test is optional and only to be run with --include-optional in
+    /// command line
+    test_is_optional                = 0x2000,
+
     /// Indicates test requires to have Simultaneous Multi-Threading(SMT)/Hyperthreading(HT)
     /// support
     test_requires_smt               = 0x4000,
