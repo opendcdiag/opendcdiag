@@ -1234,6 +1234,8 @@ static void slice_plan_init(int max_cores_per_slice)
         plan.reserve(slice_count);
 
         int slice_size = max_cpu / slice_count;
+        if (max_cpu % slice_count)
+            ++slice_size;       // round up the slice size
         int cpu = 0;
         for ( ; cpu < max_cpu - slice_size; cpu += slice_size)
             plan.push_back(DeviceRange{ cpu, slice_size });
