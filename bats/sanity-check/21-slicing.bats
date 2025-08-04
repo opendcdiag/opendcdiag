@@ -68,7 +68,7 @@ function cpuset_two_modules() {
 @test "no slicing if too few cores per socket" {
     declare -A yamldump
 
-    export SANDSTONE_MOCK_TOPOLOGY=`seq 0 $MAX_PROC | xargs`
+    export SANDSTONE_MOCK_TOPOLOGY=`seq 0 $((MAX_PROC - 1))| xargs`
     echo "SANDSTONE_MOCK_TOPOLOGY=\"$SANDSTONE_MOCK_TOPOLOGY\""
     sandstone_yq --disable=\*
 
@@ -77,6 +77,7 @@ function cpuset_two_modules() {
 
     local sockets=`query_jq -r '[ ."cpu-info"[].package ] | unique | length'`
     if $is_debug; then
+        # check that the tool reported as many sockets as we expect it to
         [[ ${sockets-0} = $MAX_PROC ]]
     fi
 
