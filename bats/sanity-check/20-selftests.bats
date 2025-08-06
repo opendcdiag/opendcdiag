@@ -1506,13 +1506,24 @@ selftest_crash_common() {
 @test "crash context" {
     declare -A yamldump
     selftest_crash_context_common -n1 -e selftest_sigsegv --on-crash=context
+    test_yaml_regexp "/tests/0/threads/0/thread" '[0-9]+'       # not 'main'
 
     # Ensure we can use this option even if gdb isn't found
     # (can't use run_sandstone_yaml here because we empty $PATH)
     if ! $is_windows; then (
         PATH=
-        run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o - >/dev/null
+        run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o -
         [[ $status -eq 1 ]]     # instead of 64 (EX_USAGE)
+        [[ "$output" = *"level: info"*"Registers:"* ]]
+        ! [[ "$output" = *Backtrace:* ]]
+
+        # And that we get a context even without the option
+        local opts=($SANDSTONE)         # split on space
+        opts=(${opts/--on-crash=*})     # remove --on-crash
+        SANDSTONE="${opts[@]}"          # rejoin with spaces
+        run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 -o -
+        [[ "$output" = *"level: info"*"Registers:"* ]]
+        ! [[ "$output" = *Backtrace:* ]]
     ); fi
 }
 
