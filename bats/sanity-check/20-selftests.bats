@@ -1510,9 +1510,8 @@ selftest_crash_common() {
 
     # Ensure we can use this option even if gdb isn't found
     # (can't use run_sandstone_yaml here because we empty $PATH)
-    if ! $is_windows; then (
-        PATH=/
-        run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o -
+    if ! $is_windows; then
+        run env PATH=/ $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o -
         [[ $status -eq 1 ]]     # instead of 64 (EX_USAGE)
         [[ "$output" = *"level: info"*"Registers:"* ]]
         ! [[ "$output" = *Backtrace:* ]]
@@ -1521,10 +1520,10 @@ selftest_crash_common() {
         local opts=($SANDSTONE)         # split on space
         opts=(${opts/--on-crash=*})     # remove --on-crash
         SANDSTONE="${opts[@]}"          # rejoin with spaces
-        run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 -o -
+        run env PATH=/ $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 -o -
         [[ "$output" = *"level: info"*"Registers:"* ]]
         ! [[ "$output" = *Backtrace:* ]]
-    ); fi
+    fi
 }
 
 @test "crash backtrace" {
