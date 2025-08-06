@@ -1511,7 +1511,7 @@ selftest_crash_common() {
     # Ensure we can use this option even if gdb isn't found
     # (can't use run_sandstone_yaml here because we empty $PATH)
     if ! $is_windows; then (
-        PATH=
+        PATH=/
         run $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o -
         [[ $status -eq 1 ]]     # instead of 64 (EX_USAGE)
         [[ "$output" = *"level: info"*"Registers:"* ]]
