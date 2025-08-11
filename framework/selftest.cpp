@@ -824,7 +824,8 @@ static int selftest_malloc_fail(struct test *test, int cpu)
 {
     // ask for a very, very silly allocation size, which malloc can't possibly honor
     size_t size = size_t(1) << 62;
-    void *ptr = malloc(size);
+    // prevent malloc() from being optimized-out as a "built-in" function (clang issue)
+    void* volatile ptr = malloc(size);
     int ret = (ptr == NULL ? EXIT_SUCCESS : EXIT_FAILURE);
     free(ptr);
     return ret;
