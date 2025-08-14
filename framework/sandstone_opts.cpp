@@ -64,7 +64,9 @@ enum {
     raw_list_group_members,
     raw_list_groups,
     retest_on_failure_option,
+#ifdef SANDSTONE_DEVICE_CPU
     reschedule_option,
+#endif
     schedule_by_option,
 #ifndef NO_SELF_TESTS
     selftest_option,
@@ -148,7 +150,9 @@ static struct option long_options[]  = {
     { "quick", no_argument, nullptr, quick_run_option },
     { "quiet", no_argument, nullptr, 'q' },
     { "retest-on-failure", required_argument, nullptr, retest_on_failure_option },
+#ifdef SANDSTONE_DEVICE_CPU
     { "reschedule", required_argument, nullptr, reschedule_option },
+#endif
     { "rng-state", required_argument, nullptr, 's' },
     { "schedule-by", required_argument, nullptr, schedule_by_option },
 #ifndef NO_SELF_TESTS
@@ -471,7 +475,9 @@ struct ProgramOptionsParser {
             case temperature_threshold_option:
             case max_logdata_option:
             case max_messages_option:
+#ifdef SANDSTONE_DEVICE_CPU
             case reschedule_option:
+#endif
                 opts_map.insert_or_assign(opt, optarg);
                 break;
 
@@ -836,6 +842,7 @@ struct ProgramOptionsParser {
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
         }
+#ifdef SANDSTONE_DEVICE_CPU
         if (auto value = string_opt_for(reschedule_option)) {
             if (opts.thread_count < 2) {
                 fprintf(stderr, "%s: --reschedule is only useful with at least 2 threads\n", argv[0]);
@@ -856,6 +863,7 @@ struct ProgramOptionsParser {
                 return EX_USAGE;
             }
         }
+#endif
         if (auto it = opts_map.find('O'); it != opts_map.end()) {
             app->shmem->log_test_knobs = true;
             for (auto knob : std::get<std::vector<const char*>>(it->second)) {
