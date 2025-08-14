@@ -172,6 +172,7 @@ static int xsave_size = 0;
 
 static const char gdb_preamble_commands[] = R"(set prompt
 set pagination off
+set print static-members off
 set confirm off
 python handle = %#tx; print("\1")
 )";
