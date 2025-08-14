@@ -45,7 +45,7 @@ void dump_device_info()
            detected, sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping,
            cpu_features_to_string(cpu_features).c_str());
     printf("# CPU\tPkgID\tCoreID\tThrdID\tModId\tNUMAId\tApicId\tMicrocode\tPPIN\n");
-    for (i = 0; i < num_cpus(); ++i) {
+    for (i = 0; i < num_devices(); ++i) {
         printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t0x%" PRIx64, cpu_info[i].cpu_number,
                cpu_info[i].package_id, cpu_info[i].core_id, cpu_info[i].thread_id,
                cpu_info[i].module_id, cpu_info[i].numa_id, cpu_info[i].hwid,
