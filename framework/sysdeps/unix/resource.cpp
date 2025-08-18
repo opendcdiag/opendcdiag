@@ -18,7 +18,7 @@ void resource_init_global()
     // rounded up so it doesn't look precise
     static const int FileDescriptorOverhead = 64;
     static const int FileDescriptorsPerThread = 4;
-    rlim_t desired_fd_count = num_cpus() * FileDescriptorsPerThread + FileDescriptorOverhead;
+    rlim_t desired_fd_count = num_devices() * FileDescriptorsPerThread + FileDescriptorOverhead;
     desired_fd_count = ROUND_UP_TO(desired_fd_count, 256);
 
     struct rlimit oldlimit;
@@ -46,7 +46,7 @@ void resource_init_global()
 #endif
                             "If using bash, type 'help ulimit' for information on increasing the "
                             "file descriptor limit.\n",
-                    oldlimit.rlim_cur, oldlimit.rlim_max, num_cpus(), desired_fd_count);
+                    oldlimit.rlim_cur, oldlimit.rlim_max, num_devices(), desired_fd_count);
             exit(exit_reason);
         }
     }
