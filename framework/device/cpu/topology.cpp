@@ -118,15 +118,15 @@ int num_packages()
     return Topology::topology().packages.size();
 }
 
-std::unique_ptr<DeviceSchedule> make_rescheduler(std::string_view mode)
+std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode)
 {
-    std::unique_ptr<DeviceSchedule> res;
+    std::unique_ptr<DeviceScheduler> res;
     if (mode == "barrier") {
-        res = std::make_unique<BarrierDeviceSchedule>();
+        res = std::make_unique<BarrierDeviceScheduler>();
     } else if (mode == "queue") {
-        res = std::make_unique<QueueDeviceSchedule>();
+        res = std::make_unique<QueueDeviceScheduler>();
     } else if (mode == "random") {
-        res = std::make_unique<RandomDeviceSchedule>();
+        res = std::make_unique<RandomDeviceScheduler>();
     }
     return res;
 }
@@ -140,7 +140,7 @@ void pin_to_next_cpu(int next_cpu, tid_t thread_id = 0)
 }
 } // end anonymous namespace
 
-void BarrierDeviceSchedule::reschedule_to_next_device()
+void BarrierDeviceScheduler::reschedule_to_next_device()
 {
     auto on_completion = [&]() noexcept {
         std::unique_lock lock(groups_mutex);
@@ -188,7 +188,7 @@ void BarrierDeviceSchedule::reschedule_to_next_device()
     return;
 }
 
-void BarrierDeviceSchedule::finish_reschedule()
+void BarrierDeviceScheduler::finish_reschedule()
 {
     std::unique_lock lock(groups_mutex);
 
@@ -213,7 +213,7 @@ void BarrierDeviceSchedule::finish_reschedule()
     group.barrier->arrive_and_drop();
 }
 
-void QueueDeviceSchedule::reschedule_to_next_device()
+void QueueDeviceScheduler::reschedule_to_next_device()
 {
     // Select a cpu from the queue
     std::lock_guard lock(q_mutex);
@@ -228,7 +228,7 @@ void QueueDeviceSchedule::reschedule_to_next_device()
     return;
 }
 
-void QueueDeviceSchedule::shuffle_queue()
+void QueueDeviceScheduler::shuffle_queue()
 {
     // Must be called with mutex locked
     if (queue.size() == 0) {
@@ -241,7 +241,7 @@ void QueueDeviceSchedule::shuffle_queue()
     std::shuffle(queue.begin(), queue.end(), rng);
 }
 
-void RandomDeviceSchedule::reschedule_to_next_device()
+void RandomDeviceScheduler::reschedule_to_next_device()
 {
     // Select a random cpu index among the ones available
     int next_idx = unsigned(random()) % num_cpus();
