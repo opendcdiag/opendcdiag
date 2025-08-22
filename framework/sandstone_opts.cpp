@@ -843,8 +843,8 @@ struct ProgramOptionsParser {
                 return EX_USAGE;
             }
 
-            sApp->device_schedule = make_rescheduler(value);
-            if (!sApp->device_schedule) {
+            sApp->device_scheduler = make_rescheduler(value);
+            if (!sApp->device_scheduler) {
                 fprintf(stderr, "%s: unknown reschedule option: %s\n", argv[0], value);
                 return EX_USAGE;
             }
