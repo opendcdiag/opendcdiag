@@ -163,8 +163,13 @@ bool pin_to_logical_processors(DeviceRange, const char *thread_name);
 
 void apply_deviceset_param(char *param);
 void slice_plan_init(int max_cores_per_slice);
-void init_num_devices();
-void init_topology();
+
+template <typename EnabledDevices>
+EnabledDevices detect_devices();
+
+template <typename EnabledDevices>
+void setup_devices(const EnabledDevices& enabled_devices);
+
 void restrict_topology(DeviceRange range);
 
 #endif /* INC_TOPOLOGY_H */

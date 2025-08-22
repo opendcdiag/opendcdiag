@@ -67,6 +67,8 @@
 #include "sandstone_utils.h"
 #include "topology.h"
 
+#include "device/device_topology.h"
+
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
 #  include "sandstone_ssl_rand.h"
@@ -2623,10 +2625,11 @@ int main(int argc, char **argv)
         return exec_mode_run(argc - 2, argv + 2);
     }
 
-    // this order is required
-    init_num_devices();
-    init_shmem(); // this uses num_devices
-    init_topology(); // this uses shmem
+    {
+        auto enabled_devices = detect_devices<EnabledDevices>();
+        init_shmem();
+        setup_devices(std::move(enabled_devices));
+    }
 
     ProgramOptions opts;
     if (int ret = parse_cmdline(argc, argv, sApp, opts); ret != EXIT_SUCCESS) {
