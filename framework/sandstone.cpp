@@ -951,8 +951,8 @@ static uintptr_t thread_runner(int thread_number)
         test_end(new_state);
 
         // If rescheduling, do cleanup
-        if (sApp->device_schedule)
-            sApp->device_schedule->finish_reschedule();
+        if (sApp->device_scheduler)
+            sApp->device_scheduler->finish_reschedule();
     });
 
     // indicate to SIGQUIT handler that we're running
@@ -2680,7 +2680,7 @@ int main(int argc, char **argv)
                     program_invocation_name);
             return EX_USAGE;
         }
-        if (sApp->device_schedule) {
+        if (sApp->device_scheduler) {
             fprintf(stderr, "%s: error: --reschedule is not supported in this configuration\n",
                     program_invocation_name);
             return EX_USAGE;

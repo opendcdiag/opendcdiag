@@ -21,14 +21,14 @@
 
 #include "gettid.h"
 
-class DeviceSchedule {
+class DeviceScheduler {
 public:
-    virtual ~DeviceSchedule() = default;
+    virtual ~DeviceScheduler() = default;
     virtual void reschedule_to_next_device() = 0;
     virtual void finish_reschedule() = 0;
 };
 
-std::unique_ptr<DeviceSchedule> make_rescheduler(std::string_view mode);
+std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode);
 
 struct DeviceRange
 {
