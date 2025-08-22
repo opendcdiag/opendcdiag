@@ -450,7 +450,7 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
 
     SandstoneBackgroundScan background_scan;
 
-    std::unique_ptr<DeviceSchedule> device_schedule = nullptr;
+    std::unique_ptr<DeviceScheduler> device_scheduler = nullptr;
 
 private:
     SandstoneApplication() = default;
