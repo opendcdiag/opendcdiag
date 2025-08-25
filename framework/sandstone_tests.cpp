@@ -77,13 +77,27 @@ SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) 
     load_all_tests(); /* initialize the catalog */
     if (!(flags & enable_all_tests)) return;
     std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
-    for (struct test &test : source) {
-        if (test.quality_level < sApp->requested_quality)
-            continue;
+
+    auto add_test = [](struct test &test, auto &test_set) {
         struct test_cfg_info ti;
         ti.status = test_cfg_info::enabled;
         ti.test = &test;
         test_set.push_back(&test);
+    };
+
+    for (struct test &test : source) {
+        //when the command line contains --include-optional and test includes test_is_optional flag
+        if (sApp->include_optional && (test.flags & test_is_optional)) {
+            /* This check excludes BETA tests with test_is_optional flag when --beta is not specified on command line
+            but --include-optional is specified*/
+            if (test.quality_level >= sApp->requested_quality) {
+                add_test(test, test_set);
+            }
+        } else if (!(test.flags & test_is_optional) && (test.quality_level >= sApp->requested_quality)) {
+            /* what if the command line has no --include-optional but the test includes test_is_optional flag?
+            We should exclude this test. The first predicate ensures this.*/
+            add_test(test, test_set);
+        }
     }
 };
 
