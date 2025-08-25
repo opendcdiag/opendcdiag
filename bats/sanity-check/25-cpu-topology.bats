@@ -525,3 +525,32 @@ selftest_cpuset_negated() {
     test_yaml_regexp "/tests/0/threads/3/messages/0/text" "I> ${cpuset[3]}\$"
     test_yaml_regexp "/tests/0/threads/3/messages/1/text" "I> ${cpuset[3]}\$"
 }
+
+@test "selftest test smt skip" {
+    declare -A yamldump
+    # if all thread ids are 0(--cpuset=t0) skip the test
+    sandstone_selftest -e selftest_requires_smt --cpuset=t0
+
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/result" 'skip'
+    test_yaml_regexp "/tests/0/skip-category" 'CpuTopologyIssue'
+    test_yaml_regexp "/tests/0/skip-reason" 'Test requires SMT \(hyperthreading\)'
+}
+
+@test "selftest test smt run" {
+    # core0 has 2 threads(0 and 1) where as core1 and core2 have only thread0
+    export SANDSTONE_MOCK_TOPOLOGY="0:0:0 0:0:1 0:1:0 0:2:0"
+    echo "SANDSTONE_MOCK_TOPOLOGY=\"$SANDSTONE_MOCK_TOPOLOGY\""
+
+    declare -A yamldump
+    # run the test
+    sandstone_yq -e selftest_requires_smt --selftests --disable=mce_check
+
+    local threads1=`query_jq '."cpu-info"[] | select(.thread != 0) .logical'`
+
+    if [[ -z "$threads1" ]]; then
+        skip "Test only works with Debug builds to mock the topology or CPUs with hyperthreading"
+    else
+        test_yaml_regexp "/tests/0/result" 'pass'
+    fi
+}
