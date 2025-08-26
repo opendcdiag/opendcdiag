@@ -190,7 +190,7 @@ static int selftest_logs_reschedule_init(struct test *test)
 {
     // In order to always get the same result and avoid race conditions,
     // we use semaphores to synchronize the access to reschedule()
-    int sem_size = num_cpus() - 1;
+    int sem_size = thread_count() - 1;
     sem_t *reschedule_sem = (sem_t *) calloc(sem_size, sizeof(sem_t));
     for (int i = 0; i < sem_size; i++) {
         sem_init(&reschedule_sem[i], 0, 0);
@@ -216,7 +216,7 @@ static int selftest_logs_reschedule_run(struct test *test, int cpu)
 
     // When we finish, instruct next thread it can proceed
     // unless we are the last one
-    if (cpu < num_cpus()-1)
+    if (cpu < thread_count()-1)
         sem_post(&semaphores[cpu]);
 
     cpu_number = get_cpu();
@@ -228,7 +228,7 @@ static int selftest_logs_reschedule_run(struct test *test, int cpu)
 static int selftest_logs_reschedule_cleanup(struct test *test)
 {
     sem_t *reschedule_sem = (sem_t *) test->data;
-    for (int i = 0; i < num_cpus() - 1; i++) {
+    for (int i = 0; i < thread_count() - 1; i++) {
         sem_destroy(&reschedule_sem[i]);
     }
     free (reschedule_sem);
@@ -262,7 +262,7 @@ static int selftest_cxxthrowcatch_run(struct test *test, int cpu)
 
 static int selftest_skip_init(struct test *test)
 {
-    log_info("{\"packages\": %d, \"cpus\": %d}", num_packages(), num_cpus());
+    log_info("{\"packages\": %d, \"cpus\": %d}", num_packages(), thread_count());
     log_info("Requesting skip (this message should be visible)");
     return EXIT_SKIP;
 }
