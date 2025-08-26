@@ -265,7 +265,7 @@ static auto thread_core_spacing()
         struct { int logical, core; } result = { 1, 1 };
         int max_core_id = 0;
         int max_logical_id = 0;
-        for (int i = 0; i < num_cpus(); ++i) {
+        for (int i = 0; i < thread_count(); ++i) {
             if (cpu_info[i].cpu_number > max_logical_id)
                 max_logical_id = cpu_info[i].cpu_number;
             if (cpu_info[i].core_id > max_core_id)
@@ -1796,7 +1796,7 @@ void KeyValuePairLogger::print(int tc)
                    cpu_has_feature(cpu_feature_hypervisor) ? "yes" : "no");
     if (should_print_fail_info()) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_percent = %.1f\n", test->id,
-                       100. * (num_cpus() - pc) / num_cpus());
+                       100. * (thread_count() - pc) / thread_count());
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_random_generator_state = %s\n", test->id,
                        random_format_seed().c_str());
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_mask = %s\n", test->id,
@@ -2555,7 +2555,7 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
 
     // print the CPU information
     logging_printf(LOG_LEVEL_VERBOSE(1), "cpu-info:\n");
-    for (int i = 0; i < num_cpus(); ++i) {
+    for (int i = 0; i < thread_count(); ++i) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "- %s   # %d\n",
                        thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
     }

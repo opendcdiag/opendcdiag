@@ -110,7 +110,7 @@ static void update_topology(std::span<const struct cpu_info> new_cpu_info,
 
 int num_cpus()
 {
-    return sApp->thread_count;
+    return thread_count();
 }
 
 int num_packages()

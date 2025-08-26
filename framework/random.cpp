@@ -92,7 +92,7 @@ struct RandomEngineWrapper
     EngineType engine_type;
 
     RandomEngineWrapper(EngineType type)
-        : per_thread(num_cpus() + 1), engine_type(type)
+        : per_thread(thread_count() + 1), engine_type(type)
     {}
 
     virtual ~RandomEngineWrapper();
@@ -117,7 +117,7 @@ void RandomEngineDeleter::operator()(RandomEngineWrapper *ptr) const
 namespace {
 static thread_rng *rng_for_thread(int thread_num)
 {
-    assert(thread_num < num_cpus());
+    assert(thread_num < thread_count());
     assert(thread_num >= -1);
 
     auto &rngs = sApp->random_engine->per_thread;
@@ -452,7 +452,7 @@ void random_init_global(const char *seed_from_user)
         }
         __builtin_unreachable();
     };
-    assert(num_cpus() > 0);
+    assert(thread_count() > 0);
     assert(thread_num == -1);
 
     // treat the argument as if it were a file, see if it works

@@ -187,12 +187,7 @@ std::string cpu_features_to_string(cpu_features_t f);
 extern "C" {
 #endif // __cplusplus
 
-/// Returns the number of hardware threads (logical CPUs) available to a
-/// test.  It is equal to the number of test threads the framework runs.
-/// Normally, this value is equal to the number of CPU threads in the
-/// device under test but the value can be lower if --cpuset option
-/// is used, the tests specifies a value for test.max_threads or the OS
-/// restricts the number of CPUs sandstone can see.
+/// Keep num_cpus() defined for legacy reasons
 int num_cpus() __attribute__((pure));
 
 /// Returns the number of physical CPU packages (a.k.a. sockets) available to a
