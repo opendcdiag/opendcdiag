@@ -133,6 +133,17 @@ sandstone_tests += [
 ]
 
 if host_machine.cpu_family() == 'x86_64'
+    march_hsw = [
+        '-march=haswell',
+        '-mtune=skylake',
+        '-mrtm',
+    ]
+    march_skx = [
+        '-march=skylake-avx512',
+        '-mtune=skylake-avx512',
+        '-mrtm',
+    ]
+
     tests_config_hsw = tests_set_hsw.apply(tests_config)
 
     tests_hsw_a = static_library(
@@ -145,15 +156,11 @@ if host_machine.cpu_family() == 'x86_64'
         ],
         c_args : [
             tests_common_c_args,
-            '-march=haswell',
-            '-mtune=skylake',
-            '-mrtm',
+            march_hsw,
         ],
         cpp_args : [
             tests_common_cpp_args,
-            '-march=haswell',
-            '-mtune=skylake',
-            '-mrtm',
+            march_hsw,
             '-DEigen=EigenAVX2',
         ],
     )
@@ -173,13 +180,11 @@ if host_machine.cpu_family() == 'x86_64'
         ],
         c_args : [
             tests_common_c_args,
-            '-march=skylake-avx512',
-            '-mtune=skylake-avx512',
+            march_skx,
         ],
         cpp_args : [
             tests_common_cpp_args,
-            '-march=skylake-avx512',
-            '-mtune=skylake-avx512',
+            march_skx,
             '-DEigen=EigenAVX512',
         ],
     )
