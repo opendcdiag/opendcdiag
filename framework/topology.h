@@ -10,6 +10,7 @@
 
 #include <array>
 #include <bit>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
