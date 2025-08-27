@@ -144,6 +144,16 @@ if host_machine.cpu_family() == 'x86_64'
         '-mrtm',
     ]
 
+    # Check if march_base has a higher CPU target, in which case
+    # we should not downgrade
+    if cc.has_define('__AVX512F__', args: tests_common_c_args)
+        # We're already targetting AVX512
+        march_skx = []
+        march_hsw = []
+    elif cc.has_define('__AVX2__', args: tests_common_c_args)
+        march_hsw = []
+    endif
+
     tests_config_hsw = tests_set_hsw.apply(tests_config)
 
     tests_hsw_a = static_library(
