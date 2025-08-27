@@ -293,6 +293,10 @@ typedef enum test_flag {
     /// Indicates that a test can only attribute failure to a particular
     /// package and not to threads or cores.
     test_failure_package_only       = 0x1000,
+
+    /// Indicates the test is optional and only to be run with --include-optional in
+    /// command line
+    test_is_optional                = 0x2000,
 } test_flags;
 
 struct test_data_per_thread
