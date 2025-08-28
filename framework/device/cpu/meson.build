@@ -21,6 +21,7 @@ generated_files += configure_file(
 framework_files += files(
     'cpu_device.cpp',
     'topology.cpp',
+    'logging_cpu.cpp',
 )
 
 unittests_sources += files(
