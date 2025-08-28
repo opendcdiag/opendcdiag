@@ -140,7 +140,6 @@ if host_machine.cpu_family() == 'x86_64'
     ]
     march_skx = [
         '-march=skylake-avx512',
-        '-mtune=skylake-avx512',
         '-mrtm',
     ]
 
