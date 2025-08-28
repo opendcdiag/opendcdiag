@@ -459,6 +459,8 @@ static inline bool write_msr(int cpu, uint32_t msr, uint64_t value)
 }
 #endif
 
+/// Interface for C-based tests
+void reschedule();
 
 /// Calls aligned_alloc but first checks to see whether size is a multiple
 /// of alignment.  If it is not, the requested size of the allocation is increased
