@@ -918,6 +918,12 @@ void test_loop_end() noexcept
     assembly_marker<TestLoop, End>(sApp->test_thread_data(thread_num)->inner_loop_count);
 }
 
+void reschedule()
+{
+    if (sApp->device_scheduler)
+        sApp->device_scheduler->reschedule_to_next_device();
+}
+
 #ifndef _WIN32
 #  pragma GCC visibility pop
 #endif
