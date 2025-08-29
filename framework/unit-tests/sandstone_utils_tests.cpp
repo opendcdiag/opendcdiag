@@ -289,3 +289,253 @@ TEST(DataCompare, Float16)
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::quiet_NaN()), "7e00 (nan)");
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::signaling_NaN()), "7d00 (nan)");
 }
+
+// dummy mock to allow new_random_xxx() compilation
+uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
+    assert(!"Not implemented");
+    return 0;
+}
+__attribute__((weak)) uint32_t random32() {
+    return random();
+}
+
+// test conversion f32 -> bf8 (s.eeeee.mm)
+TEST(FloatConversions, BF8fromFloat)
+{
+    // small float value
+    static constexpr float DELTA = 1.0e-6f;
+    /// smallest "normal" value
+    static constexpr float MIN = 1.0f / ((float) (1 << (BFLOAT8_EXPONENT_BIAS - 1)));
+    // lets prevent rounding with MIN/32 by subtracting small value
+    static constexpr float FTZ = MIN / 32.0f - DELTA;
+
+    static constexpr uint8_t NEGATIVE = 0x80;
+    static constexpr uint8_t ZERO = 0x00;
+
+    EXPECT_EQ(ZERO,            to_bfloat8(0.0f).as_hex);
+    EXPECT_EQ(NEGATIVE | ZERO, to_bfloat8(-0.0f).as_hex);
+    EXPECT_EQ(NEGATIVE | ZERO, (-to_bfloat8(0.0f)).as_hex);
+    EXPECT_EQ(ZERO,            to_bfloat8(FTZ).as_hex);
+
+
+    // infinite/nan
+    EXPECT_EQ(BFLOAT8_OVERFLOW_MANTISSA,      to_bfloat8((float) (1LL << (BFLOAT8_INFINITY_EXPONENT + 1))).mantissa);
+    EXPECT_EQ(BFLOAT8_INF_AT_INPUT_MANTISSA,  to_bfloat8(Float32{0, FLOAT32_INFINITY_EXPONENT, 0}.as_float).mantissa);
+    EXPECT_EQ(BFLOAT8_SNAN_AT_INPUT_MANTISSA, to_bfloat8(Float32{0, FLOAT32_NAN_EXPONENT, 1}.as_float).mantissa);
+    EXPECT_EQ(BFLOAT8_QNAN_AT_INPUT_MANTISSA, to_bfloat8(Float32{0, FLOAT32_NAN_EXPONENT, 1 | FLOAT32_MANTISSA_QUIET_NAN_MASK}.as_float).mantissa);
+
+    static constexpr uint8_t ONE = 0b0'01111'00;
+    static constexpr uint8_t TWO = 0b0'10000'00;
+
+    EXPECT_EQ(ONE,            to_bfloat8(1.0f).as_hex);
+    EXPECT_EQ(NEGATIVE | ONE, to_bfloat8(-1.0f).as_hex);
+    EXPECT_EQ(ONE,            (-to_bfloat8(-1.0f)).as_hex);
+    EXPECT_EQ(TWO,            to_bfloat8(2.0f).as_hex);
+
+    EXPECT_EQ(TWO, to_bfloat8(2.0 - DELTA).as_hex);
+    EXPECT_EQ(TWO, to_bfloat8(2.0 + DELTA).as_hex);
+
+    EXPECT_EQ(0b0'01111'10, to_bfloat8(1.0f + 1.0f / 2.0f).as_hex);
+    EXPECT_EQ(0b0'01111'11, to_bfloat8(1.0f + 1.0f / 2.0f + 1.0f / 4.0f).as_hex);
+    EXPECT_EQ(0b0'01111'11, to_bfloat8(1.0f + 1.0f / 2.0f + 1.0f / 4.0f).as_hex);
+    EXPECT_EQ(0b0'01111'11, to_bfloat8(1.0f + 1.0f / 2.0f + 1.0f / 8.0f).as_hex); // rounded up
+    EXPECT_EQ(0b0'01111'11, to_bfloat8(1.0f + 1.0f / 2.0f + 1.0f / 4.0f + 1.0f / 16.0f).as_hex); // rounded down
+    EXPECT_EQ(TWO,          to_bfloat8(1.0f + 1.0f / 2.0f + 1.0f / 4.0f + 1.0f / 8.0f).as_hex); // rounded up
+
+    // denormals
+    EXPECT_EQ(0b0'00001'00, to_bfloat8(MIN).as_hex);
+    EXPECT_EQ(0b0'00000'10, to_bfloat8(MIN / 2.0f).as_hex);
+    EXPECT_EQ(0b0'00000'01, to_bfloat8(MIN / 4.0f).as_hex);
+    EXPECT_EQ(0b0'00000'01, to_bfloat8(MIN / 8.0f).as_hex); // rounded up
+    EXPECT_EQ(0b0'00000'00, to_bfloat8(MIN / 16.0f).as_hex); // ftz
+
+    // rounding with denormals
+    EXPECT_EQ(0b0'00000'11, to_bfloat8(MIN / 2.0f + MIN / 4.0f).as_hex);
+    EXPECT_EQ(0b0'00000'10, to_bfloat8(MIN / 4.0f + MIN / 8.0f).as_hex); // round up, MIN/2
+    EXPECT_EQ(0b0'00000'11, to_bfloat8(MIN / 2.0f + MIN / 8.0f).as_hex); // round up, MIN/2+MIN/4
+
+    EXPECT_EQ(0b0'00000'11, to_bfloat8(MIN - MIN / 8.0f - MIN / 16.0f).as_hex); // round down, denormal
+    EXPECT_EQ(0b0'00001'00, to_bfloat8(MIN - MIN / 8.0f + MIN / 16.0f).as_hex); // round up, MIN
+
+    EXPECT_EQ(0b0'00000'01, to_bfloat8(MIN / 4.0f + MIN / 16.0f).as_hex); // no round up
+    EXPECT_EQ(0b0'00000'10, to_bfloat8(MIN / 2.0f + MIN / 16.0f).as_hex); // no round up
+
+    static constexpr uint32_t F8_INF_BIAS = FLOAT32_EXPONENT_BIAS + BFLOAT8_INFINITY_EXPONENT - BFLOAT8_EXPONENT_BIAS;
+    EXPECT_EQ(BFLOAT8_OVERFLOW_MANTISSA, to_bfloat8(Float32{0, F8_INF_BIAS, 0x000000}.as_float).mantissa);
+}
+
+TEST(FloatConversions, BF8FtoFloat) {
+    /// smallest "normal" value
+    static constexpr float MIN = 1.0f / ((float) (1 << (BFLOAT8_EXPONENT_BIAS - 1)));
+    // do not round up the value
+    static constexpr float FTZ = MIN / 8.0f - MIN / 128.0f;
+
+    static constexpr Float32 F32INF{ 0, FLOAT32_INFINITY_EXPONENT, 0 };
+
+    EXPECT_EQ(0.0f, from_bfloat8(to_bfloat8(0.0f)));
+    EXPECT_EQ(1.0f, from_bfloat8(to_bfloat8(1.0f)));
+    EXPECT_EQ(MIN,  from_bfloat8(BFloat8::min()));
+    EXPECT_EQ(0.0f, from_bfloat8(to_bfloat8(FTZ)));
+
+    // denormals
+    EXPECT_EQ(MIN / 2.0f,              from_bfloat8(BFloat8{ 0, BFLOAT8_DENORM_EXPONENT, 0b10 }));
+    EXPECT_EQ(MIN / 4.0f,              from_bfloat8(BFloat8{ 0, BFLOAT8_DENORM_EXPONENT, 0b01 }));
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f, from_bfloat8(BFloat8{ 0, BFLOAT8_DENORM_EXPONENT, 0b11 }));
+
+    EXPECT_EQ(MIN / 2.0f,              from_bfloat8(to_bfloat8(MIN / 2.0f)));
+    EXPECT_EQ(MIN / 4.0f,              from_bfloat8(to_bfloat8(MIN / 4.0f)));
+    EXPECT_EQ(MIN / 4.0f,              from_bfloat8(to_bfloat8(MIN / 8.0f))); // rounded
+
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f, from_bfloat8(to_bfloat8(MIN / 2.0f + MIN / 4.0f)));
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f, from_bfloat8(to_bfloat8(MIN / 2.0f              + MIN / 8.0f))); // round up
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f, from_bfloat8(to_bfloat8(MIN / 2.0f + MIN / 4.0f - MIN / 8.0f))); // round up
+    EXPECT_EQ(MIN,                     from_bfloat8(to_bfloat8(MIN / 2.0f + MIN / 4.0f + MIN / 8.0f))); // round up to normal value
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f, from_bfloat8(to_bfloat8(MIN / 2.0f + MIN / 4.0f + MIN / 16.0f))); // round down
+
+    static float MAX = from_bfloat8(BFloat8::max());
+    EXPECT_EQ(57344.0f, MAX);
+    static float MAXBIT = from_bfloat8(BFloat8::max()) / 7.0f;
+    EXPECT_EQ(8192.0f, MAXBIT);
+    EXPECT_EQ(MAXBIT,          from_bfloat8(to_bfloat8(MAXBIT)));
+    EXPECT_EQ(2.0f * MAXBIT,   from_bfloat8(to_bfloat8(2.0f * MAXBIT)));
+    EXPECT_EQ(7.0f * MAXBIT,   from_bfloat8(to_bfloat8(7.0f * MAXBIT)));
+    EXPECT_EQ(7.0f * MAXBIT,   from_bfloat8(to_bfloat8(7.0f * MAXBIT + 4095.0f))); // still rounded down
+    EXPECT_EQ(F32INF.as_float, from_bfloat8(to_bfloat8(7.0f * MAXBIT + 4096.0f))); // round up
+    EXPECT_EQ(F32INF.as_float, from_bfloat8(to_bfloat8(8.0f * MAXBIT)));
+    EXPECT_EQ(F32INF.as_float, from_bfloat8(to_bfloat8(8.0f * MAXBIT - 4096.0f))); // round up
+}
+
+// test conversion f32 -> hf8 (s.eeee.mmm)
+TEST(FloatConversions, HF8fromFloat) {
+    // small float value
+    static constexpr float DELTA = 1.0e-6f;
+    /// smallest "normal" value
+    static constexpr float MIN = 1.0f / ((float) (1 << (HFLOAT8_EXPONENT_BIAS - 1)));
+    // lets prevent rounding with MIN/16 by subtracting small value
+    static constexpr float FTZ = MIN / 16.0f - DELTA;
+
+    static constexpr uint8_t NEGATIVE = 0x80;
+    static constexpr uint8_t ZERO = 0x00;
+
+    EXPECT_EQ(ZERO,            to_hfloat8(0.0f).as_hex);
+    EXPECT_EQ(NEGATIVE | ZERO, to_hfloat8(-0.0f).as_hex);
+    EXPECT_EQ(NEGATIVE | ZERO, (-to_hfloat8(0.0f)).as_hex);
+    EXPECT_EQ(ZERO,            to_hfloat8(FTZ).as_hex);
+
+
+    // infinite/nan, saturated/overflow
+    EXPECT_EQ(HFLOAT8_SATURATED_OVERFLOW_VALUE, to_hfloat8((float) (1 << (HFLOAT8_INF_NAN_EXPONENT + 1))).value);
+    EXPECT_EQ(HFLOAT8_NAN_INF_VALUE,            to_hfloat8(Float32{0, FLOAT32_INFINITY_EXPONENT, 0}.as_float).value);
+    EXPECT_EQ(HFLOAT8_NAN_INF_VALUE,            to_hfloat8(Float32{0, FLOAT32_NAN_EXPONENT, 1}.as_float).value);
+
+    EXPECT_EQ(HFLOAT8_SATURATED_OVERFLOW_VALUE, (-to_hfloat8((float) (1 << (HFLOAT8_INF_NAN_EXPONENT + 1)))).value);
+    EXPECT_EQ(HFLOAT8_NAN_INF_VALUE,            (-to_hfloat8(Float32{0, FLOAT32_INFINITY_EXPONENT, 0}.as_float)).value);
+    EXPECT_EQ(HFLOAT8_NAN_INF_VALUE,            (-to_hfloat8(Float32{0, FLOAT32_NAN_EXPONENT, 1}.as_float)).value);
+
+    static constexpr uint8_t ONE = 0b0'0111'000;
+    static constexpr uint8_t TWO = 0b0'1000'000;
+
+    EXPECT_EQ(ONE,            to_hfloat8(1.0f).as_hex);
+    EXPECT_EQ(NEGATIVE | ONE, to_hfloat8(-1.0f).as_hex);
+    EXPECT_EQ(ONE,            (-to_hfloat8(-1.0f)).as_hex);
+    EXPECT_EQ(TWO,            to_hfloat8(2.0f).as_hex);
+
+    EXPECT_EQ(TWO, to_hfloat8(2.0 - DELTA).as_hex);
+    EXPECT_EQ(TWO, to_hfloat8(2.0 + DELTA).as_hex);
+
+    EXPECT_EQ(0b0'0111'100, to_hfloat8(1.0f + 1.0f / 2.0f).as_hex);
+    EXPECT_EQ(0b0'0111'110, to_hfloat8(1.0f + 1.0f / 2.0f + 1.0f / 4.0f).as_hex);
+    EXPECT_EQ(0b0'0111'101, to_hfloat8(1.0f + 1.0f / 2.0f + 1.0f / 8.0f).as_hex);
+    EXPECT_EQ(0b0'0111'111, to_hfloat8(1.0f + 1.0f / 2.0f + 1.0f / 4.0f + 1.0f / 8.0f).as_hex);
+    EXPECT_EQ(0b0'0111'111, to_hfloat8(1.0f + 1.0f / 2.0f + 1.0f / 4.0f + 1.0f / 8.0f + 1.0f / 32.0f).as_hex); // rounded down
+    EXPECT_EQ(TWO,          to_hfloat8(1.0f + 1.0f / 2.0f + 1.0f / 4.0f + 1.0f / 8.0f + 1.0f / 16.0f).as_hex); // rounded up
+
+    // denormals
+    EXPECT_EQ(0b0'0001'000, to_hfloat8(MIN).as_hex);
+    EXPECT_EQ(0b0'0000'100, to_hfloat8(MIN / 2.0f).as_hex);
+    EXPECT_EQ(0b0'0000'010, to_hfloat8(MIN / 4.0f).as_hex);
+    EXPECT_EQ(0b0'0000'001, to_hfloat8(MIN / 8.0f).as_hex);
+    EXPECT_EQ(0b0'0000'001, to_hfloat8(MIN / 16.0f).as_hex);
+
+    EXPECT_EQ(0b0'0000'101, to_hfloat8(MIN / 2.0f + MIN / 8.0f).as_hex);
+    EXPECT_EQ(0b0'0000'010, to_hfloat8(MIN / 8.0f + MIN / 16.0f).as_hex); // round up, MIN/4
+    EXPECT_EQ(0b0'0000'011, to_hfloat8(MIN / 4.0f + MIN / 16.0f).as_hex); // round up, MIN/4+MIN/8
+    EXPECT_EQ(0b0'0000'101, to_hfloat8(MIN / 2.0f + MIN / 16.0f).as_hex); // round up, MIN/2+MIN/8
+
+
+    // rounding with denormals
+    EXPECT_EQ(0b0'0000'111, to_hfloat8(MIN - MIN / 16.0f - MIN / 32.0f).as_hex); // round down, denormal
+    EXPECT_EQ(0b0'0001'000, to_hfloat8(MIN - MIN / 16.0f + MIN / 32.0f).as_hex); // round up, MIN
+
+    EXPECT_EQ(0b0'0000'001, to_hfloat8(MIN / 8.0f + MIN / 32.0f).as_hex); // no round up
+    EXPECT_EQ(0b0'0000'010, to_hfloat8(MIN / 4.0f + MIN / 32.0f).as_hex); // no round up
+    EXPECT_EQ(0b0'0000'100, to_hfloat8(MIN / 2.0f + MIN / 32.0f).as_hex); // no round up
+
+    static constexpr uint32_t F8_INF_BIAS = FLOAT32_EXPONENT_BIAS + HFLOAT8_INF_NAN_EXPONENT - HFLOAT8_EXPONENT_BIAS;
+    EXPECT_EQ(0b0'1111'000, to_hfloat8(Float32{0, F8_INF_BIAS, 0x000000}.as_float).as_hex);
+    EXPECT_EQ(0b0'1111'001, to_hfloat8(Float32{0, F8_INF_BIAS, 0x100000}.as_float).as_hex);
+    EXPECT_EQ(0b0'1111'010, to_hfloat8(Float32{0, F8_INF_BIAS, 0x200000}.as_float).as_hex);
+    EXPECT_EQ(0b0'1111'011, to_hfloat8(Float32{0, F8_INF_BIAS, 0x300000}.as_float).as_hex);
+    EXPECT_EQ(0b0'1111'100, to_hfloat8(Float32{0, F8_INF_BIAS, 0x400000}.as_float).as_hex);
+    EXPECT_EQ(0b0'1111'101, to_hfloat8(Float32{0, F8_INF_BIAS, 0x500000}.as_float).as_hex);
+    EXPECT_EQ(HFLOAT8_SATURATED_OVERFLOW_VALUE, to_hfloat8(Float32{0, F8_INF_BIAS, 0x600000}.as_float).value);
+    EXPECT_EQ(HFLOAT8_SATURATED_OVERFLOW_VALUE, to_hfloat8(Float32{0, F8_INF_BIAS, 0x700000}.as_float).value);
+    EXPECT_EQ(HFLOAT8_SATURATED_OVERFLOW_VALUE, to_hfloat8(Float32{0, F8_INF_BIAS + 1, 0}.as_float).value);
+}
+
+TEST(FloatConversions, HF8toFloat) {
+    // small float value
+    static constexpr float DELTA = 1.0e-6f;
+    /// smallest "normal" value
+    static constexpr float MIN = 1.0f / ((float) (1 << (HFLOAT8_EXPONENT_BIAS - 1)));
+    // lets prevent rounding with MIN/16 by subtracting small value
+    static constexpr float FTZ = MIN / 16.0f - DELTA;
+
+    static constexpr Float32 F32INF{ 0, FLOAT32_INFINITY_EXPONENT, 0 };
+
+    EXPECT_EQ(0.0f, from_hfloat8(to_hfloat8(0.0f)));
+    EXPECT_EQ(1.0f, from_hfloat8(to_hfloat8(1.0f)));
+    EXPECT_EQ(MIN, from_hfloat8(HFloat8::min()));
+
+    EXPECT_EQ(0.0f, from_hfloat8(to_hfloat8(FTZ)));
+
+    // denormals
+    EXPECT_EQ(MIN / 2.0f, from_hfloat8(HFloat8{ 0, HFLOAT8_DENORM_EXPONENT, 0b100 }));
+    EXPECT_EQ(MIN / 4.0f, from_hfloat8(HFloat8{ 0, HFLOAT8_DENORM_EXPONENT, 0b010 }));
+    EXPECT_EQ(MIN / 8.0f, from_hfloat8(HFloat8{ 0, HFLOAT8_DENORM_EXPONENT, 0b001 }));
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f, from_hfloat8(HFloat8{ 0, HFLOAT8_DENORM_EXPONENT, 0b110 }));
+    EXPECT_EQ(MIN / 2.0f + MIN / 8.0f, from_hfloat8(HFloat8{ 0, HFLOAT8_DENORM_EXPONENT, 0b101 }));
+    EXPECT_EQ(MIN / 4.0f + MIN / 8.0f, from_hfloat8(HFloat8{ 0, HFLOAT8_DENORM_EXPONENT, 0b011 }));
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f + MIN / 8.0f, from_hfloat8(HFloat8{ 0, HFLOAT8_DENORM_EXPONENT, 0b111 }));
+
+    EXPECT_EQ(MIN / 2.0f, from_hfloat8(to_hfloat8(MIN / 2.0f)));
+    EXPECT_EQ(MIN / 4.0f, from_hfloat8(to_hfloat8(MIN / 4.0f)));
+    EXPECT_EQ(MIN / 8.0f, from_hfloat8(to_hfloat8(MIN / 8.0f)));
+    EXPECT_EQ(MIN / 8.0f, from_hfloat8(to_hfloat8(MIN / 16.0f))); // rounded!
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f, from_hfloat8(to_hfloat8(MIN / 2.0f + MIN / 4.0f)));
+    EXPECT_EQ(MIN / 2.0f + MIN / 8.0f, from_hfloat8(to_hfloat8(MIN / 2.0f + MIN / 8.0f)));
+    EXPECT_EQ(MIN / 2.0f + MIN / 4.0f + MIN / 8.0f, from_hfloat8(to_hfloat8(MIN / 2.0f + MIN / 4.0f + MIN / 8.0f)));
+    EXPECT_EQ(MIN, from_hfloat8(to_hfloat8(MIN / 2.0f + MIN / 4.0f + MIN / 8.0f + MIN / 16.0f))); // rounded!
+
+    // almost NaNs with rounding
+    static float MAX1 = from_hfloat8(HFloat8::max1());
+    EXPECT_EQ(256.0f, MAX1);
+    EXPECT_EQ(MAX1, from_hfloat8(to_hfloat8(MAX1)));
+    EXPECT_EQ(MAX1, from_hfloat8(to_hfloat8(MAX1 + 1.0f)));
+    EXPECT_EQ(MAX1, from_hfloat8(to_hfloat8(MAX1 + 2.0f)));
+    EXPECT_EQ(MAX1, from_hfloat8(to_hfloat8(MAX1 + 4.0f)));
+    EXPECT_EQ(MAX1, from_hfloat8(to_hfloat8(MAX1 + 8.0f)));
+    EXPECT_EQ(MAX1, from_hfloat8(to_hfloat8(MAX1 + 15.0f)));
+    EXPECT_EQ(MAX1 + 32.0f,    from_hfloat8(to_hfloat8(MAX1 + 16.0f))); // round up
+
+    EXPECT_EQ(MAX1 + 32.0f,    from_hfloat8(to_hfloat8(MAX1 + 1.0f * 32.0f)));
+    EXPECT_EQ(MAX1 + 64.0f,    from_hfloat8(to_hfloat8(MAX1 + 1.0f * 32.0f + 16.0f))); // round up
+    EXPECT_EQ(MAX1 + 64.0f,    from_hfloat8(to_hfloat8(MAX1 + 2.0f * 32.0f)));
+    EXPECT_EQ(MAX1 + 96.0f,    from_hfloat8(to_hfloat8(MAX1 + 3.0f * 32.0f)));
+    EXPECT_EQ(MAX1 + 128.0f,   from_hfloat8(to_hfloat8(MAX1 + 4.0f * 32.0f)));
+    EXPECT_EQ(MAX1 + 160.0f,   from_hfloat8(to_hfloat8(MAX1 + 5.0f * 32.0f)));
+    EXPECT_EQ(F32INF.as_float, from_hfloat8(to_hfloat8(MAX1 + 6.0f * 32.0f)));
+    EXPECT_EQ(F32INF.as_float, from_hfloat8(to_hfloat8(MAX1 + 7.0f * 32.0f)));
+    EXPECT_EQ(F32INF.as_float, from_hfloat8(to_hfloat8(2.0f * MAX1)));
+
+}
