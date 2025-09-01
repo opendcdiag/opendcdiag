@@ -680,11 +680,11 @@ STATIC_INLINE Float80 new_float80(uint64_t sign, uint64_t exponent, uint64_t jbi
 Float16 new_random_float16();
 BFloat16 new_random_bfloat16();
 Float32 new_random_float32();
-STATIC_INLINE float new_random_float() {
+static inline float new_random_float() {
     return new_random_float32().as_float;
 }
 Float64 new_random_float64();
-STATIC_INLINE double new_random_double() {
+static inline double new_random_double() {
     return new_random_float64().as_float;
 }
 Float80 new_random_float80();
