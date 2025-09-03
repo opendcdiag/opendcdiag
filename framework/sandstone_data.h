@@ -14,10 +14,6 @@
 
 #include "fp_vectors/Floats.h"
 
-#ifdef __F16C__
-#  include <immintrin.h>
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,117 +42,8 @@ enum DataType {
     Float128Data = UInt128Data | DataIsFloatingPoint
 };
 
-#ifdef __SIZEOF_FLOAT128__
-struct Float128
-{
-    __float128 payload;
-
-#ifndef __f128
-#   define __f128(x) x##q
-#endif
-#ifdef __cplusplus
-    Float128() = default;
-    Float128(long double f) : payload(f) {}
-
-    static constexpr int digits = 113;
-    static constexpr int digits10 = 33;
-    static constexpr int max_digits10 = 6;  // log2(digits)
-    static constexpr int min_exponent = -16381;
-    static constexpr int min_exponent10 = -4931;
-    static constexpr int max_exponent = 16384;
-    static constexpr int max_exponent10 = 4932;
-
-    static constexpr bool radix = 2;
-    static constexpr bool is_signed = true;
-    static constexpr bool is_integer = false;
-    static constexpr bool is_exact = false;
-    static constexpr bool has_infinity = true;
-    static constexpr bool has_quiet_NaN = true;
-    static constexpr bool has_signaling_NaN = has_quiet_NaN;
-    static constexpr std::float_denorm_style has_denorm = std::denorm_present;
-    static constexpr bool has_denorm_loss = false;
-    static constexpr bool is_iec559 = true;
-    static constexpr bool is_bounded = true;
-    static constexpr bool is_modulo = false;
-    static constexpr bool traps = false;
-    static constexpr bool tinyness_before = false;
-    static constexpr std::float_round_style round_style =
-            std::round_toward_zero;   // unlike std::numeric_limits<float>::round_style
-
-    static constexpr __float128 min()
-    { return __f128(0x1p-16382); }
-    static constexpr __float128 max()
-    { return __f128(1.18973149535723176508575932662800702e+4932); }
-    static constexpr __float128 lowest()
-    { return -max(); }
-    static constexpr __float128 denorm_min()
-    { return __f128(6.47517511943802511092443895822764655e-4966); }
-    static constexpr __float128 epsilon()
-    { return __f128(1.92592994438723585305597794258492732e-34); }
-    static constexpr __float128 round_error()
-    { return __f128(0.5); }
-    static constexpr __float128 infinity()
-    { return __builtin_inff128(); }
-    static constexpr __float128 neg_infinity()
-    { return -__builtin_inff128(); }
-    static constexpr __float128 quiet_NaN()
-    { return __builtin_nanf128(""); }
-    static constexpr __float128 signaling_NaN()
-    { return __builtin_nansf128(""); }
-#endif
-};
-#endif // __FLT128_MAX__
-
-extern Float16 tofp16_emulated(float f);
-extern float fromfp16_emulated(Float16 f);
-extern BFloat16 tobf16_emulated(float f);
-
-static inline Float16 tofp16(float f)
-{
-#ifdef __F16C__
-    Float16 r;
-    r.as_hex = _cvtss_sh(f, _MM_FROUND_TRUNC);
-    return r;
-#else
-    return tofp16_emulated(f);
-#endif
-}
-
-static inline float fromfp16(Float16 f)
-{
-#ifdef __F16C__
-    return _cvtsh_ss(f.as_hex);
-#else
-    return fromfp16_emulated(f);
-#endif
-}
-
-static inline float frombf16_emulated(BFloat16 r)
-{
-    // we zero-extend, shamelessly
-    float f;
-    uint32_t x = r.as_hex;
-    x <<= 16;
-    memcpy(&f, &x, sizeof(f));
-
-#ifndef __FAST_MATH__
-    f += 0;     // normalize and quiet any SNaNs
-#endif
-    return f;
-}
-
 #ifdef __cplusplus
 } // extern "C"
-
-inline Float16::Float16(float f)
-    : Float16(tofp16(f))
-{
-}
-
-inline BFloat16::BFloat16(float f)
-    : BFloat16(tobf16_emulated(f))
-{
-}
 
 namespace SandstoneDataDetails {
 enum { MaxDataTypeSize = 16 };
