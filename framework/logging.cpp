@@ -1800,7 +1800,7 @@ void KeyValuePairLogger::print(int tc)
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_random_generator_state = %s\n", test->id,
                        random_format_seed().c_str());
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_mask = %s\n", test->id,
-                       Topology::topology().build_falure_mask(test).c_str());
+                       build_failure_mask_for_topology(test).c_str());
         if (std::string time = format_duration(earliest_fail); time.size())
             logging_printf(LOG_LEVEL_VERBOSE(1), "%s_earliest_fail_time = %s\n", test->id, time.c_str());
     }
@@ -1979,7 +1979,7 @@ std::string TapFormatLogger::fail_info_details()
 
     std::string seed = random_format_seed();
     std::string time = format_duration(earliest_fail, FormatDurationOptions::WithoutUnit);
-    std::string fail_mask = Topology::topology().build_falure_mask(test);
+    std::string fail_mask = build_failure_mask_for_topology(test);
 
     result.reserve(strlen("  fail: { cpu-mask: '', time-to-fail: , seed: '' }\n") +
                    seed.size() + time.size() + fail_mask.size());
