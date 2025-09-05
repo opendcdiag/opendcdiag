@@ -59,7 +59,7 @@ public:
         return !packages.empty();
     }
 
-    std::string build_falure_mask(const struct test *test) const;
+    std::string build_failure_mask(const struct test *test) const;
 
     static const Topology &topology();
     struct Data;

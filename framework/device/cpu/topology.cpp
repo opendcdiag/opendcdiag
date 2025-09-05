@@ -1784,7 +1784,7 @@ static char character_for_mask(uint32_t mask)
     return mask < 0xa ? '0' + mask : 'a' + mask - 0xa;
 }
 
-std::string Topology::build_falure_mask(const struct test *test) const
+std::string Topology::build_failure_mask(const struct test *test) const
 {
     std::string result;
     if (!isValid())
@@ -1903,4 +1903,9 @@ void print_temperature_of_device()
 
     logging_printf(LOG_LEVEL_VERBOSE(1),
                    "# CPU temperatures: %s\n", format_socket_temperature_string(temperatures).c_str());
+}
+
+std::string build_failure_mask_for_topology(const struct test* test)
+{
+    return Topology::topology().build_failure_mask(test);
 }
