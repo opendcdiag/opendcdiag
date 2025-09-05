@@ -250,7 +250,7 @@ static void check_missing_features(cpu_features_t features, cpu_features_t minim
             fputs(features_string + features_indices[i], stderr);
     }
     fputs("\nexit: invalid\n", stderr);
-    exit(EX_CONFIG);
+    _exit(EX_CONFIG);
 }
 
 #undef cpuid_errmsg
