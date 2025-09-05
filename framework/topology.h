@@ -182,4 +182,6 @@ std::string build_failure_mask_for_topology(const struct test* test);
 
 void print_temperature_of_device();
 
+uint32_t mixin_from_device_info(int thread_num);
+
 #endif /* INC_TOPOLOGY_H */
