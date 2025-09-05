@@ -687,54 +687,6 @@ bool test_is_retry() noexcept
     return sApp->current_iteration_count < 0;
 }
 
-// Creates a string containing all socket temperatures like: "P0:30oC P2:45oC"
-static string format_socket_temperature_string(const vector<int> & temps)
-{
-    string temp_string;
-    for(int i=0; i<temps.size(); ++i){
-        if (temps[i] != INVALID_TEMPERATURE){
-            char buffer[64];
-            sprintf(buffer, "P%d:%.1foC", i, temps[i]/1000.0);
-            temp_string += string(buffer) + " ";
-        }
-    }
-    return temp_string;
-}
-
-static void print_temperature_and_throttle()
-{
-    if (sApp->thermal_throttle_temp < 0)
-        return;     // throttle disabled
-
-    vector<int> temperatures = ThermalMonitor::get_all_socket_temperatures();
-
-    if (temperatures.empty()) return; // Cant find temperature files at all (probably on windows)
-
-    int highest_temp = *max_element(temperatures.begin(), temperatures.end());
-
-    while ((highest_temp > sApp->thermal_throttle_temp) && sApp->threshold_time_remaining > 0) {
-
-        if ((sApp->threshold_time_remaining % 1000) == 0) {
-            logging_printf(LOG_LEVEL_VERBOSE(1),
-                           "# CPU temperature (%.1foC) above threshold (%.1foC), throttling (%.1f s remaining)\n",
-                           highest_temp / 1000.0, sApp->thermal_throttle_temp / 1000.0,
-                           sApp->threshold_time_remaining / 1000.0);
-            logging_printf(LOG_LEVEL_VERBOSE(1),
-                    "# All CPU temperatures: %s\n", format_socket_temperature_string(temperatures).c_str());
-        }
-
-        const int throttle_ms = 100;
-        usleep(throttle_ms * 1000);
-        sApp->threshold_time_remaining -= throttle_ms;
-
-        temperatures = ThermalMonitor::get_all_socket_temperatures();
-        highest_temp = *max_element(temperatures.begin(), temperatures.end());
-    }
-
-    logging_printf(LOG_LEVEL_VERBOSE(1),
-                   "# CPU temperatures: %s\n", format_socket_temperature_string(temperatures).c_str());
-}
-
 static void apply_group_inits(/*nonconst*/ struct test *test)
 {
     // Create an array with the replacement functions per group and cache.
@@ -798,7 +750,7 @@ void prepare_test(/*nonconst*/ struct test *test)
 
 static void init_internal(const struct test *test)
 {
-    print_temperature_and_throttle();
+    print_temperature_of_device();
 
     logging_init(test);
 }

@@ -179,4 +179,6 @@ void init_topology(const LogicalProcessorSet &enabled_cpus);
 void restrict_topology(DeviceRange range);
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures);
 
+void print_temperature_of_device();
+
 #endif /* INC_TOPOLOGY_H */
