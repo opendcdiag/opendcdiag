@@ -136,12 +136,10 @@ if host_machine.cpu_family() == 'x86_64'
     march_hsw = [
         '-march=haswell',
         '-mtune=skylake',
-        '-mrtm',
     ]
     march_skx = [
         '-march=skylake-avx512',
         '-mtune=skylake-avx512',
-        '-mrtm',
     ]
 
     # Check if march_base has a higher CPU target, in which case
