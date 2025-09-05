@@ -542,32 +542,8 @@ void random_advance_seed()
 
 void random_init_thread(int thread_num)
 {
-    // Create a pattern based exclusively on the topology that we'll use
-    // to seed the thread's generator. Algorithm very loosely inspired by
-    // https://en.wikipedia.org/wiki/MurmurHash version 3.
-    device_info &info = cpu_info[thread_num];
-    auto scramble = [](uint32_t k) {
-        k *= 0xcc9e2d51;
-        k = (k << 15) | (k >> 17);              // rotl(mixin, 15);
-        k *= 0x1b873593;
-        return k;
-    };
-    uint32_t mixin = scramble(info.core_id);
-    mixin = (mixin << 13) | (mixin >> 19);      // rotl(mixin, 13);
-    mixin = mixin * 5 + 0xe6546b64;
-    mixin ^= scramble(info.package_id);
-    mixin ^= [=](){
-        switch (info.thread_id & 3) {
-        case 0:     return 0x00000000U; // 0b00
-        case 1:     return 0x55555555U; // 0b01
-        case 2:     return 0xaaaaaaaaU; // 0b10
-        case 3:     return 0xffffffffU; // 0b11
-        }
-        __builtin_unreachable();
-    }();
-
     // nothing should be modifying the global engine now
-    sApp->random_engine->seedThread(rng_for_thread(thread_num), mixin);
+    sApp->random_engine->seedThread(rng_for_thread(thread_num), mixin_from_device_info(thread_num));
 }
 
 template <typename FP> static inline FP random_template(FP scale)
