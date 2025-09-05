@@ -178,6 +178,7 @@ void slice_plan_init(int max_cores_per_slice);
 void init_topology(const LogicalProcessorSet &enabled_cpus);
 void restrict_topology(DeviceRange range);
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures);
+std::string build_failure_mask_for_topology(const struct test* test);
 
 void print_temperature_of_device();
 
