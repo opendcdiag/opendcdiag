@@ -178,7 +178,10 @@ static cpu_features_t detect_cpu()
     }
     if (max_level >= 0x1e) {
         __cpuid_count(0x1e, 0, eax, ebx, ecx, edx);
-        features |= parse_register(Leaf1E_01EAX, eax);
+        if (eax) {
+            __cpuid_count(0x1e, 1, eax, ebx, ecx, edx);
+            features |= parse_register(Leaf1E_01EAX, eax);
+        }
     }
     __cpuid(0x80000001, eax, ebx, ecx, edx);
     features |= parse_register(Leaf80000001ECX, ecx);
