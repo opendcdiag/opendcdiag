@@ -16,6 +16,7 @@
 #endif
 #include "test_knobs.h"
 #include "topology.h"
+#include "logging.h"
 
 #include <array>
 #include <charconv>
@@ -154,7 +155,7 @@ private:
 
     void maybe_print_yaml_marker(int fd);
     void print_thread_messages();
-    void print_thread_header(int fd, int cpu, int verbosity);
+    void print_thread_header(int fd, int device, int verbosity);
     void print_child_stderr();
     std::string format_status_code();
 };
@@ -180,11 +181,11 @@ private:
     bool file_printed_messages_header = false;
     bool stdout_printed_messages_header = false;
 
-    static std::string thread_id_header(int cpu, int verbosity);
+    static std::string thread_id_header(int device, int verbosity);
     void maybe_print_messages_header(int fd);
     void print_fixed();
     void print_thread_messages();
-    void print_thread_header(int fd, int cpu, int verbosity);
+    void print_thread_header(int fd, int device, int verbosity);
     void maybe_print_slice_resource_usage(int fd, int slice);
     static int print_test_knobs(int fd, mmap_region r);
     static void format_and_print_message(int fd, std::string_view level, std::string_view message);
@@ -208,7 +209,7 @@ private:
     std::string timestamp_prefix;
 
     void prepare_line_prefix();
-    void print_thread_header(int fd, int cpu, const char *prefix);
+    void print_thread_header(int fd, int device, const char *prefix);
     void print_thread_messages();
     void print_child_stderr();
 };
@@ -254,36 +255,6 @@ static enum LogTypes log_type_from_code(uint8_t code)
 static int level_from_code(uint8_t code)
 {
     return code & 0xf;
-}
-
-static auto thread_core_spacing()
-{
-    // calculate the spacing so things align
-    // Note: this assumes the topology won't change after the first time this
-    // function is called.
-    static const auto spacing = []() {
-        struct { int logical, core; } result = { 1, 1 };
-        int max_core_id = 0;
-        int max_logical_id = 0;
-        for (int i = 0; i < thread_count(); ++i) {
-            if (cpu_info[i].cpu_number > max_logical_id)
-                max_logical_id = cpu_info[i].cpu_number;
-            if (cpu_info[i].core_id > max_core_id)
-                max_core_id = cpu_info[i].core_id;
-        }
-        if (max_logical_id > 9)
-            ++result.logical;
-        if (max_logical_id > 99)
-            ++result.logical;
-        if (max_logical_id > 999)
-            ++result.logical;
-        if (max_core_id > 9)
-            ++result.core;
-        if (max_core_id > 99)
-            ++result.core;
-        return result;
-    }();
-    return spacing;
 }
 
 enum class Iso8601Format : unsigned {
@@ -1641,8 +1612,7 @@ static void print_child_stderr_common(std::function<void(int)> header)
     truncate_log(stderr_fd);
 }
 
-static std::string
-format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
+std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts)
 {
     if (tp <= MonotonicTimePoint() || tp == MonotonicTimePoint::max())
         return {};
@@ -1792,8 +1762,10 @@ void KeyValuePairLogger::print(int tc)
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_quality = %s\n", test->id, quality_string(test));
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_description = %s\n", test->id, test->description);
     logging_printf(LOG_LEVEL_VERBOSE(1), "%s_pass_count = %d\n", test->id, pc);
+#if SANDSTONE_DEVICE_CPU
     logging_printf(LOG_LEVEL_VERBOSE(2), "%s_virtualized = %s\n", test->id,
-                   cpu_has_feature(cpu_feature_hypervisor) ? "yes" : "no");
+                   cpu_has_feature(cpu_feature_hypervisor) ? "yes" : "no");         // TODO: would we need it for GPUs by any chance?
+#endif
     if (should_print_fail_info()) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_percent = %.1f\n", test->id,
                        100. * (thread_count() - pc) / thread_count());
@@ -1810,42 +1782,19 @@ void KeyValuePairLogger::print(int tc)
     logging_flush();
 }
 
-void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix)
+void KeyValuePairLogger::print_thread_header(int fd, int device, const char *prefix)
 {
-    if (cpu < 0) {
-        cpu = ~cpu;
-        if (cpu == 0)
+    if (device < 0) {
+        device = ~device;
+        if (device == 0)
             writeln(file_log_fd, timestamp_prefix, "_messages_mainthread = \\");
         else
             dprintf(file_log_fd, "%s_messages_mainthread_%d = \\\n",
-                    timestamp_prefix.c_str(), cpu);
+                    timestamp_prefix.c_str(), device);
         return;
     }
 
-    device_info *info = cpu_info + cpu;
-    const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
-    PerThreadData::Test *thr = sApp->test_thread_data(cpu);
-    if (std::string time = format_duration(thr->fail_time); time.size()) {
-        dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, cpu, time.c_str());
-        dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
-                thr->inner_loop_count_at_fail);
-    } else {
-        dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
-                thr->inner_loop_count);
-    }
-    dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, cpu, info->cpu_number);
-    dprintf(fd, "%s_messages_thread_%d_family_model_stepping = %02x-%02x-%02x\n", prefix, cpu,
-            sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
-    dprintf(fd, "%s_messages_thread_%d_topology = phys %d, core %d, thr %d\n",
-            prefix, cpu, info->package_id, info->core_id, info->thread_id);
-    dprintf(fd, "%s_messages_thread_%d_microcode =", prefix, cpu);
-    if (info->microcode)
-        dprintf(fd, " 0x%" PRIx64, info->microcode);
-    dprintf(fd, "\n%s_messages_thread_%d_ppin =",
-            prefix, cpu);
-    if (pkg && pkg->ppin)
-        dprintf(fd, " 0x%" PRIx64, pkg->ppin);
-    dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
+    print_thread_header_kv_for_device(fd, device, prefix);
 }
 
 void KeyValuePairLogger::print_thread_messages()
@@ -1983,7 +1932,11 @@ std::string TapFormatLogger::fail_info_details()
 
     result.reserve(strlen("  fail: { cpu-mask: '', time-to-fail: , seed: '' }\n") +
                    seed.size() + time.size() + fail_mask.size());
-    result += "  fail: { cpu-mask: ";
+#if SANDSTONE_DEVICE_CPU
+    result += "  fail: { cpu-mask: "; // TODO: keep for legacy reasons?
+#else
+    result += "  fail: { dev-mask: "; // keep it 3 letters
+#endif
     add_value(fail_mask, '\'');
     result += ", time-to-fail: ";
     add_value(time, '\0');
@@ -2061,51 +2014,29 @@ void TapFormatLogger::maybe_print_yaml_marker(int fd)
     writeln(fd, yamlseparator,
             "\n  info: {version: ", program_version,
             ", timestamp: ", iso8601_time_now(Iso8601Format::WithoutMs),
+#if SANDSTONE_DEVICE_CPU
             cpu_has_feature(cpu_feature_hypervisor) ? ", virtualized: true" : nothing,
+#else
+            nothing,
+#endif
             "}");
     if (std::string fail_info = fail_info_details(); !fail_info.empty())
         IGNORE_RETVAL(write(fd, fail_info.c_str(), fail_info.size()));
 }
 
-void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
+void TapFormatLogger::print_thread_header(int fd, int device, int verbosity)
 {
     maybe_print_yaml_marker(fd);
-    if (cpu < 0) {
-        cpu = ~cpu;
-        if (cpu == 0)
+    if (device < 0) {
+        device = ~device;
+        if (device == 0)
             writeln(fd, "  Main thread:");
         else
-            dprintf(fd, "  Main thread %d:", cpu);
+            dprintf(fd, "  Main thread %d:", device);
         return;
     }
 
-    device_info *info = cpu_info + cpu;
-    std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", cpu,
-            info->cpu_number, info->package_id, info->core_id, info->thread_id);
-
-    const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
-    line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", sApp->hwinfo.family, sApp->hwinfo.model,
-                      sApp->hwinfo.stepping);
-    if (info->microcode)
-        line += stdprintf("%#" PRIx64, info->microcode);
-    else
-        line += "N/A";
-    if (pkg && pkg->ppin)
-        line += stdprintf(", PPIN %016" PRIx64 "):", pkg->ppin);
-    else
-        line += ", PPIN N/A):";
-
-    writeln(fd, line);
-
-    if (verbosity > 1) {
-        PerThreadData::Test *thr = sApp->test_thread_data(cpu);
-        if (std::string time = format_duration(thr->fail_time); time.size())
-            writeln(fd, "  - failed: { time: ", time,
-                    ", loop-count: ", std::to_string(thr->inner_loop_count_at_fail),
-                    " }");
-        else if (verbosity > 2)
-            writeln(fd, "  - loop-count: ", std::to_string(thr->inner_loop_count));
-    }
+    print_thread_header_tap_for_device(fd, device, verbosity);
 }
 
 void TapFormatLogger::print_thread_messages()
@@ -2147,54 +2078,27 @@ void YamlLogger::maybe_print_messages_header(int fd)
     }
 }
 
-std::string YamlLogger::thread_id_header(int cpu, int verbosity)
+std::string YamlLogger::thread_id_header(int device, int verbosity)
 {
-    device_info *info = cpu_info + cpu;
-    std::string line;
-#ifdef _WIN32
-    line = stdprintf("{ logical-group: %2u, logical: %2u, ",
-                     // see win32/cpu_affinity.cpp
-                     info->cpu_number / 64u, info->cpu_number % 64u);
-#else
-    line = stdprintf("{ logical: %*d, ", thread_core_spacing().logical, info->cpu_number);
-#endif
-    line += stdprintf("package: %d, numa_node: %d, module: %*d, core: %*d, thread: %d",
-                      info->package_id, info->numa_id, thread_core_spacing().core, info->module_id,
-                      thread_core_spacing().core, info->core_id, info->thread_id);
-    if (verbosity > 1) {
-        auto add_value_or_null = [&line](const char *fmt, uint64_t value) {
-            if (value)
-                line += stdprintf(fmt, value);
-            else
-                line += "null";
-        };
-        const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
-        line += stdprintf(", family: %d, model: %#02x, stepping: %d, microcode: ",
-                          sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
-        add_value_or_null("%#" PRIx64, info->microcode);
-        line += ", ppin: ";
-        add_value_or_null("\"%016" PRIx64 "\"", pkg ? pkg->ppin : 0);   // string to prevent loss of precision
-    }
-    line += " }";
-    return line;
+    return thread_id_header_for_device(device, verbosity);
 }
 
-void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
+void YamlLogger::print_thread_header(int fd, int device, int verbosity)
 {
     maybe_print_messages_header(fd);
-    if (cpu < 0) {
-        cpu = ~cpu;
-        if (cpu == 0)
+    if (device < 0) {
+        device = ~device;
+        if (device == 0)
             writeln(fd, indent_spaces(), "  - thread: main");
         else
-            writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(cpu));
-        maybe_print_slice_resource_usage(fd, cpu);
+            writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(device));
+        maybe_print_slice_resource_usage(fd, device);
     } else {
-        dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), cpu);
-        dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(cpu, verbosity).c_str());
+        dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), device);
+        dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(device, verbosity).c_str());
 
         if (verbosity > 1) {
-            PerThreadData::Test *thr = sApp->test_thread_data(cpu);
+            PerThreadData::Test *thr = sApp->test_thread_data(device);
             auto opts = FormatDurationOptions::WithoutUnit;
             if (std::string time = format_duration(thr->fail_time, opts); time.size()) {
                 writeln(fd, indent_spaces(), "    state: failed");
@@ -2553,8 +2457,12 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str(),
                    format_duration(test_timeout, FormatDurationOptions::WithoutUnit).c_str());
 
-    // print the CPU information
-    logging_printf(LOG_LEVEL_VERBOSE(1), "cpu-info:\n");
+    // print the device information
+#if SANDSTONE_DEVICE_CPU
+    logging_printf(LOG_LEVEL_VERBOSE(1), "cpu-info:\n"); // TODO: keep for legacy reasons?
+#else
+    logging_printf(LOG_LEVEL_VERBOSE(1), "device-info:\n");
+#endif
     for (int i = 0; i < thread_count(); ++i) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "- %s   # %d\n",
                        thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
@@ -2565,7 +2473,11 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
         for (DeviceRange r : plan) {
             if (result.size())
                 result += ", ";
-            result += "{ starting_cpu: ";
+#if SANDSTONE_DEVICE_CPU
+            result += "{ starting_cpu: ";    // TODO: keep for legacy reasons?
+#else
+            result += "{ starting_device: ";
+#endif
             result += std::to_string(r.starting_device);
             result += ", count: ";
             result += std::to_string(r.device_count);
