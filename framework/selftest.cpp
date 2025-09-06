@@ -1091,6 +1091,11 @@ const static test_group group_random = {
     .description = "Self-tests that use random input and may or may not fail"
 };
 
+const static test_group group_test_is_optional = {
+    .id = "test_is_optional",
+    .description = "Self-tests used to test test_is_optional flag"
+};
+
 #if SANDSTONE_DEVICE_CPU
 const static test_group group_kvm = {
     .id = "kvm",
@@ -1940,6 +1945,41 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .test_run = selftest_inject_idle,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD
+},
+// group of selftests that test test_is_optional flag
+{
+    .id = "selftest_test_optional",
+    .description = "Tests prod test without test_is_optional flag",
+    .groups = DECLARE_TEST_GROUPS(&group_test_is_optional),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_test_optional_beta",
+    .description = "Tests beta test without test_is_optional flag",
+    .groups = DECLARE_TEST_GROUPS(&group_test_is_optional),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_BETA,
+},
+{
+    .id = "selftest_test_optional_include_optional",
+    .description = "Tests prod test with test_is_optional flag",
+    .groups = DECLARE_TEST_GROUPS(&group_test_is_optional),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_is_optional,
+},
+{
+    .id = "selftest_test_optional_beta_include_optional",
+    .description = "Tests beta test with test_is_optional flag",
+    .groups = DECLARE_TEST_GROUPS(&group_test_is_optional),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_BETA,
+    .flags = test_is_optional,
 }
 };
 
