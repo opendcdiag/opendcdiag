@@ -664,6 +664,7 @@ static void cause_sigill()
                             -std::numeric_limits<double>::infinity());
 
     __m128i one = _mm_set1_epi32(-1);
+#if SANDSTONE_DEVICE_CPU
 #ifndef __APX_F__
     if (cpu_has_feature(cpu_feature_apx_f)) {
         // force-init the APX state
@@ -695,6 +696,7 @@ static void cause_sigill()
         asm ("ldtilecfg %0" : : "m" (cfg));
         asm ("tileloadd (%0, %1, 1), %%tmm0" : : "r" (&cfg), "r" (ptrdiff_t(1)));
     }
+#endif
 
     // make sure there are no function calls between the instruction above and the one below
 
