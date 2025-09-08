@@ -54,6 +54,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "device/device.h"
 #include "cpu_features.h"
 #include "forkfd.h"
 
@@ -1823,7 +1824,7 @@ static TestResult run_one_test_once(const struct test *test)
     ChildrenList children;
 
     sApp->current_test_count++;
-    if (cpu_features_t missing = (test->minimum_cpu | test->compiler_minimum_cpu) & ~cpu_features) {
+    if (device_features_t missing = (test->minimum_cpu | test->compiler_minimum_cpu) & ~cpu_features) {
         init_per_thread_data();
 
         // for brevity, don't report the bits that the framework itself needs
@@ -2085,7 +2086,7 @@ static void list_tests(const ProgramOptions& opts)
                     printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
                 } else if (sApp->shmem->verbosity > 0) {
                     // don't report the FW minimum CPU features
-                    cpu_features_t cpuf = test->compiler_minimum_cpu & ~_compilerCpuFeatures;
+                    device_features_t cpuf = test->compiler_minimum_cpu & ~_compilerCpuFeatures;
                     cpuf |= test->minimum_cpu;
                     printf("%-20s %s\n", test->id, cpu_features_to_string(cpuf).c_str());
                 } else {

@@ -23,7 +23,7 @@
 #include "cpuid_internal.h"
 
 // from cpu_device.cpp
-extern const cpu_features_t minimum_cpu_features;
+extern const device_features_t minimum_cpu_features;
 
 #if defined(AT_EXECPATH) && !defined(AT_EXECFN)
 // FreeBSD uses AT_EXECPATH instead of AT_EXECFN

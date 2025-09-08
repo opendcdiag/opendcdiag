@@ -127,6 +127,21 @@ generated_files += custom_target(
     ],
 )
 
+generated_files += configure_file(
+    output: 'xsave_states.h',
+    encoding: 'ascii',
+    input: files(
+        'xsave-states.conf',
+    ),
+    capture: true,
+    command: [
+        perl,
+        files('scripts/xsave_generate.pl'),
+        '@INPUT@',
+        '@OUTPUT@',
+    ],
+)
+
 if cc.has_type('_Float16') and cpp.has_type('_Float16')
     framework_config.set('SANDSTONE_FP16_TYPE', '_Float16')
 elif cc.has_type('__fp16') and cpp.has_type('__fp16')

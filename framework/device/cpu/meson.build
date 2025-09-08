@@ -7,6 +7,7 @@ generated_files += configure_file(
     output: 'cpu_features.h',
     encoding: 'ascii',
     input: files(
+        '../../xsave-states.conf',
         'simd.conf',
     ),
     capture: true,

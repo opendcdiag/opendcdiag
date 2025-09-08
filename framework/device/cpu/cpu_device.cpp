@@ -8,11 +8,11 @@
 
 #include <cinttypes>
 
-extern constexpr const cpu_features_t minimum_cpu_features = _compilerCpuFeatures;
+extern constexpr const device_features_t minimum_cpu_features = _compilerCpuFeatures;
 
-cpu_features_t cpu_features = 0;
+device_features_t cpu_features = 0;
 
-std::string cpu_features_to_string(cpu_features_t f)
+std::string cpu_features_to_string(device_features_t f)
 {
     std::string result;
     const char *comma = "";

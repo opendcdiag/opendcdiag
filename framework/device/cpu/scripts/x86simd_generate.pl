@@ -30,13 +30,35 @@ $leaves{Leaf01EDX} = "CPUID Leaf 1, EDX";
 my $input_conf_file = shift @ARGV;
 open(FH, '<', $input_conf_file) or die $!;
 
+my @xsaveStates;
+while (<FH>) {
+    chomp $_;
+    m/#\s*(.*)\s*/;
+    my $comment = $1;
+
+    s/#.*$//;
+    s/^\s+//;
+    next if $_ eq "";
+
+    if (s/^xsave=//) {
+        my ($name, $value, $required) = split /\s+/;
+        $required =~ s/[^a-z0-9_,]/_/g;
+        push @xsaveStates,
+            { id => $name, value => $value, required_for => $required, comment => $comment };
+    }
+}
+close FH;
+
+# Read input from file specified by second argument
+my $input_conf_file = shift @ARGV;
+open(FH, '<', $input_conf_file) or die $!;
+
 my $i = 0;
 my @features;
 my %feature_ids;
 my $feature_type = "uint64_t";
 my @architecture_names;
 my %architectures;
-my @xsaveStates;
 my $maxarchnamelen = 0;
 while (<FH>) {
     chomp $_;
@@ -77,11 +99,6 @@ while (<FH>) {
         };
         push @architecture_names, $arch
             unless grep {$_ eq $arch} @architecture_names;
-    } elsif (s/^xsave=//) {
-        my ($name, $value, $required) = split /\s+/;
-        $required =~ s/[^a-z0-9_,]/_/g;
-        push @xsaveStates,
-            { id => $name, value => $value, required_for => $required, comment => $comment };
     } else {
         my ($name, $function, $bit, $depends) = split /\s+/;
         die("Unknown CPUID function \"$function\"")
@@ -121,13 +138,14 @@ if ($headername = shift @ARGV) {
 #ifndef $headerguard
 #define $headerguard
 
-#include <stdint.h>|;
+#include "xsave_states.h"\n
+#include <stdint.h>\n|;
 } else {
     $debug = 1;
 }
 
-printf "typedef %s cpu_features_t;\n", $feature_type;
-printf "#define CPU_FEATURE_CONSTANT(bit) (((cpu_features_t) 1) << (bit))\n\n";
+printf "typedef %s device_features_t;\n", $feature_type;
+printf "#define CPU_FEATURE_CONSTANT(bit) (((device_features_t) 1) << (bit))\n\n";
 
 # Print the feature list
 my $lastleaf;
@@ -196,7 +214,7 @@ for (@architecture_names) {
 }
 
 print q{
-static const cpu_features_t _compilerCpuFeatures = 0};
+static const device_features_t _compilerCpuFeatures = 0};
 
 # And print the compiler-enabled features part:
 for (my $i = 0; $i < scalar @features; ++$i) {
@@ -212,7 +230,7 @@ print '        ;';
 if ($headerguard ne "") {
     print q|
 #if (defined __cplusplus) && __cplusplus >= 201103L
-enum X86CpuFeatures : cpu_features_t {|;
+enum X86CpuFeatures : device_features_t {|;
 
     for (@features) {
         my $line = sprintf "CpuFeature%s = cpu_feature_%s,", $_->{id}, lc($_->{id});
@@ -225,7 +243,7 @@ enum X86CpuFeatures : cpu_features_t {|;
 
 print qq|}; // enum X86CpuFeatures
 
-enum X86CpuArchitectures : cpu_features_t {|;
+enum X86CpuArchitectures : device_features_t {|;
 
     for (@architecture_names) {
         my $arch = $architectures{$_};
@@ -293,7 +311,7 @@ for (@architecture_names) {
 print qq|
 struct X86Architecture
 {
-    cpu_features_t features;
+    device_features_t features;
     char name[$maxarchnamelen + 1];
 };
 
@@ -305,30 +323,15 @@ for (sort { $b <=> $a } keys %sorted_archs) {
 }
 print "};";
 
-# Produce the list of XSAVE states
-print "\nenum XSaveBits {";
-my $xsaveEnumPrefix = "XSave_";
-for my $state (@xsaveStates) {
-    my $value = $state->{value};
-    unless ($value =~ /^0x/) {
-        # Compound value
-        $value = join(" | ", map { $xsaveEnumPrefix . $_ } split(/\|/, $value));
-    }
-    printf "    %s%-12s = %s,", $xsaveEnumPrefix, $state->{id}, $value;
-    printf "%s// %s", ' ' x (18 - length($value)), $state->{comment}
-        if $state->{comment} ne '';
-    printf "\n";
-};
-print "};";
-
 # Produce a list of features require extended XSAVE state
+my $xsaveEnumPrefix = "XSave_";
 my $xsaveRequirementMapping;
 for my $state (@xsaveStates) {
     my $xsaveReqPrefix = "XSaveReq_";
     my @required_for = split /,/, $state->{required_for};
     next unless scalar @required_for;
 
-    my $prefix = sprintf "\n// List of features requiring %s%s\nstatic const cpu_features_t %s%s = 0",
+    my $prefix = sprintf "\n// List of features requiring %s%s\nstatic const device_features_t %s%s = 0",
         $xsaveEnumPrefix, $state->{id}, $xsaveReqPrefix, $state->{id};
 
     # match either the feature name or one of its requirements against list
@@ -357,8 +360,8 @@ for my $state (@xsaveStates) {
 printf qq|
 struct XSaveRequirementMapping
 {
-    cpu_features_t cpu_features;
-    cpu_features_t xsave_state;
+    device_features_t cpu_features;
+    device_features_t xsave_state;
 };
 
 static const struct XSaveRequirementMapping xsave_requirements[] = {

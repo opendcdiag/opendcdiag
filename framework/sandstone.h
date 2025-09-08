@@ -26,7 +26,10 @@
 
 #include "device/device.h"
 
-#include "cpu_features.h"
+#if SANDSTONE_DEVICE_CPU
+#   include "cpu_features.h"
+#endif
+
 #include "sandstone_config.h"
 #include "sandstone_data.h"
 #include <sandstone_test_groups.h>
@@ -155,12 +158,20 @@ typedef enum TestQuality {
 /// used in a test's test_init function to indicate that a test should be skipped.
 #define EXIT_SKIP               -255
 
+#if SANDSTONE_DEVICE_CPU
 #define DECLARE_TEST_INNER2(test_id, test_description) \
     __attribute__((aligned(alignof(void*)), used, section(SANDSTONE_SECTION_PREFIX "tests"))) \
     struct test _test_ ## test_id = {                   \
         .compiler_minimum_cpu = _compilerCpuFeatures,   \
         .id = SANDSTONE_STRINGIFY(test_id),             \
         .description = test_description,
+#else
+#define DECLARE_TEST_INNER2(test_id, test_description) \
+    __attribute__((aligned(alignof(void*)), used, section(SANDSTONE_SECTION_PREFIX "tests"))) \
+    struct test _test_ ## test_id = {                   \
+        .id = SANDSTONE_STRINGIFY(test_id),             \
+        .description = test_description,
+#endif
 #define DECLARE_TEST_INNER(test_id, test_description)   DECLARE_TEST_INNER2(test_id, test_description)
 
 #ifndef DECLARE_TEST
@@ -314,7 +325,7 @@ typedef const kvm_config_t *(*kvmconfigfunc)(void);
 struct test {
     /* metadata */
     /// filled in by the DECLARE_TEST macro
-    cpu_features_t compiler_minimum_cpu;
+    device_features_t compiler_minimum_cpu;
 
     /// Identifier of the test.  Each test must have a unique string identifier
     const char *id;
@@ -336,7 +347,7 @@ struct test {
     /* filled in by framework, used by framework and tests */
 
     /// minimum CPU required to be run, skipped if too old
-    cpu_features_t minimum_cpu;
+    device_features_t minimum_cpu;
 
     /// duration (in ms) the test wants to run for
     /// Special values:

@@ -134,6 +134,9 @@ struct cache_info
     int cache_data;
 };
 
+/// Keep alias for legacy reasons
+typedef device_features_t cpu_features_t;
+
 /// cpu_info contains information about a logical CPU
 struct cpu_info
 {

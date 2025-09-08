@@ -9,7 +9,8 @@
 
 #ifdef __x86_64__
 #include "amx_common.h"
-#include "cpu_features.h"
+#include "device/device.h"
+#include "xsave_states.h"
 #include "fp_vectors/Floats.h"
 
 #include <algorithm>
@@ -521,10 +522,12 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
         // sanity check it
         uint64_t xgetbv0 = XSave_X87 | XSave_SseState;
 
+#if SANDSTONE_DEVICE_CPU
         // some Atoms have XSAVE but not AVX, but until there's interesting
         // state in them, the check for AVX suffices
         if (cpu_has_feature(cpu_feature_avx))
             xgetbv0 = do_xgetbv();
+#endif
 
         if (xsave_bv & ~xgetbv0)
             return;     // bit vector contains invalid bits
