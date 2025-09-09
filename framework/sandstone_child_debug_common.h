@@ -11,7 +11,7 @@
 #include <stdint.h>
 
 #ifdef __x86_64__
-#  include "cpu_features.h"
+#  include "xsave_states.h"
 
 #  include <algorithm>
 #  include <cpuid.h>
@@ -29,8 +29,8 @@ inline int xsave_size_for_bitvector(uint64_t xsave_bv)
     if (cpuid_bv & ~xsave_bv) {
         // yes, find the end of the highest state that we *are* transferring
         int bit = 2;
-        uint64_t mask = XSave_Ymm_Hi128;
-        xsave_bv &= ~(XSave_SseState | XSave_X87);  // included in FXSAVE
+        uint64_t mask = XSave::Ymm_Hi128;
+        xsave_bv &= ~(XSave::SseState | XSave::X87);  // included in FXSAVE
         for ( ; xsave_bv; ++bit, mask <<= 1) {
             if ((xsave_bv & mask) == 0)
                 continue;
