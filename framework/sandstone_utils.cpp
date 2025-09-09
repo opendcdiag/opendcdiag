@@ -63,6 +63,18 @@ template <> void format_fp<Float16, sizeof(Float16)>(std::string &buffer, const 
     double d = fromfp16(v);
     return format_fp<double>(buffer, &d);
 }
+template <> void format_fp<HFloat8, sizeof(HFloat8)>(std::string &buffer, const void *data)
+{
+    HFloat8 v;
+    memcpy(&v, data, sizeof(HFloat8));
+    buffer += stdprintf(" (%g)", from_hfloat8(v));
+}
+template <> void format_fp<BFloat8, sizeof(BFloat8)>(std::string &buffer, const void *data)
+{
+    BFloat8 v;
+    memcpy(&v, data, sizeof(BFloat8));
+    buffer += stdprintf(" (%g)", from_bfloat8(v));
+}
 
 template <typename T> static __attribute__((unused)) void check_type_assumptions()
 {
@@ -144,6 +156,10 @@ string format_single_type(DataType type, int typeSize, const uint8_t *data, bool
             format_fp<Float16, 2>(result, data); break;
         case Float128Data:
             break;
+        case HFloat8Data:
+            format_fp<HFloat8>(result, data); break;
+        case BFloat8Data:
+            format_fp<BFloat8>(result, data); break;
 
             // case DataIsSigned:
         case DataIsFloatingPoint:

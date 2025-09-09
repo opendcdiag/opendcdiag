@@ -290,6 +290,63 @@ TEST(DataCompare, Float16)
     EXPECT_EQ(format_type_helper(my_numeric_limits<Float16>::signaling_NaN()), "7d00 (nan)");
 }
 
+namespace {
+template <> struct my_numeric_limits<BFloat8> : public BFloat8 {
+    static constexpr BFloat8 neg_infinity()  { return -infinity(); }
+    static constexpr BFloat8 denorm_min()    { return BFloat8(0, BFLOAT8_DENORM_EXPONENT, 1); }
+    static constexpr BFloat8 overflow()      { return BFloat8(0, BFLOAT8_INFINITY_EXPONENT, BFLOAT8_OVERFLOW_MANTISSA); }
+    static constexpr BFloat8 quiet_NaN()     { return BFloat8(0, BFLOAT8_NAN_EXPONENT, BFLOAT8_QNAN_AT_INPUT_MANTISSA); }
+    static constexpr BFloat8 signaling_NaN() { return BFloat8(0, BFLOAT8_NAN_EXPONENT, BFLOAT8_SNAN_AT_INPUT_MANTISSA); }
+};
+}
+
+TEST(DataCompare, BFloat8)
+{
+    using namespace SandstoneDataDetails;
+    setlocale(LC_ALL, "C");     // ensure C locale, so we get periods as decimal separators
+    EXPECT_STREQ(type_name(BFloat8Data), "BFloat8");
+    EXPECT_EQ(type_real_size(BFloat8Data), 1);
+    EXPECT_EQ(type_size(BFloat8Data), 1);
+
+    EXPECT_EQ(format_type_helper(BFloat8(0)), "00 (0)");
+    EXPECT_EQ(format_type_helper(BFloat8(-1)), "bc (-1)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat8>::max()), "7b (57344)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat8>::min()), "04 (6.10352e-05)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat8>::denorm_min()), "01 (1.52588e-05)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat8>::infinity()), "7c (inf)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat8>::neg_infinity()), "fc (-inf)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat8>::overflow()), "7d (inf)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat8>::signaling_NaN()), "7e (nan)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<BFloat8>::quiet_NaN()), "7f (nan)");
+}
+
+namespace {
+template <> struct my_numeric_limits<HFloat8> : HFloat8 {
+    static constexpr HFloat8 neg_infinity()  { return -infinity(); }
+    static constexpr HFloat8 denorm_min()    { return HFloat8(0, HFLOAT8_DENORM_EXPONENT, 1); }
+    static constexpr HFloat8 overflow()      { return HFloat8(0, HFLOAT8_SATURATED_OVERFLOW_VALUE); }
+};
+}
+
+TEST(DataCompare, HFloat8)
+{
+    using namespace SandstoneDataDetails;
+    setlocale(LC_ALL, "C");     // ensure C locale, so we get periods as decimal separators
+    EXPECT_STREQ(type_name(HFloat8Data), "HFloat8");
+    EXPECT_EQ(type_real_size(HFloat8Data), 1);
+    EXPECT_EQ(type_size(HFloat8Data), 1);
+
+    EXPECT_EQ(format_type_helper(HFloat8(0)), "00 (0)");
+    EXPECT_EQ(format_type_helper(HFloat8(-1)), "b8 (-1)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<HFloat8>::max()), "7d (416)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<HFloat8>::min()), "08 (0.015625)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<HFloat8>::denorm_min()), "01 (0.00195312)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<HFloat8>::overflow()), "7e (inf)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<HFloat8>::infinity()), "7f (inf)");
+    EXPECT_EQ(format_type_helper(my_numeric_limits<HFloat8>::neg_infinity()), "ff (-inf)");
+    // no NaN values, these are treated as infinity
+}
+
 // dummy mock to allow new_random_xxx() compilation
 uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
     assert(!"Not implemented");

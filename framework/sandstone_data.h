@@ -43,7 +43,9 @@ enum DataType {
     Float32Data = UInt32Data | DataIsFloatingPoint,
     Float64Data = UInt64Data | DataIsFloatingPoint,
     Float80Data = 9 | DataIsFloatingPoint,
-    Float128Data = UInt128Data | DataIsFloatingPoint
+    Float128Data = UInt128Data | DataIsFloatingPoint,
+    HFloat8Data,
+    BFloat8Data,
 };
 
 #ifdef __SIZEOF_FLOAT128__
@@ -176,6 +178,8 @@ static constexpr const char *type_name(DataType type)
     case Int64Data: return "int64_t";
     case Int128Data: return "int128_t";
 
+    case HFloat8Data: return "HFloat8";
+    case BFloat8Data: return "BFloat8";
     case Float16Data: return "_Float16";
     case BFloat16Data: return "_BFloat16";
     case Float32Data: return "float";
@@ -212,6 +216,8 @@ template<> struct TypeToDataType<int32_t> : TypeToDataType_helper<Int32Data> {};
 template<> struct TypeToDataType<int64_t> : TypeToDataType_helper<Int64Data> {};
 template<> struct TypeToDataType<__int128_t> : TypeToDataType_helper<Int128Data> {};
 
+template<> struct TypeToDataType<BFloat8> : TypeToDataType_helper<BFloat8Data> {};
+template<> struct TypeToDataType<HFloat8> : TypeToDataType_helper<HFloat8Data> {};
 template<> struct TypeToDataType<Float16> : TypeToDataType_helper<Float16Data> {};
 template<> struct TypeToDataType<BFloat16> : TypeToDataType_helper<BFloat16Data> {};
 template<> struct TypeToDataType<Float32> : TypeToDataType_helper<Float32Data> {};
@@ -231,9 +237,15 @@ template<> struct TypeToDataType<fp16_t> : TypeToDataType_helper<Float16Data> {}
 static constexpr size_t type_real_size(DataType type)
 {
     constexpr unsigned SizeMask = 0x3f;
-    if (type == BFloat16Data)
-        return 2;               // exception
-    return (type & SizeMask) + 1;
+    switch (type) {
+        case HFloat8Data:
+        case BFloat8Data:
+            return 1;
+        case BFloat16Data:
+            return 2;
+        default:
+            return (type & SizeMask) + 1;
+    }
 }
 
 static constexpr size_t type_size(DataType type)
@@ -267,6 +279,8 @@ static constexpr size_t type_alignment(DataType type)
         long: (sizeof(long) == sizeof(long long) ? Int64Data : Int32Data), \
         long long: Int64Data, \
         __int128_t: Int128Data, \
+        HFloat8: HFloat8Data, \
+        BFloat8: BFloat8Data, \
         BFloat16: BFloat16Data, \
         Float16: Float16Data, \
         float: Float32Data, \
