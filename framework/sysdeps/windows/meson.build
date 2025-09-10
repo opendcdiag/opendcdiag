@@ -6,6 +6,7 @@ framework_files += \
         'aligned_alloc.cpp',
         'child_debug.cpp',
         'cpu_affinity.cpp',
+        'errno.cpp',
         'fcntl.c',
         'fnmatch.c',
         'gettid.cpp',
