@@ -155,6 +155,29 @@ static void perror_for_mmap(const char *msg)
 #endif
 }
 
+const char *strerror_for_mmap()
+{
+#if defined(__GLIBC__) && (__GLIBC__ * 10000 + __GLIBC_MINOR__ >= 20032)
+    // no need for thread-local variable, just use the static string in glibc
+    return strerrordesc_np(errno);
+#else
+    static thread_local std::string s;
+#  if defined(_WIN32)
+    s = win32_strerror(GetLastError());
+#  else
+    char buf[512];
+    auto assign = [&](auto res) {
+        if constexpr (std::is_pointer_v<decltype(res)>)
+            s = res;
+        else
+            s = buf;
+    };
+    assign(strerror_r(errno, buf, sizeof(buf)));
+#  endif
+    return s.c_str();
+#endif
+}
+
 static int open_runtime_file_internal(const char *name, int flags, int mode)
 {
     assert(strchr(name, '/') == nullptr);
