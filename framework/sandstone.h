@@ -474,6 +474,11 @@ extern void log_yaml(char levelchar, const char *yaml);
 /// privileges.
 uint64_t retrieve_physical_address(const volatile void *ptr);
 
+/// Returns the error message after the last mmap() call failed. This function
+/// must be called before anything overwrites @c errno or @c GetLastError().
+/// This is for mmap() because we implement a compatibility layer for Windows.
+const char *strerror_for_mmap();
+
 #if defined(__linux__) && defined(__x86_64__)
 /// reads the value of the MSR, specified by msr, of CPU cpu.
 /// The value is returned in the value parameter.  The function

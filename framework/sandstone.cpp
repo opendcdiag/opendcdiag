@@ -83,6 +83,36 @@ static void perror_for_mmap(const char *msg)
 #endif
 }
 
+const char *strerror_for_mmap()
+{
+#if defined(__GLIBC__) && (__GLIBC__ * 10000 + __GLIBC_MINOR__ >= 20032)
+    // no need for thread-local variable, just use the static string in glibc
+    return strerrordesc_np(errno);
+#elif defined(_WIN32)
+    // initializing a thread_local on Windows overwrites GetLastError!!!
+    DWORD last = GetLastError();
+    static thread_local std::string s;
+    s = win32_strerror(last);
+    return s.c_str();
+#else
+    // There are two flavors of strerror_r():
+    char buf[512];
+    auto assign = [&](auto res) -> const char * {
+        if constexpr (std::is_pointer_v<decltype(res)>) {
+            // GNU variant, which we usually see on Linux, which may write to
+            // buf or return a constant message
+            if (res != buf)
+                return res;
+        }
+        // the POSIX variant always writes to buf
+        static thread_local std::string s;
+        s = buf;
+        return s.c_str();
+    };
+    return assign(strerror_r(errno, buf, sizeof(buf)));
+#endif
+}
+
 static int open_runtime_file_internal(const char *name, int flags, int mode)
 {
     assert(strchr(name, '/') == nullptr);
