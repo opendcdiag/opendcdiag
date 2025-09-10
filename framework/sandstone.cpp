@@ -1826,10 +1826,16 @@ static TestResult run_one_test_once(const struct test *test)
     if (cpu_features_t missing = (test->minimum_cpu | test->compiler_minimum_cpu) & ~cpu_features) {
         init_per_thread_data();
 
-        // for brevity, don't report the bits that the framework itself needs
-        missing &= ~_compilerCpuFeatures;
-        log_skip(CpuNotSupportedSkipCategory, "test requires %s\n", cpu_features_to_string(missing).c_str());
-        (void) missing;
+        // be as brief as possible: if the feature missing is required by the
+        // test, then report only those. if not, report the features the test
+        // was compiled with, but not those already required by the framework.
+        cpu_features_t missing_to_report = missing & ~test->compiler_minimum_cpu;
+        if (missing_to_report) {
+            log_skip(CpuNotSupportedSkipCategory, "test requires %s\n", cpu_features_to_string(missing_to_report).c_str());
+        } else {
+            missing_to_report = missing & ~_compilerCpuFeatures;
+            log_skip(CpuNotSupportedSkipCategory, "test compiled with %s\n", cpu_features_to_string(missing_to_report).c_str());
+        }
 
         children.results.emplace_back(ChildExitStatus{ TestResult::Skipped });
     } else if (test->quality_level == TEST_QUALITY_BETA && test->quality_level < sApp->requested_quality) {
