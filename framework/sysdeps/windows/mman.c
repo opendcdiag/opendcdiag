@@ -20,6 +20,8 @@
 #define PROT_MASK       (PROT_READ | PROT_WRITE | PROT_EXEC)
 static_assert(PROT_MASK == 7, "PROT_xxx macro values inconsistent");
 
+extern void set_errno_from_last_error(DWORD error); // in errno.cpp
+
 static DWORD map_protection(int prot, int flags)
 {
     static const DWORD mapping[] = {
@@ -171,9 +173,10 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
     DWORD flMaxProtect = map_max_protection(prot, flags);
     HANDLE hmap = CreateFileMappingW(hFile, lpFileMappingAttributes, flMaxProtect,
                                      hsize, lsize, lpName);
-    errno = 0;
-    if (!hmap)
+    if (!hmap) {
+        set_errno_from_last_error(GetLastError());
         return MAP_FAILED;
+    }
 
     uint32_t l = off;
     uint32_t h = (uint64_t)off >> 32;
@@ -183,6 +186,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
         DWORD err = GetLastError();
         CloseHandle(hmap);
         SetLastError(err);
+        set_errno_from_last_error(err);
         return MAP_FAILED;
     }
 
@@ -200,6 +204,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
         CloseHandle(hmap);
         UnmapViewOfFile(temp);
         SetLastError(err);
+        set_errno_from_last_error(GetLastError());
         return MAP_FAILED;
     }
 
@@ -241,7 +246,7 @@ int madvise(void *addr, size_t length, int advice)
     if (advice == MADV_DONTNEED) {
         if (DiscardVirtualMemory(addr, length) == ERROR_SUCCESS)
             return 0;
-        errno = EINVAL; /* we assume.... */
+        set_errno_from_last_error(GetLastError());
         return -1;
     }
 
