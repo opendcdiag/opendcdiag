@@ -110,6 +110,33 @@ static int selftest_timedpass_noloop_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
+static int selftest_preinit_preinit(struct test *test)
+{
+    check_is_main_process();
+    test->desired_duration = -1;
+    test->maximum_duration = 1; // 1ms only
+    return EXIT_SUCCESS;
+}
+
+static int selftest_preinit_init(struct test *test)
+{
+    // If this is an -fexec run, we can only check things in sApp->shmem for
+    // side-effects from the preinit function.
+
+    // test->desired_duration influences the loop counter (though
+    // --max-test-loop-count takes precedence...)
+    if (sApp->shmem->current_max_loop_count == INT_MAX)
+        report_fail_msg("test->desired_duration does not appear to have been taken into account");
+
+    // test->maximum_duration influences sApp->current_test_duration (so long
+    // as --force-test-time isn't used), but we can't access that so we check a
+    // side effect of the duration: the test end time
+    if (sApp->shmem->current_test_endtime - MonotonicTimePoint::clock::now() > 1ms)
+        report_fail_msg("test->maximum_duration appears not to have been taken into account");
+
+    return EXIT_SUCCESS;
+}
+
 static int selftest_logs_init(struct test *test)
 {
     log_debug("This is a debug message from init function");
@@ -304,6 +331,17 @@ static int selftest_skip_cleanup(struct test *test)
 {
     log_info("SKIP returned silently from cleanup");
     return EXIT_SKIP;
+}
+
+static int selftest_log_skip_preinit(struct test *test)
+{
+    check_is_main_process();
+    test->test_init = [](struct test *) {
+        log_skip(SelftestSkipCategory, "This is a skip from preinit");
+        return EXIT_SUCCESS;
+    };
+    test->flags = test->flags | test_init_in_parent;
+    return EXIT_SUCCESS;
 }
 
 static int selftest_errno_cleanup(struct test *test)
@@ -1169,6 +1207,16 @@ static struct test selftests_array[] = {
 },
 #endif
 {
+    .id = "selftest_preinit",
+    .description = "Changes some test configs in the preinit function",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_preinit = selftest_preinit_preinit,
+    .test_init = selftest_preinit_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = INT_MAX,        // we change to -1 in the preinit
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_logs",
     .description = "Adds some debug, info and warning messages",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
@@ -1270,6 +1318,16 @@ static struct test selftests_array[] = {
     .description = "Skips using log_skip() in the init function",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_log_skip_init,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_log_skip_preinit",
+    .description = "SKIP in the init function set from the test's preinit",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_preinit = selftest_log_skip_preinit,
+    .test_init = selftest_failinit_init,
     .test_run = selftest_noreturn_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
