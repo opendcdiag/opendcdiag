@@ -329,6 +329,14 @@ selftest_pass() {
     test_yaml_regexp "/tests/2/result" skip
 }
 
+@test "selftest_preinit" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_preinit
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_preinit
+}
+
 @test "selftest_cxxthrowcatch" {
     # Note: we want to test with the crash handler enabled (--on-crash)
     declare -A yamldump
@@ -377,6 +385,10 @@ function selftest_log_skip_init_common() {
 
 @test "selftest_log_skip_init" {
     selftest_log_skip_init_common selftest_log_skip_init
+}
+
+@test "selftest_log_skip_preinit" {
+    selftest_log_skip_init_common selftest_log_skip_preinit '.*skip from preinit'
 }
 
 @test "selftest_log_skip_init_mainproc" {

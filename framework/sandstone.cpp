@@ -727,7 +727,7 @@ static void apply_group_inits(/*nonconst*/ struct test *test)
     }
 }
 
-void prepare_test(/*nonconst*/ struct test *test)
+static void prepare_test(/*nonconst*/ struct test *test)
 {
     if (test->test_preinit) {
         test->test_preinit(test);
@@ -747,6 +747,13 @@ void prepare_test(/*nonconst*/ struct test *test)
 #endif
 }
 
+
+static void preinit_tests()
+{
+    for (test_cfg_info &cfg : *test_set) {
+        prepare_test(cfg.test);
+    }
+}
 
 static void init_internal(const struct test *test)
 {
@@ -1423,8 +1430,6 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         signals_init_child();
         debug_init_child();
     }
-
-    prepare_test(test);
 
     TestResult state = TestResult::Passed;
 
@@ -2734,6 +2739,7 @@ int main(int argc, char **argv)
     int total_tests_run = 0;
     TestResult lastTestResult = TestResult::Skipped;
 
+    preinit_tests();
     for (auto it = get_first_test(); it != test_set->end(); it = get_next_test(it)) {
         if (lastTestResult != TestResult::Skipped) {
             if (sApp->service_background_scan) {
