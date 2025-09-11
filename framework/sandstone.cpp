@@ -2132,6 +2132,7 @@ static bool should_start_next_iteration(void)
 static SandstoneTestSet::EnabledTestList::iterator get_first_test()
 {
     logging_print_iteration_start();
+    test_set->maybe_reshuffle();
     auto it = test_set->begin();
     while (it != test_set->end() && (it->test->quality_level < 0 && sApp->requested_quality >= 0))
         ++it;

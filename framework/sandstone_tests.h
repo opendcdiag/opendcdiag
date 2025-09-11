@@ -79,7 +79,7 @@ public:
     SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags);
 
     // note: not idempotent, we may shuffle every time! */
-    EnabledTestList::iterator begin() noexcept
+    EnabledTestList::iterator maybe_reshuffle() noexcept
     {
         if (cfg.randomize) {
             /* Do not shuffle mce_check if present. */
@@ -90,6 +90,7 @@ public:
         return test_set.begin();
     };
 
+    EnabledTestList::iterator begin() noexcept { return test_set.begin(); }
     EnabledTestList::iterator end() noexcept { return test_set.end(); }
 
     int remove(const char *name);
