@@ -297,6 +297,11 @@ typedef enum test_flag {
     /// Indicates test requires to have Simultaneous Multi-Threading(SMT)/Hyperthreading(HT)
     /// support
     test_requires_smt               = 0x4000,
+
+    /// Indicates the test's init function should be run in the parent, to log
+    /// the state. Do not cause a "memory" effect between tests, and do not use
+    /// the random generator.
+    test_init_in_parent             = 0x10000,
 } test_flags;
 
 struct test_data_per_thread

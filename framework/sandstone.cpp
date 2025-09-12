@@ -1818,6 +1818,33 @@ static void run_one_test_children(ChildrenList &children, const struct test *tes
     wait_for_children(children, test);
 }
 
+static void run_one_test_init_in_parent(ChildrenList &children, const struct test *test)
+{
+    TestResult res;
+    init_per_thread_data();
+    int ret = test->test_init(const_cast<struct test *>(test));
+
+    PerThreadData::Main *main = sApp->main_thread_data();
+    if (ret < 0) [[likely]] {
+        assert(main->has_skipped() &&
+               "Internal error: init-in-parent returned a skip but did not call log_skip()");
+        res = TestResult::Skipped;
+    } else if (ret == EXIT_SUCCESS) [[likely]] {
+        if (main->has_skipped())
+            res = TestResult::Skipped;
+        else if (main->has_failed())
+            res = TestResult::Failed;
+        else
+            assert(!"Internal error: init-in-parent succeeded");
+    } else {
+        assert(main->has_failed() &&
+               "Internal error: init-in-parent returned an error but did not call log_error()");
+        res = TestResult::Failed;
+    }
+
+    children.results.emplace_back(ChildExitStatus{ res });
+}
+
 static TestResult run_one_test_once(const struct test *test)
 {
     ChildrenList children;
@@ -1836,6 +1863,8 @@ static TestResult run_one_test_once(const struct test *test)
         init_per_thread_data();
         log_skip(TestResourceIssueSkipCategory, "Test %s is in BETA quality, try again using --beta option", test->id);
         children.results.emplace_back(ChildExitStatus{ TestResult::Skipped });
+    } else if (test->flags & test_init_in_parent) {
+        run_one_test_init_in_parent(children, test);
     } else {
         run_one_test_children(children, test);
     }
