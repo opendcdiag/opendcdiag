@@ -688,6 +688,26 @@ bool test_is_retry() noexcept
 
 static void preinit_tests()
 {
+    struct GroupReplacementEntry {
+        decltype(test_group::group_init) group_init;
+        initfunc replacement;
+    };
+    std::vector<GroupReplacementEntry> group_replacement_cache;
+    auto cached_replacement = [&group_replacement_cache](const struct test_group *group) {
+        if (!group->group_init)
+            return initfunc(nullptr);
+
+        auto it = std::ranges::find(group_replacement_cache, group->group_init,
+                                    [](const GroupReplacementEntry &e) { return e.group_init; });
+        if (it != group_replacement_cache.end())
+            return it->replacement;
+
+        // call the group init and cache the result
+        GroupReplacementEntry e = { group->group_init, group->group_init() };
+        group_replacement_cache.emplace_back(e);
+        return e.replacement;
+    };
+
     for (test_cfg_info &cfg : *test_set) {
         struct test *test = cfg.test;
         if (test->test_preinit) {
@@ -701,7 +721,7 @@ static void preinit_tests()
         if (test->groups) {
             for (auto ptr = test->groups; *ptr; ++ptr) {
                 const struct test_group *group = *ptr;
-                initfunc replacement = group->group_init ? group->group_init() : nullptr;
+                initfunc replacement = cached_replacement(group);
                 if (!replacement)
                     continue;
                 test->test_init = replacement;
