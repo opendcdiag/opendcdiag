@@ -6,6 +6,8 @@
 #ifndef SANDSTONE_TEST_GROUPS_H
 #define SANDSTONE_TEST_GROUPS_H
 
+#include "sandstone_config.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,6 +17,12 @@ extern const struct test_group
         group_compression,
         group_math,
         group_fuzzing;
+
+#if defined(SANDSTONE_DEVICE_CPU) && defined(__x86_64__)
+extern const struct test_group
+        group_kvm;
+#endif
+
 #ifdef __cplusplus
 }
 #endif

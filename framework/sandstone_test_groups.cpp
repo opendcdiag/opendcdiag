@@ -25,3 +25,10 @@ constexpr struct test_group group_fuzzing = {
     TEST_GROUP("fuzzing",
                "Tests that fuzz framework functions using AFL++ persistent mode"),
 };
+
+#if defined(SANDSTONE_DEVICE_CPU) && defined(__x86_64__)
+extern constexpr struct test_group group_kvm = {
+    TEST_GROUP("kvm",
+               "Tests that create virtual machines using Linux's KVM support"),
+};
+#endif
