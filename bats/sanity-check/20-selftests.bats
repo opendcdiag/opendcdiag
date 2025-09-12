@@ -362,15 +362,25 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/skip-reason" '.*test requires.*'
 }
 
-@test "selftest_log_skip_init" {
+function selftest_log_skip_init_common() {
+    local testname=$1
+    local skipmsg=${2-'.*skip in init'}
     declare -A yamldump
-    sandstone_selftest -e selftest_log_skip_init
+    sandstone_selftest -e $testname
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/test" selftest_log_skip_init
+    test_yaml_regexp "/tests/0/test" "$testname"
     test_yaml_regexp "/tests/0/result" skip
     test_yaml_regexp "/tests/0/skip-category" Selftest
-    test_yaml_regexp "/tests/0/skip-reason" '.*skip.*'
+    test_yaml_regexp "/tests/0/skip-reason" "$skipmsg"
+}
+
+@test "selftest_log_skip_init" {
+    selftest_log_skip_init_common selftest_log_skip_init
+}
+
+@test "selftest_log_skip_init_mainproc" {
+    selftest_log_skip_init_common selftest_log_skip_init_mainproc
 }
 
 @test "selftest_skip_cleanup" {
@@ -1020,11 +1030,13 @@ test_list_file_ignores_beta() {
 
 # -- negative tests --
 
-@test "selftest_failinit" {
+function selftest_failinit_common() {
+    local testname=$1
     declare -A yamldump
-    sandstone_selftest -e selftest_failinit
+    sandstone_selftest -e $testname
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/test" "$testname"
     test_yaml_regexp "/tests/0/result" fail
     test_yaml_regexp "/tests/0/fail/cpu-mask" None
     test_yaml_regexp "/tests/0/fail/time-to-fail" None
@@ -1034,31 +1046,37 @@ test_list_file_ignores_beta() {
     test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
 }
 
-@test "selftest_failinit_and_logskip" {
-    declare -A yamldump
-    sandstone_selftest -e selftest_failinit_and_logskip
-    [[ "$status" -eq 1 ]]
-    test_yaml_regexp "/exit" fail
-    test_yaml_regexp "/tests/0/result" fail
-    test_yaml_regexp "/tests/0/fail/cpu-mask" None
-    test_yaml_regexp "/tests/0/fail/time-to-fail" None
-    test_yaml_absent "/tests/0/skip-category"
-    test_yaml_absent "/tests/0/skip-reason"
-    i=$((-1 + yamldump[/tests/0/threads/0/messages@len]))
-    test_yaml_regexp "/tests/0/threads/0/messages/$i/level" error
-    test_yaml_regexp "/tests/0/threads/0/messages/$i/text" 'E> Init function failed.*'
+@test "selftest_failinit" {
+    selftest_failinit_common selftest_failinit
 }
 
-@test "selftest_logerror_init" {
+@test "selftest_failinit_and_logskip" {
     declare -A yamldump
-    sandstone_selftest -e selftest_logerror_init
+    selftest_failinit_common selftest_failinit_and_logskip
+    test_yaml_absent "/tests/0/skip-category"
+    test_yaml_absent "/tests/0/skip-reason"
+}
+
+function selftest_logerror_init_common() {
+    local testname=$1
+    declare -A yamldump
+    sandstone_selftest -e $testname
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     i=$((0 + yamldump[/tests/0/threads@len]))
     [[ "$i" -eq 1 ]]
+    test_yaml_regexp "/tests/0/test" "$testname"
     test_yaml_regexp "/tests/0/threads/0/thread" 'main'
     test_yaml_regexp "/tests/0/threads/0/messages/0/level" error
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'E> Error logged in init.*'
+}
+
+@test "selftest_logerror_init" {
+    selftest_logerror_init_common selftest_logerror_init
+}
+
+@test "selftest_logerror_init_mainproc" {
+    selftest_logerror_init_common selftest_logerror_init_mainproc
 }
 
 @test "selftest_logerror_logskip_init" {
