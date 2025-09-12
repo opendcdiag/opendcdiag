@@ -60,7 +60,6 @@
 #include "sandstone.h"
 #include "sandstone_p.h"
 #include "sandstone_opts.hpp"
-#include "sandstone_kvm.h"
 #include "sandstone_system.h"
 #include "sandstone_thread.h"
 #include "sandstone_tests.h"
@@ -735,18 +734,7 @@ static void prepare_test(/*nonconst*/ struct test *test)
     }
     if (test->groups)
         apply_group_inits(test);
-
-#if defined(SANDSTONE) and defined(SANDSTONE_DEVICE_CPU)
-    if (test->flags & test_type_kvm) {
-        if (!test->test_init) {
-            test->test_init = kvm_generic_init;
-            test->test_run = kvm_generic_run;
-            test->test_cleanup = kvm_generic_cleanup;
-        }
-    }
-#endif
 }
-
 
 static void preinit_tests()
 {
