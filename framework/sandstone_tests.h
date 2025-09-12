@@ -53,9 +53,6 @@ struct test_cfg_info {
 
 #ifdef __cplusplus
 
-__attribute__((weak)) extern const struct test_group __start_test_group;
-__attribute__((weak)) extern const struct test_group __stop_test_group;
-
 inline std::span<struct test> regular_tests = { &__start_tests, &__stop_tests };
 #ifdef NO_SELF_TESTS
 constexpr const std::span<struct test> selftests = {};
