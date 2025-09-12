@@ -68,6 +68,14 @@ struct SelftestException : std::exception
     }
 };
 
+static void check_is_main_process()
+{
+    if (!sApp->is_main_process()) {
+        fprintf(stderr, "Function appears to have run in the child process\n");
+        abort();
+    }
+}
+
 static int selftest_pass_run(struct test *test, int cpu)
 {
     printf("# This was printed from the test. YOU SHOULD NOT SEE THIS!\n");
@@ -1066,6 +1074,12 @@ static int selftest_inject_idle(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
+template <initfunc F> static int selftest_init_mainproc(struct test *test)
+{
+    check_is_main_process();
+    return F(test);
+}
+
 const static test_group group_positive = {
     .id = "positive",
     .description = "Self-tests that succeed (positive results)"
@@ -1252,6 +1266,16 @@ static struct test selftests_array[] = {
     .test_run = selftest_noreturn_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_log_skip_init_mainproc",
+    .description = "Skips using log_skip() in the init function in the main process",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_init_mainproc<selftest_log_skip_init>,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_init_in_parent,
 },
 {
     .id = "selftest_log_skip_init_socket0",
@@ -1586,6 +1610,16 @@ static struct test selftests_array[] = {
     .test_run = selftest_failinit_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_logerror_init_mainproc",
+    .description = "Fails on error logged in init from the main process",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_init_mainproc<selftest_logerror_init>,
+    .test_run = selftest_failinit_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_init_in_parent,
 },
 {
     .id = "selftest_logerror_and_logskip",
