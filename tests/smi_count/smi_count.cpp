@@ -19,9 +19,22 @@
 #include <limits.h>
 #include <map>
 
-extern void initialize_smi_counts();
+namespace {
+int initialize_smi_counts(struct test*)
+{
+    std::optional<uint64_t> v = sApp->count_smi_events(cpu_info[0].cpu_number);
+    if (!v) {
+        return EXIT_SUCCESS;
+    }
+    sApp->smi_counts_start.resize(thread_count());
+    sApp->smi_counts_start[0] = *v;
+    for (int i = 1; i < thread_count(); i++) {
+        sApp->smi_counts_start[i] = sApp->count_smi_events(cpu_info[i].cpu_number).value_or(0);
+    }
+    return EXIT_SUCCESS;
+}
 
-static int smi_count_run(struct test *test, int cpu)
+int smi_count_run(struct test *test, int cpu)
 {
     (void) test;
 
@@ -40,11 +53,13 @@ static int smi_count_run(struct test *test, int cpu)
     }
     return EXIT_SUCCESS;
 }
+} // end anonymous namespace
 
 DECLARE_TEST(smi_count, "Counts SMI events")
+    .test_preinit = initialize_smi_counts,
     .test_init = [](struct test *t) { return InterruptMonitor::InterruptMonitorWorks ? EXIT_SUCCESS : EXIT_SKIP; },
     .test_run = smi_count_run,
-    .test_cleanup = [](struct test * t) { initialize_smi_counts(); return EXIT_SUCCESS; },
+    .test_cleanup = initialize_smi_counts,
     .desired_duration = -1,
     .fracture_loop_count = -1,
     .quality_level = TEST_QUALITY_PROD,
