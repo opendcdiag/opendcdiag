@@ -1299,7 +1299,7 @@ static struct test selftests_array[] = {
 {
     .id = "selftest_skip_cleanup",
     .description = "SKIP in the cleanup function",
-    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_skip_cleanup,
@@ -1309,7 +1309,7 @@ static struct test selftests_array[] = {
 {
     .id = "selftest_oserror_cleanup",
     .description = "OS error in the cleanup function",
-    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_errno_cleanup,
@@ -1319,7 +1319,7 @@ static struct test selftests_array[] = {
 {
     .id = "selftest_skipmsg_success_cleanup",
     .description = "Log skip message with SUCCESS in the cleanup function",
-    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_skipmsg_success_cleanup,
@@ -1329,7 +1329,7 @@ static struct test selftests_array[] = {
 {
     .id = "selftest_skipmsg_skip_cleanup",
     .description = "Log skip message with SKIP in the cleanup function",
-    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_logs_random_init,
     .test_run = selftest_pass_run,
     .test_cleanup = selftest_skipmsg_skip_cleanup,
