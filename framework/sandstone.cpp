@@ -720,6 +720,7 @@ static void apply_group_inits(/*nonconst*/ struct test *test)
             }
             if (replacements[i].replacement) {
                 test->test_init = replacements[i].replacement;
+                test->flags = test->flags | test_init_in_parent;
                 return;
             }
         }
