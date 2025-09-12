@@ -1484,8 +1484,6 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         debug_init_child();
     }
 
-    prepare_test(test);
-
     TestResult state = TestResult::Passed;
 
     do {
@@ -1926,6 +1924,9 @@ run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failur
                 per_thread_failures[i] |= U(1) << i;
         });
     };
+
+    // call pre-init before timing starts
+    prepare_test(const_cast<struct test*>(test));
 
     sApp->current_test_duration = test_duration(test_cfg);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
