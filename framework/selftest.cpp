@@ -1166,13 +1166,6 @@ const static test_group group_test_is_optional = {
     .description = "Self-tests used to test test_is_optional flag"
 };
 
-#if SANDSTONE_DEVICE_CPU
-const static test_group group_kvm = {
-    .id = "kvm",
-    .description = "Self-tests that launch virtual machines"
-};
-#endif
-
 static struct test selftests_array[] = {
 {
     .id = "selftest_pass",
