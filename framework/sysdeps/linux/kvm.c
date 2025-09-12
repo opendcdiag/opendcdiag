@@ -1056,6 +1056,30 @@ epilogue:
     return result;
 }
 
+static int kvm_log_skip(struct test *test)
+{
+    errno = ~kvm_fd;
+    log_message_skip(-1, OSResourceIssueSkipCategory, "Failed to open /dev/kvm: %m");
+    return EXIT_SKIP;
+}
+
+initfunc group_kvm_init(void) __attribute__((nothrow));
+initfunc group_kvm_init(void)
+{
+    kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
+    if (kvm_fd >= 0) {
+        // we leave kvm_fd open for (usually) fork-mode child processes
+        // (this is C code so we can't check sApp->current_fork_mode)
+        return NULL;
+    }
+
+    // This is a group init, so we are not allowed to log anything.
+    // We store the errno in kvm_fd as a negative value (different from -1)
+    assert(errno);
+    kvm_fd = ~errno;
+    return kvm_log_skip;
+}
+
 int kvm_generic_init(struct test *t)
 {
     int ret;
@@ -1065,10 +1089,11 @@ int kvm_generic_init(struct test *t)
         return EXIT_FAILURE;
     }
 
-    kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
+    if (kvm_fd < 0)
+        kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
     if (kvm_fd < 0) {
-        log_info("Failed to open /dev/kvm.");
-        return -errno;
+        log_message_skip(-1, OSResourceIssueSkipCategory, "Failed to open /dev/kvm: %m");
+        return EXIT_SKIP;
     }
 
     ret = ioctl(kvm_fd, KVM_GET_API_VERSION, NULL);

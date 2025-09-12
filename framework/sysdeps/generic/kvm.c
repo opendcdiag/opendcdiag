@@ -45,3 +45,9 @@ int kvm_generic_cleanup(struct test *)
 }
 
 #endif
+
+initfunc group_kvm_init(void) __attribute__((nothrow));
+initfunc group_kvm_init(void)
+{
+    return kvm_generic_init;
+}

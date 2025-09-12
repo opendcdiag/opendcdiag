@@ -588,6 +588,11 @@ void debug_init_global(const char *on_hang_arg, const char *on_crash_arg);
 void debug_crashed_child(std::span<const pid_t> children);
 void debug_hung_child(pid_t child, std::span<const pid_t> children);
 
+#if defined(SANDSTONE_DEVICE_CPU) && defined(__x86_64__)
+/* kvm.c */
+extern "C" initfunc group_kvm_init(void) noexcept;
+#endif
+
 /* logging.cpp */
 void log_message_preformatted(int thread_num, int level, std::string_view msg);
 int logging_stdout_fd(void);

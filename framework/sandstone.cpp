@@ -728,7 +728,6 @@ static void preinit_tests()
                 test->flags = test->flags | test_init_in_parent;
             }
         }
-
     }
 }
 

@@ -27,8 +27,9 @@ constexpr struct test_group group_fuzzing = {
 };
 
 #if defined(SANDSTONE_DEVICE_CPU) && defined(__x86_64__)
-extern constexpr struct test_group group_kvm = {
+constexpr struct test_group group_kvm = {
     TEST_GROUP("kvm",
                "Tests that create virtual machines using Linux's KVM support"),
+    .group_init = group_kvm_init,
 };
 #endif
