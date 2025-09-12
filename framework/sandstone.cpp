@@ -686,61 +686,29 @@ bool test_is_retry() noexcept
     return sApp->current_iteration_count < 0;
 }
 
-static void apply_group_inits(/*nonconst*/ struct test *test)
-{
-    // Create an array with the replacement functions per group and cache.
-    // If the group_init function decides that the group cannot run at all, it
-    // will return a pointer to a replacement function that will in turn cause
-    // the test to fail or skip during test_init().
-
-    std::span<const struct test_group> groups = { &__start_test_group, &__stop_test_group };
-    static auto replacements = [=]() {
-        struct Result {
-            decltype(test_group::group_init) group_init;
-            decltype(test_group::group_init()) replacement;
-        };
-
-        std::vector<Result> replacements(groups.size());
-        size_t i = 0;
-        for ( ; i < replacements.size(); ++i) {
-            replacements[i].group_init = groups[i].group_init;
-            replacements[i].replacement = nullptr;
-        }
-        return replacements;
-    }();
-
-    for (auto ptr = test->groups; *ptr; ++ptr) {
-        for (size_t i = 0; i < groups.size(); ++i) {
-            if (*ptr != &groups.begin()[i])
-                continue;
-            if (replacements[i].group_init && !replacements[i].replacement) {
-                // call the group_init function, only once
-                replacements[i].replacement = replacements[i].group_init();
-                replacements[i].group_init = nullptr;
-            }
-            if (replacements[i].replacement) {
-                test->test_init = replacements[i].replacement;
-                test->flags = test->flags | test_init_in_parent;
-                return;
-            }
-        }
-    }
-}
-
-static void prepare_test(/*nonconst*/ struct test *test)
-{
-    if (test->test_preinit) {
-        test->test_preinit(test);
-        test->test_preinit = nullptr;   // don't rerun in case the test is re-added
-    }
-    if (test->groups)
-        apply_group_inits(test);
-}
-
 static void preinit_tests()
 {
     for (test_cfg_info &cfg : *test_set) {
-        prepare_test(cfg.test);
+        struct test *test = cfg.test;
+        if (test->test_preinit) {
+            test->test_preinit(test);
+            test->test_preinit = nullptr;   // don't rerun in case the test is re-added
+        }
+
+        // If the group_init function decides that the group cannot run at all,
+        // it will return a pointer to a replacement function that will in turn
+        // cause the test to fail or skip during test_init().
+        if (test->groups) {
+            for (auto ptr = test->groups; *ptr; ++ptr) {
+                const struct test_group *group = *ptr;
+                initfunc replacement = group->group_init ? group->group_init() : nullptr;
+                if (!replacement)
+                    continue;
+                test->test_init = replacement;
+                test->flags = test->flags | test_init_in_parent;
+            }
+        }
+
     }
 }
 

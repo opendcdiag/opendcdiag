@@ -395,6 +395,10 @@ function selftest_log_skip_init_common() {
     selftest_log_skip_init_common selftest_log_skip_init_mainproc
 }
 
+@test "selftest_log_skip_init_from_group" {
+    selftest_log_skip_init_common selftest_log_skip_init_from_group '.*skip from the group init'
+}
+
 @test "selftest_skip_cleanup" {
     declare -A yamldump
     sandstone_selftest -e selftest_skip_cleanup
