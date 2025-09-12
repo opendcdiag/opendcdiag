@@ -9,7 +9,7 @@
 
 #ifdef __x86_64__
 #include "amx_common.h"
-#include "cpu_features.h"
+#include "xsave_states.h"
 #include "fp_vectors/Floats.h"
 
 #include <algorithm>
@@ -31,7 +31,7 @@
 #  include <windows.h>
 #endif
 
-using ApxState = std::array<int64_t, 16>;
+using ApxState_ = std::array<int64_t, 16>;
 
 union xmmreg
 {
@@ -149,7 +149,7 @@ static constexpr char rounding_modes[][9] = {
     "nearest", "down", "up", "truncate"
 };
 
-static ptrdiff_t xsave_offset(XSaveBits bit)
+static ptrdiff_t xsave_offset(XSave bit)
 {
     int n = __bsfd(bit);
     uint32_t eax, ebx, ecx, edx;
@@ -339,12 +339,12 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
 
 static void print_egprs(std::string &f, const Fxsave *state)
 {
-    int offset = xsave_offset(XSave_ApxState);
-    if (offset + sizeof(ApxState) <= Fxsave::size)
+    int offset = xsave_offset(XSave::ApxState);
+    if (offset + sizeof(ApxState_) <= Fxsave::size)
         return;
 
     auto base = reinterpret_cast<const uint8_t *>(state);
-    auto egprs = reinterpret_cast<const ApxState *>(base + offset);
+    auto egprs = reinterpret_cast<const ApxState_ *>(base + offset);
     char regname[] = "r16";
     for (int64_t value : *egprs) {
         print_gpr(f, regname, value);
@@ -386,7 +386,7 @@ static void print_xmm_register(std::string &f, const xmmreg &ptr)
     f += stdprintf("%016" PRIx64 ":%016" PRIx64 " ", high, low);
 }
 
-static void print_avx_registers(std::string &f, const Fxsave *state, XSaveBits mask)
+static void print_avx_registers(std::string &f, const Fxsave *state, XSave mask)
 {
     // start with the MXCSR
     f += stdprintf(" mxcsr = 0x%08x [ ", state->mxcsr);
@@ -400,22 +400,22 @@ static void print_avx_registers(std::string &f, const Fxsave *state, XSaveBits m
     const zmmreg *hizmmstate = nullptr;
     const __mmask64 *opmaskstate = nullptr;
 
-    if (mask & XSave_Ymm_Hi128) {
+    if (mask & XSave::Ymm_Hi128) {
         nameprefix = 'y';
-        if (int offset = xsave_offset(XSave_Ymm_Hi128); offset > Fxsave::size)
+        if (int offset = xsave_offset(XSave::Ymm_Hi128); offset > Fxsave::size)
             ymmhstate = reinterpret_cast<const xmmreg *>(base + offset);
     }
-    if (mask & XSave_Zmm_Hi256) {
+    if (mask & XSave::Zmm_Hi256) {
         nameprefix = 'z';
-        if (int offset = xsave_offset(XSave_Zmm_Hi256); offset > Fxsave::size)
+        if (int offset = xsave_offset(XSave::Zmm_Hi256); offset > Fxsave::size)
             zmmhstate = reinterpret_cast<const ymmreg *>(base + offset);
     }
-    if (mask & XSave_Hi16_Zmm) {
-        if (int offset = xsave_offset(XSave_Hi16_Zmm); offset > Fxsave::size)
+    if (mask & XSave::Hi16_Zmm) {
+        if (int offset = xsave_offset(XSave::Hi16_Zmm); offset > Fxsave::size)
             hizmmstate = reinterpret_cast<const zmmreg *>(base + offset);
     }
-    if (mask & XSave_OpMask) {
-        if (int offset = xsave_offset(XSave_OpMask); offset > Fxsave::size)
+    if (mask & XSave::OpMask) {
+        if (int offset = xsave_offset(XSave::OpMask); offset > Fxsave::size)
             opmaskstate = reinterpret_cast<const __mmask64 *>(base + offset);
     }
 
@@ -453,7 +453,7 @@ static void print_amx_tiles_palette1(std::string &f, const Fxsave *state, const 
         .max_rows = 16
     };
 
-    int offset = xsave_offset(XSave_Xtiledata);
+    int offset = xsave_offset(XSave::Xtiledata);
     if (offset + info.total_tile_bytes <= Fxsave::size)
         return;
 
@@ -476,9 +476,9 @@ static void print_amx_tiles_palette1(std::string &f, const Fxsave *state, const 
     }
 }
 
-static void print_amx_state(std::string &f, const Fxsave *state, XSaveBits mask)
+static void print_amx_state(std::string &f, const Fxsave *state, XSave mask)
 {
-    int offset = xsave_offset(XSave_Xtilecfg);
+    int offset = xsave_offset(XSave::Xtilecfg);
     if (offset + sizeof(amx_tileconfig) <= Fxsave::size)
         return;
 
@@ -489,7 +489,7 @@ static void print_amx_state(std::string &f, const Fxsave *state, XSaveBits mask)
         f += stdprintf("            tile%-2zu { colsb: %u, rows: %u }\n",
                 i, tileconfig->colsb[i], tileconfig->rows[i]);
 
-    if (mask & XSave_Xtiledata) {
+    if (mask & XSave::Xtiledata) {
         if (tileconfig->palette == 1)
             return print_amx_tiles_palette1(f, state, tileconfig);
     }
@@ -503,7 +503,7 @@ static inline uint64_t __attribute__((target("xsave"))) do_xgetbv()
 void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
 {
     // sanity check the state
-    XSaveBits mask = XSaveBits(xsave_dump_mask);
+    XSave mask = XSave(xsave_dump_mask);
     if (xsave_size < Fxsave::size)
         return;         // too small to be FXSAVE state
 
@@ -516,10 +516,10 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
         // get the bit vector of saved features
         uint64_t xsave_bv;
         memcpy(&xsave_bv, state + 1, sizeof(xsave_bv));
-        mask = XSaveBits(mask & xsave_bv);
+        mask = XSave(mask & xsave_bv);
 
         // sanity check it
-        uint64_t xgetbv0 = XSave_X87 | XSave_SseState;
+        uint64_t xgetbv0 = XSave::X87 | XSave::SseState;
 
         // some Atoms have XSAVE but not AVX, but until there's interesting
         // state in them, the check for AVX suffices
@@ -530,19 +530,19 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
             return;     // bit vector contains invalid bits
     } else {
         // only the legacy state
-        mask = XSaveBits(mask & (XSave_X87 | XSave_SseState));
+        mask = XSave(mask & (XSave::X87 | XSave::SseState));
     }
 
-    if (mask & XSave_ApxState)
+    if (mask & XSave::ApxState)
         print_egprs(f, state);
 
-    if (mask & XSave_X87)
+    if (mask & XSave::X87)
         print_x87mmx_registers(f, state);
 
-    if (mask & XSave_Avx512State)
+    if (mask & XSave::Avx512State)
         print_avx_registers(f, state, mask);
 
-    if (mask & XSave_AmxState)
+    if (mask & XSave::AmxState)
         print_amx_state(f, state, mask);
 }
 
