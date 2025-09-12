@@ -179,4 +179,6 @@ void init_topology(const LogicalProcessorSet &enabled_cpus);
 void restrict_topology(DeviceRange range);
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures);
 
+uint32_t mixin_from_device_info(int thread_num);
+
 #endif /* INC_TOPOLOGY_H */
