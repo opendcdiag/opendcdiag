@@ -1536,7 +1536,8 @@ selftest_crash_common() {
 @test "crash context" {
     declare -A yamldump
     selftest_crash_context_common -n1 -e selftest_sigsegv --on-crash=context
-    test_yaml_regexp "/tests/0/threads/0/thread" '[0-9]+'       # not 'main'
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/1/thread" '[0-9]+'       # not 'main'
 
     # Ensure we can use this option even if gdb isn't found
     # (can't use run_sandstone_yaml here because we empty $PATH)
@@ -1631,7 +1632,7 @@ selftest_interrupt_common() {
     fi
 
     # Confirm the grandchild died too
-    local msg=/tests/0/threads/0/messages/0/text
+    local msg=/tests/0/threads/1/messages/0/text
     test_yaml_regexp "$msg" '.*Child pid:.*'
     pid=${yamldump[$msg]#I> Child pid: }
     if status=`ps ho s $pid`; then

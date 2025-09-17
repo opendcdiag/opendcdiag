@@ -1740,16 +1740,14 @@ void YamlLogger::print_thread_header(int fd, int device, int verbosity)
     writeln(fd, indent_spaces(), "    messages:");
 }
 
-void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
+bool YamlLogger::want_slice_resource_usage(int slice)
 {
     switch (slices[slice].result) {
     case TestResult::Skipped:
     case TestResult::Passed:
     case TestResult::Failed:
     case TestResult::OperatingSystemError:
-        if (sApp->shmem->verbosity >= 3)
-            break;
-        return;
+        return sApp->shmem->verbosity >= 3;
 
     case TestResult::Killed:
     case TestResult::CoreDumped:
@@ -1758,6 +1756,13 @@ void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
     case TestResult::Interrupted:
         break;
     }
+    return true;
+}
+
+void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
+{
+    if (!want_slice_resource_usage(slice))
+        return;
 
     auto runtime = slices[slice].endtime - sApp->current_test_starttime;
     writeln(fd, indent_spaces(), "    runtime: ", format_duration(runtime, FormatDurationOptions::WithoutUnit));
@@ -2033,11 +2038,17 @@ void YamlLogger::print_thread_messages()
     // print the thread messages
     auto doprint = [this](PerThreadData::Common *data, int s_tid) {
         struct mmap_region r = maybe_mmap_log(data);
+        bool want_print = data->has_failed() || sApp->shmem->verbosity >= 3;
+        ssize_t min_size = 0;
 
         /* for main threads (negative ids) adjust the message size to account
          * for skip message. this is to avoid empty messages printed to the log.
          */
-        if (r.size - (s_tid < 0 ? init_skip_message_bytes : 0) == 0 && !data->has_failed() && sApp->shmem->verbosity < 3) {
+        if (s_tid < 0 && !want_print) {
+            min_size = init_skip_message_bytes;
+            want_print = want_slice_resource_usage(~s_tid);
+        }
+        if (r.size <= min_size && !want_print) {
             munmap_and_truncate_log(data, r);
             return;             /* nothing to be printed, on any level */
         }
