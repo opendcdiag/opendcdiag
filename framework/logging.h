@@ -70,6 +70,7 @@ private:
     void print_fixed();
     void print_thread_messages();
     void print_thread_header(int fd, int device, int verbosity);
+    bool want_slice_resource_usage(int slice);
     void maybe_print_slice_resource_usage(int fd, int slice);
     static int print_test_knobs(int fd, mmap_region r);
     static void format_and_print_skip_reason(int fd, std::string_view message);
