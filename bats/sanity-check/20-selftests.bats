@@ -1650,6 +1650,9 @@ selftest_interrupt_common() {
 
     test_yaml_regexp "/exit" interrupted
     test_yaml_regexp "/tests/0/result" interrupted
+    test_yaml_numeric "/tests/0/threads/0/runtime" "value >= 0 && value < $timeout"
+    test_yaml_numeric "/tests/0/threads/0/resource-usage/cpuavg" 'value >= 0'
+    test_yaml_numeric "/tests/0/test-runtime" "value < $timeout"
     test_yaml_numeric "/tests/0/time-at-end/elapsed" "value < $timeout"
 }
 
