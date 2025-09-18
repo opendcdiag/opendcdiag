@@ -1354,8 +1354,12 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
             if (ret == 0)
                 continue;
 
-            for (ChildExitStatus &result : children.results)
-                result = { TestResult::Interrupted };
+            MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+            for (ChildExitStatus &result : children.results) {
+                result.result = TestResult::Interrupted;
+                if (result.endtime == MonotonicTimePoint())
+                    result.endtime = now;
+            }
 
             // Problem waiting: we must have caught a signal
             // (child has likely not been able to write results)
