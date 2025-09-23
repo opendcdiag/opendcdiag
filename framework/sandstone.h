@@ -324,10 +324,10 @@ struct test {
     const struct test_group * const *groups;
 
     /* methods */
-    initfunc test_preinit;        ///! called from the main thread
-    initfunc test_init;                ///! called from the main thread
-    runfunc test_run;                ///! called per CPU
-    cleanupfunc test_cleanup;        ///! called from the main thread
+    initfunc test_preinit;        ///! called from the parent
+    initfunc test_init;           ///! called from the child's main thread
+    runfunc test_run;             ///! called from the child, per CPU
+    cleanupfunc test_cleanup;     ///! called from the child's main thread
 
     /// kvm_config for kvm test type
     kvmconfigfunc test_kvm_config;
