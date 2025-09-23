@@ -762,18 +762,6 @@ static void init_per_thread_data()
     for_each_test_thread(initer);
 }
 
-/* not static: used in tests/smi_count/smi_count.cpp */
-void initialize_smi_counts()
-{
-    std::optional<uint64_t> v = sApp->count_smi_events(cpu_info[0].cpu_number);
-    if (!v)
-        return;
-    sApp->smi_counts_start.resize(thread_count());
-    sApp->smi_counts_start[0] = *v;
-    for (int i = 1; i < thread_count(); i++)
-        sApp->smi_counts_start[i] = sApp->count_smi_events(cpu_info[i].cpu_number).value_or(0);
-}
-
 static void cleanup_internal(const struct test *test)
 {
     logging_finish();
@@ -2715,8 +2703,6 @@ int main(int argc, char **argv)
     sApp->current_test_count = 0;
     int total_tests_run = 0;
     TestResult lastTestResult = TestResult::Skipped;
-
-    initialize_smi_counts();  // used by smi_count test
 
     for (auto it = get_first_test(); it != test_set->end(); it = get_next_test(it)) {
         if (lastTestResult != TestResult::Skipped) {
