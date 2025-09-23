@@ -16,6 +16,10 @@
 #endif
 #include "test_knobs.h"
 #include "topology.h"
+#include "logging.h"
+#if SANDSTONE_DEVICE_CPU
+#   include "logging_cpu.h"
+#endif
 
 #include <array>
 #include <charconv>
@@ -41,8 +45,6 @@
 #ifndef _WIN32
 #  include <sys/utsname.h>
 #endif
-
-#include "gitid.h"
 
 #if O_CLOEXEC
 #  define FOPEN_CLOEXEC     "e"
@@ -94,16 +96,15 @@ RtlGetVersion(
 #  include <gnu/libc-version.h>
 #endif
 
-static const char program_version[] = SANDSTONE_EXECUTABLE_NAME "-" GIT_ID;
-
-static int real_stdout_fd = STDOUT_FILENO;
 static int tty = -1;
-static int file_log_fd = -1;
 static int stderr_fd = -1;
 static bool delete_log_on_success;
 static uint8_t progress_bar_needs_flush = false;
 
 static constexpr auto UsedKnobValueLoggingLevel = LOG_LEVEL_VERBOSE(1);
+
+int AbstractLogger::real_stdout_fd = STDOUT_FILENO;
+int AbstractLogger::file_log_fd = -1;
 
 namespace {
 enum LogTypes {
@@ -112,107 +113,6 @@ enum LogTypes {
     UsedKnobValue = 2,
     SkipMessages = 3,
 };
-
-class AbstractLogger
-{
-public:
-    AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state);
-
-    const struct test *test;
-    MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
-    std::span<const ChildExitStatus> slices;
-    ChildExitStatus childExitStatus;
-    TestResult testResult = TestResult::Passed;
-    int pc = 0;
-    bool skipInMainThread = false;
-
-protected:
-    int loglevel() const;
-    bool should_print_fail_info() const;
-
-    // shared between the TAP and key-value loggers; YAML overrides
-    static void format_and_print_message(int fd, std::string_view message, bool from_thread_message);
-    int print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level);
-};
-
-class TapFormatLogger : public AbstractLogger
-{
-public:
-    TapFormatLogger(const struct test *test, std::span<const ChildExitStatus> state)
-        : AbstractLogger(test, state)
-    {}
-
-    void print(int tc);
-
-protected:
-    // shared with the pure YAML logger
-    std::string fail_info_details();
-
-private:
-    const char *file_terminator = nullptr;
-    const char *stdout_terminator = nullptr;
-
-    void maybe_print_yaml_marker(int fd);
-    void print_thread_messages();
-    void print_thread_header(int fd, int cpu, int verbosity);
-    void print_child_stderr();
-    std::string format_status_code();
-};
-
-class YamlLogger : public TapFormatLogger
-{
-public:
-    YamlLogger(const struct test *test, std::span<const ChildExitStatus> state)
-        : TapFormatLogger(test, state)
-    { }
-
-    static std::string get_current_time();
-
-    // non-virtual override
-    void print();
-    static void print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout);
-
-    enum TestHeaderTime { AtStart, OnFirstFail };
-    static void print_tests_header(TestHeaderTime mode);
-
-private:
-    int init_skip_message_bytes = 0;
-    bool file_printed_messages_header = false;
-    bool stdout_printed_messages_header = false;
-
-    static std::string thread_id_header(int cpu, int verbosity);
-    void maybe_print_messages_header(int fd);
-    void print_fixed();
-    void print_thread_messages();
-    void print_thread_header(int fd, int cpu, int verbosity);
-    void maybe_print_slice_resource_usage(int fd, int slice);
-    static int print_test_knobs(int fd, mmap_region r);
-    static void format_and_print_message(int fd, std::string_view level, std::string_view message);
-    static void format_and_print_skip_reason(int fd, std::string_view message);
-    int print_one_thread_messages(int fd, mmap_region r, int level);
-    void print_result_line(int &init_skip_message_bytes);
-};
-
-class KeyValuePairLogger : public AbstractLogger
-{
-public:
-    KeyValuePairLogger(const struct test *test, std::span<const ChildExitStatus> state)
-        : AbstractLogger(test, state)
-    {
-        prepare_line_prefix();
-    }
-
-    void print(int tc);
-
-private:
-    std::string timestamp_prefix;
-
-    void prepare_line_prefix();
-    void print_thread_header(int fd, int cpu, const char *prefix);
-    void print_thread_messages();
-    void print_child_stderr();
-};
-
 } // unnamed namespace
 
 static SandstoneApplication::OutputFormat current_output_format()
@@ -256,47 +156,12 @@ static int level_from_code(uint8_t code)
     return code & 0xf;
 }
 
-static auto thread_core_spacing()
-{
-    // calculate the spacing so things align
-    // Note: this assumes the topology won't change after the first time this
-    // function is called.
-    static const auto spacing = []() {
-        struct { int logical, core; } result = { 1, 1 };
-        int max_core_id = 0;
-        int max_logical_id = 0;
-        for (int i = 0; i < thread_count(); ++i) {
-            if (cpu_info[i].cpu_number > max_logical_id)
-                max_logical_id = cpu_info[i].cpu_number;
-            if (cpu_info[i].core_id > max_core_id)
-                max_core_id = cpu_info[i].core_id;
-        }
-        if (max_logical_id > 9)
-            ++result.logical;
-        if (max_logical_id > 99)
-            ++result.logical;
-        if (max_logical_id > 999)
-            ++result.logical;
-        if (max_core_id > 9)
-            ++result.core;
-        if (max_core_id > 99)
-            ++result.core;
-        return result;
-    }();
-    return spacing;
-}
-
-enum class Iso8601Format : unsigned {
-    WithoutMs           = 0,
-    WithMs              = 1,
-    FilenameCompatible  = 2,
-};
 static Iso8601Format operator|(Iso8601Format f1, Iso8601Format f2)
 { return Iso8601Format(unsigned(f1) | unsigned(f2)); }
 static unsigned operator&(Iso8601Format f1, Iso8601Format f2)
 { return unsigned(f1) & unsigned(f2); }
 
-static const char *iso8601_time_now(Iso8601Format format)
+const char *iso8601_time_now(Iso8601Format format)
 {
     static char buffer[sizeof "2147483647-12-31T23:59:60.999999Z"];
     struct tm tm;
@@ -350,7 +215,7 @@ static struct timespec elapsed_runtime(void)
     return (struct timespec){ secs, nsecs };
 }
 
-static std::string log_timestamp()
+std::string log_timestamp()
 {
     struct timespec elapsed = elapsed_runtime();
     return stdprintf("[%5ld.%06d] ", (long)elapsed.tv_sec, (int)elapsed.tv_nsec / 1000);
@@ -411,7 +276,7 @@ static void progress_bar_flush()
     IGNORE_RETVAL(write(tty, flush_str.data(), flush_str.size()));
 }
 
-static const char *quality_string(const struct test *test)
+const char *quality_string(const struct test *test)
 {
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value:
@@ -453,7 +318,7 @@ static uint8_t status_level(char letter)
     return 2;
 }
 
-static const char *char_to_skip_category(int val)
+const char *char_to_skip_category(int val)
 {
     switch (val) {
     case CpuNotSupportedSkipCategory:
@@ -496,7 +361,7 @@ log_message_for_thread(int thread_num, LogTypes logType, int level, Args &&... a
 
 int logging_stdout_fd(void)
 {
-    return real_stdout_fd;
+    return AbstractLogger::real_stdout_fd;
 }
 
 static inline int open_new_log()
@@ -514,14 +379,14 @@ static inline void truncate_log(int fd)
     IGNORE_RETVAL(ftruncate(fd, 0));
 }
 
-static inline mmap_region maybe_mmap_log(const PerThreadData::Common *data)
+mmap_region maybe_mmap_log(const PerThreadData::Common *data)
 {
     if (data->messages_logged.load(std::memory_order_relaxed) == 0)
         return {};
     return mmap_file(data->log_fd);
 }
 
-static inline void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r)
+void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r)
 {
     if (r.size == 0)
         return;
@@ -534,7 +399,7 @@ void logging_init_global_child()
 {
     assert(sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
 
-    file_log_fd = real_stdout_fd = STDOUT_FILENO;
+    AbstractLogger::file_log_fd = AbstractLogger::real_stdout_fd = STDOUT_FILENO;
 #ifndef NDEBUG
     logging_printf(LOG_LEVEL_QUIET, "# stdout is expected to be connected to " _PATH_DEVNULL
                    " so you should never see this message\n");
@@ -602,11 +467,11 @@ void logging_init_global(void)
 
     /* move stdout to a different file descriptor for us */
 #ifdef F_DUPFD_CLOEXEC
-    real_stdout_fd = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, 0);
+    AbstractLogger::real_stdout_fd = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, 0);
 #else
-    real_stdout_fd = dup(STDOUT_FILENO);
+    AbstractLogger::real_stdout_fd = dup(STDOUT_FILENO);
 #endif
-    if (real_stdout_fd == -1) {
+    if (AbstractLogger::real_stdout_fd == -1) {
         // this will never happen
         perror("fdopen");
         exit(EXIT_MEMORY);
@@ -625,15 +490,15 @@ void logging_init_global(void)
     }
 
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output) {
-        file_log_fd = STDOUT_FILENO;
+        AbstractLogger::file_log_fd = STDOUT_FILENO;
     } else if (should_log_to_file()) {
         errno = EISDIR;
         if (sApp->file_log_path.empty())
             sApp->file_log_path = '.';
 
-        file_log_fd = open(sApp->file_log_path.c_str(), O_RDWR | O_CLOEXEC | O_CREAT | O_TRUNC, 0666);
+        AbstractLogger::file_log_fd = open(sApp->file_log_path.c_str(), O_RDWR | O_CLOEXEC | O_CREAT | O_TRUNC, 0666);
         bool isdir = false;
-        if (file_log_fd == -1) {
+        if (AbstractLogger::file_log_fd == -1) {
 #ifdef _WIN32
             // open(".") for writing on Windows results in other errors instead of EISDIR
             DWORD attr = GetFileAttributesA(sApp->file_log_path.c_str());
@@ -644,24 +509,24 @@ void logging_init_global(void)
 #endif
         }
         if (isdir) {
-            file_log_fd = open(time_based_log_path(), O_RDWR | O_CLOEXEC | O_CREAT | O_TRUNC | O_EXCL, 0666);
+            AbstractLogger::file_log_fd = open(time_based_log_path(), O_RDWR | O_CLOEXEC | O_CREAT | O_TRUNC | O_EXCL, 0666);
             delete_log_on_success = true;
         }
-        if (file_log_fd == -1) {
+        if (AbstractLogger::file_log_fd == -1) {
             fprintf(stderr, "%s: failed to open log file: %s: %s\n",
                     program_invocation_name, sApp->file_log_path.c_str(), strerror(errno));
             exit(EX_CANTCREAT);
         }
     }
 
-    if (file_log_fd == -1) {
-        file_log_fd = real_stdout_fd;
+    if (AbstractLogger::file_log_fd == -1) {
+        AbstractLogger::file_log_fd = AbstractLogger::real_stdout_fd;
     } else {
 #ifdef _WIN32
         // no tty on win32, open app's console instead
         tty = open("CON:", _O_WRONLY);
 #elif defined _PATH_TTY
-        if (isatty(real_stdout_fd)) {
+        if (isatty(AbstractLogger::real_stdout_fd)) {
             // stdout is a tty, so try to open /dev/tty
             tty = open(_PATH_TTY, O_WRONLY | O_NOCTTY | O_CLOEXEC);
         }
@@ -712,7 +577,7 @@ int logging_close_global(int exitcode)
             logging_printf(LOG_LEVEL_QUIET, "exit: %s\n", exitline);
     }
     if (exitcode == EXIT_SUCCESS && delete_log_on_success) {
-        close(file_log_fd);
+        close(AbstractLogger::file_log_fd);
         remove(sApp->file_log_path.c_str());
     }
 
@@ -732,16 +597,16 @@ int logging_close_global(int exitcode)
 
 void logging_print_log_file_name()
 {
-    if (real_stdout_fd == file_log_fd || file_log_fd == STDOUT_FILENO)
+    if (AbstractLogger::real_stdout_fd == AbstractLogger::file_log_fd || AbstractLogger::file_log_fd == STDOUT_FILENO)
         return;
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value:
     case SandstoneApplication::OutputFormat::tap:
-        dprintf(real_stdout_fd, "# More information logged to '%s'\n", sApp->file_log_path.c_str());
+        dprintf(AbstractLogger::real_stdout_fd, "# More information logged to '%s'\n", sApp->file_log_path.c_str());
         break;
 
     case SandstoneApplication::OutputFormat::yaml:
-        dprintf(real_stdout_fd, "%slog_file: '%s'\n", indent_spaces().data(), sApp->file_log_path.c_str());
+        dprintf(AbstractLogger::real_stdout_fd, "%slog_file: '%s'\n", indent_spaces().data(), sApp->file_log_path.c_str());
         // timestamp in the iteration start
         break;
 
@@ -845,7 +710,7 @@ void logging_restricted(int level, const char *fmt, ...)
 
     progress_bar_flush();
 
-    int fd = real_stdout_fd;
+    int fd = AbstractLogger::real_stdout_fd;
     if (level < 0)
         fd = STDERR_FILENO;
 
@@ -868,16 +733,16 @@ void logging_printf(int level, const char *fmt, ...)
     if (msg.empty())
         return;     // can happen if fmt was "%s" and the string ended up empty
 
-    if (level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
+    if (level <= sApp->shmem->verbosity && AbstractLogger::file_log_fd != AbstractLogger::real_stdout_fd) {
         progress_bar_flush();
-        int fd = real_stdout_fd;
+        int fd = AbstractLogger::real_stdout_fd;
         if (level < 0)
             fd = STDERR_FILENO;
         writevec(fd, indent_spaces(), msg);
     }
 
-    int fd = file_log_fd;
-    if (level < 0 && file_log_fd == real_stdout_fd)
+    int fd = AbstractLogger::file_log_fd;
+    if (level < 0 && AbstractLogger::file_log_fd == AbstractLogger::real_stdout_fd)
         fd = STDERR_FILENO;         // no stderr logging above, so do it here
 
     // include the timestamp in each line, unless we're using YAML format
@@ -967,18 +832,18 @@ static void print_reproduction_details()
 {
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value:
-        logging_printf(LOG_LEVEL_QUIET, "version = %s\n", program_version);
+        logging_printf(LOG_LEVEL_QUIET, "version = %s\n", AbstractLogger::program_version);
         logging_printf(LOG_LEVEL_QUIET, "current_time = %s\n", iso8601_time_now(Iso8601Format::WithMs));
         logging_printf(LOG_LEVEL_VERBOSE(1), "os = %s\n", os_info().c_str());
         return;
 
     case SandstoneApplication::OutputFormat::tap:
-        logging_printf(LOG_LEVEL_QUIET, "# Built from git commit: %s\n", program_version);
+        logging_printf(LOG_LEVEL_QUIET, "# Built from git commit: %s\n", AbstractLogger::program_version);
         logging_printf(LOG_LEVEL_QUIET, "# Current time: %s\n", iso8601_time_now(Iso8601Format::WithMs));
         break;
 
     case SandstoneApplication::OutputFormat::yaml:
-        logging_printf(LOG_LEVEL_QUIET, "version: %s\n", program_version);
+        logging_printf(LOG_LEVEL_QUIET, "version: %s\n", AbstractLogger::program_version);
         // timestamp in the iteration start
         break;
 
@@ -991,7 +856,7 @@ static void print_reproduction_details()
 
 void logging_print_version()
 {
-    printf("%s\n", program_version);
+    printf("%s\n", AbstractLogger::program_version);
 }
 
 void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout)
@@ -1022,7 +887,7 @@ void logging_print_header(int argc, char **argv, ShortDuration test_duration, Sh
     case SandstoneApplication::OutputFormat::tap:
         logging_printf(LOG_LEVEL_QUIET, "# %s\n", cmdline.data());
         logging_printf(LOG_LEVEL_VERBOSE(1), "# %s; Operating system: %s\n",
-                       program_version, os_info().c_str());
+                       AbstractLogger::program_version, os_info().c_str());
         logging_printf(LOG_LEVEL_VERBOSE(2), "# Target test duration is %s per test, timeout %s\n",
                        format_duration(test_duration, FormatDurationOptions::WithUnit).c_str(),
                        format_duration(test_timeout, FormatDurationOptions::WithUnit).c_str());
@@ -1085,7 +950,7 @@ void logging_flush(void)
 
     // we don't need to fflush() because all our log files are opened without
     // buffering
-    do_flush(file_log_fd);
+    do_flush(AbstractLogger::file_log_fd);
     do_flush(sApp->main_thread_data()->log_fd);
 }
 
@@ -1541,7 +1406,7 @@ void AbstractLogger::format_and_print_message(int fd, std::string_view message, 
     }
 }
 
-static std::string get_skip_message(int thread_num)
+std::string get_skip_message(int thread_num)
 {
     std::string skip_message;
     struct mmap_region r = mmap_file(sApp->thread_data(thread_num)->log_fd);
@@ -1569,7 +1434,7 @@ static std::string_view format_skip_message(std::string_view message)
 
 /// Returns the lowest priority found
 /// (this function is shared between the TAP and key-value pair loggers)
-int AbstractLogger::print_one_thread_messages(int fd, PerThreadData::Common *data, struct mmap_region r, int level)
+int AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Common *data, struct mmap_region r, int level)
 {
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
@@ -1620,7 +1485,7 @@ int AbstractLogger::print_one_thread_messages(int fd, PerThreadData::Common *dat
     return lowest_level;
 }
 
-static void print_child_stderr_common(std::function<void(int)> header)
+void print_child_stderr_common(std::function<void(int)> header)
 {
     struct mmap_region r = mmap_file(stderr_fd);
     if (r.size == 0)
@@ -1629,11 +1494,11 @@ static void print_child_stderr_common(std::function<void(int)> header)
     char indent[] = "    ";
     std::string_view contents(static_cast<const char *>(r.base), r.size);
 
-    header(file_log_fd);
-    print_content_indented(file_log_fd, indent, contents);
-    if (file_log_fd != real_stdout_fd && sApp->shmem->verbosity > 0) {
-        header(real_stdout_fd);
-        print_content_indented(real_stdout_fd, indent, contents);
+    header(AbstractLogger::file_log_fd);
+    print_content_indented(AbstractLogger::file_log_fd, indent, contents);
+    if (AbstractLogger::file_log_fd != AbstractLogger::real_stdout_fd && sApp->shmem->verbosity > 0) {
+        header(AbstractLogger::real_stdout_fd);
+        print_content_indented(AbstractLogger::real_stdout_fd, indent, contents);
     }
     munmap_file(r);
 
@@ -1641,8 +1506,7 @@ static void print_child_stderr_common(std::function<void(int)> header)
     truncate_log(stderr_fd);
 }
 
-static std::string
-format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
+std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts)
 {
     if (tp <= MonotonicTimePoint() || tp == MonotonicTimePoint::max())
         return {};
@@ -1716,7 +1580,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
         testResult = TestResult::Skipped;       // all threads skipped
 }
 
-inline int AbstractLogger::loglevel() const
+int AbstractLogger::loglevel() const
 {
     switch (testResult) {
     case TestResult::Skipped:
@@ -1735,7 +1599,7 @@ inline int AbstractLogger::loglevel() const
     __builtin_unreachable();
 }
 
-inline bool AbstractLogger::should_print_fail_info() const
+bool AbstractLogger::should_print_fail_info() const
 {
     switch (testResult) {
     case TestResult::Skipped:
@@ -1754,246 +1618,7 @@ inline bool AbstractLogger::should_print_fail_info() const
     __builtin_unreachable();
 }
 
-void KeyValuePairLogger::prepare_line_prefix()
-{
-    timestamp_prefix = log_timestamp();
-    timestamp_prefix += test->id;
-}
-
-void KeyValuePairLogger::print(int tc)
-{
-    logging_printf(LOG_LEVEL_QUIET, "%s_result = %s\n", test->id,
-                   testResult == TestResult::Skipped ? "skip" :
-                   testResult == TestResult::Passed ? "pass" : "fail");
-
-    if (testResult == TestResult::Skipped && !skipInMainThread) {
-        logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "Runtime");
-        logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
-                       "All CPUs skipped while executing 'test_run()' function, check log for details");
-    } else if (testResult == TestResult::Skipped) {
-        // skipped in the test_init()
-        // FIXME: multiple main threads
-        std::string init_skip_message = get_skip_message(-1);
-        if (init_skip_message.size() > 0) {
-            logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, char_to_skip_category(init_skip_message[0]));
-            logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = ", test->id);
-            std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
-            format_and_print_message(real_stdout_fd, message, false);
-            if (file_log_fd != real_stdout_fd)
-                format_and_print_message(file_log_fd, message, false);
-        } else {
-            logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, "Unknown");
-            logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
-                           "Unknown, check main thread message for details or use -vv option for more info");
-        }
-    }
-
-    logging_printf(LOG_LEVEL_VERBOSE(1), "%s_seq = %d\n", test->id, tc);
-    logging_printf(LOG_LEVEL_VERBOSE(1), "%s_quality = %s\n", test->id, quality_string(test));
-    logging_printf(LOG_LEVEL_VERBOSE(1), "%s_description = %s\n", test->id, test->description);
-    logging_printf(LOG_LEVEL_VERBOSE(1), "%s_pass_count = %d\n", test->id, pc);
-    logging_printf(LOG_LEVEL_VERBOSE(2), "%s_virtualized = %s\n", test->id,
-                   cpu_has_feature(cpu_feature_hypervisor) ? "yes" : "no");
-    if (should_print_fail_info()) {
-        logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_percent = %.1f\n", test->id,
-                       100. * (thread_count() - pc) / thread_count());
-        logging_printf(LOG_LEVEL_VERBOSE(1), "%s_random_generator_state = %s\n", test->id,
-                       random_format_seed().c_str());
-        logging_printf(LOG_LEVEL_VERBOSE(1), "%s_fail_mask = %s\n", test->id,
-                       build_failure_mask_for_topology(test).c_str());
-        if (std::string time = format_duration(earliest_fail); time.size())
-            logging_printf(LOG_LEVEL_VERBOSE(1), "%s_earliest_fail_time = %s\n", test->id, time.c_str());
-    }
-
-    print_thread_messages();
-    print_child_stderr();
-    logging_flush();
-}
-
-void KeyValuePairLogger::print_thread_header(int fd, int cpu, const char *prefix)
-{
-    if (cpu < 0) {
-        cpu = ~cpu;
-        if (cpu == 0)
-            writeln(file_log_fd, timestamp_prefix, "_messages_mainthread = \\");
-        else
-            dprintf(file_log_fd, "%s_messages_mainthread_%d = \\\n",
-                    timestamp_prefix.c_str(), cpu);
-        return;
-    }
-
-    device_info *info = cpu_info + cpu;
-    const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
-    PerThreadData::Test *thr = sApp->test_thread_data(cpu);
-    if (std::string time = format_duration(thr->fail_time); time.size()) {
-        dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, cpu, time.c_str());
-        dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
-                thr->inner_loop_count_at_fail);
-    } else {
-        dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, cpu,
-                thr->inner_loop_count);
-    }
-    dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, cpu, info->cpu_number);
-    dprintf(fd, "%s_messages_thread_%d_family_model_stepping = %02x-%02x-%02x\n", prefix, cpu,
-            sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
-    dprintf(fd, "%s_messages_thread_%d_topology = phys %d, core %d, thr %d\n",
-            prefix, cpu, info->package_id, info->core_id, info->thread_id);
-    dprintf(fd, "%s_messages_thread_%d_microcode =", prefix, cpu);
-    if (info->microcode)
-        dprintf(fd, " 0x%" PRIx64, info->microcode);
-    dprintf(fd, "\n%s_messages_thread_%d_ppin =",
-            prefix, cpu);
-    if (pkg && pkg->ppin)
-        dprintf(fd, " 0x%" PRIx64, pkg->ppin);
-    dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, cpu);
-}
-
-void KeyValuePairLogger::print_thread_messages()
-{
-    auto doprint = [this](PerThreadData::Common *data, int i) {
-        struct mmap_region r = maybe_mmap_log(data);
-
-        if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
-            return;           /* nothing to be printed, on any level */
-
-        print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
-
-        if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, i, test->id);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity);
-        }
-
-        munmap_and_truncate_log(data, r);
-    };
-    for_each_main_thread(doprint, slices.size());
-    for_each_test_thread(doprint);
-}
-
-void KeyValuePairLogger::print_child_stderr()
-{
-    print_child_stderr_common([this](int fd) {
-        std::string_view prefix = test->id;
-        if (fd == file_log_fd)
-            prefix = timestamp_prefix.c_str();
-        writeln(fd, prefix, "_strerr = \\");
-    });
-}
-
-void TapFormatLogger::print(int tc)
-{
-    // build the ok / not ok line
-    std::string extra;
-    if (const char *qual = quality_string(test))
-        extra = qual;
-
-    const char *okstring = "not ok";
-    switch (testResult) {
-    case TestResult::Skipped:
-        extra += "SKIP";
-        if (skipInMainThread) {
-            // FIXME: multiple main threads
-            std::string init_skip_message = get_skip_message(-1);
-            if (init_skip_message.size() != 0)
-                extra += "(" + std::string(char_to_skip_category(init_skip_message[0])) +
-                        " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
-            else
-                extra += "(Unknown: check main thread message for details or "
-                            "use -vv option for more info)";
-        } else {
-            extra += "(Runtime: All CPUs skipped while executing 'test_run()' "
-                     "function, check log for details)";
-        }
-        [[fallthrough]];
-    case TestResult::Passed:
-        okstring = "ok";
-        break;
-    case TestResult::Failed:
-        break;          // no suffix necessary
-    case TestResult::TimedOut:
-        extra += "timed out";
-        break;
-    case TestResult::CoreDumped:
-        extra += "Core Dumped: ";
-        extra += format_status_code();
-        break;
-    case TestResult::OutOfMemory:
-    case TestResult::Killed:
-        extra += "Killed: ";
-        extra += format_status_code();
-        break;
-    case TestResult::Interrupted:
-        extra += "Interrupted";
-        break;
-    case TestResult::OperatingSystemError:
-        extra += "Operating system error: ";
-        extra += format_status_code();
-        break;
-    }
-
-    std::string tap_line = stdprintf("%s %3i %s", okstring, tc, test->id);
-    if (extra.size()) {
-        static constexpr std::string_view separator = " # ";
-        size_t newsize = std::max(tap_line.size(), size_t(31)) + separator.size() + extra.size();
-        tap_line.reserve(newsize);
-        if (tap_line.size() < 32)
-            tap_line.resize(32, ' ');
-        tap_line += separator;
-        tap_line += extra;
-        extra.clear();
-    }
-
-    logging_printf(loglevel(), "%s\n", tap_line.c_str());
-
-    print_thread_messages();
-    if (sApp->shmem->verbosity >= 1)
-        print_child_stderr();
-
-    if (file_terminator)
-        writeln(file_log_fd, file_terminator);
-    if (stdout_terminator)
-        writeln(real_stdout_fd, stdout_terminator);
-
-    logging_flush();
-}
-
-/// builds the fail info message (including newline)
-/// returns an empty string if there was no failure
-std::string TapFormatLogger::fail_info_details()
-{
-    std::string result;
-    if (!should_print_fail_info())
-        return result;
-
-    auto add_value = [&result](const std::string &s, char separator) {
-        if (s.empty()) {
-            result += "null";
-        } else if (!separator) {
-            result += s;
-        } else {
-            result += separator;
-            result += s;
-            result += separator;
-        }
-    };
-
-    std::string seed = random_format_seed();
-    std::string time = format_duration(earliest_fail, FormatDurationOptions::WithoutUnit);
-    std::string fail_mask = build_failure_mask_for_topology(test);
-
-    result.reserve(strlen("  fail: { cpu-mask: '', time-to-fail: , seed: '' }\n") +
-                   seed.size() + time.size() + fail_mask.size());
-    result += "  fail: { cpu-mask: ";
-    add_value(fail_mask, '\'');
-    result += ", time-to-fail: ";
-    add_value(time, '\0');
-    result += ", seed: ";
-    add_value(seed, '\'');
-    result += "}\n";
-    return result;
-}
-
-[[gnu::pure]] static const char *crash_reason(const ChildExitStatus &status)
+[[gnu::pure]] const char *crash_reason(const ChildExitStatus &status)
 {
     assert(status.result != TestResult::Passed);
     assert(status.result != TestResult::Skipped);
@@ -2007,7 +1632,7 @@ std::string TapFormatLogger::fail_info_details()
 #endif
 }
 
-[[gnu::pure]] static const char *sysexit_reason(const ChildExitStatus &status)
+[[gnu::pure]] const char *sysexit_reason(const ChildExitStatus &status)
 {
     assert(status.result == TestResult::OperatingSystemError);
     switch (status.extra) {
@@ -2032,110 +1657,44 @@ std::string TapFormatLogger::fail_info_details()
     return "unknown error";
 }
 
-std::string TapFormatLogger::format_status_code()
+/// builds the fail info message (including newline)
+/// returns an empty string if there was no failure
+std::string YamlLogger::fail_info_details()
 {
-    if (childExitStatus.result == TestResult::OperatingSystemError)
-        return sysexit_reason(childExitStatus);
-    std::string msg = crash_reason(childExitStatus);
-    if (msg.empty()) {
-        // format the number
-#ifdef _WIN32
-        msg = stdprintf("Child process caused error %#08x", childExitStatus.extra);
-#else
-        // probably a real-time signal
-        msg = stdprintf("Child process died with signal %d", childExitStatus.extra);
-#endif
-    }
-    return msg;
-}
+    std::string result;
+    if (!should_print_fail_info())
+        return result;
 
-void TapFormatLogger::maybe_print_yaml_marker(int fd)
-{
-    static const char yamlseparator[] = " ---";
-    auto &terminator = (fd == file_log_fd ? file_terminator : stdout_terminator);
-    if (terminator)
-        return;
-
-    std::string_view nothing;
-    terminator = yamlseparator;
-    writeln(fd, yamlseparator,
-            "\n  info: {version: ", program_version,
-            ", timestamp: ", iso8601_time_now(Iso8601Format::WithoutMs),
-            cpu_has_feature(cpu_feature_hypervisor) ? ", virtualized: true" : nothing,
-            "}");
-    if (std::string fail_info = fail_info_details(); !fail_info.empty())
-        IGNORE_RETVAL(write(fd, fail_info.c_str(), fail_info.size()));
-}
-
-void TapFormatLogger::print_thread_header(int fd, int cpu, int verbosity)
-{
-    maybe_print_yaml_marker(fd);
-    if (cpu < 0) {
-        cpu = ~cpu;
-        if (cpu == 0)
-            writeln(fd, "  Main thread:");
-        else
-            dprintf(fd, "  Main thread %d:", cpu);
-        return;
-    }
-
-    device_info *info = cpu_info + cpu;
-    std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", cpu,
-            info->cpu_number, info->package_id, info->core_id, info->thread_id);
-
-    const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
-    line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", sApp->hwinfo.family, sApp->hwinfo.model,
-                      sApp->hwinfo.stepping);
-    if (info->microcode)
-        line += stdprintf("%#" PRIx64, info->microcode);
-    else
-        line += "N/A";
-    if (pkg && pkg->ppin)
-        line += stdprintf(", PPIN %016" PRIx64 "):", pkg->ppin);
-    else
-        line += ", PPIN N/A):";
-
-    writeln(fd, line);
-
-    if (verbosity > 1) {
-        PerThreadData::Test *thr = sApp->test_thread_data(cpu);
-        if (std::string time = format_duration(thr->fail_time); time.size())
-            writeln(fd, "  - failed: { time: ", time,
-                    ", loop-count: ", std::to_string(thr->inner_loop_count_at_fail),
-                    " }");
-        else if (verbosity > 2)
-            writeln(fd, "  - loop-count: ", std::to_string(thr->inner_loop_count));
-    }
-}
-
-void TapFormatLogger::print_thread_messages()
-{
-    auto doprint = [this](PerThreadData::Common *data, int i) {
-        struct mmap_region r = maybe_mmap_log(data);
-
-        if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
-            return;             /* nothing to be printed, on any level */
-
-        print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, data, r, INT_MAX);
-
-        if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, i, sApp->shmem->verbosity);
-            print_one_thread_messages(real_stdout_fd, data, r, sApp->shmem->verbosity);
+    auto add_value = [&result](const std::string &s, char separator) {
+        if (s.empty()) {
+            result += "null";
+        } else if (!separator) {
+            result += s;
+        } else {
+            result += separator;
+            result += s;
+            result += separator;
         }
-
-        munmap_and_truncate_log(data, r);
     };
-    for_each_main_thread(doprint, slices.size());
-    for_each_test_thread(doprint);
-}
 
-void TapFormatLogger::print_child_stderr()
-{
-    print_child_stderr_common([this](int fd) {
-        maybe_print_yaml_marker(fd);
-        writeln(fd, "  stderr messages: |");
-    });
+    std::string seed = random_format_seed();
+    std::string time = format_duration(earliest_fail, FormatDurationOptions::WithoutUnit);
+    std::string fail_mask = build_failure_mask_for_topology(test);
+
+    result.reserve(strlen("  fail: { cpu-mask: '', time-to-fail: , seed: '' }\n") +
+                   seed.size() + time.size() + fail_mask.size());
+#if SANDSTONE_DEVICE_CPU
+    result += "  fail: { cpu-mask: ";
+#else
+    result += "  fail: { dev-mask: "; // keep it 3 letters
+#endif
+    add_value(fail_mask, '\'');
+    result += ", time-to-fail: ";
+    add_value(time, '\0');
+    result += ", seed: ";
+    add_value(seed, '\'');
+    result += "}\n";
+    return result;
 }
 
 void YamlLogger::maybe_print_messages_header(int fd)
@@ -2147,54 +1706,27 @@ void YamlLogger::maybe_print_messages_header(int fd)
     }
 }
 
-std::string YamlLogger::thread_id_header(int cpu, int verbosity)
+std::string YamlLogger::thread_id_header(int device, int verbosity)
 {
-    device_info *info = cpu_info + cpu;
-    std::string line;
-#ifdef _WIN32
-    line = stdprintf("{ logical-group: %2u, logical: %2u, ",
-                     // see win32/cpu_affinity.cpp
-                     info->cpu_number / 64u, info->cpu_number % 64u);
-#else
-    line = stdprintf("{ logical: %*d, ", thread_core_spacing().logical, info->cpu_number);
-#endif
-    line += stdprintf("package: %d, numa_node: %d, module: %*d, core: %*d, thread: %d",
-                      info->package_id, info->numa_id, thread_core_spacing().core, info->module_id,
-                      thread_core_spacing().core, info->core_id, info->thread_id);
-    if (verbosity > 1) {
-        auto add_value_or_null = [&line](const char *fmt, uint64_t value) {
-            if (value)
-                line += stdprintf(fmt, value);
-            else
-                line += "null";
-        };
-        const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
-        line += stdprintf(", family: %d, model: %#02x, stepping: %d, microcode: ",
-                          sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
-        add_value_or_null("%#" PRIx64, info->microcode);
-        line += ", ppin: ";
-        add_value_or_null("\"%016" PRIx64 "\"", pkg ? pkg->ppin : 0);   // string to prevent loss of precision
-    }
-    line += " }";
-    return line;
+    return thread_id_header_for_device(device, verbosity);
 }
 
-void YamlLogger::print_thread_header(int fd, int cpu, int verbosity)
+void YamlLogger::print_thread_header(int fd, int device, int verbosity)
 {
     maybe_print_messages_header(fd);
-    if (cpu < 0) {
-        cpu = ~cpu;
-        if (cpu == 0)
+    if (device < 0) {
+        device = ~device;
+        if (device == 0)
             writeln(fd, indent_spaces(), "  - thread: main");
         else
-            writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(cpu));
-        maybe_print_slice_resource_usage(fd, cpu);
+            writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(device));
+        maybe_print_slice_resource_usage(fd, device);
     } else {
-        dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), cpu);
-        dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(cpu, verbosity).c_str());
+        dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), device);
+        dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(device, verbosity).c_str());
 
         if (verbosity > 1) {
-            PerThreadData::Test *thr = sApp->test_thread_data(cpu);
+            PerThreadData::Test *thr = sApp->test_thread_data(device);
             auto opts = FormatDurationOptions::WithoutUnit;
             if (std::string time = format_duration(thr->fail_time, opts); time.size()) {
                 writeln(fd, indent_spaces(), "    state: failed");
@@ -2553,13 +2085,18 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                    format_duration(test_duration, FormatDurationOptions::WithoutUnit).c_str(),
                    format_duration(test_timeout, FormatDurationOptions::WithoutUnit).c_str());
 
-    // print the CPU information
+    // print the device information
+#if SANDSTONE_DEVICE_CPU
     logging_printf(LOG_LEVEL_VERBOSE(1), "cpu-info:\n");
+#else
+    logging_printf(LOG_LEVEL_VERBOSE(1), "device-info:\n");
+#endif
     for (int i = 0; i < thread_count(); ++i) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "- %s   # %d\n",
                        thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
     }
 
+#if SANDSTONE_DEVICE_CPU
     auto make_plan_string = [](const std::vector<DeviceRange> &plan) {
         std::string result;
         for (DeviceRange r : plan) {
@@ -2580,6 +2117,7 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                    make_plan_string(fullsocket).c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  heuristic: [ %s ]\n",
                    make_plan_string(heuristic).c_str());
+#endif
 }
 
 void YamlLogger::print_tests_header(TestHeaderTime mode)
@@ -2608,6 +2146,7 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
 TestResult logging_print_results(std::span<const ChildExitStatus> status, const struct test *test)
 {
     switch (current_output_format()) {
+#if SANDSTONE_DEVICE_CPU
     case SandstoneApplication::OutputFormat::key_value: {
         KeyValuePairLogger l(test, status);
         l.print(sApp->current_test_count);
@@ -2619,7 +2158,7 @@ TestResult logging_print_results(std::span<const ChildExitStatus> status, const 
         l.print(sApp->current_test_count);
         return l.testResult;
     }
-
+#endif
     case SandstoneApplication::OutputFormat::yaml: {
         YamlLogger l(test, status);
         l.print();
