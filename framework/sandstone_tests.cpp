@@ -60,8 +60,13 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     } else if (name[0] == '@') { /* it's a group name */
         const char *group_name = name + 1;
         auto it = all_group_map.find(group_name);
-        if (it != all_group_map.end())
-            res = it->second;
+        if (it != all_group_map.end()) {
+            for (auto test : it->second) {
+                if ((test->flags & test_is_optional) && !sApp->include_optional)
+                    continue;
+                res.push_back(test);
+            }
+        }
     } else {
         for (struct test *t : all_tests) {
             if (!strcmp(t->id, name)) {
@@ -78,6 +83,8 @@ SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) 
     if (!(flags & enable_all_tests)) return;
     std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
     for (struct test &test : source) {
+        if ((test.flags & test_is_optional) && !sApp->include_optional)
+            continue;
         if (test.quality_level < sApp->requested_quality)
             continue;
         struct test_cfg_info ti;

@@ -1633,3 +1633,57 @@ selftest_interrupt_common() {
         test_yaml_regexp "/exit" pass
     done
 }
+
+@test "selftest_test_optional" {
+    # only selftest_test_optional runs, selftest_test_optional_beta skips
+    # the other 2 tests are not selected to run
+    declare -A yamldump
+    sandstone_selftest -e @test_is_optional
+    [[ "$status" -eq 0 ]]
+
+    test_yaml_regexp "/tests/0/test" selftest_test_optional
+    test_yaml_regexp "/tests/1/test" selftest_test_optional_beta
+    test_yaml_regexp "/tests/1/result" "skip"
+    test_yaml_absent "/tests/2/test"
+    test_yaml_absent "/tests/3/test"
+}
+
+@test "selftest_test_optional_beta" {
+    # Tests selftest_test_optional and selftest_test_optional_beta run
+    # the other 2 tests are not selected to run
+    declare -A yamldump
+    sandstone_selftest --beta -e @test_is_optional
+    [[ "$status" -eq 0 ]]
+
+    test_yaml_regexp "/tests/0/test" selftest_test_optional
+    test_yaml_regexp "/tests/1/test" selftest_test_optional_beta
+    test_yaml_absent "/tests/2/test"
+    test_yaml_absent "/tests/3/test"
+}
+
+@test "selftest_test_optional_include_optional" {
+    # Tests selftest_test_optional, selftest_test_optional_include_optional run
+    # selftest_test_optional_beta and selftest_test_optional_beta_include_optional skip
+    declare -A yamldump
+    sandstone_selftest --include-optional -e @test_is_optional
+    [[ "$status" -eq 0 ]]
+
+    test_yaml_regexp "/tests/0/test" selftest_test_optional
+    test_yaml_regexp "/tests/1/test" selftest_test_optional_beta
+    test_yaml_regexp "/tests/1/result" "skip"
+    test_yaml_regexp "/tests/2/test" selftest_test_optional_include_optional
+    test_yaml_regexp "/tests/3/test" selftest_test_optional_beta_include_optional
+    test_yaml_regexp "/tests/3/result" "skip"
+}
+
+@test "selftest_test_optional_beta_include_optional" {
+    # All tests in the group test_is_optional run
+    declare -A yamldump
+    sandstone_selftest --beta --include-optional -e @test_is_optional
+    [[ "$status" -eq 0 ]]
+
+    test_yaml_regexp "/tests/0/test" selftest_test_optional
+    test_yaml_regexp "/tests/1/test" selftest_test_optional_beta
+    test_yaml_regexp "/tests/2/test" selftest_test_optional_include_optional
+    test_yaml_regexp "/tests/3/test" selftest_test_optional_beta_include_optional
+}
