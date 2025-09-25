@@ -14,7 +14,6 @@ framework_files += \
         'signals.cpp',
         'splitlock_detect.c',
         'tmpfile.c',
-        'ucrt-mapping.c',
         'unistd.c',
         'win32_perror.cpp',
         '../generic/kvm.c',
