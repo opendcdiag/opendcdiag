@@ -67,39 +67,23 @@ static uint64_t adjusted_xcr0(uint64_t xcr0, uint64_t xcr0_wanted)
 #  endif // ARCH_GET_XCOMP_SUPP
 static uint64_t adjusted_xcr0(uint64_t xcr0, uint64_t xcr0_wanted)
 {
-    static const uint64_t KernelNonDynamicXSave = XSave_Xtilecfg - 1;
+    // Bits that the Linux kernel requires us to dynamically request
+    static const uint64_t KernelNonDynamicXSave = XSave_Xtiledata;
 
     // Linux doesn't hide XCR0 bits
     xcr0 &= xcr0_wanted;
 
     // Check if we need to make a dynamic XSAVE request
-    if ((xcr0_wanted & ~KernelNonDynamicXSave) == 0)
-        return xcr0;            // no, XCR0 is accurate
+    uint64_t xcr0_needed = (xcr0_wanted & KernelNonDynamicXSave);
+    while (xcr0_needed) {
+        unsigned long feature_nr = __builtin_ctzll(xcr0_needed);
+        uint64_t bit = UINT64_C(1) << feature_nr;
 
-    // dynamic XSAVE support required, ask for everything
-    uint64_t feature_nr = 63 - __builtin_clzll(xcr0_wanted);
-    if (syscall(SYS_arch_prctl, ARCH_REQ_XCOMP_PERM, feature_nr) == 0)
-        return xcr0_wanted;     // we got it
-
-    // Either ARCH_REQ_XCOMP_PERM isn't supported or the kernel doesn't support
-    // XSAVE'ing the feature we asked for (and we can't tell from the errno, since
-    // it returns EINVAL for both situations). Ask the kernel what it does support.
-    uint64_t xcr0_supported;
-    if (syscall(SYS_arch_prctl, ARCH_GET_XCOMP_SUPP, &xcr0_supported) == 0) {
-        // The call is supported (Linux >= 5.16). Ask for the highest bit that
-        // we want and the kernel supports.
-        xcr0_wanted &= xcr0_supported;
-        feature_nr = 63 - __builtin_clzll(xcr0_wanted);
-        if (syscall(SYS_arch_prctl, ARCH_REQ_XCOMP_PERM, feature_nr) == 0)
-            return xcr0_wanted;     // we got it
+        // ask the kernel to enable this feature; disable if it doesn't support
+        if (syscall(SYS_arch_prctl, ARCH_REQ_XCOMP_PERM, feature_nr) != 0)
+            xcr0 &= ~bit;
+        xcr0_needed &= ~bit;
     }
-
-    // Either Linux < 5.16 or the kernel failed to enable what it told us it
-    // supported (can happen if something else has installed a sigaltstack()
-    // that is too small).
-#  ifndef LINUX_COMPAT_PRE_5_16_AMX_SUPPORT
-    xcr0 &= KernelNonDynamicXSave;
-#  endif
     return xcr0;
 }
 #else
