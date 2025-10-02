@@ -1706,11 +1706,6 @@ void YamlLogger::maybe_print_messages_header(int fd)
     }
 }
 
-std::string YamlLogger::thread_id_header(int device, int verbosity)
-{
-    return thread_id_header_for_device(device, verbosity);
-}
-
 void YamlLogger::print_thread_header(int fd, int device, int verbosity)
 {
     maybe_print_messages_header(fd);
@@ -1723,7 +1718,7 @@ void YamlLogger::print_thread_header(int fd, int device, int verbosity)
         maybe_print_slice_resource_usage(fd, device);
     } else {
         dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), device);
-        dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header(device, verbosity).c_str());
+        dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header_for_device(device, verbosity).c_str());
 
         if (verbosity > 1) {
             PerThreadData::Test *thr = sApp->test_thread_data(device);
@@ -2093,7 +2088,7 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
 #endif
     for (int i = 0; i < thread_count(); ++i) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "- %s   # %d\n",
-                       thread_id_header(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
+                       thread_id_header_for_device(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
     }
 
 #if SANDSTONE_DEVICE_CPU

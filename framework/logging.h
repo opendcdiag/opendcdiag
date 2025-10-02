@@ -65,7 +65,6 @@ private:
     bool file_printed_messages_header = false;
     bool stdout_printed_messages_header = false;
 
-    static std::string thread_id_header(int device, int verbosity);
     void maybe_print_messages_header(int fd);
     void print_fixed();
     void print_thread_messages();
