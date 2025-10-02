@@ -47,7 +47,14 @@ public:
     static mmap_region maybe_mmap_log(const PerThreadData::Common *data);
     static void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r);
     static void print_child_stderr_common(std::function<void(int)> header);
-    static std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit);
+
+    static std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
+    {
+        if (tp <= MonotonicTimePoint() || tp == MonotonicTimePoint::max())
+            return {};
+
+        return ::format_duration(tp - sApp->current_test_starttime, opts);
+    }
     [[gnu::pure]] static const char *crash_reason(const ChildExitStatus &status);
     [[gnu::pure]] static const char *sysexit_reason(const ChildExitStatus &status);
 
@@ -75,7 +82,7 @@ public:
         : AbstractLogger(test, state)
     { }
 
-    static std::string get_current_time();
+    static inline std::string get_current_time();
     static const char *quality_string(const struct test *test);
 
     // non-virtual override
@@ -94,13 +101,13 @@ private:
     bool file_printed_messages_header = false;
     bool stdout_printed_messages_header = false;
 
-    void maybe_print_messages_header(int fd);
+    inline void maybe_print_messages_header(int fd);
     void print_fixed();
     void print_thread_messages();
     void print_thread_header(int fd, int device, int verbosity);
-    bool want_slice_resource_usage(int slice);
+    inline bool want_slice_resource_usage(int slice);
     void maybe_print_slice_resource_usage(int fd, int slice);
-    static int print_test_knobs(int fd, mmap_region r);
+    inline int print_test_knobs(int fd, mmap_region r);
     static void format_and_print_skip_reason(int fd, std::string_view message);
     int print_one_thread_messages(int fd, mmap_region r, int level);
     void print_result_line(int &init_skip_message_bytes);
