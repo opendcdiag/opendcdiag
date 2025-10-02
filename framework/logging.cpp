@@ -161,7 +161,7 @@ static Iso8601Format operator|(Iso8601Format f1, Iso8601Format f2)
 static unsigned operator&(Iso8601Format f1, Iso8601Format f2)
 { return unsigned(f1) & unsigned(f2); }
 
-const char *iso8601_time_now(Iso8601Format format)
+const char *AbstractLogger::iso8601_time_now(Iso8601Format format)
 {
     static char buffer[sizeof "2147483647-12-31T23:59:60.999999Z"];
     struct tm tm;
@@ -215,7 +215,7 @@ static struct timespec elapsed_runtime(void)
     return (struct timespec){ secs, nsecs };
 }
 
-std::string log_timestamp()
+std::string AbstractLogger::log_timestamp()
 {
     struct timespec elapsed = elapsed_runtime();
     return stdprintf("[%5ld.%06d] ", (long)elapsed.tv_sec, (int)elapsed.tv_nsec / 1000);
@@ -276,7 +276,7 @@ static void progress_bar_flush()
     IGNORE_RETVAL(write(tty, flush_str.data(), flush_str.size()));
 }
 
-const char *quality_string(const struct test *test)
+const char *AbstractLogger::quality_string(const struct test *test)
 {
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value:
@@ -318,7 +318,7 @@ static uint8_t status_level(char letter)
     return 2;
 }
 
-const char *char_to_skip_category(int val)
+const char *AbstractLogger::char_to_skip_category(int val)
 {
     switch (val) {
     case CpuNotSupportedSkipCategory:
@@ -379,14 +379,14 @@ static inline void truncate_log(int fd)
     IGNORE_RETVAL(ftruncate(fd, 0));
 }
 
-mmap_region maybe_mmap_log(const PerThreadData::Common *data)
+mmap_region AbstractLogger::maybe_mmap_log(const PerThreadData::Common *data)
 {
     if (data->messages_logged.load(std::memory_order_relaxed) == 0)
         return {};
     return mmap_file(data->log_fd);
 }
 
-void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r)
+void AbstractLogger::munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r)
 {
     if (r.size == 0)
         return;
@@ -448,7 +448,7 @@ static const char *time_based_log_path()
 
     // append suffixes
     sApp->file_log_path += '-';
-    sApp->file_log_path += iso8601_time_now(Iso8601Format::WithMs | Iso8601Format::FilenameCompatible);
+    sApp->file_log_path += AbstractLogger::iso8601_time_now(Iso8601Format::WithMs | Iso8601Format::FilenameCompatible);
     sApp->file_log_path += extension;
     return sApp->file_log_path.c_str();
 }
@@ -748,7 +748,7 @@ void logging_printf(int level, const char *fmt, ...)
     // include the timestamp in each line, unless we're using YAML format
     // (timestamps are elsewhere there)
     if (current_output_format() != SandstoneApplication::OutputFormat::yaml) {
-        writevec(fd, log_timestamp(), msg);
+        writevec(fd, AbstractLogger::log_timestamp(), msg);
     } else {
         writevec(fd, indent_spaces(), msg);
     }
@@ -833,13 +833,13 @@ static void print_reproduction_details()
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::key_value:
         logging_printf(LOG_LEVEL_QUIET, "version = %s\n", AbstractLogger::program_version);
-        logging_printf(LOG_LEVEL_QUIET, "current_time = %s\n", iso8601_time_now(Iso8601Format::WithMs));
+        logging_printf(LOG_LEVEL_QUIET, "current_time = %s\n", AbstractLogger::iso8601_time_now(Iso8601Format::WithMs));
         logging_printf(LOG_LEVEL_VERBOSE(1), "os = %s\n", os_info().c_str());
         return;
 
     case SandstoneApplication::OutputFormat::tap:
         logging_printf(LOG_LEVEL_QUIET, "# Built from git commit: %s\n", AbstractLogger::program_version);
-        logging_printf(LOG_LEVEL_QUIET, "# Current time: %s\n", iso8601_time_now(Iso8601Format::WithMs));
+        logging_printf(LOG_LEVEL_QUIET, "# Current time: %s\n", AbstractLogger::iso8601_time_now(Iso8601Format::WithMs));
         break;
 
     case SandstoneApplication::OutputFormat::yaml:
@@ -969,7 +969,7 @@ void logging_init(const struct test *test)
         YamlLogger::print_tests_header(YamlLogger::AtStart);
         logging_printf(LOG_LEVEL_VERBOSE(1), "- test: %s\n", test->id);
         logging_printf(LOG_LEVEL_VERBOSE(3), "  details: { quality: %s, description: \"%s\" }\n",
-                       quality_string(test), test->description);
+                       YamlLogger::quality_string(test), test->description);
         logging_printf(LOG_LEVEL_VERBOSE(3), "  state: { seed: '%s', iteration: %d, retry: %s }\n",
                        random_format_seed().c_str(), abs(sApp->current_iteration_count),
                        sApp->current_iteration_count < 0 ? "true" : "false");
@@ -1406,7 +1406,7 @@ void AbstractLogger::format_and_print_message(int fd, std::string_view message, 
     }
 }
 
-std::string get_skip_message(int thread_num)
+std::string AbstractLogger::get_skip_message(int thread_num)
 {
     std::string skip_message;
     struct mmap_region r = mmap_file(sApp->thread_data(thread_num)->log_fd);
@@ -1485,7 +1485,7 @@ int AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Commo
     return lowest_level;
 }
 
-void print_child_stderr_common(std::function<void(int)> header)
+void AbstractLogger::print_child_stderr_common(std::function<void(int)> header)
 {
     struct mmap_region r = mmap_file(stderr_fd);
     if (r.size == 0)
@@ -1506,12 +1506,12 @@ void print_child_stderr_common(std::function<void(int)> header)
     truncate_log(stderr_fd);
 }
 
-std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts)
+std::string AbstractLogger::format_duration(MonotonicTimePoint tp, FormatDurationOptions opts)
 {
     if (tp <= MonotonicTimePoint() || tp == MonotonicTimePoint::max())
         return {};
 
-    return format_duration(tp - sApp->current_test_starttime, opts);
+    return ::format_duration(tp - sApp->current_test_starttime, opts);
 }
 
 static ChildExitStatus find_most_serious_result(std::span<const ChildExitStatus> results)
@@ -1618,7 +1618,7 @@ bool AbstractLogger::should_print_fail_info() const
     __builtin_unreachable();
 }
 
-[[gnu::pure]] const char *crash_reason(const ChildExitStatus &status)
+[[gnu::pure]] const char *AbstractLogger::crash_reason(const ChildExitStatus &status)
 {
     assert(status.result != TestResult::Passed);
     assert(status.result != TestResult::Skipped);
@@ -1632,7 +1632,7 @@ bool AbstractLogger::should_print_fail_info() const
 #endif
 }
 
-[[gnu::pure]] const char *sysexit_reason(const ChildExitStatus &status)
+[[gnu::pure]] const char *AbstractLogger::sysexit_reason(const ChildExitStatus &status)
 {
     assert(status.result == TestResult::OperatingSystemError);
     switch (status.extra) {
@@ -1761,6 +1761,7 @@ bool YamlLogger::want_slice_resource_usage(int slice)
 
 void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
 {
+    using ::format_duration;
     if (!want_slice_resource_usage(slice))
         return;
 
@@ -1994,11 +1995,12 @@ std::string YamlLogger::get_current_time()
     // aligns for up to 999.999 s
     return stdprintf("{ elapsed: %6ld.%03d, now: !!timestamp '%s' }",
              long(ms.count()), int(us.count()),
-             iso8601_time_now(Iso8601Format::WithoutMs));
+             AbstractLogger::iso8601_time_now(Iso8601Format::WithoutMs));
 }
 
 void YamlLogger::print_fixed()
 {
+    using ::format_duration;
     Duration test_duration = MonotonicTimePoint::clock::now() - sApp->current_test_starttime;
 
     print_result_line(init_skip_message_bytes);
@@ -2079,6 +2081,7 @@ void YamlLogger::print()
 
 void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout)
 {
+    using ::format_duration;
     logging_printf(LOG_LEVEL_QUIET, "command-line: '%s'\n", cmdline.data());
     logging_printf(LOG_LEVEL_QUIET, "version: %s\n", program_version);
     logging_printf(LOG_LEVEL_VERBOSE(1), "os: %s\n", kernel_info().c_str());

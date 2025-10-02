@@ -14,6 +14,12 @@
 #include <string>
 #include <span>
 
+enum class Iso8601Format : unsigned {
+    WithoutMs           = 0,
+    WithMs              = 1,
+    FilenameCompatible  = 2,
+};
+
 class AbstractLogger
 {
 public:
@@ -22,6 +28,18 @@ public:
     static constexpr char program_version[] = SANDSTONE_EXECUTABLE_NAME "-" GIT_ID;
     static int real_stdout_fd;
     static int file_log_fd;
+
+    static const char *iso8601_time_now(Iso8601Format format);
+    static std::string log_timestamp();
+    static std::string get_skip_message(int thread_num);
+    static const char *char_to_skip_category(int val);
+    static mmap_region maybe_mmap_log(const PerThreadData::Common *data);
+    static void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r);
+    static void print_child_stderr_common(std::function<void(int)> header);
+    static const char *quality_string(const struct test *test);
+    static std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit);
+    [[gnu::pure]] static const char *crash_reason(const ChildExitStatus &status);
+    [[gnu::pure]] static const char *sysexit_reason(const ChildExitStatus &status);
 
     const struct test *test;
     MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
@@ -76,24 +94,6 @@ private:
     int print_one_thread_messages(int fd, mmap_region r, int level);
     void print_result_line(int &init_skip_message_bytes);
 };
-
-std::string log_timestamp();
-std::string get_skip_message(int thread_num);
-const char *char_to_skip_category(int val);
-mmap_region maybe_mmap_log(const PerThreadData::Common *data);
-void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r);
-void print_child_stderr_common(std::function<void(int)> header);
-const char *quality_string(const struct test *test);
-std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit);
-[[gnu::pure]] const char *crash_reason(const ChildExitStatus &status);
-[[gnu::pure]] const char *sysexit_reason(const ChildExitStatus &status);
-
-enum class Iso8601Format : unsigned {
-    WithoutMs           = 0,
-    WithMs              = 1,
-    FilenameCompatible  = 2,
-};
-const char *iso8601_time_now(Iso8601Format format);
 
 std::string thread_id_header_for_device(int device, int verbosity);
 
