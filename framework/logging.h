@@ -7,12 +7,23 @@
 #define INC_LOGGING_H
 
 #include "sandstone_chrono.h"
+#include "sandstone_config.h"
 #include "sandstone_p.h"
 
 #include "gitid.h"
 
 #include <string>
 #include <span>
+
+// Whether only the YAML logger is compiled in. This includes the NO_LOGGING
+// case, which is disabled via dead-code elimination in logging.cpp.
+#define SANDSTONE_LOGGING_YAML_ONLY (!SANDSTONE_DEVICE_CPU || SANDSTONE_NO_LOGGING)
+
+#if SANDSTONE_LOGGING_YAML_ONLY
+// there's only one use of this, in logging.cpp, so let the compiler
+// eliminate anything not used
+namespace {
+#endif
 
 enum class Iso8601Format : unsigned {
     WithoutMs           = 0,
@@ -96,5 +107,13 @@ private:
 };
 
 std::string thread_id_header_for_device(int device, int verbosity);
+#if SANDSTONE_NO_LOGGING
+inline std::string thread_id_header_for_device(int device, int verbosity)
+{ __builtin_unreachable(); return {}; }
+#endif
+
+#if SANDSTONE_LOGGING_YAML_ONLY
+} // unnamed namespace
+#endif
 
 #endif /* INC_LOGGING_H */

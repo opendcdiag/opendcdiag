@@ -215,11 +215,13 @@ static struct timespec elapsed_runtime(void)
     return (struct timespec){ secs, nsecs };
 }
 
+#if !SANDSTONE_LOGGING_YAML_ONLY
 std::string AbstractLogger::log_timestamp()
 {
     struct timespec elapsed = elapsed_runtime();
     return stdprintf("[%5ld.%06d] ", (long)elapsed.tv_sec, (int)elapsed.tv_nsec / 1000);
 }
+#endif
 
 static bool is_dumb_terminal()
 {
@@ -1363,26 +1365,6 @@ static void print_content_single_line(int fd, std::string_view before,
     writeln(fd, before, escape_for_single_line(message, escaped), after);
 }
 
-void AbstractLogger::format_and_print_message(int fd, std::string_view message, bool from_thread_message)
-{
-    if (message.find('\n') != std::string_view::npos) {
-        /* multi line */
-        if (from_thread_message) // are you writing individual thread's message?
-            writeln(fd, "  - |");
-        else                     // are you writing init thread's message?
-            writeln(fd, "\n", indent_spaces(), " - |");
-        print_content_indented(fd, "    ", message);
-    } else {
-        /* single line */
-        if (from_thread_message) { // are you writing individual thread's message?
-            char c = '\'';
-            print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
-        } else { // are you writing init thread's message?
-            print_content_single_line(fd, "'", message, "'");
-        }
-    }
-}
-
 std::string AbstractLogger::get_skip_message(int thread_num)
 {
     std::string skip_message;
@@ -1407,6 +1389,27 @@ static std::string_view format_skip_message(std::string_view message)
     // skip messages contain a byte with the category identifier that we must
     // not print
     return message.substr(1);
+}
+
+#if !SANDSTONE_LOGGING_YAML_ONLY
+void AbstractLogger::format_and_print_message(int fd, std::string_view message, bool from_thread_message)
+{
+    if (message.find('\n') != std::string_view::npos) {
+        /* multi line */
+        if (from_thread_message) // are you writing individual thread's message?
+            writeln(fd, "  - |");
+        else                     // are you writing init thread's message?
+            writeln(fd, "\n", indent_spaces(), " - |");
+        print_content_indented(fd, "    ", message);
+    } else {
+        /* single line */
+        if (from_thread_message) { // are you writing individual thread's message?
+            char c = '\'';
+            print_content_single_line(fd, "   - '", message, std::string_view(&c, 1));
+        } else { // are you writing init thread's message?
+            print_content_single_line(fd, "'", message, "'");
+        }
+    }
 }
 
 /// Returns the lowest priority found
@@ -1461,6 +1464,7 @@ int AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Commo
 
     return lowest_level;
 }
+#endif // !SANDSTONE_LOGGING_YAML_ONLY
 
 void AbstractLogger::print_child_stderr_common(std::function<void(int)> header)
 {
@@ -2133,7 +2137,12 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
 TestResult logging_print_results(std::span<const ChildExitStatus> status, const struct test *test)
 {
     switch (current_output_format()) {
-#if SANDSTONE_DEVICE_CPU
+#if SANDSTONE_LOGGING_YAML_ONLY
+    // only YAML logging supported (or none at all)
+    case SandstoneApplication::OutputFormat::key_value:
+    case SandstoneApplication::OutputFormat::tap:
+        __builtin_unreachable();
+#else
     case SandstoneApplication::OutputFormat::key_value: {
         KeyValuePairLogger l(test, status);
         l.print(sApp->current_test_count);
@@ -2145,8 +2154,12 @@ TestResult logging_print_results(std::span<const ChildExitStatus> status, const 
         l.print(sApp->current_test_count);
         return l.testResult;
     }
-#endif
+#endif // !SANDSTONE_LOGGING_YAML_ONLY
+
     case SandstoneApplication::OutputFormat::yaml: {
+#if SANDSTONE_NO_LOGGING
+        __builtin_unreachable();
+#endif
         YamlLogger l(test, status);
         l.print();
         return l.testResult;
