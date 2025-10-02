@@ -36,7 +36,6 @@ public:
     static mmap_region maybe_mmap_log(const PerThreadData::Common *data);
     static void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r);
     static void print_child_stderr_common(std::function<void(int)> header);
-    static const char *quality_string(const struct test *test);
     static std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit);
     [[gnu::pure]] static const char *crash_reason(const ChildExitStatus &status);
     [[gnu::pure]] static const char *sysexit_reason(const ChildExitStatus &status);
@@ -66,6 +65,7 @@ public:
     { }
 
     static std::string get_current_time();
+    static const char *quality_string(const struct test *test);
 
     // non-virtual override
     void print();

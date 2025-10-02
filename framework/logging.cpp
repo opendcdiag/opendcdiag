@@ -276,29 +276,6 @@ static void progress_bar_flush()
     IGNORE_RETVAL(write(tty, flush_str.data(), flush_str.size()));
 }
 
-const char *AbstractLogger::quality_string(const struct test *test)
-{
-    switch (current_output_format()) {
-    case SandstoneApplication::OutputFormat::key_value:
-    case SandstoneApplication::OutputFormat::yaml:
-        if (test->quality_level < 0)
-            return "alpha";
-        if (test->quality_level == TEST_QUALITY_BETA)
-            return "beta";
-        return "production";
-    case SandstoneApplication::OutputFormat::tap:
-        if (test->quality_level < 0)
-            return "(alpha test) ";
-        if (test->quality_level == TEST_QUALITY_BETA)
-            return "(beta test) ";
-        return nullptr;
-    case SandstoneApplication::OutputFormat::no_output:
-        return nullptr;
-    }
-    __builtin_unreachable();
-    return NULL;
-}
-
 /* which level of "quiet" should this log print at */
 static uint8_t status_level(char letter)
 {
@@ -1506,14 +1483,6 @@ void AbstractLogger::print_child_stderr_common(std::function<void(int)> header)
     truncate_log(stderr_fd);
 }
 
-std::string AbstractLogger::format_duration(MonotonicTimePoint tp, FormatDurationOptions opts)
-{
-    if (tp <= MonotonicTimePoint() || tp == MonotonicTimePoint::max())
-        return {};
-
-    return ::format_duration(tp - sApp->current_test_starttime, opts);
-}
-
 static ChildExitStatus find_most_serious_result(std::span<const ChildExitStatus> results)
 {
     auto comparator = [](const ChildExitStatus &s1, const ChildExitStatus &s2) {
@@ -1996,6 +1965,15 @@ std::string YamlLogger::get_current_time()
     return stdprintf("{ elapsed: %6ld.%03d, now: !!timestamp '%s' }",
              long(ms.count()), int(us.count()),
              AbstractLogger::iso8601_time_now(Iso8601Format::WithoutMs));
+}
+
+const char *YamlLogger::quality_string(const struct test *test)
+{
+    if (test->quality_level < 0)
+        return "alpha";
+    if (test->quality_level == TEST_QUALITY_BETA)
+        return "beta";
+    return "production";
 }
 
 void YamlLogger::print_fixed()
