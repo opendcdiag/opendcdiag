@@ -49,7 +49,6 @@ enum {
     max_test_loop_count_option,
     max_messages_option,
     max_logdata_option,
-    mce_check_period_option,
     mem_sample_time_option,
     mem_samples_per_log_option,
     no_mem_sampling_option,
@@ -135,7 +134,6 @@ static struct option long_options[]  = {
     { "max-messages", required_argument, nullptr, max_messages_option },
     { "max-test-count", required_argument, nullptr, max_test_count_option },
     { "max-test-loop-count", required_argument, nullptr, max_test_loop_count_option },
-    { "mce-check-every", required_argument, nullptr, mce_check_period_option },
     { "mem-sample-time", required_argument, nullptr, mem_sample_time_option },
     { "mem-samples-per-log", required_argument, nullptr, mem_samples_per_log_option},
     { "no-memory-sampling", no_argument, nullptr, no_mem_sampling_option },
@@ -466,7 +464,6 @@ struct ProgramOptionsParser {
             case 'o':
             case 's':
             case inject_idle_option:
-            case mce_check_period_option:
             case on_crash_option:
             case on_hang_option:
             case retest_on_failure_option:
@@ -916,10 +913,6 @@ struct ProgramOptionsParser {
                 opts.max_cores_per_slice = -1;
                 break;
             }
-        }
-
-        if (auto value = string_opt_for(mce_check_period_option)) {
-            app->mce_check_period = ParseIntArgument<>{"--mce-check-every"}(value);
         }
 
         if (auto value = string_opt_for(retest_on_failure_option)) {
