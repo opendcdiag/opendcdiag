@@ -38,6 +38,7 @@ private:
     const char *file_terminator = nullptr;
     const char *stdout_terminator = nullptr;
 
+    static const char *quality_string(const struct test *test);
     void maybe_print_yaml_marker(int fd);
     void print_thread_messages();
     void print_thread_header(int fd, int device, int verbosity);
