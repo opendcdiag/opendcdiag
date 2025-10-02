@@ -10,6 +10,7 @@
 #include <stdbool.h>
 
 #ifdef __cplusplus
+#include <cfloat>
 #include <limits>
 #endif
 
