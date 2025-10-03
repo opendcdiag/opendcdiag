@@ -20,6 +20,7 @@ jobs:
       matrix:
         include:
         - { name: GCC, unittests: "unittests", selftests: "selftests" }
+        - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
         - { name: Clang, unittests: "unittests", env: "CC=clang-19 CXX=clang++-19" }
         - { archsuffix: "-arm", selftests: "selftests" }
     steps:
@@ -47,7 +48,7 @@ jobs:
             zlib1g-dev 
     - uses: actions/checkout@v4
     - name: meson setup
-      run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized
+      run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized ${{ matrix.meson_args }}
     - name: ninja build
       run: ninja -C builddir
     - uses: actions/upload-artifact@v4
