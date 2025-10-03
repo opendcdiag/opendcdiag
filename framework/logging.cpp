@@ -122,7 +122,7 @@ static SandstoneApplication::OutputFormat current_output_format()
     return sApp->shmem->output_format;
 }
 
-static std::string_view indent_spaces()
+std::string_view indent_spaces()
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return {};
@@ -1737,9 +1737,7 @@ void YamlLogger::print_thread_header(int fd, int device, int verbosity)
                 writeln(fd, indent_spaces(), "    loop-count: ",
                         std::to_string(thr->inner_loop_count));
             }
-            const double effective_freq_mhz = thr->effective_freq_mhz;
-            if (std::isfinite(effective_freq_mhz))
-                dprintf(fd, "%s    freq_mhz: %.1f\n", indent_spaces().data(), effective_freq_mhz);
+            print_thread_header_for_device(fd, thr);
         }
     }
     writeln(fd, indent_spaces(), "    messages:");
