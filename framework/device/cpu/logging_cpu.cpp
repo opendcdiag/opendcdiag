@@ -212,6 +212,15 @@ void TapFormatLogger::print(int tc)
     logging_flush();
 }
 
+const char *TapFormatLogger::quality_string(const struct test *test)
+{
+    if (test->quality_level < 0)
+        return "(alpha test) ";
+    if (test->quality_level == TEST_QUALITY_BETA)
+        return "(beta test) ";
+    return nullptr;
+}
+
 std::string TapFormatLogger::format_status_code()
 {
     if (childExitStatus.result == TestResult::OperatingSystemError)
