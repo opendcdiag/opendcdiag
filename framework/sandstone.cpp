@@ -54,7 +54,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "cpu_features.h"
 #include "forkfd.h"
 
 #include "sandstone.h"
@@ -108,6 +107,8 @@ using namespace std::chrono_literals;
 #ifndef __GLIBC__
 char *program_invocation_name;
 #endif
+
+device_features_t device_features;
 
 static const struct test *current_test = nullptr;
 #ifdef __llvm__
@@ -1772,18 +1773,18 @@ static TestResult run_one_test_once(const struct test *test)
     ChildrenList children;
 
     sApp->current_test_count++;
-    if (cpu_features_t missing = (test->minimum_cpu | test->compiler_minimum_cpu) & ~cpu_features) {
+    if (device_features_t missing = (test->compiler_minimum_device | test->minimum_cpu) & ~device_features) {
         init_per_thread_data();
 
         // be as brief as possible: if the feature missing is required by the
         // test, then report only those. if not, report the features the test
         // was compiled with, but not those already required by the framework.
-        cpu_features_t missing_to_report = missing & ~test->compiler_minimum_cpu;
+        device_features_t missing_to_report = missing & ~test->compiler_minimum_device;
         if (missing_to_report) {
-            log_skip(CpuNotSupportedSkipCategory, "test requires %s\n", cpu_features_to_string(missing_to_report).c_str());
+            log_skip(CpuNotSupportedSkipCategory, "test requires %s\n", device_features_to_string(missing_to_report).c_str());
         } else {
-            missing_to_report = missing & ~_compilerCpuFeatures;
-            log_skip(CpuNotSupportedSkipCategory, "test compiled with %s\n", cpu_features_to_string(missing_to_report).c_str());
+            missing_to_report = missing & ~device_compiler_features;
+            log_skip(CpuNotSupportedSkipCategory, "test compiled with %s\n", device_features_to_string(missing_to_report).c_str());
         }
 
         children.results.emplace_back(ChildExitStatus{ TestResult::Skipped });
@@ -2042,9 +2043,9 @@ static void list_tests(const ProgramOptions& opts)
                     printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
                 } else if (sApp->shmem->verbosity > 0) {
                     // don't report the FW minimum CPU features
-                    cpu_features_t cpuf = test->compiler_minimum_cpu & ~_compilerCpuFeatures;
-                    cpuf |= test->minimum_cpu;
-                    printf("%-20s %s\n", test->id, cpu_features_to_string(cpuf).c_str());
+                    device_features_t feats = test->compiler_minimum_device & ~device_compiler_features;
+                    feats |= test->minimum_cpu;
+                    printf("%-20s %s\n", test->id, device_features_to_string(feats).c_str());
                 } else {
                     puts(test->id);
                 }

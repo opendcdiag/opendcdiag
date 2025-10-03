@@ -8,11 +8,9 @@
 
 #include <cinttypes>
 
-extern constexpr const cpu_features_t minimum_cpu_features = _compilerCpuFeatures;
+extern constexpr const device_features_t minimum_cpu_features = device_compiler_features;
 
-cpu_features_t cpu_features = 0;
-
-std::string cpu_features_to_string(cpu_features_t f)
+std::string device_features_to_string(device_features_t f)
 {
     std::string result;
     const char *comma = "";
@@ -33,17 +31,17 @@ void dump_device_info()
     // find the best matching CPU
     const char *detected = "<unknown>";
     for (const auto &arch : x86_architectures) {
-        if ((arch.features & cpu_features) == arch.features) {
+        if ((arch.features & device_features) == arch.features) {
             detected = arch.name;
             break;
         }
         if (sApp->shmem->verbosity > 1)
             printf("CPU is not %s: missing %s\n", arch.name,
-                   cpu_features_to_string(arch.features & ~cpu_features).c_str());
+                   device_features_to_string(arch.features & ~device_features).c_str());
     }
     printf("Detected CPU: %s; family-model-stepping (hex): %02x-%02x-%02x; CPU features: %s\n",
            detected, sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping,
-           cpu_features_to_string(cpu_features).c_str());
+           device_features_to_string(device_features).c_str());
     printf("# CPU\tPkgID\tCoreID\tThrdID\tModId\tNUMAId\tApicId\tMicrocode\tPPIN\n");
     for (i = 0; i < num_cpus(); ++i) {
         printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t0x%" PRIx64, cpu_info[i].cpu_number,
