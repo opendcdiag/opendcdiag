@@ -2,12 +2,8 @@
  * Copyright 2025 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef LOGGING_CPU_H
-#define LOGGING_CPU_H
 
 #include "logging.h"
-
-#if !SANDSTONE_NO_LOGGING
 
 class KeyValuePairLogger : public YamlLogger
 {
@@ -48,7 +44,3 @@ private:
     void print_child_stderr();
     std::string format_status_code();
 };
-
-#endif // !SANDSTONE_NO_LOGGING
-
-#endif // LOGGING_CPU_H
