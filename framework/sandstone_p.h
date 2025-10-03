@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "device/device_topology.h"
+#include "device/test_data_device.h"
 
 #include <sandstone_config.h>
 #include <sandstone_chrono.h>
@@ -43,6 +44,7 @@
 #include <sandstone_utils.h>
 
 #include "gettid.h"
+#include "test_data.h"
 #include "topology.h"
 #include "interrupt_monitor.hpp"
 #if SANDSTONE_DEVICE_CPU
@@ -141,15 +143,6 @@ enum class TestResult : int8_t {
     Interrupted,
 };
 
-enum ThreadState : int {
-    thread_not_started = 0,
-    thread_running = 1,
-    thread_failed = 2,
-    thread_debugged = 3,
-    thread_succeeded = -1,
-    thread_skipped = -2,
-};
-
 struct ChildExitStatus
 {
     TestResult result = TestResult{-127};
@@ -187,65 +180,6 @@ inline int simple_getopt(int argc, char **argv, struct option *options, int *opt
     }();
     return getopt_long(argc, argv, cached_short_opts.c_str(), options, optind);
 }
-
-namespace PerThreadData {
-struct Common
-{
-    std::atomic<ThreadState> thread_state;
-
-    /* file descriptor for logging */
-    int log_fd;
-
-    /* Records number of messages logged per thread of each test */
-    std::atomic<int> messages_logged;
-
-    /* Records the number of bytes log_data'ed per thread */
-    std::atomic<unsigned> data_bytes_logged;
-
-    MonotonicTimePoint fail_time;
-    bool has_failed() const
-    {
-        return fail_time > MonotonicTimePoint{};
-    }
-    bool has_skipped() const
-    {
-        return fail_time < MonotonicTimePoint{};
-    }
-
-    void init()
-    {
-        thread_state.store(thread_not_started, std::memory_order_relaxed);
-        fail_time = MonotonicTimePoint{};
-        messages_logged.store(0, std::memory_order_relaxed);
-        data_bytes_logged.store(0, std::memory_order_relaxed);
-    }
-};
-
-struct alignas(64) Main : Common
-{
-    DeviceRange device_range;
-};
-
-struct alignas(64) Test : Common
-{
-    /* Number of iterations of the inner loop (aka #times test_time_condition called) */
-    uint64_t inner_loop_count;
-    uint64_t inner_loop_count_at_fail;
-
-    /* Thread's effective CPU frequency during execution */
-    double effective_freq_mhz;
-
-    /* Thread ID */
-    std::atomic<tid_t> tid;
-
-    void init()
-    {
-        Common::init();
-        inner_loop_count = inner_loop_count_at_fail = 0;
-        effective_freq_mhz = 0.0;
-    }
-};
-} // namespace PerThreadData
 
 template <bool IsDebug> struct test_the_test_data
 {
