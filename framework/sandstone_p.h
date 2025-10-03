@@ -423,7 +423,6 @@ struct SandstoneApplication : public test_the_test_data<SandstoneConfig::Debug>
     static constexpr int DefaultTemperatureThreshold = -1;
     int thermal_throttle_temp = DefaultTemperatureThreshold;
     int threshold_time_remaining = 30000;
-    std::vector<uint32_t> mce_counts_start;
 
     HardwareInfo hwinfo;
 
