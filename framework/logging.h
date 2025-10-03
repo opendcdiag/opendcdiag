@@ -87,6 +87,7 @@ const char *quality_string(const struct test *test);
 std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit);
 [[gnu::pure]] const char *crash_reason(const ChildExitStatus &status);
 [[gnu::pure]] const char *sysexit_reason(const ChildExitStatus &status);
+std::string_view indent_spaces();
 
 enum class Iso8601Format : unsigned {
     WithoutMs           = 0,
@@ -96,5 +97,6 @@ enum class Iso8601Format : unsigned {
 const char *iso8601_time_now(Iso8601Format format);
 
 std::string thread_id_header_for_device(int device, int verbosity);
+void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
 
 #endif /* INC_LOGGING_H */
