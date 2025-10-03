@@ -47,6 +47,7 @@ public:
     static mmap_region maybe_mmap_log(const PerThreadData::Common *data);
     static void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r);
     static void print_child_stderr_common(std::function<void(int)> header);
+    static std::string_view indent_spaces();
 
     static std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = FormatDurationOptions::WithoutUnit)
     {
@@ -114,9 +115,12 @@ private:
 };
 
 std::string thread_id_header_for_device(int device, int verbosity);
+void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
 #if SANDSTONE_NO_LOGGING
 inline std::string thread_id_header_for_device(int device, int verbosity)
 { __builtin_unreachable(); return {}; }
+inline void print_thread_header_for_device(int fd, PerThreadData::Test *thr)
+{ __builtin_unreachable(); }
 #endif
 
 #if SANDSTONE_LOGGING_YAML_ONLY
