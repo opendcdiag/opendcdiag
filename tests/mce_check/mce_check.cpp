@@ -27,32 +27,49 @@
  */
 
 #include "sandstone_p.h"
-#include <vector>
-#include <numeric>
-#include <cassert>
-#include <limits.h>
 
-static int mce_check_run(struct test *test, int cpu)
+#include <cassert>
+#include <climits>
+#include <numeric>
+#include <vector>
+
+
+namespace {
+// we can use globals as it's run for 0th cpu only (data won't be shared accross >1 threads)
+std::vector<uint32_t> mce_counts_start;
+uint64_t mce_count_last;
+uint64_t last_thermal_event_count;
+
+int mce_check_preinit(struct test *test)
+{
+    (void) test;
+    last_thermal_event_count = InterruptMonitor::count_thermal_events();
+    mce_counts_start = InterruptMonitor::get_mce_interrupt_counts();
+    mce_count_last = std::accumulate(mce_counts_start.begin(), mce_counts_start.end(), uint64_t(0));
+    return EXIT_SUCCESS;
+}
+
+int mce_check_run(struct test *test, int cpu)
 {
     int errorcount = 0;
     (void) test;
     if (cpu != 0)
         return EXIT_SUCCESS;
 
-    std::vector<uint32_t> counts = sApp->get_mce_interrupt_counts();
+    std::vector<uint32_t> counts = InterruptMonitor::get_mce_interrupt_counts();
 
-    if (counts.size() != sApp->mce_counts_start.size()) {
+    if (counts.size() != mce_counts_start.size()) {
         report_fail_msg("Number of CPUs changed during execution, test is not valid.");
         return EXIT_FAILURE;
     }
 
     std::vector<uint32_t> differences(counts.size());
     for (int i = 0; i < counts.size(); ++i)
-        differences[i] = counts[i] - sApp->mce_counts_start[i];
+        differences[i] = counts[i] - mce_counts_start[i];
 
     // set up for the next iteration (in case there's one)
-    sApp->mce_count_last = std::accumulate(counts.begin(), counts.end(), uint64_t(0));
-    sApp->mce_counts_start = std::move(counts);
+    mce_count_last = std::accumulate(counts.begin(), counts.end(), uint64_t(0));
+    mce_counts_start = std::move(counts);
     counts.clear();
 
     // check the CPUs we were running tests on
@@ -80,14 +97,15 @@ static int mce_check_run(struct test *test, int cpu)
     if (errorcount)
         log_platform_message(SANDSTONE_LOG_ERROR "MCE interrupts detected on %d CPUs", errorcount);
 
-    uint64_t thermal_now = sApp->count_thermal_events();
-    if (thermal_now != sApp->last_thermal_event_count) {
+    uint64_t thermal_now = InterruptMonitor::count_thermal_events();
+    if (thermal_now != last_thermal_event_count) {
         log_platform_message(SANDSTONE_LOG_WARNING "Thermal events detected (%zu since start).",
-                             size_t(thermal_now - sApp->last_thermal_event_count));
-        sApp->last_thermal_event_count = thermal_now;
+                             size_t(thermal_now - last_thermal_event_count));
+        last_thermal_event_count = thermal_now;
     }
 
     return errorcount;
+}
 }
 
 
@@ -103,6 +121,7 @@ struct test mce_test = {  // This variable is used in the framework!
         .id = "mce_check",
         .description = "Machine Check Exceptions/Events count",
 #endif
+        .test_preinit = mce_check_preinit,
         .test_run = mce_check_run,
         .desired_duration = -1,
         .fracture_loop_count = -1,

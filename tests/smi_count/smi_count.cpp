@@ -20,16 +20,20 @@
 #include <map>
 
 namespace {
+// we can use global variable, since write to this vector is done by single thread (initialize_smi_counts),
+// and in smi_count_run it's read-only + each thread reads different memory location.
+std::vector<uint64_t> smi_counts_start;
+
 int initialize_smi_counts(struct test*)
 {
-    std::optional<uint64_t> v = sApp->count_smi_events(cpu_info[0].cpu_number);
+    std::optional<uint64_t> v = InterruptMonitor::count_smi_events(cpu_info[0].cpu_number);
     if (!v) {
-        return EXIT_SUCCESS;
+        return EXIT_SKIP;
     }
-    sApp->smi_counts_start.resize(thread_count());
-    sApp->smi_counts_start[0] = *v;
+    smi_counts_start.resize(thread_count());
+    smi_counts_start[0] = *v;
     for (int i = 1; i < thread_count(); i++) {
-        sApp->smi_counts_start[i] = sApp->count_smi_events(cpu_info[i].cpu_number).value_or(0);
+        smi_counts_start[i] = InterruptMonitor::count_smi_events(cpu_info[i].cpu_number).value_or(0);
     }
     return EXIT_SUCCESS;
 }
@@ -38,10 +42,10 @@ int smi_count_run(struct test *test, int cpu)
 {
     (void) test;
 
-    if (sApp->smi_counts_start.size() > cpu) {
+    if (smi_counts_start.size() > cpu) {
         int real_cpu_number = cpu_info[cpu].cpu_number;
-        auto initial_count = sApp->smi_counts_start[cpu];
-        auto current_count = sApp->count_smi_events(real_cpu_number);
+        auto initial_count = smi_counts_start[cpu];
+        auto current_count = InterruptMonitor::count_smi_events(real_cpu_number);
         if (current_count) {
             uint64_t difference = *current_count - initial_count;
 
