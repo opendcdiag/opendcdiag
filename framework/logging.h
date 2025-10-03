@@ -7,7 +7,6 @@
 #define INC_LOGGING_H
 
 #include "sandstone_chrono.h"
-#include "sandstone_config.h"
 #include "sandstone_p.h"
 
 #include "gitid.h"
@@ -89,12 +88,6 @@ std::string format_duration(MonotonicTimePoint tp, FormatDurationOptions opts = 
 [[gnu::pure]] const char *crash_reason(const ChildExitStatus &status);
 [[gnu::pure]] const char *sysexit_reason(const ChildExitStatus &status);
 
-#if !SANDSTONE_DEVICE_CPU || SANDSTONE_NO_LOGGING
-// there's only one use of this, in logging.cpp, so let the compiler
-// eliminate anything not used
-namespace {
-#endif
-
 enum class Iso8601Format : unsigned {
     WithoutMs           = 0,
     WithMs              = 1,
@@ -103,13 +96,5 @@ enum class Iso8601Format : unsigned {
 const char *iso8601_time_now(Iso8601Format format);
 
 std::string thread_id_header_for_device(int device, int verbosity);
-#if SANDSTONE_NO_LOGGING
-inline std::string thread_id_header_for_device(int device, int verbosity)
-{ __builtin_unreachable(); return {}; }
-#endif
-
-#if !SANDSTONE_DEVICE_CPU || SANDSTONE_NO_LOGGING
-} // unnamed namespace
-#endif
 
 #endif /* INC_LOGGING_H */

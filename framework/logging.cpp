@@ -2146,13 +2146,7 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
 TestResult logging_print_results(std::span<const ChildExitStatus> status, const struct test *test)
 {
     switch (current_output_format()) {
-#if SANDSTONE_NO_LOGGING
-    case SandstoneApplication::OutputFormat::key_value:
-    case SandstoneApplication::OutputFormat::tap:
-    case SandstoneApplication::OutputFormat::yaml:
-        __builtin_unreachable();
-#else
-#  if SANDSTONE_DEVICE_CPU
+#if SANDSTONE_DEVICE_CPU
     case SandstoneApplication::OutputFormat::key_value: {
         KeyValuePairLogger l(test, status);
         l.print(sApp->current_test_count);
@@ -2164,19 +2158,12 @@ TestResult logging_print_results(std::span<const ChildExitStatus> status, const 
         l.print(sApp->current_test_count);
         return l.testResult;
     }
-#  else
-    // only YAML logging supported
-    case SandstoneApplication::OutputFormat::key_value:
-    case SandstoneApplication::OutputFormat::tap:
-        __builtin_unreachable();
-#  endif // SANDSTONE_DEVICE_CPU
-
+#endif
     case SandstoneApplication::OutputFormat::yaml: {
         YamlLogger l(test, status);
         l.print();
         return l.testResult;
     }
-#endif // SANDSTONE_NO_LOGGING
 
     case SandstoneApplication::OutputFormat::no_output:
         break;
