@@ -422,4 +422,11 @@ std::string thread_id_header_for_device(int cpu, int verbosity)
     return line;
 }
 
+void print_thread_header_for_device(int fd, PerThreadData::Test *thr)
+{
+    if (std::isfinite(thr->effective_freq_mhz)) {
+        dprintf(fd, "%s    freq_mhz: %.1f\n", AbstractLogger::indent_spaces().data(), thr->effective_freq_mhz);
+    }
+}
+
 #endif // !SANDSTONE_NO_LOGGING
