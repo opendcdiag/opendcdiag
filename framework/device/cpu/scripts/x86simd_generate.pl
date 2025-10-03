@@ -126,8 +126,8 @@ if ($headername = shift @ARGV) {
     $debug = 1;
 }
 
-printf "typedef %s cpu_features_t;\n", $feature_type;
-printf "#define CPU_FEATURE_CONSTANT(bit) (((cpu_features_t) 1) << (bit))\n\n";
+printf "typedef %s device_features_t;\n", $feature_type;
+printf "#define CPU_FEATURE_CONSTANT(bit) (((device_features_t) 1) << (bit))\n\n";
 
 # Print the feature list
 my $lastleaf;
@@ -196,7 +196,7 @@ for (@architecture_names) {
 }
 
 print q{
-static const cpu_features_t _compilerCpuFeatures = 0};
+static const device_features_t device_compiler_features = 0};
 
 # And print the compiler-enabled features part:
 for (my $i = 0; $i < scalar @features; ++$i) {
@@ -212,7 +212,7 @@ print '        ;';
 if ($headerguard ne "") {
     print q|
 #if (defined __cplusplus) && __cplusplus >= 201103L
-enum X86CpuFeatures : cpu_features_t {|;
+enum X86CpuFeatures : device_features_t {|;
 
     for (@features) {
         my $line = sprintf "CpuFeature%s = cpu_feature_%s,", $_->{id}, lc($_->{id});
@@ -225,7 +225,7 @@ enum X86CpuFeatures : cpu_features_t {|;
 
 print qq|}; // enum X86CpuFeatures
 
-enum X86CpuArchitectures : cpu_features_t {|;
+enum X86CpuArchitectures : device_features_t {|;
 
     for (@architecture_names) {
         my $arch = $architectures{$_};
@@ -293,7 +293,7 @@ for (@architecture_names) {
 print qq|
 struct X86Architecture
 {
-    cpu_features_t features;
+    device_features_t features;
     char name[$maxarchnamelen + 1];
 };
 
@@ -328,7 +328,7 @@ for my $state (@xsaveStates) {
     my @required_for = split /,/, $state->{required_for};
     next unless scalar @required_for;
 
-    my $prefix = sprintf "\n// List of features requiring %s%s\nstatic const cpu_features_t %s%s = 0",
+    my $prefix = sprintf "\n// List of features requiring %s%s\nstatic const device_features_t %s%s = 0",
         $xsaveEnumPrefix, $state->{id}, $xsaveReqPrefix, $state->{id};
 
     # match either the feature name or one of its requirements against list
@@ -357,8 +357,8 @@ for my $state (@xsaveStates) {
 printf qq|
 struct XSaveRequirementMapping
 {
-    cpu_features_t cpu_features;
-    cpu_features_t xsave_state;
+    device_features_t cpu_features;
+    device_features_t xsave_state;
 };
 
 static const struct XSaveRequirementMapping xsave_requirements[] = {
