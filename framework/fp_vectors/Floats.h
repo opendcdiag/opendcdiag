@@ -179,7 +179,7 @@ struct BFloat8
 #ifdef __cplusplus
     constexpr inline BFloat8() = default;
     constexpr inline BFloat8(float f);
-    constexpr inline BFloat8(uint8_t h): payload{h} { };
+    constexpr inline BFloat8(uint8_t h): payload{h} { }
 
     constexpr inline BFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa{m}, exponent{e}, sign{s} { }
     constexpr inline BFloat8(uint8_t s, uint8_t v): value{v}, signv{s} { }
@@ -308,7 +308,7 @@ static inline float from_hfloat8(HFloat8 f8) {
 }
 
 #ifdef __cplusplus
-constexpr HFloat8::HFloat8(const float f):
+constexpr HFloat8::HFloat8(float f):
     payload{to_hfloat8(f).payload}
 {}
 #endif
