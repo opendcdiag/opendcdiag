@@ -9,8 +9,6 @@
 
 #include <cinttypes>
 
-#if !SANDSTONE_NO_LOGGING
-
 void KeyValuePairLogger::prepare_line_prefix()
 {
     timestamp_prefix = log_timestamp();
@@ -350,7 +348,7 @@ auto thread_core_spacing()
     }();
     return spacing;
 }
-} // end unnamed namespace
+} // end anonymous namespace
 
 std::string thread_id_header_for_device(int cpu, int verbosity)
 {
@@ -383,5 +381,3 @@ std::string thread_id_header_for_device(int cpu, int verbosity)
     line += " }";
     return line;
 }
-
-#endif // !SANDSTONE_NO_LOGGING
