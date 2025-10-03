@@ -37,6 +37,8 @@ public:
         return get_total_interrupt_counts(MCE);
     }
 
+    static bool observed_mce_events();
+
     static uint64_t count_thermal_events() {
         return get_total_interrupt_counts(Thermal);
     }
@@ -62,6 +64,11 @@ inline std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptTyp
 {
     static_assert(!InterruptMonitorWorks);
     return {};
+}
+
+inline bool InterruptMonitor::observed_mce_events()
+{
+    return false;
 }
 #endif
 
