@@ -177,15 +177,16 @@ struct BFloat8
     };
 
 #ifdef __cplusplus
-    inline BFloat8() = default;
-    inline BFloat8(float f);
+    constexpr inline BFloat8() = default;
+    constexpr inline BFloat8(float f);
+    constexpr inline BFloat8(uint8_t h): payload{h} { };
 
-    constexpr inline BFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa(m), exponent(e), sign(s) { }
-    constexpr inline BFloat8(uint8_t s, uint8_t v): value(v), signv(s) { }
+    constexpr inline BFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa{m}, exponent{e}, sign{s} { }
+    constexpr inline BFloat8(uint8_t s, uint8_t v): value{v}, signv{s} { }
 
-    static constexpr BFloat8 min()      { return BFloat8(Holder{ 0b0'00001'00 }); }
-    static constexpr BFloat8 max()      { return BFloat8(Holder{ 0b0'11110'11 }); }
-    static constexpr BFloat8 infinity() { return BFloat8(Holder{ 0b0'11111'00 }); }
+    static constexpr BFloat8 min()      { return BFloat8{ static_cast<uint8_t>(0b0'00001'00) }; }
+    static constexpr BFloat8 max()      { return BFloat8{ static_cast<uint8_t>(0b0'11110'11) }; }
+    static constexpr BFloat8 infinity() { return BFloat8{ static_cast<uint8_t>(0b0'11111'00) }; }
 
     constexpr inline bool is_negative() const { return (sign != 0); }
     constexpr inline bool is_zero() const     { return (value == 0); }
@@ -200,10 +201,6 @@ struct BFloat8
     constexpr inline BFloat8 operator-() const {
         return { (uint8_t) (sign ^ 1), exponent, mantissa };
     }
-
-private:
-    struct Holder { uint8_t payload; };
-    explicit constexpr BFloat8(Holder h) : payload(h.payload) {}
 #endif
 };
 typedef struct BFloat8 BFloat8;
@@ -236,8 +233,8 @@ static inline float from_bfloat8(BFloat8 f8) {
 }
 
 #ifdef __cplusplus
-BFloat8::BFloat8(float f):
-    payload(to_bfloat8(f).payload)
+constexpr BFloat8::BFloat8(float f):
+    payload{to_bfloat8(f).payload}
 {}
 #endif
 
@@ -260,16 +257,17 @@ struct HFloat8
     };
 
 #ifdef __cplusplus
-    inline HFloat8() = default;
-    inline HFloat8(float f);
+    constexpr inline HFloat8() = default;
+    constexpr inline HFloat8(float f);
+    constexpr inline HFloat8(uint8_t h): payload{h} { }
 
-    constexpr inline HFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa(m), exponent(e), sign(s) { }
-    constexpr inline HFloat8(uint8_t s, uint8_t v): value(v), signv(s) { }
+    constexpr inline HFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa{m}, exponent{e}, sign{s} { }
+    constexpr inline HFloat8(uint8_t s, uint8_t v): value{v}, signv{s} { }
 
-    static constexpr HFloat8 min()      { return HFloat8(Holder{ 0b0'0001'000 }); }
-    static constexpr HFloat8 max()      { return HFloat8(Holder{ 0b0'1111'101 }); }
-    static constexpr HFloat8 max1()     { return HFloat8(Holder{ 0b0'1111'000 }); }
-    static constexpr HFloat8 infinity() { return HFloat8(Holder{ 0b0'1111'111 }); }
+    static constexpr HFloat8 min()      { return HFloat8{ static_cast<uint8_t>(0b0'0001'000) }; }
+    static constexpr HFloat8 max()      { return HFloat8{ static_cast<uint8_t>(0b0'1111'101) }; }
+    static constexpr HFloat8 max1()     { return HFloat8{ static_cast<uint8_t>(0b0'1111'000) }; }
+    static constexpr HFloat8 infinity() { return HFloat8{ static_cast<uint8_t>(0b0'1111'111) }; }
 
     constexpr inline bool is_negative() const { return (sign != 0); }
     constexpr inline bool is_zero() const     { return (value == 0); }
@@ -281,10 +279,6 @@ struct HFloat8
     constexpr inline HFloat8 operator-() const {
         return { (uint8_t) (sign ^ 1), exponent, mantissa };
     }
-
-private:
-    struct Holder { uint8_t payload; };
-    explicit constexpr HFloat8(Holder h) : payload(h.payload) {}
 #endif
 };
 typedef struct HFloat8 HFloat8;
@@ -314,8 +308,8 @@ static inline float from_hfloat8(HFloat8 f8) {
 }
 
 #ifdef __cplusplus
-HFloat8::HFloat8(float f):
-    payload(to_hfloat8(f).payload)
+constexpr HFloat8::HFloat8(const float f):
+    payload{to_hfloat8(f).payload}
 {}
 #endif
 
@@ -342,10 +336,11 @@ struct Float16
     };
 
 #ifdef __cplusplus
-    inline Float16() = default;
-    inline Float16(float f);
+    constexpr inline Float16() = default;
+    constexpr inline Float16(float f);
+    constexpr inline Float16(uint16_t h): payload{h} { }
 
-    constexpr inline Float16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
+    constexpr inline Float16(uint16_t s, uint16_t e, uint16_t m): mantissa{m}, exponent{e}, sign{s} { }
 
     static constexpr int digits = FLOAT16_MANT_DIG;
     static constexpr int digits10 = FLOAT16_DIG;
@@ -372,16 +367,16 @@ struct Float16
     static constexpr std::float_round_style round_style =
             std::round_toward_zero;   // unlike std::numeric_limits<float>::round_style
 
-    static constexpr Float16 min()              { return Float16(Holder{0x0400}); }
-    static constexpr Float16 max()              { return Float16(Holder{0x7bff}); }
-    static constexpr Float16 lowest()           { return Float16(Holder{0xfbff}); }
-    static constexpr Float16 denorm_min()       { return Float16(Holder{0x0001}); }
-    static constexpr Float16 epsilon()          { return Float16(Holder{0x1400}); }
-    static constexpr Float16 round_error()      { return Float16(Holder{0x3800}); }
-    static constexpr Float16 infinity()         { return Float16(Holder{0x7c00}); }
-    static constexpr Float16 neg_infinity()     { return Float16(Holder{0xfc00}); }
-    static constexpr Float16 quiet_NaN()        { return Float16(Holder{0x7e00}); }
-    static constexpr Float16 signaling_NaN()    { return Float16(Holder{0x7d00}); }
+    static constexpr Float16 min()              { return Float16{ static_cast<uint16_t>(0x0400) }; }
+    static constexpr Float16 max()              { return Float16{ static_cast<uint16_t>(0x7bff) }; }
+    static constexpr Float16 lowest()           { return Float16{ static_cast<uint16_t>(0xfbff) }; }
+    static constexpr Float16 denorm_min()       { return Float16{ static_cast<uint16_t>(0x0001) }; }
+    static constexpr Float16 epsilon()          { return Float16{ static_cast<uint16_t>(0x1400) }; }
+    static constexpr Float16 round_error()      { return Float16{ static_cast<uint16_t>(0x3800) }; }
+    static constexpr Float16 infinity()         { return Float16{ static_cast<uint16_t>(0x7c00) }; }
+    static constexpr Float16 neg_infinity()     { return Float16{ static_cast<uint16_t>(0xfc00) }; }
+    static constexpr Float16 quiet_NaN()        { return Float16{ static_cast<uint16_t>(0x7e00) }; }
+    static constexpr Float16 signaling_NaN()    { return Float16{ static_cast<uint16_t>(0x7d00) }; }
 
     constexpr inline bool     is_negative() const         { return sign != 0; }
     constexpr inline bool     is_zero() const             { return (exponent == FLOAT16_DENORM_EXPONENT) && (mantissa == 0); }
@@ -394,10 +389,6 @@ struct Float16
     constexpr inline bool     is_valid() const            { return exponent != FLOAT16_NAN_EXPONENT; }
 
     constexpr inline uint16_t get_nan_payload() const     { return mantissa & (~FLOAT16_MANTISSA_QUIET_NAN_MASK); }
-
-private:
-    struct Holder { uint16_t payload; };
-    explicit constexpr Float16(Holder h) : as_hex(h.payload) {}
 #endif
 };
 typedef struct Float16 Float16;
@@ -435,9 +426,10 @@ struct BFloat16
     };
 
 #ifdef __cplusplus
-    inline BFloat16() = default;
-    inline BFloat16(float f);
-    constexpr inline BFloat16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
+    constexpr inline BFloat16() = default;
+    constexpr inline BFloat16(float f);
+    constexpr inline BFloat16(uint16_t h): payload{h} {}
+    constexpr inline BFloat16(uint16_t s, uint16_t e, uint16_t m): mantissa{m}, exponent{e}, sign{s} { }
 
     // same API as std::numeric_limits:
     static constexpr int digits = BFLOAT16_MANT_DIG;
@@ -465,16 +457,16 @@ struct BFloat16
     static constexpr std::float_round_style round_style =
             std::round_toward_zero;   // unlike std::numeric_limits<float>::round_style
 
-    static constexpr BFloat16 max()           { return BFloat16(Holder{0x7f7f}); }
-    static constexpr BFloat16 min()           { return BFloat16(Holder{0x0080}); }
-    static constexpr BFloat16 lowest()        { return BFloat16(Holder{0xff7f}); }
-    static constexpr BFloat16 denorm_min()    { return BFloat16(Holder{0x0001}); }
-    static constexpr BFloat16 epsilon()       { return BFloat16(Holder{0x3c00}); }
-    static constexpr BFloat16 round_error()   { return BFloat16(Holder{0x3f00}); }
-    static constexpr BFloat16 infinity()      { return BFloat16(Holder{0x7f80}); }
-    static constexpr BFloat16 neg_infinity()  { return BFloat16(Holder{0xff80}); }
-    static constexpr BFloat16 quiet_NaN()     { return BFloat16(Holder{0x7fc0}); }
-    static constexpr BFloat16 signaling_NaN() { return BFloat16(Holder{0x7fa0}); }
+    static constexpr BFloat16 max()           { return BFloat16{ static_cast<uint16_t>(0x7f7f) }; }
+    static constexpr BFloat16 min()           { return BFloat16{ static_cast<uint16_t>(0x0080) }; }
+    static constexpr BFloat16 lowest()        { return BFloat16{ static_cast<uint16_t>(0xff7f) }; }
+    static constexpr BFloat16 denorm_min()    { return BFloat16{ static_cast<uint16_t>(0x0001) }; }
+    static constexpr BFloat16 epsilon()       { return BFloat16{ static_cast<uint16_t>(0x3c00) }; }
+    static constexpr BFloat16 round_error()   { return BFloat16{ static_cast<uint16_t>(0x3f00) }; }
+    static constexpr BFloat16 infinity()      { return BFloat16{ static_cast<uint16_t>(0x7f80) }; }
+    static constexpr BFloat16 neg_infinity()  { return BFloat16{ static_cast<uint16_t>(0xff80) }; }
+    static constexpr BFloat16 quiet_NaN()     { return BFloat16{ static_cast<uint16_t>(0x7fc0) }; }
+    static constexpr BFloat16 signaling_NaN() { return BFloat16{ static_cast<uint16_t>(0x7fa0) }; }
 
     // extra
     static constexpr float epsilon_v()        { return std::numeric_limits<float>::epsilon() * 65536; }
@@ -490,10 +482,6 @@ struct BFloat16
     constexpr inline bool     is_qnan() const           { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
 
     constexpr inline uint16_t get_nan_payload() const   { return mantissa & (~BFLOAT16_MANTISSA_QUIET_NAN_MASK); }
-
-private:
-    struct Holder { uint16_t payload; };
-    explicit constexpr BFloat16(Holder h) : as_hex(h.payload) {}
 #endif
 };
 typedef struct BFloat16 BFloat16;
@@ -529,9 +517,9 @@ struct Float32 {
     };
 
 #ifdef __cplusplus
-    inline Float32() = default;
-    constexpr inline Float32(float f) : as_float(f) { }
-    constexpr inline Float32(uint32_t s, uint32_t e, uint32_t m): mantissa(m), exponent(e), sign(s) { }
+    constexpr inline Float32() = default;
+    constexpr inline Float32(float f) : as_float{f} { }
+    constexpr inline Float32(uint32_t s, uint32_t e, uint32_t m): mantissa{m}, exponent{e}, sign{s} { }
 #endif
 };
 typedef struct Float32 Float32;
@@ -558,9 +546,9 @@ struct Float64 {
     };
 
 #ifdef __cplusplus
-    inline Float64() = default;
-    constexpr inline Float64(float f) : as_float(f) { }
-    constexpr inline Float64(uint64_t s, uint64_t e, uint64_t m): mantissa(m), exponent(e), sign(s) { }
+    constexpr inline Float64() = default;
+    constexpr inline Float64(float f) : as_float{f} { }
+    constexpr inline Float64(uint64_t s, uint64_t e, uint64_t m): mantissa{m}, exponent{e}, sign{s} { }
 #endif
 };
 typedef struct Float64 Float64;
@@ -593,9 +581,9 @@ struct Float80 {
     };
 
 #ifdef __cplusplus
-    inline Float80() = default;
-    constexpr inline Float80(long double f) : as_float(f) { }
-    constexpr inline Float80(uint64_t s, uint64_t e, uint64_t j, uint64_t m): mantissa(m), jbit(j), exponent(e), sign(s) { }
+    constexpr inline Float80() = default;
+    constexpr inline Float80(long double f) : as_float{f} { }
+    constexpr inline Float80(uint64_t s, uint64_t e, uint64_t j, uint64_t m): mantissa{m}, jbit{j}, exponent{e}, sign{s} { }
 #endif
 };
 typedef struct Float80 Float80;
@@ -617,7 +605,7 @@ typedef struct Float80 Float80;
 STATIC_INLINE BFloat8 new_bfloat8(uint8_t sign, uint8_t exponent, uint8_t mantissa)
 {
 #ifdef __cplusplus
-    return BFloat8(sign, exponent, mantissa);
+    return BFloat8 { sign, exponent, mantissa };
 #else
     return (BFloat8) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
 #endif
@@ -626,7 +614,7 @@ STATIC_INLINE BFloat8 new_bfloat8(uint8_t sign, uint8_t exponent, uint8_t mantis
 STATIC_INLINE HFloat8 new_hfloat8(uint8_t sign, uint8_t exponent, uint8_t mantissa)
 {
 #ifdef __cplusplus
-    return HFloat8(sign, exponent, mantissa);
+    return HFloat8 { sign, exponent, mantissa };
 #else
     return (HFloat8) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
 #endif
@@ -635,7 +623,7 @@ STATIC_INLINE HFloat8 new_hfloat8(uint8_t sign, uint8_t exponent, uint8_t mantis
 STATIC_INLINE Float16 new_float16(uint16_t sign, uint16_t exponent, uint16_t mantissa)
 {
 #ifdef __cplusplus
-    return Float16(sign, exponent, mantissa);
+    return Float16 { sign, exponent, mantissa };
 #else
     return (Float16) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
 #endif
@@ -644,7 +632,7 @@ STATIC_INLINE Float16 new_float16(uint16_t sign, uint16_t exponent, uint16_t man
 STATIC_INLINE BFloat16 new_bfloat16(uint16_t sign, uint16_t exponent, uint16_t mantissa)
 {
 #ifdef __cplusplus
-    return BFloat16(sign, exponent, mantissa);
+    return BFloat16 { sign, exponent, mantissa };
 #else
     return (BFloat16) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
 #endif
@@ -653,7 +641,7 @@ STATIC_INLINE BFloat16 new_bfloat16(uint16_t sign, uint16_t exponent, uint16_t m
 STATIC_INLINE Float32 new_float32(uint32_t sign, uint32_t exponent, uint32_t mantissa)
 {
 #ifdef __cplusplus
-    return Float32(sign, exponent, mantissa);
+    return Float32 { sign, exponent, mantissa };
 #else
     return (Float32) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
 #endif
@@ -662,7 +650,7 @@ STATIC_INLINE Float32 new_float32(uint32_t sign, uint32_t exponent, uint32_t man
 STATIC_INLINE Float64 new_float64(uint64_t sign, uint64_t exponent, uint64_t mantissa)
 {
 #ifdef __cplusplus
-    return Float64(sign, exponent, mantissa);
+    return Float64 { sign, exponent, mantissa };
 #else
     return (Float64) {{{ .sign = sign, .exponent = exponent, .mantissa = mantissa }}};
 #endif
@@ -671,7 +659,7 @@ STATIC_INLINE Float64 new_float64(uint64_t sign, uint64_t exponent, uint64_t man
 STATIC_INLINE Float80 new_float80(uint64_t sign, uint64_t exponent, uint64_t jbit, uint64_t mantissa)
 {
 #ifdef __cplusplus
-    return Float80(sign, exponent, jbit, mantissa);
+    return Float80 { sign, exponent, jbit, mantissa };
 #else
     return (Float80) {{{ .sign = sign, .exponent = exponent, .jbit = jbit, .mantissa = mantissa }}};
 #endif
