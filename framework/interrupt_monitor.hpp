@@ -6,8 +6,9 @@
 #ifndef SANDSTONE_INTERRUPTS_MONITOR_HPP
 #define SANDSTONE_INTERRUPTS_MONITOR_HPP
 #include <sandstone.h>
-#include <stdint.h>
-#include <numeric>      // for std::accummulate
+
+#include <cstdint>
+#include <numeric> // for std::accummulate
 #include <optional>
 #include <vector>
 
@@ -18,8 +19,8 @@ class InterruptMonitor
         MCE,
         Thermal,
     };
-    static uint64_t get_total_interrupt_counts(InterruptType type)
-    {
+
+    static uint64_t get_total_interrupt_counts(InterruptType type) {
         std::vector<uint32_t> counts = get_interrupt_counts(type);
         return std::accumulate(counts.begin(), counts.end(), uint64_t(0));
     }
@@ -28,16 +29,19 @@ class InterruptMonitor
     static std::vector<uint32_t> get_interrupt_counts(InterruptType type);
 
 public:
-    std::vector<uint32_t> get_mce_interrupt_counts() const
-    { return get_interrupt_counts(MCE); }
+    static std::vector<uint32_t> get_mce_interrupt_counts() {
+        return get_interrupt_counts(MCE);
+    }
 
-    uint64_t count_mce_events() const
-    { return get_total_interrupt_counts(MCE); }
+    static uint64_t count_mce_events() {
+        return get_total_interrupt_counts(MCE);
+    }
 
-    uint64_t count_thermal_events() const
-    { return get_total_interrupt_counts(Thermal); }
+    static uint64_t count_thermal_events() {
+        return get_total_interrupt_counts(Thermal);
+    }
 
-    std::optional<uint64_t> count_smi_events(int cpu)
+    static std::optional<uint64_t> count_smi_events(int cpu)
     {
         uint64_t msi_count = 0;
         if (read_msr(cpu, MSR_SMI_COUNT, &msi_count))

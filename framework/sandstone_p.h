@@ -327,7 +327,7 @@ struct HardwareInfo
 #endif
 };
 
-struct SandstoneApplication : public InterruptMonitor, public test_the_test_data<SandstoneConfig::Debug>
+struct SandstoneApplication : public test_the_test_data<SandstoneConfig::Debug>
 {
     enum class OutputFormat : int8_t {
         no_output   = 0,
@@ -423,10 +423,6 @@ struct SandstoneApplication : public InterruptMonitor, public test_the_test_data
     static constexpr int DefaultTemperatureThreshold = -1;
     int thermal_throttle_temp = DefaultTemperatureThreshold;
     int threshold_time_remaining = 30000;
-    uint64_t last_thermal_event_count;
-    uint64_t mce_count_last;
-    std::vector<uint32_t> mce_counts_start;
-    std::vector<uint64_t> smi_counts_start;
 
     HardwareInfo hwinfo;
 
