@@ -108,6 +108,10 @@ int mce_check_run(struct test *test, int cpu)
 }
 }
 
+bool InterruptMonitor::observed_mce_events()
+{
+    return get_mce_interrupt_counts() != mce_counts_start;
+}
 
 // The MCE test is special in that it is not handled like a normal test
 // We do not use the macros to specify it because we do not want it to
