@@ -1752,12 +1752,14 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
                "Internal error: init-in-parent returned a skip but did not call log_skip()");
         res = TestResult::Skipped;
     } else if (ret == EXIT_SUCCESS) [[likely]] {
-        if (main->has_skipped())
+        if (main->has_skipped()) {
             res = TestResult::Skipped;
-        else if (main->has_failed())
+        } else if (main->has_failed()) {
             res = TestResult::Failed;
-        else
+        } else {
             assert(!"Internal error: init-in-parent succeeded");
+            __builtin_unreachable();
+        }
     } else {
         assert(main->has_failed() &&
                "Internal error: init-in-parent returned an error but did not call log_error()");
