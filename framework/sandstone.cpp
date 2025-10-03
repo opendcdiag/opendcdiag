@@ -2694,6 +2694,7 @@ int main(int argc, char **argv)
         sApp->shmem->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
 
     if (InterruptMonitor::InterruptMonitorWorks && test_set->contains(&mce_test)) {
+        sApp->mce_counts_start = InterruptMonitor::get_mce_interrupt_counts();
         if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
             test_set->remove(&mce_test);
         } else if (InterruptMonitor::get_mce_interrupt_counts().empty()) {
