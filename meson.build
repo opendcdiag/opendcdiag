@@ -279,7 +279,7 @@ sandstone_tests_link_whole = []
 unittests_sources = []
 
 subdir('framework')
-subdir('tests' / device_type)
+subdir('tests')
 
 sandstone_tests_link_whole += [sandstone_tests]
 
