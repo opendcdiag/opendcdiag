@@ -23,7 +23,7 @@
 #include "cpuid_internal.h"
 
 // from cpu_device.cpp
-extern const cpu_features_t minimum_cpu_features;
+extern const device_features_t minimum_cpu_features;
 
 #if defined(AT_EXECPATH) && !defined(AT_EXECFN)
 // FreeBSD uses AT_EXECPATH instead of AT_EXECFN
@@ -116,9 +116,9 @@ static void premain(int argc, char **argv, char **envp)
     (void) envp;
 
     // initialize CPU detection
-    cpu_features = detect_cpu();
-    if (minimum_cpu_features & ~cpu_features)
+    device_features = detect_cpu();
+    if (minimum_cpu_features & ~device_features)
         fallback_exec(argv);
-    check_missing_features(cpu_features, minimum_cpu_features);
+    check_missing_features(device_features, minimum_cpu_features);
 }
 }
