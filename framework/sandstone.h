@@ -645,6 +645,7 @@ int thread_count() __attribute__((pure));
 
 // Static C++ test runner to instantiate appropriate test class or always skipping one
 #ifdef __cplusplus
+
 template<class T>
 class TestRunner
 {
