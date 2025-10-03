@@ -122,7 +122,7 @@ def main():
             f.write('{\n')
             f.write('#ifdef SANDSTONE\n')
             f.write('    if ((name == nullptr) || (strcmp(name, "auto") == 0)) {\n')
-            f.write('        return (test_set->features & cpu_features) == test_set->features;\n')
+            f.write('        return (test_set->features & device_features) == test_set->features;\n')
             f.write('    }\n')
             f.write('#endif\n')
             f.write('    return (name != nullptr) && (strcmp(name, test_set->name) == 0);\n')
@@ -154,7 +154,7 @@ def main():
 
         # per-gen list definition
         f.write('typedef struct BuiltinTestSet {\n')
-        f.write('    cpu_features_t features;\n')
+        f.write('    device_features_t features;\n')
         f.write('    const char* name;\n')
         f.write('    const std::optional<std::vector<struct test *>> tests;\n')
         f.write('} BuiltinTestSet ;\n\n')

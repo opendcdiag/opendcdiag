@@ -120,7 +120,7 @@
 /// may call cpu_has_feature(cpu_feature_avx512f) to determine whether AVX-512 is available.
 /// Normally, cpuid detection is handle automatically by the framework via test's minimum_cpu field.
 /// This macro is provided in case tests need more fine grained control.
-#define cpu_has_feature(f)      ((_compilerCpuFeatures & (f)) == (f) || (cpu_features & (f)) == (f))
+#define cpu_has_feature(f)      ((device_compiler_features & (f)) == (f) || (device_features & (f)) == (f))
 
 /// used as follows: if instruction cache, only cache_instruction is valid; if
 /// data, only data is valid; if unified, both are set to the same value. In all
@@ -182,7 +182,7 @@ inline int cpu_info::cpu() const
     return this - ::cpu_info;
 }
 
-std::string cpu_features_to_string(cpu_features_t f);
+std::string device_features_to_string(device_features_t f);
 
 extern "C" {
 #endif // __cplusplus
@@ -197,7 +197,5 @@ int num_packages() __attribute__((pure));
 #ifdef __cplusplus
 }
 #endif
-
-extern cpu_features_t cpu_features;
 
 #endif // INC_CPU_DEVICE_H
