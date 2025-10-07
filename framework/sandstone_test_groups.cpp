@@ -11,17 +11,17 @@
 #  define TEST_GROUP(name, descr)   .id = name, .description = descr
 #endif
 
-extern constexpr struct test_group group_compression = {
+constexpr struct test_group group_compression = {
     TEST_GROUP("compression",
                "Tests that drive compression routines in various libraries"),
 };
 
-extern constexpr struct test_group group_math = {
+constexpr struct test_group group_math = {
     TEST_GROUP("math",
                "Tests that perform math using, e.g., Eigen"),
 };
 
-extern constexpr struct test_group group_fuzzing = {
+constexpr struct test_group group_fuzzing = {
     TEST_GROUP("fuzzing",
                "Tests that fuzz framework functions using AFL++ persistent mode"),
 };
