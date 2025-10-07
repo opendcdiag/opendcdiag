@@ -14,21 +14,6 @@
 #include "sandstone_tests.h"
 #include "sandstone_chrono.h"
 
-#if !defined(__linux__) || !defined(__x86_64__)
-// no MCE test outside Linux
-static_assert(!InterruptMonitor::InterruptMonitorWorks);
-struct test mce_test = {
-#ifdef TEST_ID_mce_check
-    .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
-    .description = nullptr,
-#else
-    .id = "mce_check",
-    .description = "Machine Check Exceptions/Events count",
-#endif
-    .quality_level = TEST_QUALITY_SKIP
-};
-#endif
-
 void SandstoneTestSet::load_all_tests()
 {
     std::span<struct test> known_tests = cfg.is_selftest ? selftests : regular_tests;
