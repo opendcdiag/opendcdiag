@@ -12,12 +12,9 @@
  */
 
 #include "sandstone_p.h"
+
+#include <cinttypes>
 #include <vector>
-#include <numeric>
-#include <cassert>
-#include <inttypes.h>
-#include <limits.h>
-#include <map>
 
 namespace {
 // we can use global variable, since write to this vector is done by single thread (initialize_smi_counts),
