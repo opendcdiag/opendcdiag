@@ -79,7 +79,7 @@ test_fail_socket1() {
 }
 
 @test "cpu-info real topology" {
-    if ! [[ -f /sys/devices/system/cpu ]]; then
+    if ! [[ -d /sys/devices/system/cpu ]]; then
         skip "Test only works on Linux with /sys mounted"
     fi
     declare -A yamldump
