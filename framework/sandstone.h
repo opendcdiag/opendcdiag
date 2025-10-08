@@ -539,6 +539,18 @@ extern thread_local int thread_num;
 extern __thread int thread_num __attribute__((tls_model("initial-exec")));
 #endif
 
+/// Returns the number of hardware threads available to a
+/// test.  It is equal to the number of test threads the framework runs.
+/// Normally, this value is equal to the number of CPU threads in the
+/// device under test but the value can be lower if --cpuset option
+/// is used, the tests specifies a value for test.max_threads or the OS
+/// restricts the number of CPUs sandstone can see.
+int thread_count() __attribute__((pure));
+
+/// Returns the number of physical CPU packages (a.k.a. sockets) available to a
+/// test.
+int num_packages() __attribute__((pure));
+
 #ifdef __cplusplus
 }
 
@@ -635,18 +647,6 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
         _memcmp_fail_report(actual, expected, size, type, NULL)
 #  endif
 #endif
-
-/// Returns the number of hardware threads available to a
-/// test.  It is equal to the number of test threads the framework runs.
-/// Normally, this value is equal to the number of CPU threads in the
-/// device under test but the value can be lower if --cpuset option
-/// is used, the tests specifies a value for test.max_threads or the OS
-/// restricts the number of CPUs sandstone can see.
-int thread_count() __attribute__((pure));
-
-/// Returns the number of physical CPU packages (a.k.a. sockets) available to a
-/// test.
-int num_packages() __attribute__((pure));
 
 // Static C++ test runner to instantiate appropriate test class or always skipping one
 #ifdef __cplusplus
