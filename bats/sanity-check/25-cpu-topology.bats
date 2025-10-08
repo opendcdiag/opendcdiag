@@ -79,7 +79,7 @@ test_fail_socket1() {
 }
 
 @test "cpu-info real topology" {
-    if ! [[ -f /sys/devices/system/cpu ]]; then
+    if ! [[ -d /sys/devices/system/cpu ]]; then
         skip "Test only works on Linux with /sys mounted"
     fi
     declare -A yamldump
@@ -100,7 +100,7 @@ test_fail_socket1() {
         v=`cat topology/thread_siblings_list`
         (
             bats::on_failure() { echo thread_siblings_list: $v; }
-            if [[ "$v" == "$n" ]] || [[ "$v" == "$n",* ]]; then
+            if [[ "$v" == "$n" ]] || [[ "$v" == "$n"[,-]* ]]; then
                 test_yaml_expr "/cpu-info/$i/thread" = 0
             else
                 test_yaml_expr "/cpu-info/$i/thread" = 1
