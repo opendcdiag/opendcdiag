@@ -496,10 +496,11 @@ selftest_cpuset_negated() {
 
 # Confirm we are rescheduling properly
 @test "thread queue reschedule" {
-    run $SANDSTONE -n1 --selftests -e selftest_logs_reschedule --reschedule=queue
-    if [[ $status == 64 ]] || [[ "`uname -m`" != x86_64 ]]; then
-       skip "Not supported"
-    fi
+    PLATFORM=$(uname -m)
+    [[ "${PLATFORM}" != "x86_64" || ${is_windows} ]] && skip "Not supported"
+
+    run $SANDSTONE --selftests -e selftest_logs_reschedule --reschedule=queue
+    [[ $status == 64 ]] && false
 
     local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
     nproc=${#cpuset[@]}
