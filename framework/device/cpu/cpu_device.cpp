@@ -54,3 +54,20 @@ void dump_device_info()
         puts("");
     }
 }
+
+TestResult prepare_test_for_device(struct test *test)
+{
+    auto has_smt = []() -> bool {
+        for(int idx = 0; idx < thread_count() - 1; idx++) {
+            if (cpu_info[idx].core_id == cpu_info[idx + 1].core_id)
+                return true;
+        }
+        return false;
+    };
+
+    if (test->flags & test_requires_smt && !has_smt()) {
+        log_skip(CpuTopologyIssueSkipCategory, "Test requires SMT (hyperthreading)");
+        return TestResult::Skipped;
+    }
+    return TestResult::Passed;
+}

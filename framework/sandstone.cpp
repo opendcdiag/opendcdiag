@@ -1421,18 +1421,8 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         init_per_thread_data();
 
         sApp->test_tests_init(test);
-
-        auto has_smt = []() -> bool {
-            for(int idx = 0; idx < num_cpus() - 1; idx++) {
-                if (cpu_info[idx].core_id == cpu_info[idx + 1].core_id)
-                    return true;
-            }
-            return false;
-        };
-
-        if (test->flags & test_requires_smt && !has_smt()) {
-            log_skip(CpuTopologyIssueSkipCategory, "Test requires SMT (hyperthreading)");
-            state = TestResult::Skipped;
+        state = prepare_test_for_device(test);
+        if (state != TestResult::Passed) {
             break;
         }
 
