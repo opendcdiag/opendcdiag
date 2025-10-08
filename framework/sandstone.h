@@ -644,6 +644,10 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 /// restricts the number of CPUs sandstone can see.
 int thread_count() __attribute__((pure));
 
+/// Returns the number of physical CPU packages (a.k.a. sockets) available to a
+/// test.
+int num_packages() __attribute__((pure));
+
 // Static C++ test runner to instantiate appropriate test class or always skipping one
 #ifdef __cplusplus
 template<class T>

@@ -190,10 +190,6 @@ extern "C" {
 /// Keep num_cpus() defined for legacy reasons
 int num_cpus() __attribute__((pure));
 
-/// Returns the number of physical CPU packages (a.k.a. sockets) available to a
-/// test.
-int num_packages() __attribute__((pure));
-
 #ifdef __cplusplus
 }
 #endif
