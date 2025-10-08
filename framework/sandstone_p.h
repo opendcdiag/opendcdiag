@@ -630,6 +630,7 @@ void random_init_thread(int thread_num);
 
 /* sandstone.cpp */
 TestResult run_one_test(int *tc, const struct test *test, PerThreadFailures &per_thread_fails);
+TestResult prepare_test_for_device(struct test* test);
 
 /*
  * Called from sandstone_main() before logging_global_init() and before
