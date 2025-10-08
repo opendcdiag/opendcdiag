@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import yaml
+import platform
 import sys
 
 def fail(msg):
@@ -50,12 +51,14 @@ def validate_thread(name, thr):
         thr['id']['numa_node']
         thr['id']['module']
         thr['id']['core']
-        thr['id']['thread']
-        thr['id']['family']
-        thr['id']['model']
-        thr['id']['stepping']
-        thr['id']['microcode']
-        thr['id']['ppin']
+
+        if platform.uname().machine == 'x86-64':
+            thr['id']['thread']
+            thr['id']['family']
+            thr['id']['model']
+            thr['id']['stepping']
+            thr['id']['microcode']
+            thr['id']['ppin']
     elif not n.startswith('main'):
         fail('found unknown thread "{}" for test {}'.format(n, name))
 

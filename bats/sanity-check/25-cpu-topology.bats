@@ -88,6 +88,7 @@ test_fail_socket1() {
     # Get the NUMA node assignments
     eval local -A numa=`numa_nodes`
 
+    local machine=`uname -m`
     local i
     for ((i=0; i < ${yamldump[/cpu-info@len]}; ++i)); do (
         local v
@@ -109,13 +110,15 @@ test_fail_socket1() {
 
         # Our module ID from CPUID differs from what Linux reports in topology/cluster_id
 
-        if v=`cat microcode/version 2>/dev/null`; then
-            test_yaml_numeric "/cpu-info/$i/microcode" "value == $v"
-        fi
-        if v=`cat topology/ppin 2>/dev/null`; then
-            test_yaml_expr "/cpu-info/$i/ppin" = "${v#0x}"
-        else
-            test_yaml_expr "/cpu-info/$i/ppin" = None
+        if [[ $machine = x86_64 ]]; then
+            if v=`cat microcode/version 2>/dev/null`; then
+                test_yaml_numeric "/cpu-info/$i/microcode" "value == $v"
+            fi
+            if v=`cat topology/ppin 2>/dev/null`; then
+                test_yaml_expr "/cpu-info/$i/ppin" = "${v#0x}"
+            else
+                test_yaml_expr "/cpu-info/$i/ppin" = None
+            fi
         fi
 
         v=${numa[$n]}
