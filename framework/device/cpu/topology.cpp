@@ -1406,6 +1406,25 @@ void apply_deviceset_param(char *param)
                 if (cpu.cpu_number % 2 == desired_remainder)
                     apply_to_set(cpu);
             }
+        } else if (p.starts_with("type=")) {
+            NativeCoreType expected = [&]() {
+                std::string_view type = p;
+                type.remove_prefix(strlen("type="));
+                if (type == "e")
+                    return core_type_efficiency;
+                else if (type == "p")
+                    return core_type_performance;
+
+                fprintf(stderr, "%s: error: Invalid CPU set parameter: %s (unknown core type)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+                return core_type_unknown;    // unreachable
+            }();
+
+            for (const struct cpu_info &cpu : old_cpu_info) {
+                if (cpu.native_core_type == expected)
+                    apply_to_set(cpu);
+            }
         } else if (c >= 'a' && c <= 'z') {
             // topology search
             auto set_if_unset = [orig_arg](int n, int &where, const char *what) {
