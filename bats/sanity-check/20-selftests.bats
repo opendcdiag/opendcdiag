@@ -224,6 +224,7 @@ tap_negative_check() {
     test_yaml_numeric "/timing/timeout" 'value == 12345'
 
     # just verify these exist
+    local machine=`uname -m`
     for ((i = 0; i < MAX_PROC; ++i)); do
         if $is_windows; then
             test_yaml_numeric "/cpu-info/$i/logical-group" 'value >= 0'
@@ -234,11 +235,13 @@ tap_negative_check() {
         test_yaml_numeric "/cpu-info/$i/module" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/core" 'value >= 0'
         test_yaml_numeric "/cpu-info/$i/thread" 'value >= 0'
-        test_yaml_numeric "/cpu-info/$i/family" 'value >= 0'
-        test_yaml_numeric "/cpu-info/$i/model" 'value >= 0'
-        test_yaml_numeric "/cpu-info/$i/stepping" 'value >= 0'
-        test_yaml_regexp "/cpu-info/$i/microcode" '(None|[0-9]+)'
-        test_yaml_regexp "/cpu-info/$i/ppin" '(None|[0-9a-f]{16})'
+        if [[ $machine = x86_64 ]]; then
+            test_yaml_numeric "/cpu-info/$i/family" 'value >= 0'
+            test_yaml_numeric "/cpu-info/$i/model" 'value >= 0'
+            test_yaml_numeric "/cpu-info/$i/stepping" 'value >= 0'
+            test_yaml_regexp "/cpu-info/$i/microcode" '(None|[0-9]+)'
+            test_yaml_regexp "/cpu-info/$i/ppin" '(None|[0-9a-f]{16})'
+        fi
     done
 
     # check some more timing parse

@@ -293,6 +293,7 @@ void TapFormatLogger::print_thread_header(int fd, int device, int verbosity)
         line += stdprintf(", type: %s", type);
 
     const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
+#ifdef __x86_64__
     line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", sApp->hwinfo.family, sApp->hwinfo.model,
                       sApp->hwinfo.stepping);
     if (info->microcode)
@@ -303,6 +304,9 @@ void TapFormatLogger::print_thread_header(int fd, int device, int verbosity)
         line += stdprintf(", PPIN %016" PRIx64 "):", pkg->ppin);
     else
         line += ", PPIN N/A):";
+#else
+    (void) pkg;
+#endif
 
     writeln(fd, line);
 
@@ -403,11 +407,16 @@ std::string thread_id_header_for_device(int cpu, int verbosity)
                 line += "null";
         };
         const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
+#ifdef __x86_64__
         line += stdprintf(", family: %d, model: %#02x, stepping: %d, microcode: ",
                           sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
         add_value_or_null("%#" PRIx64, info->microcode);
         line += ", ppin: ";
         add_value_or_null("\"%016" PRIx64 "\"", pkg ? pkg->ppin : 0);   // string to prevent loss of precision
+#else
+        (void) pkg;
+        (void) add_value_or_null;
+#endif
     }
     line += " }";
     return line;

@@ -111,11 +111,6 @@ $defs:
       - module
       - core
       - thread
-      - family
-      - model
-      - stepping
-      - microcode
-      - ppin
 
   test-plan-entry:
     type: array
