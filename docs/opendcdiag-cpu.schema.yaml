@@ -90,6 +90,10 @@ $defs:
         type: integer
       thread:
         type: integer
+      core_type:
+        enum:
+          - e-core
+          - p-core
       family:
         type: integer
       model:

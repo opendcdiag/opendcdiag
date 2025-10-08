@@ -42,23 +42,32 @@ def validate_message(name, message):
     return level == 'error'
 
 
+def validate_thread_id(id):
+    thr['id']['logical']
+    thr['id']['package']
+    thr['id']['numa_node']
+    thr['id']['module']
+    thr['id']['core']
+    try:
+        core_type = thr['id']['core_type']
+        if not core_type in ('e-core', 'p-core'):
+            fail('found invalid core type "{}" for thread {}'.format(core_type, thr['id']))
+    except:
+        pass
+
+    if platform.uname().machine == 'x86-64':
+        thr['id']['thread']
+        thr['id']['family']
+        thr['id']['model']
+        thr['id']['stepping']
+        thr['id']['microcode']
+        thr['id']['ppin']
+
 def validate_thread(name, thr):
     n = thr['thread']
 
     if type(n) is int:
-        thr['id']['logical']
-        thr['id']['package']
-        thr['id']['numa_node']
-        thr['id']['module']
-        thr['id']['core']
-
-        if platform.uname().machine == 'x86-64':
-            thr['id']['thread']
-            thr['id']['family']
-            thr['id']['model']
-            thr['id']['stepping']
-            thr['id']['microcode']
-            thr['id']['ppin']
+        validate_thread_id(thr['id'])
     elif not n.startswith('main'):
         fail('found unknown thread "{}" for test {}'.format(n, name))
 
@@ -90,6 +99,8 @@ with open(sys.argv[1]) as file:
     fatal_skips = '--fatal-skips' in log['command-line']
     exit_fail = False
     tests = []
+    for thread in log['cpu-info']:
+        validate_thread_id(thread)
     if 'tests' in log:
         tests = log['tests']
     for test in tests:
