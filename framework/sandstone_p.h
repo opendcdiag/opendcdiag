@@ -128,6 +128,12 @@ void dump_device_info();
 
 #ifdef __cplusplus
 }
+
+/*
+* Returns formatted string, with comma separated features
+*/
+std::string device_features_to_string(device_features_t f);
+
 struct RandomEngineWrapper;
 struct RandomEngineDeleter { void operator()(RandomEngineWrapper *) const; };
 
