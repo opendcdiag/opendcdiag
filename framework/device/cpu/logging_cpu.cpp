@@ -9,6 +9,22 @@
 
 #include <cinttypes>
 
+static constexpr const char *native_device_type(const struct cpu_info *info)
+{
+#ifdef __x86_64__
+    // CPUID leaf 0x1A
+    switch (info->native_core_type) {
+    case 0x20:      // Intel Atom
+        return "e-core";
+    case 0x40:      // Intel Core
+        return "p-core";
+
+    // other values are reserved
+    }
+#endif
+    return nullptr;
+}
+
 #if !SANDSTONE_NO_LOGGING
 
 void KeyValuePairLogger::prepare_line_prefix()
@@ -273,6 +289,8 @@ void TapFormatLogger::print_thread_header(int fd, int device, int verbosity)
     struct cpu_info *info = cpu_info + device;
     std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", device,
             info->cpu_number, info->package_id, info->core_id, info->thread_id);
+    if (const char *type = native_device_type(info))
+        line += stdprintf(", type: %s", type);
 
     const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
     line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", sApp->hwinfo.family, sApp->hwinfo.model,
@@ -375,6 +393,8 @@ std::string thread_id_header_for_device(int cpu, int verbosity)
     line += stdprintf("package: %d, numa_node: %d, module: %*d, core: %*d, thread: %d",
                       info->package_id, info->numa_id, thread_core_spacing().core, info->module_id,
                       thread_core_spacing().core, info->core_id, info->thread_id);
+    if (const char *type = native_device_type(info))
+        line += stdprintf(", core_type: %s", type);
     if (verbosity > 1) {
         auto add_value_or_null = [&line](const char *fmt, uint64_t value) {
             if (value)
