@@ -64,10 +64,12 @@ private:
     // we only want up to Tile
     static constexpr Domain Package = Domain(Domain::Tile + 1);
 
+    bool is_hybrid = false;
     int8_t topology_leaf = -1;
     std::array<uint8_t, Package> topology_widths_array = {};
     uint8_t &width(Domain domain) { return topology_widths_array[domain - 1]; };
 
+    bool detect_hybrid_type_via_cpuid(Topology::Thread *info);
     bool detect_cache_via_cpuid(Topology::Thread *info, uint32_t *max_cpus_sharing_l2);
     bool detect_topology_via_cpuid(Topology::Thread *info);
 #endif
@@ -941,6 +943,16 @@ bool TopologyDetector::detect_cache_via_cpuid(Topology::Thread *info,
     return true;
 }
 
+bool TopologyDetector::detect_hybrid_type_via_cpuid(Topology::Thread *info)
+{
+    if (is_hybrid) {
+        uint32_t a, b, c, d;
+        __cpuid_count(0x1a, 0, a, b, c, d);
+        info->native_core_type = uint8_t(a >> 24);
+    }
+    return true;
+}
+
 bool TopologyDetector::setup_cpuid_detection()
 {
     if (SandstoneConfig::Debug) {
@@ -959,6 +971,12 @@ bool TopologyDetector::setup_cpuid_detection()
         leaf = 0x0b;        // use regular Extended Topology
     else
         return false;
+
+    if (a >= 0x1a) {
+        // is this a hybrid part?
+        __cpuid_count(0x1a, 0, a, b, c, d);
+        is_hybrid = (a != 0);
+    }
 
     int subleaf = 0;
     __cpuid_count(leaf, subleaf, a, b, c, d);
@@ -1149,6 +1167,7 @@ bool TopologyDetector::detect_ppin_via_msr(HardwareInfo::PackageInfo *info, Logi
 
 bool TopologyDetector::detect_via_cpuid(Topology::Thread *info)
 {
+    detect_hybrid_type_via_cpuid(info);
     return detect_topology_via_cpuid(info);     // does cache detection
 }
 #else // !x86-64

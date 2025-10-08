@@ -160,6 +160,12 @@ struct cpu_info
     /// On x86, it's the APICID or x2APICID, if known; -1 if not.
     int hwid;
 
+    /// On x86 with hybrid parts, contains the native core type (CPUID leaf
+    /// 0x1A, EAX bits 24-31).
+    uint8_t native_core_type;
+
+    // 3 bytes of padding
+
     struct cache_info cache[3]; ///! Cache info from OS
 
 #ifdef __cplusplus
