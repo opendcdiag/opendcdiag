@@ -844,11 +844,6 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(reschedule_option)) {
-            if (opts.thread_count < 2) {
-                fprintf(stderr, "%s: --reschedule is only useful with at least 2 threads\n", argv[0]);
-                return EX_USAGE;
-            }
-
             sApp->device_scheduler = make_rescheduler(value);
             if (!sApp->device_scheduler) {
                 fprintf(stderr, "%s: unknown reschedule option: %s\n", argv[0], value);
