@@ -17,9 +17,7 @@
 #include "test_knobs.h"
 #include "topology.h"
 #include "logging.h"
-#if SANDSTONE_DEVICE_CPU
-#   include "logging_cpu.h"
-#endif
+#include "device/logging_device.h"
 
 #include <array>
 #include <charconv>
