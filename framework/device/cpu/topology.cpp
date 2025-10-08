@@ -949,9 +949,9 @@ bool TopologyDetector::setup_cpuid_detection()
     }
 
     int8_t &leaf = topology_leaf;
-    uint32_t a, b, c, apicid;
+    uint32_t a, b, c, d;
 
-    __cpuid(0, a, b, c, apicid);
+    __cpuid(0, a, b, c, d);
     leaf = -1;
     if (a >= 0x1f)
         leaf = 0x1f;        // use V2 Extended Topology
@@ -961,7 +961,7 @@ bool TopologyDetector::setup_cpuid_detection()
         return false;
 
     int subleaf = 0;
-    __cpuid_count(leaf, subleaf, a, b, c, apicid);
+    __cpuid_count(leaf, subleaf, a, b, c, d);
 
     // extract the domain levels
     while (b) {
@@ -989,7 +989,7 @@ bool TopologyDetector::setup_cpuid_detection()
 
         // get next level
         subleaf++;
-        __cpuid_count(leaf, subleaf, a, b, c, apicid);
+        __cpuid_count(leaf, subleaf, a, b, c, d);
     }
 
     if (width(Domain::Logical) == 0 || width(Domain::Core) == 0
