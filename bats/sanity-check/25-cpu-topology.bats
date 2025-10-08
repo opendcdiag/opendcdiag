@@ -415,6 +415,47 @@ selftest_cpuset_unsorted() {
     selftest_cpuset_unsorted "odd" "${cpuinfo[@]}"
 }
 
+selftest_cpuset_hybrid() {
+    local wanted=$1
+    shift
+
+    # 1 P-core and 3 E-cores
+    export SANDSTONE_MOCK_TOPOLOGY='c0yp c8ye c9ye c10ye'
+    declare -A yamldump
+    sandstone_yq --disable=\*
+
+    # Count the core types (if any are known)
+    local -A corecount
+    corecount['e']=`query_jq '[."cpu-info"[] | select(.core_type == "e")] | length'`
+    corecount['p']=`query_jq '[."cpu-info"[] | select(.core_type == "p")] | length'`
+
+    if [[ ${corecount[$wanted]-0} = 0 ]]; then
+        # No such core of this type, we'll get an error on --cpuset
+        echo >&3 "# No core of type '$wanted' in this system and couldn't mock it"
+
+        run $SANDSTONE --cpuset=type=$wanted '--disable=*'
+        [[ $status = 64 ]]
+        [[ "$output" = *"error: --cpuset matched nothing"* ]]
+    else
+        if [[ $# -eq 0 ]]; then
+            set -- '--disable=*'
+        fi
+        sandstone_selftest --cpuset=type=$wanted "$@"
+        test_yaml_numeric '/cpu-info@len' "value == ${corecount[$wanted]}"
+        for ((i = 0; i < ${corecount[$wanted]}; ++i)); do
+            test_yaml_expr "/cpu-info/$i/core_type" = "$wanted"
+        done
+    fi
+}
+
+@test "cpuset=type=e" {
+    selftest_cpuset_hybrid e
+}
+
+@test "cpuset=type=p" {
+    selftest_cpuset_hybrid p
+}
+
 selftest_cpuset_negated() {
     local arg=$1
     local not=$2
