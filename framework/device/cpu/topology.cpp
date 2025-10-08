@@ -1276,8 +1276,8 @@ void apply_deviceset_param(char *param)
                 exit(EX_USAGE);
             }
             apply_to_set(*cpu);
-        } else if ( strcmp( p.data(), "odd") == 0 || strcmp( p.data(), "even") == 0){
-            int desired_remainder = strcmp(p.data(), "odd") == 0 ? 1 : 0;
+        } else if (p == "odd" || p == "even"){
+            int desired_remainder = (p == "odd" ? 1 : 0);
             for (struct cpu_info &cpu : old_cpu_info)
             {
                 if (cpu.cpu_number % 2 == desired_remainder)
