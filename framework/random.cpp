@@ -19,6 +19,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#if defined(__x86_64__) && !defined(signature_INTEL_ebx)
+#   include <cpuid.h>
+#endif
+
 #ifdef __linux__
 #  include <elf.h>
 #  include <sys/auxv.h>
@@ -297,7 +301,13 @@ template struct EngineWrapper<std::minstd_rand>;
 // -- AES engine (generates numbers by running AES over a state) --
 static bool haveAes()
 {
+#if !defined(__x86_64__)
     return cpu_has_feature(cpu_feature_aes);
+#else
+    uint32_t eax, ebx, ecx, edx;
+    __cpuid(1, eax, ebx, ecx, edx);
+    return bit_AES & ecx;
+#endif
 }
 
 #pragma GCC push_options

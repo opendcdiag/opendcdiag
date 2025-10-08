@@ -521,10 +521,11 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
         // sanity check it
         uint64_t xgetbv0 = XSave::X87 | XSave::SseState;
 
-        // some Atoms have XSAVE but not AVX, but until there's interesting
-        // state in them, the check for AVX suffices
-        if (cpu_has_feature(cpu_feature_avx))
+        uint32_t eax, ebx, ecx, edx;
+        __cpuid(1, eax, ebx, ecx, edx);
+        if (bit_OSXSAVE & ecx) {
             xgetbv0 = do_xgetbv();
+        }
 
         if (xsave_bv & ~xgetbv0)
             return;     // bit vector contains invalid bits
