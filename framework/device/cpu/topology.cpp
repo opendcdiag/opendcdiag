@@ -1590,7 +1590,7 @@ static Topology build_topology()
 
         // scan forward to the end of this package
         Topology::Thread *first = info;
-        Topology::Thread *numafirst = info;
+        Topology::Thread *groupfirst = info;
         int core_count = 0;
         for (int last_core_id = -1; info != end; ++info) {
             if (info->core_id < 0 || info->thread_id < 0)
@@ -1601,10 +1601,14 @@ static Topology build_topology()
                 ++core_count;
                 last_core_id = info->core_id;
             }
-            if (info->numa_id != numafirst->numa_id) {
-                // start of a new NUMA node inside of this Package
-                populate_core_group(&pkg->numa_domains.emplace_back(), numafirst, info);
-                numafirst = info;
+
+            // We consider different core types in a heterogeneous system to be a
+            // different "NUMA" nodes.
+            if (info->numa_id != groupfirst->numa_id
+                    || info->native_core_type != groupfirst->native_core_type) {
+                // start of a new NUMA or "NUMA" node inside of this Package
+                populate_core_group(&pkg->numa_domains.emplace_back(), groupfirst, info);
+                groupfirst = info;
             }
         }
 
@@ -1612,12 +1616,12 @@ static Topology build_topology()
         pkg->cores.reserve(core_count + 1);
         populate_core_group(pkg, first, info);
 
-        // populate the last NUMA node, which may be the only one too
+        // populate the last NUMA node/core type group, which may be the only one too
         Topology::NumaNode *numa = &pkg->numa_domains.emplace_back();
         if (pkg->numa_domains.size() == 1)
             numa->CoreGrouping::operator=(*pkg);    // just copy the Package
         else
-            populate_core_group(numa, numafirst, info);
+            populate_core_group(numa, groupfirst, info);
     }
 
     return Topology(std::move(packages));
@@ -1644,11 +1648,12 @@ void slice_plan_init(int max_cores_per_slice)
     //   will instead run in slices of up to DefaultMaxCoresPerSlice (32)
     //   logical processors.
     // - otherwise, we'll have at least one slice per socket
-    //   * if the socket has more than 32 cores, we'll attempt to slice it
-    //     at NUMA node boundaries
-    //   * if a NUMA node has more than 32 cores, we'll attempt to split it
-    //     evenly so each slice has 32 cores (64 threads on a system with 2
-    //     threads per core)
+    //   * if the socket has more than 32 cores or is a hybrid part, we'll
+    //     attempt to slice it, first according to core types and then at NUMA
+    //     node boundaries
+    //   * if a core group has more than 32 cores, we'll attempt to split it
+    //     evenly so each slice has at most 32 cores (64 threads on a system with
+    //     2 threads per core)
     // - we always keep the cores of a given module and threads of a core
     //   in the same slice
     //   * this means on some situations the slices may have more than 32 cores
@@ -1689,8 +1694,13 @@ void slice_plan_init(int max_cores_per_slice)
                 continue;       // untested socket
 
             push_to(isolate_socket, p.cores.begin(), p.cores.end());
-            if (p.cores.size() <= max_cores_per_slice) {
-                // easy case: package has fewer than max_cores_per_slice
+
+            bool homogeneous_package =
+                    (p.cores.front().threads[0].native_core_type ==
+                     p.cores.back().threads[0].native_core_type);
+            if (homogeneous_package && p.cores.size() <= max_cores_per_slice) {
+                // easy case: package has fewer than max_cores_per_slice and is
+                // homogeneous
                 push_to(split, p.cores.begin(), p.cores.end());
                 continue;
             }

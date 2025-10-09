@@ -140,3 +140,38 @@ function cpuset_unique_modules() {
     test_yaml_numeric "/test-plans/heuristic/1/starting_cpu" "value == $cores_per_slice"
     test_yaml_numeric "/test-plans/heuristic/1/count" "value == $# - $cores_per_slice"
 }
+
+@test "slicing core types" {
+    declare -A yamldump
+
+    # mock a hybrid system
+    export SANDSTONE_MOCK_TOPOLOGY='c0yp c4ye c5ye c6ye c16yp c20ye c21ye c22ye'
+    sandstone_yq --disable=\* --cpuset=p0 --max-cores-per-slice=$MAX_PROC
+
+    # Count the core types (if any are known)
+    local -A corecount
+    corecount['e']=`query_jq '[."cpu-info"[] | select(.core_type == "e")] | length'`
+    corecount['p']=`query_jq '[."cpu-info"[] | select(.core_type == "p")] | length'`
+
+    if [[ ${corecount['e']-0} = 0 ]] && [[ ${corecount['p']-0} = 0 ]]; then
+        skip "Test only works with Debug builds (to mock the topology) or hybrid systems"
+    fi
+
+    # There should be entries two plans in the heuristic plan
+    test_yaml_numeric "/test-plans/heuristic@len" 'value == 2'
+
+    # The first slice should be the P cores
+    test_yaml_numeric "/test-plans/heuristic/0/starting_cpu" 'value == 0'
+    test_yaml_numeric "/test-plans/heuristic/0/count" "value == ${corecount['p']}"
+    local i
+    for ((i = 0; i < ${corecount['p']}; ++i)); do
+        test_yaml_expr "/cpu-info/$i/core_type" = "p"
+    done
+
+    # The second slice should be the E cores
+    test_yaml_numeric "/test-plans/heuristic/1/starting_cpu" "value == ${corecount['p']}"
+    test_yaml_numeric "/test-plans/heuristic/1/count" "value == ${corecount['e']}"
+    for (( ; i < ${corecount['e']}; ++i)); do
+        test_yaml_expr "/cpu-info/$i/core_type" = "e"
+    done
+}
