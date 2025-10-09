@@ -27,6 +27,9 @@
 #   include <windows.h>
 #endif
 
+// Because of the anonymous struct inside of struct cpu_info
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+
 namespace {
 struct TopologyDetector
 {
@@ -346,21 +349,29 @@ void TopologyDetector::ProcCpuInfoData::load()
 
 static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2)
 {
-    static_assert(offsetof(struct cpu_info, numa_id) + 2 == offsetof(struct cpu_info, package_id));
-    static_assert(offsetof(struct cpu_info, tile_id) + 4 == offsetof(struct cpu_info, package_id));
-    static_assert(offsetof(struct cpu_info, module_id) + 6 == offsetof(struct cpu_info, package_id));
-    static_assert(offsetof(struct cpu_info, thread_id) + 2 == offsetof(struct cpu_info, core_id));
-    static_assert(offsetof(struct cpu_info, cpu_number) + 6 == offsetof(struct cpu_info, core_id));
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#  error "This doesn't work on big endian systems! Please contribute a fix."
+#endif
+    // Confirm that the members are in the right order in a 16-byte block
+    static_assert(sizeof(cpu_info::package_id) == 2);
+    static_assert(offsetof(struct cpu_info, cpu_number) + 14 == offsetof(struct cpu_info, package_id));
+    static_assert(offsetof(struct cpu_info, cpu_number) + 12 == offsetof(struct cpu_info, numa_id));
+    static_assert(offsetof(struct cpu_info, cpu_number) + 11 == offsetof(struct cpu_info, native_core_type));
+    static_assert(offsetof(struct cpu_info, cpu_number) + 9 == offsetof(struct cpu_info, tile_id));
+    static_assert(offsetof(struct cpu_info, cpu_number) + 7 == offsetof(struct cpu_info, module_id));
+    static_assert(offsetof(struct cpu_info, cpu_number) + 5 == offsetof(struct cpu_info, core_id));
+    static_assert(offsetof(struct cpu_info, cpu_number) + 4 == offsetof(struct cpu_info, thread_id));
+
     static auto cpu_tuple = [](const struct cpu_info &c) {
-        uint64_t h, l;
-        memcpy(&h, &c.module_id, sizeof(h));
-        memcpy(&l, &c.cpu_number, sizeof(l));
-        return std::make_tuple(h, l);
+        unsigned __int128 result;
+        memcpy(&result, &c.cpu_number, sizeof(result));
+        return result;
     };
 
     return cpu_tuple(cpu1) < cpu_tuple(cpu2);
 };
 
+__attribute__((noinline))
 void TopologyDetector::sort()
 {
     std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
