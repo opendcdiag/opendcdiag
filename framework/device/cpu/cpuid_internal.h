@@ -252,3 +252,6 @@ static void check_missing_features(device_features_t features, device_features_t
 }
 
 #endif // ! x86-64
+
+// Keep an alias for compatibility
+typedef device_features_t cpu_features_t;
