@@ -31,7 +31,7 @@ test_run_fakesockets() {
         if (( MAX_PROC < 4 )); then
             skip "Need at least 4 logical processors to run this test"
         fi
-        SANDSTONE_MOCK_TOPOLOGY="0 1 0:1 1:1" "$@"
+        SANDSTONE_MOCK_TOPOLOGY="p0c0 p0c1 p1c0 p1c1" "$@"
     else
         # Maybe we're running on a real multi-socket system
         run $SANDSTONE --cpuset=p1 --dump-cpu-info
@@ -53,7 +53,7 @@ test_fail_socket1() {
     declare -A yamldump
     $is_debug || skip "Test only works with Debug builds to mock the topology"
 
-    export SANDSTONE_MOCK_TOPOLOGY=`seq 0 $MAX_PROC | xargs`
+    export SANDSTONE_MOCK_TOPOLOGY=`seq -s " " -f "p%g" 0 $MAX_PROC`
     echo "SANDSTONE_MOCK_TOPOLOGY=\"$SANDSTONE_MOCK_TOPOLOGY\""
     run_sandstone_yaml --disable=\*
 
@@ -67,7 +67,7 @@ test_fail_socket1() {
     declare -A yamldump
     $is_debug || skip "Test only works with Debug builds to mock the topology"
 
-    export SANDSTONE_MOCK_TOPOLOGY=`seq 0 $MAX_PROC | xargs printf '0:%d:1 '`
+    export SANDSTONE_MOCK_TOPOLOGY=`seq -s " " -f "c%gt1" 0 $MAX_PROC`
     echo "SANDSTONE_MOCK_TOPOLOGY=\"$SANDSTONE_MOCK_TOPOLOGY\""
     run_sandstone_yaml --disable=\*
 
@@ -450,7 +450,7 @@ selftest_cpuset_negated() {
 }
 
 @test "num_packages" {
-    export SANDSTONE_MOCK_TOPOLOGY='0 1 0:1 1:1'
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1 p1c0 p1c1'
 
     # Get the first and last logical processors (might be what we mocked)
     local -a first=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
@@ -469,7 +469,7 @@ selftest_cpuset_negated() {
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" '.*"packages":\s*2\b.*'
 
     # now let's try 4 sockets
-    export SANDSTONE_MOCK_TOPOLOGY='0 1 2 3'
+    export SANDSTONE_MOCK_TOPOLOGY='p0 p1 p2 p3'
     run $SANDSTONE --cpuset=p3 --dump-cpu-info
     if [[ $status -eq 0 ]]; then
         sandstone_selftest -e selftest_skip --cpuset=p0c0,p1c0,p2c0,p3c0 --no-slicing
@@ -544,7 +544,7 @@ selftest_cpuset_negated() {
 
 @test "selftest test smt run" {
     # core0 has 2 threads(0 and 1) where as core1 and core2 have only thread0
-    export SANDSTONE_MOCK_TOPOLOGY="0:0:0 0:0:1 0:1:0 0:2:0"
+    export SANDSTONE_MOCK_TOPOLOGY="p0c0t0 p0c0t1 p0c1t0 p0c2t0"
     echo "SANDSTONE_MOCK_TOPOLOGY=\"$SANDSTONE_MOCK_TOPOLOGY\""
 
     declare -A yamldump

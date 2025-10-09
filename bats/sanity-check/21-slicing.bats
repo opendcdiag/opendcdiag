@@ -17,7 +17,7 @@ function cpuset_unique_modules() {
 @test "crash backtrace multi-slice" {
     # We need GDB and at least two cores
     check_gdb_usable
-    export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
+    export SANDSTONE_MOCK_TOPOLOGY='c0 c1'
 
     set `cpuset_unique_modules`
     if [[ $# -lt 2 ]]; then
@@ -47,7 +47,7 @@ function cpuset_unique_modules() {
         skip "Test requires procps (Linux)"
     fi
 
-    export SANDSTONE_MOCK_TOPOLOGY='0 0:1'
+    export SANDSTONE_MOCK_TOPOLOGY='c0 c1'
     set `cpuset_unique_modules`
     if [[ $# -lt 2 ]]; then
         skip "Test only works with multiple cores/modules or a debug build"
@@ -70,7 +70,7 @@ function cpuset_unique_modules() {
 @test "no slicing if too few cores per socket" {
     declare -A yamldump
 
-    export SANDSTONE_MOCK_TOPOLOGY=`seq 0 $((MAX_PROC - 1))| xargs`
+    export SANDSTONE_MOCK_TOPOLOGY=`seq -s " " -f "p%g" 0 $((MAX_PROC - 1))`
     echo "SANDSTONE_MOCK_TOPOLOGY=\"$SANDSTONE_MOCK_TOPOLOGY\""
     sandstone_yq --disable=\*
 
@@ -97,7 +97,7 @@ function cpuset_unique_modules() {
     declare -A yamldump
 
     # attempt to run on two sockets
-    export SANDSTONE_MOCK_TOPOLOGY='0 1 0:1 1:1 2 2:1 3 3:1'
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1 p1c0 p1c1 p2c0 p2c1 p3c0 p3c1'
     run $SANDSTONE --cpuset=p1 --dump-cpu-info
     if [[ $status -ne 0 ]]; then
         skip "Test only works with Debug builds (to mock the topology) or multi-socket systems"
@@ -118,7 +118,7 @@ function cpuset_unique_modules() {
     declare -A yamldump
 
     # attempt to run on four cores (on different modules), but accept two
-    export SANDSTONE_MOCK_TOPOLOGY='0:0 0:1 0:2 0:3'
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1 p0c2 p0c3'
     set `cpuset_unique_modules 4`
 
     local cores_per_slice=2
