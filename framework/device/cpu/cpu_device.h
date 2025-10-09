@@ -122,6 +122,24 @@
 /// This macro is provided in case tests need more fine grained control.
 #define cpu_has_feature(f)      ((device_compiler_features & (f)) == (f) || (device_features & (f)) == (f))
 
+/// Describes the field @c native_core_type in @ref cpu_info
+// use typed enums
+enum NativeCoreType
+#if defined(__cplusplus) || __STDC_VERSION__ >= 202311L
+        : uint8_t
+#endif
+{
+    core_type_unknown = 0,
+    core_type_performance = 1,
+    core_type_efficiency = 2,
+};
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
+typedef enum NativeCoreType NativeCoreType;     // C23 or newer
+#elif defined(__STDC_VERSION__)
+typedef uint8_t NativeCoreType;                 // C17 or older
+#endif
+
 /// used as follows: if instruction cache, only cache_instruction is valid; if
 /// data, only data is valid; if unified, both are set to the same value. In all
 /// the cases the value is the cache size in bytes.  A field is valid if it
@@ -160,9 +178,8 @@ struct cpu_info
     /// On x86, it's the APICID or x2APICID, if known; -1 if not.
     int hwid;
 
-    /// On x86 with hybrid parts, contains the native core type (CPUID leaf
-    /// 0x1A, EAX bits 24-31).
-    uint8_t native_core_type;
+    /// The core type, if known. See enum definition.
+    NativeCoreType native_core_type;
 
     // 3 bytes of padding
 

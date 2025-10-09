@@ -948,7 +948,16 @@ bool TopologyDetector::detect_hybrid_type_via_cpuid(Topology::Thread *info)
     if (is_hybrid) {
         uint32_t a, b, c, d;
         __cpuid_count(0x1a, 0, a, b, c, d);
-        info->native_core_type = uint8_t(a >> 24);
+        switch (a >> 24) {
+        case 0x20:      // Intel Atom
+            info->native_core_type = core_type_efficiency;
+            break;
+        case 0x40:      // Intel Core
+            info->native_core_type = core_type_performance;
+            break;
+
+        // other values are reserved
+        }
     }
     return true;
 }
