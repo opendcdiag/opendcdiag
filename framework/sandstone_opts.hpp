@@ -45,7 +45,7 @@ struct ProgramOptions {
     };
     const char *builtin_test_list_name = nullptr;
 
-    int parse(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts);
+    int parse(int argc, char** argv, SandstoneApplication* app);
 
     // for RestrictedCommandLine put it here to enable code elimination
     void apply_restrictions() {
@@ -60,7 +60,7 @@ struct ProgramOptions {
 };
 
 inline int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts) {
-    auto ret = opts.parse(argc, argv, app, opts);
+    auto ret = opts.parse(argc, argv, app);
     if constexpr (SandstoneConfig::RestrictedCommandLine) {
         opts.apply_restrictions(); // enable code elimination
     }

@@ -1051,10 +1051,10 @@ struct ProgramOptionsParser {
 };
 } /* anonymous namespace */
 
-int ProgramOptions::parse(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts) {
+int ProgramOptions::parse(int argc, char** argv, SandstoneApplication* app) {
     ProgramOptionsParser parser;
     if constexpr (SandstoneConfig::RestrictedCommandLine) {
-        return parser.parse_restricted_command_line(argc, argv, app, opts);
+        return parser.parse_restricted_command_line(argc, argv, app, *this);
     }
     auto ret = parser.collect_args(argc, argv);
     if (ret != EXIT_SUCCESS) {
@@ -1064,5 +1064,5 @@ int ProgramOptions::parse(int argc, char** argv, SandstoneApplication* app, Prog
     if (ret != EXIT_SUCCESS) {
         return ret;
     }
-    return parser.parse_args(app, opts, argv);
+    return parser.parse_args(app, *this, argv);
 }
