@@ -162,26 +162,26 @@ struct cpu_info
     /// 64 * ProcessorGroup + ProcessorNumber
     int cpu_number;
 
+    // anonymous struct is a GCC extension
+    __extension__ struct __attribute__((packed)) {
     /// Thread ID inside a core, usually 0 or 1 (-1 if not known).
-    int16_t thread_id;
+    int8_t thread_id;
     /// Core ID inside of a package, -1 if not known.
     int16_t core_id;
     /// Module ID inside of a package, -1 if not known.
     int16_t module_id;
     /// Tile ID inside of a package, -1 if not known. May combine with the die ID.
     int16_t tile_id;
+    /// The core type, if known. See enum definition.
+    NativeCoreType native_core_type;
     /// NUMA node ID in the system, -1 if not known.
     int16_t numa_id;
     /// Package ID in the system, -1 if not known.
     int16_t package_id;
+    };
 
     /// On x86, it's the APICID or x2APICID, if known; -1 if not.
     int hwid;
-
-    /// The core type, if known. See enum definition.
-    NativeCoreType native_core_type;
-
-    // 3 bytes of padding
 
     struct cache_info cache[3]; ///! Cache info from OS
 
