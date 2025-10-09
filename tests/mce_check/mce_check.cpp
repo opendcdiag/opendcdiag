@@ -120,8 +120,13 @@ bool InterruptMonitor::observed_mce_events()
 // We do not use the macros to specify it because we do not want it to
 // be in the acutal test list - it is an "inserted" test in that the test
 // is always inserted in the end.
-#if defined(__linux__) && defined(__x86_64__)
-struct test mce_test = {  // This variable is used in the framework!
+
+#if !defined(__linux__) || !defined(__x86_64__)
+// no MCE test outside Linux
+static_assert(!InterruptMonitor::InterruptMonitorWorks);
+#endif
+
+struct test mce_test = {
 #ifdef TEST_ID_mce_check
         .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
         .description = nullptr,
@@ -129,25 +134,17 @@ struct test mce_test = {  // This variable is used in the framework!
         .id = "mce_check",
         .description = "Machine Check Exceptions/Events count",
 #endif // TEST_ID_mce_check
+
+#if defined(__linux__) && defined(__x86_64__)
         .test_preinit = mce_check_preinit,
         .test_run = mce_check_run,
         .desired_duration = -1,
         .fracture_loop_count = -1,
         .quality_level = TEST_QUALITY_PROD,
         .flags = test_schedule_sequential,
-};
 #else
-// no MCE test outside Linux
-static_assert(!InterruptMonitor::InterruptMonitorWorks);
-struct test mce_test = {
-#ifdef TEST_ID_mce_check
-    .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
-    .description = nullptr,
-#else
-    .id = "mce_check",
-    .description = "Machine Check Exceptions/Events count",
-#endif // TEST_ID_mce_check
-    .quality_level = TEST_QUALITY_SKIP
-};
+        .quality_level = TEST_QUALITY_SKIP,
 #endif // __linux__ && __x86_64__
+};
+
 // Do not convert to use the test declaration macros - read above
