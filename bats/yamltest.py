@@ -61,7 +61,7 @@ def validate_thread_id(id):
     validate_number('thread', -1)
     try:
         core_type = id['core_type']
-        if not core_type in ('e-core', 'p-core'):
+        if core_type not in ('e', 'p'):
             fail('found invalid core type "{}" for thread {}'.format(core_type, id))
     except:
         pass

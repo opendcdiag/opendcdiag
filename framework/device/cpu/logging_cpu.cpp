@@ -15,9 +15,9 @@ static constexpr const char *native_device_type(const struct cpu_info *info)
     // CPUID leaf 0x1A
     switch (info->native_core_type) {
     case 0x20:      // Intel Atom
-        return "e-core";
+        return "e";
     case 0x40:      // Intel Core
-        return "p-core";
+        return "p";
 
     // other values are reserved
     }

@@ -92,8 +92,8 @@ $defs:
         type: integer
       core_type:
         enum:
-          - e-core
-          - p-core
+          - e
+          - p
       family:
         type: integer
       model:
