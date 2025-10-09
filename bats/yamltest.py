@@ -43,25 +43,36 @@ def validate_message(name, message):
 
 
 def validate_thread_id(id):
-    thr['id']['logical']
-    thr['id']['package']
-    thr['id']['numa_node']
-    thr['id']['module']
-    thr['id']['core']
+    def validate_number(what, min, max = None):
+        if not what in id:
+            fail('{} not found in the thread identification'.format(what))
+        n = id[what]
+        if type(n) is not int:
+            fail('{} is not an integer in the thread identification'.format(what))
+        if n < min or (max is not None and n > max):
+            fail('{} is outside of range for thread identification ({})'.format(what, n))
+
+
+    validate_number('logical', -1)
+    validate_number('package', -1)
+    validate_number('numa_node', -1)
+    validate_number('module', -1)
+    validate_number('core', -1)
+    validate_number('thread', -1)
     try:
-        core_type = thr['id']['core_type']
+        core_type = id['core_type']
         if not core_type in ('e-core', 'p-core'):
-            fail('found invalid core type "{}" for thread {}'.format(core_type, thr['id']))
+            fail('found invalid core type "{}" for thread {}'.format(core_type, id))
     except:
         pass
 
     if platform.uname().machine == 'x86-64':
-        thr['id']['thread']
-        thr['id']['family']
-        thr['id']['model']
-        thr['id']['stepping']
-        thr['id']['microcode']
-        thr['id']['ppin']
+        validate_number('family', -1, 0xffff)
+        validate_number('model', -1, 0xffff)
+        validate_number('stepping', -1, 0xffff)
+        if not id['microcode'] is None:
+            validate_number('microcode', -1)
+        id['ppin']
 
 def validate_thread(name, thr):
     n = thr['thread']
