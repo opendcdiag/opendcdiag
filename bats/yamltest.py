@@ -102,7 +102,8 @@ with open(sys.argv[1]) as file:
         validate_time(test, 'time-at-start')
         validate_time(test, 'time-at-end')
 
-        if not result in ('pass', 'fail', 'skip', 'timed out', 'crash', 'operating system error'):
+        if not result in ('pass', 'fail', 'skip', 'timed out', 'crash', 'operating system error',
+                          'interrupted'):
             fail("result for test {} was not a valid one (was: {})".format(name, result))
             if (result in ('crash', 'operating system error')):
                 test['result-details']['crashed']
@@ -127,7 +128,7 @@ with open(sys.argv[1]) as file:
         exit_fail = exit_fail or any_failed
 
     exitmsg = log['exit']
-    if not exitmsg in ('pass', 'fail', 'invalid'):
+    if not exitmsg in ('pass', 'fail', 'invalid', 'interrupted'):
         fail("exit code was not an expected one (was: {})".format(exitmsg))
     if exit_fail and exitmsg == 'pass':
         fail('found at least one failing test but the overall result was "{}"'.format(exitmsg))
