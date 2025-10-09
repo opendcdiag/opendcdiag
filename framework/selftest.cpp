@@ -1454,12 +1454,11 @@ static struct test selftests_array[] = {
 },
 {
     .id = "selftest_requires_smt",
-    .description = "Test the flag test_requires_smt",
-    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .description = "Test the group_smt test group",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_smt),
     .test_run = selftest_pass_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
-    .flags = test_requires_smt,
 },
 {
     .id = "selftest_timedpass_busywait",

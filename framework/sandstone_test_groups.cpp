@@ -33,3 +33,33 @@ constexpr struct test_group group_kvm = {
     .group_init = group_kvm_init,
 };
 #endif
+
+#if SANDSTONE_DEVICE_CPU
+namespace {
+initfunc group_smt_init() noexcept
+{
+    auto has_smt = []() -> bool {
+        for(int idx = 0; idx < thread_count() - 1; idx++) {
+            if (cpu_info[idx].core_id == cpu_info[idx + 1].core_id)
+                return true;
+        }
+        return false;
+    };
+
+    if (has_smt()) {
+        return nullptr;
+    }
+
+    return [](struct test *) {
+        log_skip(CpuTopologyIssueSkipCategory, "Test requires SMT (hyperthreading)");
+        return -EPERM;
+    };
+}
+}
+
+constexpr struct test_group group_smt = {
+    TEST_GROUP("smt",
+               "Tests that utilize Simultaneous Multi-Threading(SMT)/Hyperthreading(HT)"),
+    .group_init = group_smt_init,
+};
+#endif

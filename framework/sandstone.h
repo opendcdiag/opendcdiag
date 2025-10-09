@@ -297,10 +297,6 @@ typedef enum test_flag {
     /// command line
     test_is_optional                = 0x2000,
 
-    /// Indicates test requires to have Simultaneous Multi-Threading(SMT)/Hyperthreading(HT)
-    /// support
-    test_requires_smt               = 0x4000,
-
     /// Indicates the test's init function should be run in the parent, to log
     /// the state. Do not cause a "memory" effect between tests, and do not use
     /// the random generator.
