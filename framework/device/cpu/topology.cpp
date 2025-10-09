@@ -103,6 +103,7 @@ private:
     bool detect_ucode_via_os(Topology::Thread *info);
 #endif
 
+    bool old_create_mock_topology(const char *topo);
     bool create_mock_topology(const char *topo);
 };
 } // unnamed namespace
@@ -365,7 +366,7 @@ void TopologyDetector::sort()
     std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
 }
 
-bool TopologyDetector::create_mock_topology(const char *topo)
+bool TopologyDetector::old_create_mock_topology(const char *topo)
 {
     auto parse_int_and_advance = [&topo](auto *ptr) {
         char *end;
@@ -379,9 +380,6 @@ bool TopologyDetector::create_mock_topology(const char *topo)
             return false;           // next entry
         return true;
     };
-
-    if (!topo || !*topo)
-        return false;
 
     int cpu_count = 0;
     while (topo && *topo) {
@@ -413,6 +411,92 @@ bool TopologyDetector::create_mock_topology(const char *topo)
 
         if (!parse_int_and_advance(&info->thread_id))
             continue;
+    }
+
+    sApp->thread_count = cpu_count;
+    return true;
+}
+
+// Creates a mock topology for the system. The variable must be a space- or
+// comma-separated list of entries of the type from the switch below, which is
+// similar to the --cpuset=/--deviceset= command-line parameter (see
+// apply_deviceset_param()).
+//
+// There is little validation on the input because this is *debug* code so you
+// had better know what you're doing!
+bool TopologyDetector::create_mock_topology(const char *topo)
+{
+    auto parse_int_and_advance = [&topo](auto *ptr) {
+        char *end;
+        *ptr = strtoll(topo, &end, 0);
+        topo = end;
+    };
+
+    if (!topo || !*topo)
+        return false;
+
+    if (*topo >= '0' && *topo <= '9')
+        return old_create_mock_topology(topo);   // older format
+
+    int cpu_count = 0;
+    while (topo && *topo) {
+        if (cpu_count == sApp->thread_count)
+            break;      // can't add more
+
+        struct cpu_info *info = &cpu_info[cpu_count];
+        ++cpu_count;
+
+        info->package_id = info->numa_id = info->tile_id =
+                info->module_id = info->core_id = info->thread_id = 0;
+        info->native_core_type = core_type_unknown;
+
+        // mock cache too (8 kB L1, 32 kB L2, 256 kB L3)
+        info->cache[0] = { 0x2000, 0x2000 };
+        info->cache[1] = { 0x8000, 0x8000 };
+        info->cache[2] = { 0x40000, 0x40000 };
+
+        char c = topo[0] | 0x20;  // lowercased (if a letter); numbers unchanged
+        // parse the different fields of the topology
+        while (c >= 'a' && c <= 'z') {
+            ++topo;
+            switch (c) {
+            case 'p':
+                parse_int_and_advance(&info->package_id);
+                package_for_id(info->package_id); // ensure it exists
+                last_package_id = info->package_id;
+                break;
+            case 'n':
+                parse_int_and_advance(&info->numa_id);
+                break;
+            case 'm':
+                parse_int_and_advance(&info->module_id);
+                break;
+            case 'c':
+                parse_int_and_advance(&info->core_id);
+                break;
+            case 't':
+                parse_int_and_advance(&info->thread_id);
+                break;
+
+            case 'y':   // core tYpe
+                switch (topo[0] | 0x20) {
+                case 'e':
+                    info->native_core_type = core_type_efficiency;
+                    ++topo;
+                    break;
+                case 'p':
+                    info->native_core_type = core_type_performance;
+                    ++topo;
+                    break;
+                }
+                break;
+            }
+
+            c = topo ? topo[0] | 0x20 : '\0';
+        }
+
+        while (topo && (*topo == ' ' || *topo == ','))
+            ++topo;
     }
 
     sApp->thread_count = cpu_count;
