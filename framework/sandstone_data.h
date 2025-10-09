@@ -214,6 +214,8 @@ template<> struct TypeToDataType<__int128_t> : TypeToDataType_helper<Int128Data>
 
 template<> struct TypeToDataType<Float16> : TypeToDataType_helper<Float16Data> {};
 template<> struct TypeToDataType<BFloat16> : TypeToDataType_helper<BFloat16Data> {};
+template<> struct TypeToDataType<Float32> : TypeToDataType_helper<Float32Data> {};
+template<> struct TypeToDataType<Float64> : TypeToDataType_helper<Float64Data> {};
 template<> struct TypeToDataType<float> : TypeToDataType_helper<Float32Data> {};
 template<> struct TypeToDataType<double> : TypeToDataType_helper<Float64Data> {};
 template<> struct TypeToDataType<long double> :
