@@ -28,11 +28,11 @@
 
 #include "sandstone_p.h"
 
+#if defined(__linux__) && defined(__x86_64__)
 #include <cassert>
 #include <climits>
 #include <numeric>
 #include <vector>
-
 
 namespace {
 // we can use globals as it's run for 0th cpu only (data won't be shared accross >1 threads)
@@ -108,7 +108,6 @@ int mce_check_run(struct test *test, int cpu)
 }
 }
 
-#if defined(__linux__) && defined(__x86_64__)
 // Member function defined here as we're using mce_counts_start
 bool InterruptMonitor::observed_mce_events()
 {
