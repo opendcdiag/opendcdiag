@@ -11,17 +11,14 @@
 
 static constexpr const char *native_device_type(const struct cpu_info *info)
 {
-#ifdef __x86_64__
-    // CPUID leaf 0x1A
     switch (info->native_core_type) {
-    case 0x20:      // Intel Atom
+    case core_type_efficiency:
         return "e";
-    case 0x40:      // Intel Core
+    case core_type_performance:
         return "p";
-
-    // other values are reserved
+    case core_type_unknown:
+        break;
     }
-#endif
     return nullptr;
 }
 
@@ -290,7 +287,7 @@ void TapFormatLogger::print_thread_header(int fd, int device, int verbosity)
     std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", device,
             info->cpu_number, info->package_id, info->core_id, info->thread_id);
     if (const char *type = native_device_type(info))
-        line += stdprintf(", type: %s", type);
+        line += stdprintf(", core_type: %s", type);
 
     const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
 #ifdef __x86_64__
