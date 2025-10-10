@@ -338,7 +338,7 @@ static void __attribute__((noreturn)) report_fail_common()
 void _report_fail(const struct test *test, const char *file, int line)
 {
     /* Keep this very early */
-    if (sApp->shmem->ud_on_failure)
+    if (sApp->shmem->cfg.ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging)
@@ -349,7 +349,7 @@ void _report_fail(const struct test *test, const char *file, int line)
 void _report_fail_msg(const char *file, int line, const char *fmt, ...)
 {
     /* Keep this very early */
-    if (sApp->shmem->ud_on_failure)
+    if (sApp->shmem->cfg.ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging)
@@ -372,7 +372,7 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
 void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, DataType type, const char *fmt, ...)
 {
     // Execute UD2 early if we've failed
-    if (sApp->shmem->ud_on_failure)
+    if (sApp->shmem->cfg.ud_on_failure)
         ud2();
 
     if (!SandstoneConfig::NoLogging) {
@@ -639,7 +639,7 @@ static bool wallclock_deadline_has_expired(MonotonicTimePoint deadline)
 
     if (now > deadline)
         return true;
-    if (sApp->shmem->use_strict_runtime && now > sApp->endtime)
+    if (sApp->shmem->cfg.use_strict_runtime && now > sApp->endtime)
         return true;
     return false;
 }
@@ -876,7 +876,7 @@ static uintptr_t thread_runner(int thread_number)
         this_thread->thread_state.store(new_state, std::memory_order_relaxed);
 
         if (new_state == thread_failed) {
-            if (sApp->shmem->ud_on_failure)
+            if (sApp->shmem->cfg.ud_on_failure)
                 ud2();
             logging_mark_thread_failed(thread_number);
         } else if (new_state == thread_skipped) {
@@ -909,7 +909,7 @@ static uintptr_t thread_runner(int thread_number)
     after.Snapshot(thread_number);
     this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
 
-    if (sApp->shmem->verbosity >= 3)
+    if (sApp->shmem->cfg.verbosity >= 3)
         log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
                     thread_number, this_thread->inner_loop_count);
 
@@ -946,7 +946,7 @@ static void init_shmem()
             "PerThreadData::Main size grew, please check if it was intended");
     static_assert(sizeof(PerThreadData::Test) == 64,
             "PerThreadData::Test size grew, please check if it was intended");
-    assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test);
+    assert(sApp->current_fork_mode() != SandstoneApplication::ForkMode::child_exec_each_test);
     assert(sApp->shmem == nullptr);
     assert(thread_count());
 
@@ -1005,7 +1005,7 @@ static void commit_shmem()
     }
     attach_shmem_internal(sApp->shmemfd, offset + size);
 
-    if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
+    if (sApp->current_fork_mode() != SandstoneApplication::ForkMode::exec_each_test) {
         close(sApp->shmemfd);
         sApp->shmemfd = -1;
     }
@@ -1016,7 +1016,7 @@ static void commit_shmem()
 
 static void attach_shmem(int fd)
 {
-    assert(sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
+    assert(sApp->current_fork_mode() == SandstoneApplication::ForkMode::child_exec_each_test);
 
     size_t size;
     if (struct stat st; fstat(fd, &st) >= 0) {
@@ -1389,7 +1389,7 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
 
 static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 {
-    if (sApp->current_fork_mode() != SandstoneApplication::no_fork) {
+    if (sApp->current_fork_mode() != SandstoneApplication::ForkMode::no_fork) {
         protect_shmem();
         sApp->select_main_thread(child_number);
         pin_to_logical_processors(sApp->main_thread_data()->device_range, "control");
@@ -1688,21 +1688,21 @@ static int slices_for_test(const struct test *test)
 static void run_one_test_children(ChildrenList &children, const struct test *test)
 {
     int child_count = slices_for_test(test);
-    if (sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
-        assert(sApp->current_fork_mode() != SandstoneApplication::child_exec_each_test
+    if (sApp->current_fork_mode() != SandstoneApplication::ForkMode::exec_each_test) {
+        assert(sApp->current_fork_mode() != SandstoneApplication::ForkMode::child_exec_each_test
                 && "child_exec_each_test mode can only happen in the child side!");
-        assert((sApp->current_fork_mode() != SandstoneApplication::no_fork || child_count == 1)
+        assert((sApp->current_fork_mode() != SandstoneApplication::ForkMode::no_fork || child_count == 1)
                && "-fno-fork can only start 1 child!");
 
         for (int i = 0; i < child_count; ++i) {
             StartedChild ret = { .fd = FFD_CHILD_PROCESS };
-            if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
+            if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::fork_each_test)
                 ret = call_forkfd();
             if (ret.fd == FFD_CHILD_PROCESS) {
                 /* child - run test's code */
                 logging_init_child_preexec();
                 TestResult result = child_run(const_cast<struct test *>(test), i);
-                if (sApp->current_fork_mode() == SandstoneApplication::fork_each_test)
+                if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::fork_each_test)
                     _exit(test_result_to_exit_code(result));
 
                 children.results.emplace_back(ChildExitStatus{ result });
@@ -2022,7 +2022,7 @@ static void list_tests(const ProgramOptions& opts)
             if (opts.list_tests_include_tests) {
                 if (opts.list_tests_include_descriptions) {
                     printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
-                } else if (sApp->shmem->verbosity > 0) {
+                } else if (sApp->shmem->cfg.verbosity > 0) {
                     // don't report the FW minimum CPU features
                     device_features_t feats = test->compiler_minimum_device & ~device_compiler_features;
                     feats |= test->minimum_cpu;
@@ -2080,7 +2080,7 @@ static bool should_start_next_iteration(void)
                    std::chrono::nanoseconds(elapsed_time).count() / 1000. / 1000);
 
 
-    if (!sApp->shmem->use_strict_runtime) {
+    if (!sApp->shmem->cfg.use_strict_runtime) {
         /* do we have time for one more run? */
         MonotonicTimePoint end = sApp->endtime;
         if (end != MonotonicTimePoint::max())
@@ -2107,7 +2107,7 @@ static SandstoneTestSet::EnabledTestList::iterator get_first_test()
 static SandstoneTestSet::EnabledTestList::iterator
 get_next_test(SandstoneTestSet::EnabledTestList::iterator next_test)
 {
-    if (sApp->shmem->use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
+    if (sApp->shmem->cfg.use_strict_runtime && wallclock_deadline_has_expired(sApp->endtime))
         return test_set->end();
 
     ++next_test;
@@ -2163,7 +2163,7 @@ static int exec_mode_run(int argc, char **argv)
     sApp->thread_count = sApp->shmem->total_cpu_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 
-    test_set = new SandstoneTestSet({ .is_selftest = sApp->shmem->selftest, }, SandstoneTestSet::enable_all_tests);
+    test_set = new SandstoneTestSet({ .is_selftest = sApp->shmem->cfg.selftest, }, SandstoneTestSet::enable_all_tests);
     std::vector<struct test *> tests_to_run = test_set->lookup(argv[0]);
     if (tests_to_run.size() != 1) return EX_DATAERR;
 
@@ -2521,7 +2521,7 @@ int main(int argc, char **argv)
         /* exec mode is when a brand new child is launched for each test, as opposed to
          * just forked. set when the child is launched with '-x' option by the parent
          * running with '-f exec' or on Windows. */
-        sApp->fork_mode = SandstoneApplication::child_exec_each_test;
+        sApp->fork_mode = SandstoneApplication::ForkMode::child_exec_each_test;
 
         return exec_mode_run(argc - 2, argv + 2);
     }
@@ -2535,6 +2535,16 @@ int main(int argc, char **argv)
     ProgramOptions opts;
     if (int ret = parse_cmdline(argc, argv, sApp, opts); ret != EXIT_SUCCESS) {
         return ret;
+    }
+    // copy data from cfg that needs to be in shared memory
+    sApp->shmem->cfg = std::move(opts.shmem_cfg);
+
+    if (opts.test_tests) {
+        sApp->enable_test_tests();
+        if (sApp->test_tests_enabled()) {
+            // disable other options that don't make sense in this mode
+            sApp->retest_count = 0;
+        }
     }
 
     if (!opts.deviceset.empty()) {
@@ -2561,8 +2571,8 @@ int main(int argc, char **argv)
     case Action::run:
         break; // continue program
     }
-    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
-        if (sApp->shmem->log_test_knobs) {
+    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
+        if (sApp->shmem->cfg.log_test_knobs) {
             fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",
                     program_invocation_name);
             return EX_USAGE;
@@ -2653,11 +2663,11 @@ int main(int argc, char **argv)
         }
     }
 
-    if (sApp->shmem->verbosity == -1)
-        sApp->shmem->verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
+    if (sApp->shmem->cfg.verbosity == -1)
+        sApp->shmem->cfg.verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
 
     if (InterruptMonitor::InterruptMonitorWorks && test_set->contains(&mce_test)) {
-        if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test) {
+        if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
             test_set->remove(&mce_test);
         } else if (InterruptMonitor::get_mce_interrupt_counts().empty()) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: Cannot detect MCE events - you may be running in a VM - MCE checking disabled\n");
@@ -2683,7 +2693,7 @@ int main(int argc, char **argv)
 #endif
 
 #if SANDSTONE_SSL_BUILD
-    if (SANDSTONE_SSL_LINKED || sApp->current_fork_mode() != SandstoneApplication::exec_each_test) {
+    if (SANDSTONE_SSL_LINKED || sApp->current_fork_mode() != SandstoneApplication::ForkMode::exec_each_test) {
         sandstone_ssl_init();
         sandstone_ssl_rand_init();
     }
@@ -2733,7 +2743,7 @@ int main(int argc, char **argv)
 
     if (total_failures) {
         logging_print_footer();
-    } else if (sApp->shmem->verbosity == 0 && sApp->shmem->output_format == SandstoneApplication::OutputFormat::tap) {
+    } else if (sApp->shmem->cfg.verbosity == 0 && sApp->shmem->cfg.output_format == SandstoneApplication::OutputFormat::tap) {
         logging_printf(LOG_LEVEL_QUIET, "Ran %d tests without error (%d skipped)\n",
                        total_successes, total_tests_run - total_successes);
     }
