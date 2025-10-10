@@ -112,6 +112,7 @@ test_fail_socket1() {
 
         if [[ $machine = x86_64 ]]; then
             if v=`cat microcode/version 2>/dev/null`; then
+                v=$(($v))   # expand hex values
                 test_yaml_numeric "/cpu-info/$i/microcode" "value == $v"
             fi
             if v=`cat topology/ppin 2>/dev/null`; then
