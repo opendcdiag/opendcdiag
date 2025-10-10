@@ -640,7 +640,7 @@ struct ProgramOptionsParser {
     };
 
     // assign values to app and opts, perform more complicated parsing, parse in correct order
-    int parse_args(SandstoneApplication* app, ProgramOptions& opts, char** argv)
+    int parse_args(SandstoneApplicationConfig* app_cfg, ProgramOptions& opts, char** argv)
     {
         // verbosity (before endpoints)
         auto it_verbosity = opts_map.find('v');
@@ -648,12 +648,12 @@ struct ProgramOptionsParser {
         if (opts_map.contains('q')) {
             verbosity = 0;
         }
-        app->shmem->verbosity = verbosity;
+        opts.shmem_cfg.verbosity = verbosity;
 
         // quality (before tests listing)
         if (auto it = opts_map.find(quality_option); it != opts_map.end()) {
             if (const int* value = std::get_if<int>(&it->second)) {
-                app->requested_quality = *value;
+                app_cfg->requested_quality = *value;
             } else {
                 auto maybe_int = ParseIntArgument<>{
                         .name = "--quality",
@@ -662,7 +662,7 @@ struct ProgramOptionsParser {
                         .range_mode = OutOfRangeMode::Saturate
                 }(std::get<const char*>(it->second));
                 if (maybe_int) {
-                    app->requested_quality = maybe_int.value();
+                    app_cfg->requested_quality = maybe_int.value();
                 } else {
                     return EX_USAGE;
                 }
@@ -670,7 +670,7 @@ struct ProgramOptionsParser {
         }
         if (auto it = opts_map.find(include_optional_option); it != opts_map.end()) {
             /* do not override lower quality levels if they were requested */
-            app->include_optional = true;
+            app_cfg->include_optional = true;
         }
 
         // deviceset (before dump_cpu_info)
@@ -679,7 +679,7 @@ struct ProgramOptionsParser {
         // selftest (before test listing)
 #ifndef NO_SELF_TESTS
         if (opts_map.contains(selftest_option)) {
-            app->shmem->selftest = true;
+            opts.shmem_cfg.selftest = true;
             opts.test_set_config.is_selftest = true;
         }
 #endif
@@ -735,15 +735,15 @@ struct ProgramOptionsParser {
 
         // times
         if (auto it = opts_map.find('t'); it != opts_map.end()) {
-            app->test_time = std::get<ShortDuration>(it->second);
+            app_cfg->test_time = std::get<ShortDuration>(it->second);
         }
 
         if (auto it = opts_map.find(timeout_option); it != opts_map.end()) {
-            app->max_test_time = std::get<ShortDuration>(it->second);
+            app_cfg->max_test_time = std::get<ShortDuration>(it->second);
         }
 
         if (auto it = opts_map.find(timeout_kill_option); it != opts_map.end()) {
-            app->timeout_to_kill = std::get<ShortDuration>(it->second);
+            app_cfg->timeout_to_kill = std::get<ShortDuration>(it->second);
         }
 
         if (auto it = opts_map.find(_duration_option); it != opts_map.end()) {
@@ -751,9 +751,9 @@ struct ProgramOptionsParser {
             case 'T': {
                 auto endtime = std::get<const char*>(opts_map.at('T'));
                 if (strcmp(endtime, "forever") == 0) {
-                    app->endtime = MonotonicTimePoint::max();
+                    app_cfg->endtime = MonotonicTimePoint::max();
                 } else {
-                    app->endtime = app->starttime + string_to_millisecs(endtime);
+                    app_cfg->endtime = app_cfg->starttime + string_to_millisecs(endtime);
                 }
                 opts.test_set_config.cycle_through = true; /* Time controls when the execution stops as
                                                             opposed to the number of tests. */
@@ -762,32 +762,32 @@ struct ProgramOptionsParser {
             case one_sec_option:
                 opts.test_set_config.randomize = true;
                 opts.test_set_config.cycle_through = true;
-                app->shmem->use_strict_runtime = true;
-                app->endtime = app->starttime + 1s;
+                opts.shmem_cfg.use_strict_runtime = true;
+                app_cfg->endtime = app_cfg->starttime + 1s;
                 break;
             case thirty_sec_option:
                 opts.test_set_config.randomize = true;
                 opts.test_set_config.cycle_through = true;
-                app->shmem->use_strict_runtime = true;
-                app->endtime = app->starttime + 30s;
+                opts.shmem_cfg.use_strict_runtime = true;
+                app_cfg->endtime = app_cfg->starttime + 30s;
                 break;
             case two_min_option:
                 opts.test_set_config.randomize = true;
                 opts.test_set_config.cycle_through = true;
-                app->shmem->use_strict_runtime = true;
-                app->endtime = app->starttime + 2min;
+                opts.shmem_cfg.use_strict_runtime = true;
+                app_cfg->endtime = app_cfg->starttime + 2min;
                 break;
             case five_min_option:
                 opts.test_set_config.randomize = true;
                 opts.test_set_config.cycle_through = true;
-                app->shmem->use_strict_runtime = true;
-                app->endtime = app->starttime + 5min;
+                opts.shmem_cfg.use_strict_runtime = true;
+                app_cfg->endtime = app_cfg->starttime + 5min;
                 break;
             case service_option:
                 // keep in sync with RestrictedCommandLine below
                 opts.fatal_errors = true;
-                app->endtime = MonotonicTimePoint::max();
-                app->service_background_scan = true;
+                app_cfg->endtime = MonotonicTimePoint::max();
+                app_cfg->service_background_scan = true;
                 break;
             }
         }
@@ -798,40 +798,40 @@ struct ProgramOptionsParser {
         opts.test_set_config.ignore_unknown_tests = opts_map.contains(ignore_unknown_tests_option);
         opts.test_set_config.randomize = opts_map.contains(test_list_randomize_option);
 
-        app->force_test_time = opts_map.contains(force_test_time_option);
-        app->fatal_skips = opts_map.contains(fatal_skips_option);
-        app->ignore_mce_errors = opts_map.contains(ignore_mce_errors_option);
-        app->ignore_os_errors = opts_map.contains(ignore_os_errors_option);
+        app_cfg->force_test_time = opts_map.contains(force_test_time_option);
+        app_cfg->fatal_skips = opts_map.contains(fatal_skips_option);
+        app_cfg->ignore_mce_errors = opts_map.contains(ignore_mce_errors_option);
+        app_cfg->ignore_os_errors = opts_map.contains(ignore_os_errors_option);
 #if SANDSTONE_FREQUENCY_MANAGER
-        app->vary_frequency_mode = opts_map.contains(vary_frequency);
-        app->vary_uncore_frequency_mode = opts_map.contains(vary_uncore_frequency);
+        app_cfg->vary_frequency_mode = opts_map.contains(vary_frequency);
+        app_cfg->vary_uncore_frequency_mode = opts_map.contains(vary_uncore_frequency);
 #endif
 
-        app->shmem->use_strict_runtime = opts_map.contains(strict_runtime_option);
-        app->shmem->ud_on_failure = opts_map.contains(ud_on_failure_option);
+        opts.shmem_cfg.use_strict_runtime = opts_map.contains(strict_runtime_option);
+        opts.shmem_cfg.ud_on_failure = opts_map.contains(ud_on_failure_option);
 
         // assign 1:1
         opts.seed = string_opt_for('s');
 #ifndef NDEBUG
-        app->gdb_server_comm = string_opt_for<std::string>(gdb_server_option);
+        app_cfg->gdb_server_comm = string_opt_for<std::string>(gdb_server_option);
 #endif
         opts.on_crash_arg = string_opt_for(on_crash_option);
         opts.on_hang_arg = string_opt_for(on_hang_option);
         opts.test_list_file_path = string_opt_for(test_list_file_option);
-        app->file_log_path = string_opt_for<std::string>('o');
-        app->syslog_ident = string_opt_for(syslog_runtime_option);
+        app_cfg->file_log_path = string_opt_for<std::string>('o');
+        app_cfg->syslog_ident = string_opt_for(syslog_runtime_option);
         opts.builtin_test_list_name = string_opt_for(use_builtin_test_list_option);
 
         // the rest
         if (auto value = string_opt_for('f')) {
             std::string_view mode = value;
             if (mode == "no" || mode == "no-fork") {
-                app->fork_mode = SandstoneApplication::no_fork;
+                app_cfg->fork_mode = SandstoneApplication::ForkMode::no_fork;
             } else if (mode == "exec") {
-                app->fork_mode = SandstoneApplication::exec_each_test;
+                app_cfg->fork_mode = SandstoneApplication::ForkMode::exec_each_test;
 #ifndef _WIN32
             } else if (mode == "yes" || mode == "each-test") {
-                app->fork_mode = SandstoneApplication::fork_each_test;
+                app_cfg->fork_mode = SandstoneApplication::ForkMode::fork_each_test;
 #endif
             } else {
                 fprintf(stderr, "unknown value to -f\n");
@@ -842,7 +842,7 @@ struct ProgramOptionsParser {
             auto maybe_int = ParseIntArgument<>{
                     .name = "-n / --threads",
                     .min = 1,
-                    .max = app->thread_count,
+                    .max = app_cfg->thread_count,
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
             if (maybe_int) {
@@ -853,15 +853,15 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(reschedule_option)) {
-            sApp->device_scheduler = make_rescheduler(value);
-            if (!sApp->device_scheduler) {
+            app_cfg->device_scheduler = make_rescheduler(value);
+            if (!app_cfg->device_scheduler) {
                 fprintf(stderr, "%s: unknown reschedule option: %s\n", argv[0], value);
                 return EX_USAGE;
             }
         }
 
         if (auto it = opts_map.find('O'); it != opts_map.end()) {
-            app->shmem->log_test_knobs = true;
+            opts.shmem_cfg.log_test_knobs = true;
             for (auto knob : std::get<std::vector<const char*>>(it->second)) {
                 if (!set_knob_from_key_value_string(knob)) {
                     fprintf(stderr, "%s: Malformed test knob: \"%s\" (should be in the form KNOB=VALUE)\n",
@@ -874,7 +874,7 @@ struct ProgramOptionsParser {
         if (auto it = opts_map.find(_format_option); it != opts_map.end()) {
             switch (std::get<int>(it->second)) {
             case 'Y': {
-                app->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
+                opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::yaml;
                 auto value = std::get<const char*>(opts_map.at('Y'));
                 if (value) {
                     auto maybe_int = ParseIntArgument<>{
@@ -882,7 +882,7 @@ struct ProgramOptionsParser {
                             .max = 160,     // arbitrary
                     }(value);
                     if (maybe_int) {
-                        app->shmem->output_yaml_indent = maybe_int.value();
+                        opts.shmem_cfg.output_yaml_indent = maybe_int.value();
                     } else {
                         return EX_USAGE;
                     }
@@ -893,15 +893,15 @@ struct ProgramOptionsParser {
                 auto value = std::get<const char*>(opts_map.at(output_format_option));
                 std::string_view fmt = value;
                 if (fmt == "key-value") {
-                    app->shmem->output_format = SandstoneApplication::OutputFormat::key_value;
+                    opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::key_value;
                 } else if (fmt == "tap") {
-                    app->shmem->output_format = SandstoneApplication::OutputFormat::tap;
+                    opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::tap;
                 } else if (fmt == "yaml") {
-                    app->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
+                    opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::yaml;
                 } else if (SandstoneConfig::Debug && fmt == "none") {
                     // for testing only
-                    app->shmem->output_format = SandstoneApplication::OutputFormat::no_output;
-                    app->shmem->verbosity = -1;
+                    opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::no_output;
+                    opts.shmem_cfg.verbosity = -1;
                 } else {
                     fprintf(stderr, "%s: unknown output format: %s\n", argv[0], value);
                     return EX_USAGE;
@@ -938,14 +938,14 @@ struct ProgramOptionsParser {
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
             if (maybe_int) {
-                app->retest_count = maybe_int.value();
+                app_cfg->retest_count = maybe_int.value();
             } else {
                 return EX_USAGE;
             }
         }
         if (auto value = string_opt_for(temperature_threshold_option)) {
             if (std::string_view{value} == "disable") {
-                app->thermal_throttle_temp = -1;
+                app_cfg->thermal_throttle_temp = -1;
             } else {
                 auto maybe_int = ParseIntArgument<>{
                         .name = "--temperature-threshold",
@@ -956,18 +956,14 @@ struct ProgramOptionsParser {
                         .range_mode = OutOfRangeMode::Saturate
                 }(value);
                 if (maybe_int) {
-                    app->thermal_throttle_temp = maybe_int.value();
+                    app_cfg->thermal_throttle_temp = maybe_int.value();
                 } else {
                     return EX_USAGE;
                 }
             }
         }
         if (opts_map.contains(test_tests_option)) {
-            app->enable_test_tests();
-            if (app->test_tests_enabled()) {
-                // disable other options that don't make sense in this mode
-                app->retest_count = 0;
-            }
+            opts.test_tests = true;
         }
         if (auto value = string_opt_for(total_retest_on_failure)) {
             auto maybe_int = ParseIntArgument<>{
@@ -975,7 +971,7 @@ struct ProgramOptionsParser {
                     .min = -1
             }(value);
             if (maybe_int) {
-                app->total_retest_count = maybe_int.value();
+                app_cfg->total_retest_count = maybe_int.value();
             } else {
                 return EX_USAGE;
             }
@@ -988,12 +984,12 @@ struct ProgramOptionsParser {
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
             if (maybe_int) {
-                app->shmem->max_logdata_per_thread = maybe_int.value();
+                opts.shmem_cfg.max_logdata_per_thread = maybe_int.value();
             } else {
                 return EX_USAGE;
             }
-            if (app->shmem->max_logdata_per_thread == 0)
-                app->shmem->max_logdata_per_thread = UINT_MAX;
+            if (opts.shmem_cfg.max_logdata_per_thread == 0)
+                opts.shmem_cfg.max_logdata_per_thread = UINT_MAX;
         }
         if (auto value = string_opt_for(max_messages_option)) {
             auto maybe_int = ParseIntArgument<>{
@@ -1003,17 +999,17 @@ struct ProgramOptionsParser {
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
             if (maybe_int) {
-                app->shmem->max_messages_per_thread = maybe_int.value();
+                opts.shmem_cfg.max_messages_per_thread = maybe_int.value();
             } else {
                 return EX_USAGE;
             }
-            if (app->shmem->max_messages_per_thread <= 0)
-                app->shmem->max_messages_per_thread = INT_MAX;
+            if (opts.shmem_cfg.max_messages_per_thread <= 0)
+                opts.shmem_cfg.max_messages_per_thread = INT_MAX;
         }
         if (auto value = string_opt_for(max_test_count_option)) {
             auto maybe_int = ParseIntArgument<>{"--max-test-count"}(value);
             if (maybe_int) {
-                app->max_test_count = maybe_int.value();
+                app_cfg->max_test_count = maybe_int.value();
             } else {
                 return EX_USAGE;
             }
@@ -1025,24 +1021,24 @@ struct ProgramOptionsParser {
             {
                 auto maybe_int = ParseIntArgument<>{"--max-test-loop-count"}(std::get<const char*>(opts_map.at(max_test_loop_count_option)));
                 if (maybe_int) {
-                    app->max_test_loop_count = maybe_int.value();
+                    app_cfg->max_test_loop_count = maybe_int.value();
                 } else {
                     return EX_USAGE;
                 }
-                if (app->max_test_loop_count == 0) {
-                    app->max_test_loop_count = std::numeric_limits<int>::max();
+                if (app_cfg->max_test_loop_count == 0) {
+                    app_cfg->max_test_loop_count = std::numeric_limits<int>::max();
                 }
                 break;
             }
             case quick_run_option:
-                app->max_test_loop_count = 1;
-                app->delay_between_tests = 0ms;
+                app_cfg->max_test_loop_count = 1;
+                app_cfg->delay_between_tests = 0ms;
                 break;
             }
         }
 
         if (auto it = opts_map.find(test_delay_option); it != opts_map.end()) {
-            app->delay_between_tests = std::get<ShortDuration>(it->second);
+            app_cfg->delay_between_tests = std::get<ShortDuration>(it->second);
         }
 
         if (auto value = string_opt_for(inject_idle_option)) {
@@ -1053,7 +1049,7 @@ struct ProgramOptionsParser {
                 .range_mode = OutOfRangeMode::Saturate
             }(value);
             if (maybe_int) {
-                app->inject_idle = maybe_int.value();
+                app_cfg->inject_idle = maybe_int.value();
             } else {
                 return EX_USAGE;
             }
@@ -1063,7 +1059,7 @@ struct ProgramOptionsParser {
     }
 
     // here we play it simple
-    int parse_restricted_command_line(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts) {
+    int parse_restricted_command_line(int argc, char** argv, SandstoneApplicationConfig* app_cfg, ProgramOptions& opts) {
         // Default options for the simplified OpenDCDiag cmdline
         static struct option restricted_long_options[] = {
             { "help", no_argument, nullptr, 'h' },
@@ -1083,8 +1079,8 @@ struct ProgramOptionsParser {
                 abort();
             case 's':
                 // keep in sync above
-                app->endtime = MonotonicTimePoint::max();
-                app->service_background_scan = true;
+                app_cfg->endtime = MonotonicTimePoint::max();
+                app_cfg->service_background_scan = true;
                 break;
             case version_option:
                 opts.action = Action::version;
@@ -1101,13 +1097,13 @@ struct ProgramOptionsParser {
         }
 
         if (SandstoneConfig::NoLogging) {
-            app->shmem->output_format = SandstoneApplication::OutputFormat::no_output;
+            opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::no_output;
         } else  {
-            app->shmem->verbosity = 1;
+            opts.shmem_cfg.verbosity = 1;
         }
 
-        app->delay_between_tests = 50ms;
-        app->thermal_throttle_temp = INT_MIN;
+        app_cfg->delay_between_tests = 50ms;
+        app_cfg->thermal_throttle_temp = INT_MIN;
 
         static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,
                 "Restricted command-line build must have a built-in test list");
@@ -1116,10 +1112,10 @@ struct ProgramOptionsParser {
 };
 } /* anonymous namespace */
 
-int ProgramOptions::parse(int argc, char** argv, SandstoneApplication* app) {
+int ProgramOptions::parse(int argc, char** argv, SandstoneApplicationConfig* app_cfg) {
     ProgramOptionsParser parser;
     if constexpr (SandstoneConfig::RestrictedCommandLine) {
-        return parser.parse_restricted_command_line(argc, argv, app, *this);
+        return parser.parse_restricted_command_line(argc, argv, app_cfg, *this);
     }
     auto ret = parser.collect_args(argc, argv);
     if (ret != EXIT_SUCCESS) {
@@ -1129,5 +1125,5 @@ int ProgramOptions::parse(int argc, char** argv, SandstoneApplication* app) {
     if (ret != EXIT_SUCCESS) {
         return ret;
     }
-    return parser.parse_args(app, *this, argv);
+    return parser.parse_args(app_cfg, *this, argv);
 }

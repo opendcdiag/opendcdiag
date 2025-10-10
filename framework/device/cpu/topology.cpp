@@ -1638,7 +1638,7 @@ void slice_plan_init(int max_cores_per_slice)
     for (std::vector<DeviceRange> &plan : sApp->slice_plans.plans)
         plan.clear();
 
-    if (sApp->current_fork_mode() == SandstoneApplication::no_fork || max_cores_per_slice < 0)
+    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::no_fork || max_cores_per_slice < 0)
         return set_to_full_system();
 
     // The heuristic is enabled by max_cores_per_slice == 0 and a valid

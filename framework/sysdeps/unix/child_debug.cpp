@@ -469,7 +469,7 @@ static bool create_crash_pipe(int xsave_size)
         fcntl(crashpipe[CrashPipeParent], F_SETFL, ret | O_NONBLOCK);
 
     // if we're exec'ing the child, allow it to inherit the socket
-    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test)
+    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test)
         fcntl(crashpipe[CrashPipeChild], F_SETFD, 0);
 
     sApp->shmem->server_debug_socket = crashpipe[CrashPipeParent];
@@ -1071,7 +1071,7 @@ void debug_init_child()
         sigaction(signum, &action, nullptr);
     }
 
-    if (sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test) {
+    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::child_exec_each_test) {
         // we're in the child side of an execve()
         xsave_size = get_xsave_size();
     }

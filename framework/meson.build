@@ -140,7 +140,7 @@ framework_config.set_quoted('SANDSTONE_FALLBACK_EXEC', get_option('fallback_exec
 framework_config.set10('SANDSTONE_NO_LOGGING', get_option('logging_format') == 'no_output')
 framework_config.set(
     'SANDSTONE_DEFAULT_LOGGING',
-    'SandstoneApplication::OutputFormat::' + get_option('logging_format'),
+    'TestConfig::OutputFormat::' + get_option('logging_format'),
 )
 
 framework_config.set10(
