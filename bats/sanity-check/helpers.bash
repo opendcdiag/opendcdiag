@@ -36,7 +36,7 @@ test_yaml_numeric() {
     extract_from_yaml "$query"
     shift
     if [[ -n "$value" ]]; then
-        if awk -v value="$value" "BEGIN{exit(!($*))}" /dev/null; then
+        if gawk -v value="$value" "BEGIN{exit(!($*))}" /dev/null; then
             return 0
         fi
     fi
