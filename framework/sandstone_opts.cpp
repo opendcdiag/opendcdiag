@@ -417,6 +417,7 @@ struct ProgramOptionsParser {
     {
         int opt;
         int coptind = -1;
+        optind = 1; // reset before starting scanning
 
         while ((opt = simple_getopt(argc, argv, long_options, &coptind)) != -1) {
             switch (opt) {

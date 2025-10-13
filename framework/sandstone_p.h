@@ -168,7 +168,7 @@ struct test_group
    initfunc (*group_init)() noexcept;       // returns a replacement init function (or not)
 };
 
-inline int simple_getopt(int argc, char **argv, struct option *options, int *optind = nullptr)
+inline int simple_getopt(int argc, char **argv, struct option *options, int *coptind = nullptr)
 {
     // cache the result
     static std::string cached_short_opts = [=]() {
@@ -184,7 +184,7 @@ inline int simple_getopt(int argc, char **argv, struct option *options, int *opt
         }
         return result;
     }();
-    return getopt_long(argc, argv, cached_short_opts.c_str(), options, optind);
+    return getopt_long(argc, argv, cached_short_opts.c_str(), options, coptind);
 }
 
 template <bool IsDebug> struct test_the_test_data
