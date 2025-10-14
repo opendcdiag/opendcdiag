@@ -438,6 +438,9 @@ extern void log_message_skip(int thread_num, SkipCategory c, const char *msg, ..
 /// The message parameter provides a description of the data which
 /// precedes it in the log file.  The data is output in hexadecimal.
 extern void log_data(const char *message, const void *data, size_t size);
+/// Logs pre-formatted YAML to the logs.
+extern void log_yaml(char levelchar, const char *yaml);
+#define log_yaml(level, yaml)       log_yaml(level[0], yaml)
 
 /// retrieves the physical address of a given pointer.  Currently
 /// this function is only supported on Linux and requires root
@@ -631,6 +634,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 #  undef log_error
 #  undef log_warning
 #  undef log_info
+#  undef log_yaml
 #  undef report_fail
 #  undef report_fail_msg
 
@@ -638,6 +642,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 #  define log_error(...)                    log_message(thread_num, SANDSTONE_LOG_ERROR "")
 #  define log_warning(...)                  (void)0
 #  define log_info(...)                     (void)0
+#  define log_yaml(level, yaml)             log_yaml(level[0], NULL)
 #  define report_fail(test)                 _report_fail(test, NULL, 0)
 #  define report_fail_msg(...)              _report_fail_msg(NULL, 0, NULL)
 
