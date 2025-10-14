@@ -12,6 +12,7 @@
 #ifdef __cplusplus
 #include <cfloat>
 #include <limits>
+#include <type_traits>
 #endif
 
 #ifdef __F16C__
@@ -22,6 +23,26 @@
 #define STATIC_INLINE static inline constexpr
 #else
 #define STATIC_INLINE static inline
+#endif
+
+#ifndef OVERLOAD
+/// Variadic macros to count the number of arguments passed to other macro.
+/// @see OVERLOAD()
+#define NARGN(\
+            em, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,\
+            n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,\
+            N, ...) \
+        N
+
+#define APPEND_NON_EMPTY(...) ,##__VA_ARGS__
+#define NARG_(...) NARGN(__VA_ARGS__)
+#define NARGS(...) NARG_( \
+            -1 APPEND_NON_EMPTY(__VA_ARGS__),\
+            63,62,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,\
+            31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+
+#define OVERLOAD_(name, nargs) name##nargs
+#define OVERLOAD(name, nargs) OVERLOAD_(name, nargs)
 #endif
 
 #ifdef __cplusplus
@@ -190,6 +211,8 @@ struct BFloat8
     };
 
 #ifdef __cplusplus
+    using base_type = uint8_t;
+
     constexpr inline BFloat8() = default;
     inline BFloat8(float f);
 
@@ -216,6 +239,9 @@ struct BFloat8
     constexpr inline bool is_snan() const     { return (exponent == BFLOAT8_NAN_EXPONENT) && (mantissa == BFLOAT8_SNAN_AT_INPUT_MANTISSA); }
     constexpr inline bool is_qnan() const     { return (exponent == BFLOAT8_NAN_EXPONENT) && (mantissa == BFLOAT8_QNAN_AT_INPUT_MANTISSA); }
     constexpr inline bool is_max() const      { return (exponent == BFLOAT8_INFINITY_EXPONENT - 1) && (mantissa == BFLOAT8_MANTISSA_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return BFLOAT8_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return BFLOAT8_EXPONENT_BITS; }
 
     constexpr inline BFloat8 operator-() const {
         return { (uint8_t) (sign ^ 1), exponent, mantissa };
@@ -285,6 +311,7 @@ struct HFloat8
     };
 
 #ifdef __cplusplus
+    using base_type = uint8_t;
     constexpr inline HFloat8() = default;
     inline HFloat8(float f);
 
@@ -307,6 +334,9 @@ struct HFloat8
     constexpr inline bool is_inf_nan() const  { return value == HFLOAT8_INF_NAN_VALUE; }
     constexpr inline bool is_overflow() const { return value == HFLOAT8_SATURATED_OVERFLOW_VALUE; }
     constexpr inline bool is_max() const      { return value == HFLOAT8_MAX_VALUE; }
+
+    static constexpr inline uint32_t mantissa_bits() { return HFLOAT8_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return HFLOAT8_EXPONENT_BITS; }
 
     constexpr inline HFloat8 operator-() const {
         return { (uint8_t) (sign ^ 1), exponent, mantissa };
@@ -378,6 +408,7 @@ struct Float16
     };
 
 #ifdef __cplusplus
+    using base_type = uint16_t;
     constexpr inline Float16() = default;
     inline Float16(float f);
 
@@ -432,9 +463,13 @@ struct Float16
 
     constexpr inline uint16_t get_nan_payload() const     { return mantissa & (~FLOAT16_MANTISSA_QUIET_NAN_MASK); }
 
+    static constexpr inline uint32_t mantissa_bits() { return FLOAT16_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return FLOAT16_EXPONENT_BITS; }
+
     constexpr inline Float16 operator-() const {
         return { (uint16_t) (sign ^ 1), exponent, mantissa };
     }
+
 private:
     struct Holder { uint16_t payload; };
     explicit constexpr Float16(Holder h) : as_hex(h.payload) {}
@@ -515,6 +550,7 @@ struct BFloat16
     };
 
 #ifdef __cplusplus
+    using base_type = uint16_t;
     constexpr inline BFloat16() = default;
     inline BFloat16(float f);
     constexpr inline BFloat16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
@@ -572,6 +608,9 @@ struct BFloat16
     constexpr inline bool is_qnan() const     { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
 
     constexpr inline uint16_t get_nan_payload() const   { return mantissa & (~BFLOAT16_MANTISSA_QUIET_NAN_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return BFLOAT16_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return BFLOAT16_EXPONENT_BITS; }
 
     constexpr inline BFloat16 operator-() const {
         return { (uint16_t) (sign ^ 1), exponent, mantissa };
@@ -656,6 +695,7 @@ struct Float32 {
     };
 
 #ifdef __cplusplus
+    using base_type = uint32_t;
     constexpr inline Float32() = default;
     constexpr inline Float32(float f) : as_float(f) { }
     constexpr inline Float32(uint32_t s, uint32_t e, uint32_t m): mantissa(m), exponent(e), sign(s) { }
@@ -677,6 +717,9 @@ struct Float32 {
     constexpr inline bool is_max() const      { return (exponent == FLOAT32_INFINITY_EXPONENT - 1) && (mantissa == FLOAT32_MANTISSA_MASK); }
 
     constexpr inline uint32_t get_nan_payload() const   { return mantissa & (~FLOAT32_MANTISSA_QUIET_NAN_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return FLOAT32_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return FLOAT32_EXPONENT_BITS; }
 
     constexpr inline Float32 operator-() const {
         return { (uint32_t) (sign ^ 1), exponent, mantissa };
@@ -721,6 +764,7 @@ struct Float64 {
     };
 
 #ifdef __cplusplus
+    using base_type = uint64_t;
     constexpr inline Float64() = default;
     constexpr inline Float64(double f) : as_float(f) { }
     constexpr inline Float64(uint64_t s, uint64_t e, uint64_t m): mantissa(m), exponent(e), sign(s) { }
@@ -742,6 +786,9 @@ struct Float64 {
     constexpr inline bool is_max() const      { return (exponent == FLOAT64_INFINITY_EXPONENT - 1) && (mantissa == FLOAT64_MANTISSA_MASK); }
 
     constexpr inline uint64_t get_nan_payload() const   { return mantissa & (~FLOAT64_MANTISSA_QUIET_NAN_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return FLOAT64_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return FLOAT64_EXPONENT_BITS; }
 
     constexpr inline Float64 operator-() const {
         return { (uint64_t) (sign ^ 1), exponent, mantissa };
@@ -791,6 +838,7 @@ struct Float80 {
     };
 
 #ifdef __cplusplus
+    using base_type = uint64_t;
     constexpr inline Float80() = default;
     constexpr inline Float80(long double f) : as_float(f) { }
     constexpr inline Float80(uint64_t s, uint64_t e, uint64_t j, uint64_t m): mantissa(m), jbit(j), exponent(e), sign(s) { }
@@ -812,6 +860,10 @@ struct Float80 {
     constexpr inline bool is_snan() const     { return is_nan() && ((mantissa & FLOAT80_MANTISSA_QUIET_NAN_MASK) == 0); }
     constexpr inline bool is_qnan() const     { return is_nan() && ((mantissa & FLOAT80_MANTISSA_QUIET_NAN_MASK) != 0); }
     constexpr inline uint64_t get_nan_payload() const   { return mantissa & (~FLOAT80_MANTISSA_QUIET_NAN_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return FLOAT80_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return FLOAT80_EXPONENT_BITS; }
+
     constexpr inline Float80 operator-() const {
         return { (uint64_t) (sign ^ 1), exponent, jbit, mantissa };
     }
@@ -1278,6 +1330,10 @@ template<>
 inline float AS_FP(double d) {
     return d;
 }
+template<>
+inline float AS_FP(long double d) {
+    return d;
+}
 #else
 #define AS_FP(v) \
     _Generic((v),\
@@ -1294,6 +1350,10 @@ inline float AS_FP(double d) {
 #endif
 
 /** @} */
+
+#if defined(OBSOLETE_RANDOM_GENERATORS)
+// TODO remove when new approach is accepted
+// previous simple random generators
 
 #ifdef __cplusplus
 extern "C" {
@@ -1319,48 +1379,48 @@ Float80 new_random_float80();
 
 #ifdef __cplusplus
 template<typename T>
-inline T SET_RANDOM(T& v) {
+inline T SET_RANDOM_FP(T& v) {
     static_assert(NotImplementedFor<T>::value, "Type not handled");
     return v;
 }
 template<>
-inline HFloat8 SET_RANDOM(HFloat8& v) {
+inline HFloat8 SET_RANDOM_FP(HFloat8& v) {
     return v = new_random_hfloat8();
 }
 template<>
-inline BFloat8 SET_RANDOM(BFloat8& v) {
+inline BFloat8 SET_RANDOM_FP(BFloat8& v) {
     return v = new_random_bfloat8();
 }
 template<>
-inline Float16 SET_RANDOM(Float16& v) {
+inline Float16 SET_RANDOM_FP(Float16& v) {
     return v = new_random_float16();
 }
 template<>
-inline BFloat16 SET_RANDOM(BFloat16& v) {
+inline BFloat16 SET_RANDOM_FP(BFloat16& v) {
     return v = new_random_bfloat16();
 }
 template<>
-inline Float32 SET_RANDOM(Float32& v) {
+inline Float32 SET_RANDOM_FP(Float32& v) {
     return v = new_random_float32();
 }
 template<>
-inline float SET_RANDOM(float& v) {
+inline float SET_RANDOM_FP(float& v) {
     return v = new_random_float();
 }
 template<>
-inline Float64 SET_RANDOM(Float64& v) {
+inline Float64 SET_RANDOM_FP(Float64& v) {
     return v = new_random_float64();
 }
 template<>
-inline double SET_RANDOM(double& v) {
+inline double SET_RANDOM_FP(double& v) {
     return v = new_random_double();
 }
 template<>
-inline Float80 SET_RANDOM(Float80& v) {
+inline Float80 SET_RANDOM_FP(Float80& v) {
     return v = new_random_float80();
 }
 #else
-#define SET_RANDOM(v, ...) \
+#define SET_RANDOM_FP(v, ...) \
     v = \
     _Generic((v),\
         HFloat8: new_random_hfloat8,\
@@ -1375,7 +1435,479 @@ inline Float80 SET_RANDOM(Float80& v) {
     )(__VA_ARGS__)
 #endif
 
-#define new_random(T, ...) ({ T v; SET_RANDOM(v, ##__VA_ARGS__); v; })
+#define new_random(T, ...) ({ T v; SET_RANDOM_FP(v, ##__VA_ARGS__); v; })
+
+#elif !defined(OBSOLETE_RANDOM_GENERATORS)
+// new random generators with flags
+
+enum FP_GEN_RANDOM_FLAGS {
+    // mantissa generation
+    FP_GEN_RANDOM_FLAGS_MANTISSA_MASK       = 0x00070000,
+    FP_GEN_RANDOM_FLAGS_MANTISSA_BITS       = 0x00000000, // fetch appropriate number of bits from the "factory"
+    FP_GEN_RANDOM_FLAGS_MANTISSA_PATTERNED  = 0x00010000, // set_random_bits(), compatibility with previous generators
+    FP_GEN_RANDOM_FLAGS_MANTISSA_VECTOR     = 0x00020000, // get_float_vector(random_vector_index)
+    FP_GEN_RANDOM_FLAGS_MANTISSA_RANDOM     = 0x00030000, // sufficient random()/random32()/random64()/...
+    FP_GEN_RANDOM_FLAGS_MANTISSA_UNHANDLED1 = 0x00040000,
+    FP_GEN_RANDOM_FLAGS_MANTISSA_UNHANDLED2 = 0x00050000,
+    FP_GEN_RANDOM_FLAGS_MANTISSA_UNHANDLED3 = 0x00060000,
+    FP_GEN_RANDOM_FLAGS_MANTISSA_ZERO       = 0x00070000, // zero
+
+    // random exponent generation
+    FP_GEN_RANDOM_FLAGS_EXPONENT_MASK       = 0x00f00000,
+    FP_GEN_RANDOM_FLAGS_EXPONENT_BITS       = 0x00000000, // fetch appropriate number of bits from the "factory", flat distribution
+    FP_GEN_RANDOM_FLAGS_EXPONENT_GAUSSIAN2  = 0x00100000, // n/2 + n/2 gaussian bell distribution, bits from the "factory"
+    FP_GEN_RANDOM_FLAGS_EXPONENT_GAUSSIAN4  = 0x00200000, // n/2 + n/4 + n/4 gaussian bell distribution
+    FP_GEN_RANDOM_FLAGS_EXPONENT_GAUSSIAN8  = 0x00300000, // n/2 + n/4 + n/8 + n/8 gaussian bell distribution
+    // special values for exponent
+    FP_GEN_RANDOM_FLAGS_EXPONENT_RANDOM     = 0x00400000, // random()
+    FP_GEN_RANDOM_FLAGS_EXPONENT_VECTOR     = 0x00800000, // get_float_vector(random_vector_index)
+    FP_GEN_RANDOM_FLAGS_EXPONENT_ZERO       = 0x00d00000, // zero exponent, no assumption on the mantissa (ti denormal/zero are expected)
+    FP_GEN_RANDOM_FLAGS_EXPONENT_MAX        = 0x00e00000, // max possible exponent, no assumption on the mantissa (Inf/NaN/overflow/large value, depending on the type), will skip some HFloat8 values!
+    FP_GEN_RANDOM_FLAGS_EXPONENT_BIAS       = 0x00f00000, // exponent equal BIAS, t.i. values [1..2), forced when NORMALIZE_FP
+    // special values for exponent (with special mantissa handling done in next steps)
+    FP_GEN_RANDOM_FLAGS_VALUE_ZERO          = 0x00500000, // zero, both exponent and mantissa zeroed
+    FP_GEN_RANDOM_FLAGS_VALUE_DENORMAL      = 0x00600000, // denormal number, 0s excluded (random bit is set to 1 if zero in mantissa)
+    FP_GEN_RANDOM_FLAGS_VALUE_INF           = 0x00700000, // infinity, zero in the mantissa implied/forced
+    FP_GEN_RANDOM_FLAGS_VALUE_OVERFLOW      = 0x00900000, // overflow
+    FP_GEN_RANDOM_FLAGS_VALUE_NAN           = 0x00a00000, // any NaN, Inf excluded (random bit is set to 1 if zero in mantissa)
+    FP_GEN_RANDOM_FLAGS_VALUE_SNAN          = 0x00b00000, // signalling NaN, Q bit is cleared
+    FP_GEN_RANDOM_FLAGS_VALUE_QNAN          = 0x00c00000, // quiet NaN, Q bit is set
+
+    // sign generation
+    FP_GEN_RANDOM_FLAGS_SIGN_MASK           = 0x03000000,
+    FP_GEN_RANDOM_FLAGS_SIGN_BITS           = 0x00000000, // fetch appropriate number of bits from the "factory"
+    FP_GEN_RANDOM_FLAGS_SIGN_NEGATIVE       = 0x01000000, // forced sign=1
+    FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE       = 0x02000000, // forced sign=0
+    FP_GEN_RANDOM_FLAGS_SIGN_RANDOM         = 0x03000000, // random()
+
+    // enforcement flags
+    FP_GEN_RANDOM_FLAGS_FORCE_FINITE        = 0x04000000, // must be a finite number, Inf/NaNs/overflow excluded
+    FP_GEN_RANDOM_FLAGS_NO_SUBNORMALS       = 0x08000000, // must not be a subnormal number, use with _FINITE to get normal number
+
+    // select predefined value or generate according other flags with given probability
+    FP_GEN_PCT_VEC_SELECTOR_VAL_MASK        = 0x0000007f,
+    FP_GEN_PCT_VEC_SELECTOR                 = 0x00000080,
+    // helper to build predefined/random percentage "flags"
+    #define FP_GEN_PCT_VEC(pct) (FP_GEN_PCT_VEC_SELECTOR | ((pct) & FP_GEN_PCT_VEC_SELECTOR_VAL_MASK))
+
+    // extra scenarios (expected without any other flags)
+    FP_GEN_FAST_ZERO                        = 0x80000000, // fast zero (all bits cleared)
+    FP_GEN_FAST_MEMSET_RANDOM               = 0x90000000, // whole value initialized with "memset_random()"
+    FP_GEN_COMPATIBILITY_GENERATOR          = 0xa0000000, // use obsolete simple random generator (no flags supported)
+
+    // short aliases
+    FP_GEN_POSITIVE = FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE,
+    FP_GEN_NEGATIVE = FP_GEN_RANDOM_FLAGS_SIGN_NEGATIVE,
+    FP_GEN_FINITE = FP_GEN_RANDOM_FLAGS_FORCE_FINITE,
+    FP_GEN_ZERO = FP_GEN_RANDOM_FLAGS_VALUE_ZERO,
+    FP_GEN_INF = FP_GEN_RANDOM_FLAGS_VALUE_INF,
+    FP_GEN_DENORMAL = FP_GEN_RANDOM_FLAGS_VALUE_DENORMAL,
+    FP_GEN_OVERFLOW = FP_GEN_RANDOM_FLAGS_VALUE_OVERFLOW,
+    FP_GEN_NAN = FP_GEN_RANDOM_FLAGS_VALUE_NAN,
+    FP_GEN_SNAN = FP_GEN_RANDOM_FLAGS_VALUE_SNAN,
+    FP_GEN_QNAN = FP_GEN_RANDOM_FLAGS_VALUE_QNAN,
+    FP_GEN_RANGE12 = FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE | FP_GEN_RANDOM_FLAGS_EXPONENT_BIAS,
+
+    #define FP_GEN_CMATH_CLASS(c) \
+        ({\
+            uint32_t flags;\
+            switch ((c)) {\
+                case FP_NORMAL:\
+                    flags = FP_GEN_RANDOM_FLAGS_FORCE_FINITE | FP_GEN_RANDOM_FLAGS_NO_SUBNORMALS;\
+                    break;\
+                case FP_SUBNORMAL:\
+                    flags = FP_GEN_RANDOM_FLAGS_VALUE_DENORMAL;\
+                    break;\
+                case FP_ZERO:\
+                    flags = FP_GEN_RANDOM_FLAGS_VALUE_ZERO;\
+                    break;\
+                case FP_INFINITE:\
+                    flags = FP_GEN_RANDOM_FLAGS_VALUE_INF;\
+                    break;\
+                case FP_NAN:\
+                    flags = FP_GEN_RANDOM_FLAGS_VALUE_NAN;\
+                    break;\
+                default:\
+                    assert(false && "unsupported cmath classification");\
+                    flags = 0;\
+                    break;\
+            }\
+            flags;\
+        })
+
+    // value from predefined vectors
+    FP_GEN_STATIC_VECTOR = FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE | FP_GEN_RANDOM_FLAGS_EXPONENT_VECTOR | FP_GEN_RANDOM_FLAGS_MANTISSA_VECTOR,
+
+    // optimized random generation
+    FP_GEN_RANDOM = FP_GEN_RANDOM_FLAGS_SIGN_BITS | FP_GEN_RANDOM_FLAGS_EXPONENT_BITS | FP_GEN_RANDOM_FLAGS_MANTISSA_BITS,
+};
+
+// C delegates to the template to generate the value of particular type. These
+// will be defined in C++ with the use of the shared impl template.
+// Make both available for C and C++ (not mangled version only!)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+HFloat8  gen_random_hfloat8 (uint32_t flags);
+BFloat8  gen_random_bfloat8 (uint32_t flags);
+Float16  gen_random_float16 (uint32_t flags);
+BFloat16 gen_random_bfloat16(uint32_t flags);
+Float32  gen_random_float32 (uint32_t flags);
+float    gen_random_float   (uint32_t flags);
+Float64  gen_random_float64 (uint32_t flags);
+double   gen_random_double  (uint32_t flags);
+Float80  gen_random_float80 (uint32_t flags);
+
+HFloat8  normalize_hfloat8 (HFloat8 val,  float v1, float v2, uint32_t flags);
+BFloat8  normalize_bfloat8 (BFloat8 val,  float v1, float v2, uint32_t flags);
+Float16  normalize_float16 (Float16 val,  float v1, float v2, uint32_t flags);
+BFloat16 normalize_bfloat16(BFloat16 val, float v1, float v2, uint32_t flags);
+Float32  normalize_float32 (Float32 val,  float v1, float v2, uint32_t flags);
+float    normalize_float   (float val,    float v1, float v2, uint32_t flags);
+Float64  normalize_float64 (Float64 val,  float v1, float v2, uint32_t flags);
+double   normalize_double  (double val,   float v1, float v2, uint32_t flags);
+Float80  normalize_float80 (Float80 val,  float v1, float v2, uint32_t flags);
+
+void memset_random_impl(void* ptr, size_t size);
+static inline bool set_random_fast_path(void* ptr, size_t size, uint32_t flags) {
+    switch (flags) {
+        case FP_GEN_FAST_ZERO:
+            memset(ptr, 0, size);
+            return true;
+        case FP_GEN_FAST_MEMSET_RANDOM:
+            memset_random_impl(ptr, size);
+            return true;
+        default:
+            return false;
+    }
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+/**
+ * Language specific interface for NEW_RANDOM_FP/SET_RANDOM_FP/NORMALIZE_FP
+ * @{
+ */
+#if !defined(__cplusplus)
+/**
+ * "C" specific interface
+ * @{
+ */
+
+#define NEW_RANDOM_FP2(type, flags) \
+    ({ type new_random_fp2_val; SET_RANDOM_FP2(new_random_fp2_val, (flags)); })
+
+#define SET_RANDOM_FP2(val, flags) \
+    (val) = _Generic((val),\
+        HFloat8:  gen_random_hfloat8,\
+        BFloat8:  gen_random_bfloat8,\
+        Float16:  gen_random_float16,\
+        BFloat16: gen_random_bfloat16,\
+        Float32:  gen_random_float32,\
+        float:    gen_random_float,\
+        Float64:  gen_random_float64,\
+        double:   gen_random_double,\
+        Float80:  gen_random_float80\
+    )((flags))
+
+#define NORMALIZE_FP(val, v1, v2, flags) \
+    _Generic((val),\
+        HFloat8:  normalize_hfloat8,\
+        BFloat8:  normalize_bfloat8,\
+        Float16:  normalize_float16,\
+        BFloat16: normalize_bfloat16,\
+        Float32:  normalize_float32,\
+        float:    normalize_float,\
+        Float64:  normalize_float64,\
+        double:   normalize_double,\
+        Float80:  normalize_float80\
+    )((val), (v1), (v2), (flags))
+/** @} */
+
+#elif defined(__cplusplus)
+
+/**
+ * "C++" specific interface
+ * @{
+ */
+namespace {
+
+// template to handle bits in sign/exponent/mantissa according given T
+template<typename T>
+inline T gen_random_fp_tmpl(uint32_t flags) {
+    static_assert(NotImplementedFor<T>::value, "type not handled");
+    return T{};
+}
+template<>
+inline HFloat8  gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_hfloat8(flags);
+}
+template<>
+inline BFloat8  gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_bfloat8(flags);
+}
+template<>
+inline Float16  gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_float16(flags);
+}
+template<>
+inline BFloat16 gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_bfloat16(flags);
+}
+template<>
+inline Float32  gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_float32(flags);
+}
+template<>
+inline float    gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_float(flags);
+}
+template<>
+inline Float64  gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_float64(flags);
+}
+template<>
+inline double   gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_double(flags);
+}
+template<>
+inline Float80  gen_random_fp_tmpl(uint32_t flags) {
+    return gen_random_float80(flags);
+}
+
+template<typename T>
+inline T normalize_fp_tmpl(T val, float v1, float v2, uint32_t flags) {
+    static_assert(NotImplementedFor<T>::value, "type not handled");
+    return val;
+}
+template<>
+inline HFloat8 normalize_fp_tmpl(HFloat8 val, float v1, float v2, uint32_t flags) {
+    return normalize_hfloat8(val, v1, v2, flags);
+}
+template<>
+inline BFloat8 normalize_fp_tmpl(BFloat8 val, float v1, float v2, uint32_t flags) {
+    return normalize_bfloat8(val, v1, v2, flags);
+}
+template<>
+inline Float16 normalize_fp_tmpl(Float16 val, float v1, float v2, uint32_t flags) {
+    return normalize_float16(val, v1, v2, flags);
+}
+template<>
+inline BFloat16 normalize_fp_tmpl(BFloat16 val, float v1, float v2, uint32_t flags) {
+    return normalize_bfloat16(val, v1, v2, flags);
+}
+template<>
+inline Float32 normalize_fp_tmpl(Float32 val, float v1, float v2, uint32_t flags) {
+    return normalize_float32(val, v1, v2, flags);
+}
+template<>
+inline float normalize_fp_tmpl(float val, float v1, float v2, uint32_t flags) {
+    return normalize_float(val, v1, v2, flags);
+}
+template<>
+inline Float64 normalize_fp_tmpl(Float64 val, float v1, float v2, uint32_t flags) {
+    return normalize_float64(val, v1, v2, flags);
+}
+template<>
+inline double normalize_fp_tmpl(double val, float v1, float v2, uint32_t flags) {
+    return normalize_double(val, v1, v2, flags);
+}
+template<>
+inline Float80 normalize_fp_tmpl(Float80 val, float v1, float v2, uint32_t flags) {
+    return normalize_float80(val, v1, v2, flags);
+}
+
+#define NEW_RANDOM_FP2(type, flags) gen_random_fp_tmpl<type>(flags)
+#define SET_RANDOM_FP2(val, flags) ({ (val) = gen_random_fp_tmpl<std::remove_reference_t<decltype(val)>>(flags); })
+#define NORMALIZE_FP(val, v1, v2, flags) normalize_fp_tmpl(val, v1, v2, flags)
+} // anonymous namespace
+/** @} */
+
+#endif // C/C++ interface
+/** @} */
+
+// use "compatibility" generator when no flags specified, new_random_float() without args
+// should match previous simple random generators
+#define NEW_RANDOM_FP1(type)                NEW_RANDOM_FP2(type, FP_GEN_COMPATIBILITY_GENERATOR)
+// NEW_RANDOM2(type, flags) is defined on per-language basis (C/C++)
+// Run the generation with normalization. Normalization must be aware of the flags used
+// to generate the value, so it is passed to it as well.
+#define NEW_RANDOM_FP3(type, v1, v2)        NORMALIZE_FP(NEW_RANDOM_FP2(type, FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE | FP_GEN_RANDOM_FLAGS_EXPONENT_BIAS), (v1), (v2), 0)
+#define NEW_RANDOM_FP4(type, flags, v1, v2) \
+    ({\
+        typeof(flags) new_random_fp4_flags = (flags);\
+        NORMALIZE_FP(NEW_RANDOM_FP2(type, new_random_fp4_flags), (v1), (v2), new_random_fp4_flags);\
+    })
+#define NEW_RANDOM_FP(...)                  OVERLOAD(NEW_RANDOM_FP, NARGS(__VA_ARGS__))(__VA_ARGS__)
+
+#define new_random(type, ...)    NEW_RANDOM_FP(type,     ##__VA_ARGS__)
+#define new_random_hfloat8(...)  NEW_RANDOM_FP(HFloat8,  ##__VA_ARGS__)
+#define new_random_bfloat8(...)  NEW_RANDOM_FP(BFloat8,  ##__VA_ARGS__)
+#define new_random_float16(...)  NEW_RANDOM_FP(Float16,  ##__VA_ARGS__)
+#define new_random_bfloat16(...) NEW_RANDOM_FP(BFloat16, ##__VA_ARGS__)
+#define new_random_float32(...)  NEW_RANDOM_FP(Float32,  ##__VA_ARGS__)
+#define new_random_float(...)    NEW_RANDOM_FP(float,    ##__VA_ARGS__)
+#define new_random_float64(...)  NEW_RANDOM_FP(Float64,  ##__VA_ARGS__)
+#define new_random_double(...)   NEW_RANDOM_FP(double,   ##__VA_ARGS__)
+#define new_random_float80(...)  NEW_RANDOM_FP(Float80,  ##__VA_ARGS__)
+
+// use "faster" generator when no flags specified, no need to have compatibility with previous generators here
+#define SET_RANDOM_FP1(val) SET_RANDOM_FP2(val, FP_GEN_RANDOM)
+// SET_RANDOM_FP2(val, flags) is defined on per-language basis (C/C++)
+#define SET_RANDOM_FP3(val, v1, v2) \
+    ({\
+        typeof(val) set_random_fp3_val_ptr = (val);\
+        SET_RANDOM_FP2(set_random_fp3_val_ptr, FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE | FP_GEN_RANDOM_FLAGS_EXPONENT_BIAS);\
+        set_random_fp3_val_ptr = NORMALIZE_FP(set_random_fp3_val_ptr, (v1), (v2), 0);\
+    })
+#define SET_RANDOM_FP4(val, flags, v1, v2) \
+    ({\
+        typeof(val) set_random_fp4_val_ptr = (val);\
+        uint32_t set_random_fp4_flags = (flags);\
+        SET_RANDOM_FP2(set_random_fp4_val_ptr, set_random_fp4_flags);\
+        set_random_fp4_val_ptr = NORMALIZE_FP(set_random_fp4_val_ptr, (v1), (v2), set_random_fp4_flags);\
+    })
+#define SET_RANDOM_FP(...) OVERLOAD(SET_RANDOM_FP, NARGS(__VA_ARGS__))(__VA_ARGS__)
+
+// TODO implement Sandstone::DataType support
+
+/**
+ * Interface for SET_RANDOM
+ * @{
+ */
+// fast path is supported only for 3-args version (ptr, size, flags)
+#define SET_RANDOM_FAST_PATH(...)               OVERLOAD(SET_RANDOM_FAST_PATH, NARGS(__VA_ARGS__))(__VA_ARGS__)
+#define SET_RANDOM_FAST_PATH2(ptr, size)        false
+#define SET_RANDOM_FAST_PATH3(ptr, size, flags) set_random_fast_path((void*)(ptr), (size), flags)
+#define SET_RANDOM_FAST_PATH4(ptr, size, ...)   false
+#define SET_RANDOM_FAST_PATH5(ptr, size, ...)   false
+
+#define SET_RANDOM_PTR(ptr, nelems, ...) \
+    do {\
+        typeof(*ptr)* set_random_ptr_ptr = &((ptr)[0]);\
+        size_t set_random_ptr_nelems = (nelems);\
+        if (!SET_RANDOM_FAST_PATH(set_random_ptr_ptr, set_random_ptr_nelems * sizeof(*set_random_ptr_ptr), ##__VA_ARGS__)) {\
+            for (size_t i = 0; i < set_random_ptr_nelems; i++) {\
+                SET_RANDOM(set_random_ptr_ptr[i], ##__VA_ARGS__);\
+            }\
+        }\
+    } while (0)
+
+#if !defined(__cplusplus)
+// C interface
+// @{
+
+// Cannot use _Generic to overload SET_RANDOM base on the type of the first argument
+// (value reference, pointer, or array, as all associations should be correct, including
+// e.g. "implicit" conversions from the struct to the pointer) therefore we provide
+// specific macros to cover single value, pointer and array.
+// @warning In C SET_RANDOM(array) will not compile, SET_RANDOM_ARR must be used.
+#define SET_RANDOM SET_RANDOM_FP
+
+#define SET_RANDOM_ARR(arr, ...) \
+    do {\
+        typeof(*arr)* set_random_arr_ptr = &((arr)[0]);\
+        if (!SET_RANDOM_FAST_PATH(set_random_arr_ptr, sizeof(arr), ##__VA_ARGS__)) {\
+            for (size_t i = 0; i < sizeof(arr) / sizeof((arr)[0]); i++) {\
+                SET_RANDOM(set_random_arr_ptr[i], ##__VA_ARGS__);\
+            }\
+        }\
+    } while (0)
+
+// @}
+#elif defined(__cplusplus)
+/**
+ * C++ interface
+ * @{
+ */
+#ifdef SET_RANDOM
+#warning "SET_RANDOM macro already defined"
+#endif
+
+// functions to handle single value and arrays
+template<typename T, typename = std::enable_if_t<!std::is_pointer<T>::value>>
+inline void SET_RANDOM(T& var) {
+    if constexpr (std::is_array<T>::value) {
+        for (size_t i = 0; i < sizeof(var) / sizeof(var[0]); i++) {
+            SET_RANDOM_FP1(var[i]);
+        }
+    } else {
+        SET_RANDOM_FP1(var);
+    }
+}
+template<typename T, typename = std::enable_if_t<!std::is_pointer<T>::value>>
+inline void SET_RANDOM(T& var, uint32_t flags) {
+    if constexpr (std::is_array<T>::value) {
+        if (!set_random_fast_path(var, sizeof(var), flags)) {
+            for (size_t i = 0; i < sizeof(var) / sizeof(var[0]); i++) {
+                SET_RANDOM_FP2(var[i], flags);
+            }
+        }
+    } else {
+        SET_RANDOM_FP2(var, flags);
+    }
+}
+// The range is given as double values to cover unexpected conversions from float
+// (to avoid ambiguity in case of FP literals, where both conversion to float and
+// to double are correct and both (var, r1, r2) and (ptr, nelems, flags) match).
+template<typename T, typename = std::enable_if_t<!std::is_pointer<T>::value>>
+inline void SET_RANDOM(T& var, double r1, double r2) {
+    if constexpr (std::is_array<T>::value) {
+        for (size_t i = 0; i < sizeof(var) / sizeof(var[0]); i++) {
+            SET_RANDOM_FP3(var[i], r1, r2);
+        }
+    } else {
+        SET_RANDOM_FP3(var, r1, r2);
+    }
+}
+template<typename T, typename = std::enable_if_t<!std::is_pointer<T>::value>>
+inline void SET_RANDOM(T& var, uint32_t flags, double r1, double r2) {
+    if constexpr (std::is_array<T>::value) {
+        for (size_t i = 0; i < sizeof(var) / sizeof(var[0]); i++) {
+            SET_RANDOM_FP4(var[i], flags, r1, r2);
+        }
+    } else {
+        SET_RANDOM_FP4(var, flags, r1, r2);
+    }
+}
+// array version, compatibility macro only
+#define SET_RANDOM_ARR SET_RANDOM
+
+// functions to "degrade" to SET_RANDOM_PTR()
+template<typename T>
+inline void SET_RANDOM(T ptr, size_t nelems) {
+    for (size_t i = 0; i < nelems; i++) {
+        SET_RANDOM_FP1(ptr[i]);
+    }
+}
+template<typename T>
+inline void SET_RANDOM(T ptr, size_t nelems, uint32_t flags) {
+    if (!set_random_fast_path(ptr, nelems * sizeof(T), flags)) {
+        for (size_t i = 0; i < nelems; i++) {
+            SET_RANDOM_FP2(ptr[i], flags);
+        }
+    }
+}
+template<typename T>
+inline void SET_RANDOM(T ptr, size_t nelems, double r1, double r2) {
+    for (size_t i = 0; i < nelems; i++) {
+        SET_RANDOM_FP3(ptr[i], r1, r2);
+    }
+}
+template<typename T>
+inline void SET_RANDOM(T ptr, size_t nelems, uint32_t flags, double r1, double r2) {
+    for (size_t i = 0; i < nelems; i++) {
+        SET_RANDOM_FP4(ptr[i], flags, r1, r2);
+    }
+}
+
+// @}
+#endif // __cplusplus
+
+#endif // NEW/OBSOLETE_RANDOM_GENERATORS
 
 #undef STATIC_INLINE
 #endif //FRAMEWORK_FP_VECTORS_FLOATS_H
