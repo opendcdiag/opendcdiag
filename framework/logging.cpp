@@ -93,6 +93,8 @@ RtlGetVersion(
 #  include <gnu/libc-version.h>
 #endif
 
+static constexpr const char *levels[] = { "error", "warning", "info", "debug" };
+
 static int tty = -1;
 static int stderr_fd = -1;
 static bool delete_log_on_success;
@@ -109,6 +111,7 @@ enum LogTypes {
     Preformatted = 1,
     UsedKnobValue = 2,
     SkipMessages = 3,
+    RawYaml = 4,
 };
 } // unnamed namespace
 
@@ -137,7 +140,7 @@ static const char *strnchr(const char *buffer, char c, size_t len)
 
 static uint8_t message_code(enum LogTypes logType, int level)
 {
-    assert((int)logType < 4);
+    assert((int)logType < 0xf);
     unsigned code = ((unsigned)logType + 1) << 4;
     code |= (level & 0xf);
     return (uint8_t)code;
@@ -1282,6 +1285,24 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     do_log_data("expected", expected);
 }
 
+#undef log_yaml
+void log_yaml(char levelchar, const char *yaml)
+{
+    int level = status_level(levelchar);
+    if (levelchar == 'E')
+        logging_mark_thread_failed(thread_num);
+    if (!SandstoneConfig::Debug && levelchar == 'd')
+        return;             // no Debug in non-debug build
+    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+        return;             // short-circuit
+
+    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
+        return;
+
+    log_message_for_thread(thread_num, RawYaml, level, '\n', yaml);
+}
+
 void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigin origin)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
@@ -1391,6 +1412,62 @@ static std::string_view format_skip_message(std::string_view message)
     return message.substr(1);
 }
 
+static void format_and_print_raw_yaml(int fd, int message_level, std::string_view message)
+{
+    assert(size_t(message_level) < std::size(levels));
+    while (message.ends_with('\n'))
+        message.remove_suffix(1);       // remove trailing newline
+
+    int indent = sApp->shmem->cfg.output_yaml_indent + 2;
+    if (current_output_format() == SandstoneApplication::OutputFormat::yaml)
+        indent += 2;    // under "messages:"
+
+    std::string buffer(indent, ' ');
+    buffer += "- level: ";
+    buffer += levels[message_level];
+    buffer += '\n';
+    indent += 2;
+
+    // the first line is the heading; for log_yaml(), it's always "details:"
+    std::string_view heading = "details:\n";
+    ptrdiff_t nl = message.find('\n');
+    assert(nl >= 0);
+    if (nl)
+        heading = message.substr(0, nl + 1);    // include the newline
+    message.remove_prefix(nl + 1);
+
+    // the second line is the optional description for "text:"
+    nl = message.find('\n');
+    assert(nl >= 0);
+    if (nl) {
+        std::string escaped;
+        buffer.append(indent, ' ');
+        buffer += "text: '";
+        buffer += escape_for_single_line(message.substr(0, nl), escaped);
+        buffer += "'\n";
+    }
+    message.remove_prefix(nl + 1);
+
+    buffer.append(indent, ' ');
+    buffer += heading;
+
+    indent += 1; // nest inside "details:"
+    nl = message.find('\n');
+    while (nl >= 0) {
+        buffer.append(indent, ' ');
+
+        // write the newline too
+        ++nl;
+        buffer += message.substr(0, nl);
+        message.remove_prefix(nl);
+        nl = message.find('\n');
+    }
+    buffer.append(indent, ' ');
+    buffer += message;
+    buffer += '\n';
+    writevec(fd, buffer);
+}
+
 #if !SANDSTONE_LOGGING_YAML_ONLY
 void AbstractLogger::format_and_print_message(int fd, std::string_view message, bool from_thread_message)
 {
@@ -1432,6 +1509,10 @@ int AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Commo
         switch (log_type_from_code(code)) {
         case UserMessages:
             format_and_print_message(fd, message, true);
+            break;
+
+        case RawYaml:
+            format_and_print_raw_yaml(fd, message_level, message);
             break;
 
         case Preformatted:
@@ -1824,8 +1905,6 @@ void YamlLogger::format_and_print_skip_reason(int fd, std::string_view message)
 
 inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level)
 {
-    const char *levels[] = { "error", "warning", "info", "debug" };
-
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
@@ -1850,6 +1929,11 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
         case UserMessages:
             assert(size_t(message_level) < std::size(levels));
             format_and_print_message(fd, levels[message_level], message);
+            break;
+
+        case RawYaml:
+            assert(size_t(message_level) < std::size(levels));
+            format_and_print_raw_yaml(fd, message_level, message);
             break;
 
         case Preformatted:
