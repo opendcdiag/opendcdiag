@@ -404,7 +404,7 @@ static bool shouldTestTheTest(const struct test *the_test)
     return true;
 }
 
-inline void test_the_test_data<true>::test_tests_init(const struct test *the_test)
+inline void test_the_test_data<true>::prepare_test_tests(const struct test *the_test)
 {
     if (!shouldTestTheTest(the_test))
         return;
@@ -1406,7 +1406,7 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
         init_per_thread_data();
 
-        sApp->test_tests_init(test);
+        sApp->prepare_test_tests(test);
         state = prepare_test_for_device(test);
         if (state != TestResult::Passed) {
             break;

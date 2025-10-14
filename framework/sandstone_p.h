@@ -191,7 +191,7 @@ template <bool IsDebug> struct test_the_test_data
 {
     bool test_tests_enabled() const             { return false; }
     void enable_test_tests()                    {}
-    void test_tests_init(const struct test *)   {}
+    void prepare_test_tests(const struct test *)   {}
     void test_tests_iteration(const struct test *)  {}
     void test_tests_finish(const struct test *) {}
 };
@@ -215,7 +215,7 @@ template <> struct test_the_test_data<true>
     bool test_tests_enabled() const { return test_tests; }
     void enable_test_tests()        { test_tests = true; }
 
-    void test_tests_init(const struct test *);
+    void prepare_test_tests(const struct test *);
     void test_tests_iteration(const struct test *);
     void test_tests_finish(const struct test *);
 };
