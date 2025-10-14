@@ -166,6 +166,7 @@ typedef enum TestQuality {
 
 #define END_DECLARE_TEST   };
 
+#ifndef OVERLOAD
 /// Variadic macros to count the number of arguments passed to other macro.
 /// @see OVERLOAD()
 #define NARGN(\
@@ -202,8 +203,9 @@ static_assert(NARGS(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
  * or with two arguments (e.g. where number might be expressed as rational number)
  * All possible expressions must be defined, otherwise the code won't compile.
  */
-#define OVERLOAD_(name,num) name##num
-#define OVERLOAD(name,num) OVERLOAD_(name,num)
+#define OVERLOAD_(name,nargs) name##nargs
+#define OVERLOAD(name,nargs) OVERLOAD_(name,nargs)
+#endif
 
 /**
  * Variadic macro to suppress warnings on unused arguments/variables
