@@ -350,7 +350,7 @@ template <typename Integer = int> struct ParseIntArgument
         print_explanation();
     }
 
-    Integer operator()(std::string str) const
+    std::optional<Integer> operator()(std::string str) const
     {
         assert(name);
         assert(min <= max);
@@ -373,7 +373,7 @@ template <typename Integer = int> struct ParseIntArgument
             fprintf(stderr, "%s: invalid argument for option '%s': %s\n", program_invocation_name,
                     name, arg);
             print_explanation();
-            exit(EX_USAGE);
+            return std::nullopt;
         }
 
         // validate range
@@ -382,7 +382,7 @@ template <typename Integer = int> struct ParseIntArgument
         if (erange || v != parsed || v < min || v > max) {
             print_range_error(arg);
             if (range_mode == OutOfRangeMode::Exit)
-                exit(EX_USAGE);
+                return std::nullopt;
 
             if (parsed < min || (erange && parsed == std::numeric_limits<long long>::min()))
                 v = Integer(min);
@@ -655,12 +655,17 @@ struct ProgramOptionsParser {
             if (const int* value = std::get_if<int>(&it->second)) {
                 app->requested_quality = *value;
             } else {
-                app->requested_quality = ParseIntArgument<>{
+                auto maybe_int = ParseIntArgument<>{
                         .name = "--quality",
                         .min = int(TEST_QUALITY_SKIP),
                         .max = int(TEST_QUALITY_PROD),
                         .range_mode = OutOfRangeMode::Saturate
                 }(std::get<const char*>(it->second));
+                if (maybe_int) {
+                    app->requested_quality = maybe_int.value();
+                } else {
+                    return EX_USAGE;
+                }
             }
         }
         if (auto it = opts_map.find(include_optional_option); it != opts_map.end()) {
@@ -834,12 +839,17 @@ struct ProgramOptionsParser {
             }
         }
         if (auto value = string_opt_for('n')) {
-            opts.thread_count = ParseIntArgument<>{
+            auto maybe_int = ParseIntArgument<>{
                     .name = "-n / --threads",
                     .min = 1,
                     .max = app->thread_count,
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
+            if (maybe_int) {
+                opts.thread_count = maybe_int.value();
+            } else {
+                return EX_USAGE;
+            }
         }
 
         if (auto value = string_opt_for(reschedule_option)) {
@@ -867,10 +877,15 @@ struct ProgramOptionsParser {
                 app->shmem->output_format = SandstoneApplication::OutputFormat::yaml;
                 auto value = std::get<const char*>(opts_map.at('Y'));
                 if (value) {
-                    app->shmem->output_yaml_indent = ParseIntArgument<>{
+                    auto maybe_int = ParseIntArgument<>{
                             .name = "-Y / --yaml",
                             .max = 160,     // arbitrary
                     }(value);
+                    if (maybe_int) {
+                        app->shmem->output_yaml_indent = maybe_int.value();
+                    } else {
+                        return EX_USAGE;
+                    }
                 }
                 break;
             }
@@ -898,11 +913,18 @@ struct ProgramOptionsParser {
         if (auto it = opts_map.find(_max_cores_option); it != opts_map.end()) {
             switch (std::get<int>(it->second)) {
             case max_cores_per_slice_option:
-                opts.max_cores_per_slice = ParseIntArgument<>{
+            {
+                auto maybe_int = ParseIntArgument<>{
                     .name = "--max-cores-per-slice",
                     .min = -1,
                 }(std::get<const char*>(opts_map.at(max_cores_per_slice_option)));
+                if (maybe_int) {
+                    opts.max_cores_per_slice = maybe_int.value();
+                } else {
+                    return EX_USAGE;
+                }
                 break;
+            }
             case no_slicing_option:
                 opts.max_cores_per_slice = -1;
                 break;
@@ -910,17 +932,22 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(retest_on_failure_option)) {
-            app->retest_count = ParseIntArgument<>{
+            auto maybe_int = ParseIntArgument<>{
                     .name = "--retest-on-failure",
                     .max = SandstoneApplication::MaxRetestCount,
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
+            if (maybe_int) {
+                app->retest_count = maybe_int.value();
+            } else {
+                return EX_USAGE;
+            }
         }
         if (auto value = string_opt_for(temperature_threshold_option)) {
             if (std::string_view{value} == "disable") {
                 app->thermal_throttle_temp = -1;
             } else {
-                app->thermal_throttle_temp = ParseIntArgument<>{
+                auto maybe_int = ParseIntArgument<>{
                         .name = "--temperature-threshold",
                         .explanation = "value should be specified in thousandths of degrees Celsius "
                                         "(for example, 85000 is 85 degrees Celsius), or \"disable\" "
@@ -928,6 +955,11 @@ struct ProgramOptionsParser {
                         .max = 160000,      // 160 C is WAAAY too high anyway
                         .range_mode = OutOfRangeMode::Saturate
                 }(value);
+                if (maybe_int) {
+                    app->thermal_throttle_temp = maybe_int.value();
+                } else {
+                    return EX_USAGE;
+                }
             }
         }
         if (opts_map.contains(test_tests_option)) {
@@ -938,42 +970,70 @@ struct ProgramOptionsParser {
             }
         }
         if (auto value = string_opt_for(total_retest_on_failure)) {
-            app->total_retest_count = ParseIntArgument<>{
+            auto maybe_int = ParseIntArgument<>{
                     .name = "--total-retest-on-failure",
                     .min = -1
             }(value);
+            if (maybe_int) {
+                app->total_retest_count = maybe_int.value();
+            } else {
+                return EX_USAGE;
+            }
         }
         if (auto value = string_opt_for(max_logdata_option)) {
-            app->shmem->max_logdata_per_thread = ParseIntArgument<unsigned>{
+            auto maybe_int = ParseIntArgument<unsigned>{
                     .name = "--max-logdata",
                     .explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))",
                     .base = 0,      // accept hex
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
+            if (maybe_int) {
+                app->shmem->max_logdata_per_thread = maybe_int.value();
+            } else {
+                return EX_USAGE;
+            }
             if (app->shmem->max_logdata_per_thread == 0)
                 app->shmem->max_logdata_per_thread = UINT_MAX;
         }
         if (auto value = string_opt_for(max_messages_option)) {
-            app->shmem->max_messages_per_thread = ParseIntArgument<>{
+            auto maybe_int = ParseIntArgument<>{
                     .name = "--max-messages",
                     .explanation = "maximum number of messages (per thread) to log in each test (0 is unlimited)",
                     .min = -1,
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
+            if (maybe_int) {
+                app->shmem->max_messages_per_thread = maybe_int.value();
+            } else {
+                return EX_USAGE;
+            }
             if (app->shmem->max_messages_per_thread <= 0)
                 app->shmem->max_messages_per_thread = INT_MAX;
         }
         if (auto value = string_opt_for(max_test_count_option)) {
-            app->max_test_count = ParseIntArgument<>{"--max-test-count"}(value);
+            auto maybe_int = ParseIntArgument<>{"--max-test-count"}(value);
+            if (maybe_int) {
+                app->max_test_count = maybe_int.value();
+            } else {
+                return EX_USAGE;
+            }
         }
 
         if (auto it = opts_map.find(_max_loop_count_option); it != opts_map.end()) {
             switch (std::get<int>(it->second)) {
             case max_test_loop_count_option:
-                app->max_test_loop_count = ParseIntArgument<>{"--max-test-loop-count"}(std::get<const char*>(opts_map.at(max_test_loop_count_option)));
-                    if (app->max_test_loop_count == 0)
-                        app->max_test_loop_count = std::numeric_limits<int>::max();
+            {
+                auto maybe_int = ParseIntArgument<>{"--max-test-loop-count"}(std::get<const char*>(opts_map.at(max_test_loop_count_option)));
+                if (maybe_int) {
+                    app->max_test_loop_count = maybe_int.value();
+                } else {
+                    return EX_USAGE;
+                }
+                if (app->max_test_loop_count == 0) {
+                    app->max_test_loop_count = std::numeric_limits<int>::max();
+                }
                 break;
+            }
             case quick_run_option:
                 app->max_test_loop_count = 1;
                 app->delay_between_tests = 0ms;
@@ -986,12 +1046,17 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(inject_idle_option)) {
-            app->inject_idle = ParseIntArgument<>{
+            auto maybe_int = ParseIntArgument<>{
                 .name = "--inject-idle",
                 .min = 0,
                 .max = 50,
                 .range_mode = OutOfRangeMode::Saturate
             }(value);
+            if (maybe_int) {
+                app->inject_idle = maybe_int.value();
+            } else {
+                return EX_USAGE;
+            }
         }
 
         return EXIT_SUCCESS;
