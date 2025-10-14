@@ -106,8 +106,8 @@ static struct option long_options[]  = {
     { "30sec", no_argument, nullptr, thirty_sec_option },
     { "2min", no_argument, nullptr, two_min_option },
     { "5min", no_argument, nullptr, five_min_option },
-    { "alpha", no_argument, &sApp->requested_quality, int(TEST_QUALITY_SKIP) },
-    { "beta", no_argument,  &sApp->requested_quality, int(TEST_QUALITY_BETA) },
+    { "alpha", no_argument, nullptr, alpha_option },
+    { "beta", no_argument,  nullptr, beta_option },
     { "cpuset", required_argument, nullptr, deviceset_option },
     { "deviceset", required_argument, nullptr, deviceset_option },
     { "disable", required_argument, nullptr, disable_option },
@@ -511,12 +511,11 @@ struct ProgramOptionsParser {
                 opts_map.insert_or_assign(max_test_count_option, optarg);
                 break;
 
-            // XXX For compatibility reasons, we allow those conflicting opts and take only the last specified one
             case alpha_option:
-                opts_map.insert_or_assign(quality_option, INT_MIN);
+                opts_map.insert_or_assign(quality_option, (int)TEST_QUALITY_SKIP);
                 break;
             case beta_option:
-                opts_map.insert_or_assign(quality_option, TEST_QUALITY_BETA);
+                opts_map.insert_or_assign(quality_option, (int)TEST_QUALITY_BETA);
                 break;
             case quality_option:
                 opts_map.insert_or_assign(quality_option, optarg);
