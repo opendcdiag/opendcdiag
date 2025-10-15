@@ -26,6 +26,7 @@ extern struct test __start_tests;
 extern struct test __stop_tests;
 
 extern struct test mce_test;
+extern std::vector<struct test*> special_tests;
 
 struct test_set_cfg {
     bool ignore_unknown_tests;  /* whether an error should be reported if
@@ -79,9 +80,9 @@ public:
     EnabledTestList::iterator maybe_reshuffle() noexcept
     {
         if (cfg.randomize) {
-            /* Do not shuffle mce_check if present. */
+            /* Do not shuffle special tests if present. */
             auto end = test_set.end();
-            auto last = end[-1].test == &mce_test ? end - 1 : end;
+            auto last = end - special_tests.size();
             std::shuffle(test_set.begin(), last, SandstoneURBG());
         }
         return test_set.begin();

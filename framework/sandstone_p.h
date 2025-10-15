@@ -130,6 +130,13 @@ void dump_device_info();
 }
 
 /*
+* Fills special_tests vector with device-specific tests, that
+* should be added as last tests to the test list. An example of such
+* test (device-agnostic, however) is mce_check.
+*/
+void prepare_special_tests_for_device();
+
+/*
 * Returns formatted string, with comma separated features
 */
 std::string device_features_to_string(device_features_t f);

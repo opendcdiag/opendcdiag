@@ -2501,6 +2501,14 @@ skip_wait:
     return true;
 }
 
+namespace {
+void prepare_special_tests()
+{
+    prepare_special_tests_for_device();    // device-specific
+    special_tests.emplace_back(&mce_test); // always
+}
+} // unnamed namespace
+
 int main(int argc, char **argv)
 {
     // initialize the main application
@@ -2596,6 +2604,7 @@ int main(int argc, char **argv)
     cpu_specific_init();
     random_init_global(opts.seed);
     background_scan_init();
+    prepare_special_tests();
 
     if (opts.enabled_tests.size() || opts.builtin_test_list_name || opts.test_list_file_path) {
         /* if anything other than the "all tests" has been specified, start with
@@ -2641,10 +2650,12 @@ int main(int argc, char **argv)
         }
     }
 
-    /* Add mce_check as the last test to the set. It will be kept last by
+    /* Add device-specific monitoring tests to the set. They will be kept last by
      * SandstoneTestSet in case randomization is requested. */
-    if (!sApp->ignore_mce_errors)
-        test_set->add(&mce_test);
+    for (auto special_test : special_tests) {
+        if (special_test != &mce_test || (special_test == &mce_test && !sApp->ignore_mce_errors))
+            test_set->add(special_test);
+    }
 
     /* Remove all the tests we were told to disable */
     if (opts.disabled_tests.size()) {

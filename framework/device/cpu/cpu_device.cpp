@@ -71,3 +71,7 @@ TestResult prepare_test_for_device(struct test *test)
     }
     return TestResult::Passed;
 }
+
+// Currently empty
+void prepare_special_tests_for_device()
+{}
