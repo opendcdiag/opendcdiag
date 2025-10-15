@@ -1176,14 +1176,6 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
-    .id = "selftest_pass_optional",
-    .description = "Just pass",
-    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
-    .test_run = selftest_pass_run,
-    .desired_duration = -1,
-    .quality_level = TEST_QUALITY_OPTIONAL,
-},
-{
     .id = "selftest_pass_beta",
     .description = "Just pass",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
