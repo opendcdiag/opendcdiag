@@ -2672,10 +2672,12 @@ int main(int argc, char **argv)
         }
     }
 
-    /* Add mce_check as the last test to the set. It will be kept last by
+    /* Add device-specific monitoring tests to the set. They will be kept last by
      * SandstoneTestSet in case randomization is requested. */
-    if (!sApp->ignore_mce_errors)
-        test_set->add(&mce_test);
+    for (auto special_test : test_set->get_special_tests()) {
+        if (special_test != &mce_test || (special_test == &mce_test && !sApp->ignore_mce_errors))
+            test_set->add(special_test);
+    }
 
     /* Remove all the tests we were told to disable */
     if (opts.disabled_tests.size()) {

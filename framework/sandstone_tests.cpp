@@ -27,8 +27,9 @@ void SandstoneTestSet::load_all_tests()
         }
     }
 
-    /* add "special" mce_check as well */
-    all_tests.push_back(&mce_test);
+    /* add "special" tests */
+    special_tests = special_tests_for_device();
+    special_tests.push_back(&mce_test); // mce always added last
 }
 
 /* Looks up a name or a pattern among all "known" tests. Returns all the
@@ -55,8 +56,12 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     } else {
         for (struct test *t : all_tests) {
             if (!strcmp(t->id, name)) {
-                res.push_back(t);
-                break;
+                return {t};
+            }
+        }
+        for (struct test *t : special_tests) {
+            if (!strcmp(t->id, name)) {
+                return {t};
             }
         }
     }

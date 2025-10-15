@@ -79,9 +79,9 @@ public:
     EnabledTestList::iterator maybe_reshuffle() noexcept
     {
         if (cfg.randomize) {
-            /* Do not shuffle mce_check if present. */
+            /* Do not shuffle special tests if present. */
             auto end = test_set.end();
-            auto last = end[-1].test == &mce_test ? end - 1 : end;
+            auto last = end - special_tests.size();
             std::shuffle(test_set.begin(), last, SandstoneURBG());
         }
         return test_set.begin();
@@ -107,6 +107,11 @@ public:
 
     std::vector<struct test_cfg_info> add_builtin_test_list(const char *name, std::vector<std::string> &errors);
 
+    const TestSet& get_special_tests() const noexcept
+    {
+        return special_tests;
+    }
+
 private:
     /* Make a Uniform Random Bit Generator to use our own random as opposed to
      * standard library's. */
@@ -119,6 +124,8 @@ private:
 
     /* list of all available tests. */
     TestSet all_tests;
+    /* list of all 'special' tests. */
+    TestSet special_tests;
     /* maps group name to a vector of tests it contains. */
     std::map<std::string_view, std::vector<struct test *>> all_group_map;
 
