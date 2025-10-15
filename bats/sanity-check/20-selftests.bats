@@ -283,7 +283,6 @@ selftest_pass() {
     selftest_pass -e 'selftest_pass*'
     [[ ${yamldump[/tests]} != *selftest_pass_low_quality* ]]
     [[ ${yamldump[/tests]} != *selftest_pass_beta* ]]
-    [[ ${yamldump[/tests]} != *selftest_pass_optional* ]]
 }
 
 @test "selftest_pass_beta" {
@@ -299,17 +298,6 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/skip-reason" '.*BETA quality.*'
 }
 
-@test "selftest_pass_optional" {
-    # This should RUN selftest_pass_optional
-    declare -A yamldump
-    sandstone_selftest -e selftest_pass_optional -e selftest_pass
-    [[ "$status" -eq 0 ]]
-    test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/test" selftest_pass_optional
-    test_yaml_regexp "/tests/0/details/quality" production
-    test_yaml_regexp "/tests/0/result" pass
-}
-
 @test "selftest_pass_low_quality" {
     # This should NOT run selftest_pass_low_quality
     declare -A yamldump
@@ -318,7 +306,7 @@ selftest_pass() {
 }
 
 @test "selftest_pass group" {
-    # This should run both selftest_pass and selftest_pass_optional,
+    # This should run selftest_pass,
     # skip selftest_pass_beta and not mention selftest_pass_low_quality
     declare -A yamldump
     sandstone_selftest -e '@selftest_passes'
@@ -326,10 +314,8 @@ selftest_pass() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/test" selftest_pass
     test_yaml_regexp "/tests/0/result" pass
-    test_yaml_regexp "/tests/1/test" selftest_pass_optional
-    test_yaml_regexp "/tests/1/result" pass
-    test_yaml_regexp "/tests/2/test" selftest_pass_beta
-    test_yaml_regexp "/tests/2/result" skip
+    test_yaml_regexp "/tests/1/test" selftest_pass_beta
+    test_yaml_regexp "/tests/1/result" skip
 }
 
 @test "selftest_preinit" {
@@ -908,10 +894,6 @@ test_list_file() {
     test_list_file selftest_pass selftest_logs selftest_pass
 }
 
-@test "--test-list-file with optional test" {
-    test_list_file selftest_pass selftest_pass_optional
-}
-
 @test "--test-list-file with duration" {
     test_list_file selftest_pass:default selftest_timedpass:250 selftest_timedpass:10 \
         '' 'selftest_timedpass: 10' '' "$(printf "selftest_timedpass:\t10")"
@@ -1009,8 +991,8 @@ test_list_randomize() {
 test_list_file_ignores_beta() {
     declare -A yamldump
     local -a list=(selftest_pass selftest_pass_low_quality
-                   selftest_pass_beta selftest_pass_optional
-                   selftest_skip selftest_pass selftest_logs)
+                   selftest_pass_beta selftest_skip
+                   selftest_pass selftest_logs)
     local -a not_to_run=(selftest_pass_low_quality selftest_pass_beta)
 
     local testlistfile=`mktempfile list.XXXXXX`
