@@ -246,6 +246,24 @@ bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...)
 }
 #endif
 
+void _memcmp_fail_report_cb(const void *actual, const void *expected, size_t size,
+                            DataType type, char *(*cb)(void *token, ptrdiff_t), void *token)
+{
+    // Execute UD2 early if we've failed
+    if (sApp->shmem->cfg.ud_on_failure)
+        ud2();
+    if (SandstoneConfig::NoLogging)
+        report_fail_common();
+
+    using Fn = decltype(cb);
+    auto wrapper = [](const void *pcb, void *token, ptrdiff_t idx) -> std::string {
+        Fn callback = reinterpret_cast<Fn>(const_cast<void *>(pcb));
+        return callback(token, idx);
+    };
+    SandstoneMemcmpOrFail::report(actual, expected, size, type, wrapper,
+                                  reinterpret_cast<const void *>(cb), token);
+}
+
 void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, DataType type, const char *fmt, ...)
 {
     // Execute UD2 early if we've failed
