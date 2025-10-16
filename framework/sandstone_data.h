@@ -137,14 +137,15 @@ static constexpr const char *type_name(DataType type)
     return nullptr;
 }
 
-template <DataType V> struct TypeToDataType_helper
+template <DataType V> struct TypeToDataType_helper : std::true_type
 {
     static constexpr DataType Type = V;
+    static constexpr bool IsValid = true;
     static const char *name() { return type_name(Type); }
-    enum { IsValid = true };
 };
 
-template <typename T> struct TypeToDataType { enum { IsValid = false }; };
+template <typename T> struct TypeToDataType
+{ static constexpr bool IsValid = false; };
 template<> struct TypeToDataType<void>  : TypeToDataType_helper<UInt8Data> {};
 template<> struct TypeToDataType<bool>  : TypeToDataType_helper<UInt8Data> {};
 template<> struct TypeToDataType<char>  : TypeToDataType_helper<UInt8Data> {};
