@@ -1182,9 +1182,12 @@ static void logging_format_data(DataType type, std::string_view description, con
 
     buffer += "description: '";
     if (description.size()) {
-        assert(description.find('\n') == std::string::npos \
-               && "Data descriptions should not include a newline");
-        buffer += escape_for_single_line(description);
+        while (description.ends_with('\n'))
+            description.remove_suffix(1);       // chop trailing newlines
+        size_t nl = description.find('\n');
+        buffer += escape_for_single_line(description.substr(0, nl));
+        if (nl != std::string::npos)
+            description.remove_prefix(nl + 1);
     }
     buffer += "'\ntype:        ";
 

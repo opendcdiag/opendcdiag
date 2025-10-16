@@ -664,6 +664,31 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     int diff = (thread & (Count - 1));
     values[diff] = make_datacompare_value<T>();
 
+    auto formatter = [&](ptrdiff_t idx) {
+        return stdprintf("data at index %td", idx);
+    };
+    if constexpr (std::is_integral_v<T>) {
+        // use the C++ way with a lambda
+        memcmp_or_fail(values, values + 1, Count, formatter);
+    } else {
+        // use the C way
+        using FormatterType = decltype(formatter);
+        auto c_callback = [](void *token, ptrdiff_t idx) {
+            auto formatter = static_cast<FormatterType *>(token);
+            std::string result = std::move(*formatter)(idx);
+            return strdup(result.c_str());
+        };
+
+        // memcmp_or_fail_cb is only provided as a C macro, so we go straight to the callback
+        DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
+        _memcmp_fail_report_cb(values, values + 1, Count, type, c_callback, &formatter);
+    }
+
+    // unreachable past this point; now only confirm the calls do compile
+    memcmp_or_fail(values, values + 1, Count, [] {
+        abort(); return std::string();
+    });
+    memcmp_or_fail(values, values + 1, Count, "formatted string '%s'", "Hello World");
     memcmp_or_fail(values, values + 1, Count);
     return EXIT_SUCCESS;
 }
