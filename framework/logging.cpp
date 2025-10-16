@@ -1099,7 +1099,7 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
         [[fallthrough]];
 
     case SandstoneApplication::OutputFormat::key_value:
-        spaces.resize(4 + (from_memcmp ? 3 : 0), ' ');
+        spaces.resize(4 + (from_memcmp ? 1 : 0), ' ');
         buffer += spaces;
         buffer += "data(";
         buffer += message;
@@ -1149,36 +1149,20 @@ void log_data(const char *message, const void *data, size_t size)
 static void logging_format_data(DataType type, std::string_view description, const uint8_t *data1,
                                 const uint8_t *data2, ptrdiff_t offset)
 {
-    std::string spaces(sApp->shmem->cfg.output_yaml_indent + 7, ' ');
-    std::string buffer;
-    switch (current_output_format()) {
-    case SandstoneApplication::OutputFormat::tap:
-    case SandstoneApplication::OutputFormat::key_value:
-        buffer += "  - data-miscompare:\n";
-        break;
-
-    case SandstoneApplication::OutputFormat::yaml:
-        buffer += stdprintf("%s- level: error\n"
-                            "%s  data-miscompare:\n",
-                            spaces.c_str() + 3,
-                            spaces.c_str() + 3);
-        break;
-
-    case SandstoneApplication::OutputFormat::no_output:
-        assert(false && "Shouldn't have reached here");
-        __builtin_unreachable();
-        break;
-    }
-
-    auto formatAddresses = [&spaces](const uint8_t *ptr) {
-        std::string result = stdprintf("%saddress:     '%p'\n", spaces.c_str(), ptr);
+    // see format_and_print_raw_yaml() for the line protocol
+    std::string buffer = "data-miscompare:\n\n";
+    auto formatAddresses = [&](const uint8_t *ptr) {
+        std::string result = stdprintf("address:     '%p'\n", ptr);
         if (uint64_t physaddr = retrieve_physical_address(ptr)) {
             // 2^48-1 requires 12 hex digits
-            result += stdprintf("%sphysical:    '%#012" PRIx64 "'\n",
-                                 spaces.c_str(), physaddr);
+            result += stdprintf("physical:    '%#012" PRIx64 "'\n", physaddr);
         }
         return result;
     };
+
+    buffer += "description: '";
+    buffer += description;
+    buffer += "'\ntype:        ";
 
     const char *typeName = SandstoneDataDetails::type_name(type);
     if (!typeName) {
@@ -1186,10 +1170,8 @@ static void logging_format_data(DataType type, std::string_view description, con
         type = UInt8Data;
         typeName = SandstoneDataDetails::type_name(type);
     }
-    buffer += stdprintf("%sdescription: '%.*s'\n"
-                        "%stype:        %s\n",
-                        spaces.c_str(), int(description.size()), description.data(),
-                        spaces.c_str(), typeName);
+    buffer += typeName;
+    buffer += '\n';
 
     if (offset >= 0) {
         // typical case
@@ -1204,27 +1186,26 @@ static void logging_format_data(DataType type, std::string_view description, con
         for (int i = 0; i < typeSize; ++i)
             xormask[i] = data1[alignedOffset + i] ^ data2[alignedOffset + i];
 
-        buffer += stdprintf("%soffset:      [ %td, %td ]\n",
-                            spaces.c_str(), alignedOffset, offset - alignedOffset);
+        buffer += stdprintf("offset:      [ %td, %td ]\n",
+                            alignedOffset, offset - alignedOffset);
         buffer += formatAddresses(data1 + offset);
-        buffer += stdprintf("%sactual:      '0x%s'\n"
-                            "%sexpected:    '0x%s'\n"
-                            "%smask:        '0x%s'\n",
-                            spaces.c_str(), format_single_type(type, typeSize, data1 + alignedOffset, true).c_str(),
-                            spaces.c_str(), format_single_type(type, typeSize, data2 + alignedOffset, true).c_str(),
-                            spaces.c_str(), format_single_type(type, typeSize, xormask, false).c_str());
+        buffer += stdprintf("actual:      '0x%s'\n"
+                            "expected:    '0x%s'\n"
+                            "mask:        '0x%s'",
+                            format_single_type(type, typeSize, data1 + alignedOffset, true).c_str(),
+                            format_single_type(type, typeSize, data2 + alignedOffset, true).c_str(),
+                            format_single_type(type, typeSize, xormask, false).c_str());
     } else {
         // no difference was found: memcmp_offset() disagrees with memcmp_or_fail()
-        buffer += stdprintf("%soffset:      null\n", spaces.c_str());
+        buffer += "offset:      null\n";
         buffer += formatAddresses(data1);
-        buffer += stdprintf("%sactual:      null\n"
-                            "%sexpected:    null\n"
-                            "%smask:        null\n"
-                            "%sremark:      'memcmp_offset() could not locate difference'\n",
-                            spaces.c_str(), spaces.c_str(), spaces.c_str(), spaces.c_str());
+        buffer += "actual:      null\n"
+                  "expected:    null\n"
+                  "mask:        null\n"
+                  "remark:      'memcmp_offset() could not locate difference'";
     }
 
-    log_message_for_thread(thread_num, Preformatted, LOG_LEVEL_QUIET, buffer);
+    log_message_for_thread(thread_num, RawYaml, LOG_LEVEL_QUIET, buffer);
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
@@ -1440,10 +1421,9 @@ static void format_and_print_raw_yaml(int fd, int message_level, std::string_vie
     nl = message.find('\n');
     assert(nl >= 0);
     if (nl) {
-        std::string escaped;
         buffer.append(indent, ' ');
         buffer += "text: '";
-        buffer += escape_for_single_line(message.substr(0, nl), escaped);
+        buffer += escape_for_single_line(message.substr(0, nl));
         buffer += "'\n";
     }
     message.remove_prefix(nl + 1);
