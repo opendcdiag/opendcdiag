@@ -1029,6 +1029,14 @@ test_list_file_ignores_beta() {
     test_list_randomize -e
 }
 
+@test "selftest_test_mainproc" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_test_mainproc
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/result" pass
+}
+
 # -- negative tests --
 
 function selftest_failinit_common() {
@@ -1078,6 +1086,32 @@ function selftest_logerror_init_common() {
 
 @test "selftest_logerror_init_mainproc" {
     selftest_logerror_init_common selftest_logerror_init_mainproc
+}
+
+@test "selftest_fail_run_mainproc" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_run_mainproc
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/test" selftest_fail_run_mainproc
+    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+        test_yaml_regexp "/tests/0/threads/$i/state" failed
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" info
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" 'I> run returns FAIL'
+    done
+}
+
+@test "selftest_fail_cleanup_mainproc" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_cleanup_mainproc
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    i=$((0 + yamldump[/tests/0/threads@len]))
+    [[ "$i" -eq 1 ]]
+    test_yaml_regexp "/tests/0/test" selftest_fail_cleanup_mainproc
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" info
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'I> cleanup returns FAIL'
 }
 
 @test "selftest_logerror_logskip_init" {
