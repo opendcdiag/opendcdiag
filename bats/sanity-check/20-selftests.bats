@@ -1728,3 +1728,19 @@ selftest_interrupt_common() {
     test_yaml_regexp "/tests/2/test" selftest_test_optional_include_optional
     test_yaml_regexp "/tests/3/test" selftest_test_optional_beta_include_optional
 }
+
+@test "selftest_test_minimum_cpu_option" {
+    # All tests in the group group_test_hw_features"
+    declare -A yamldump
+    sandstone_selftest --beta -e @group_test_hw_features
+    [[ "$status" -eq 0 ]]
+
+    test_yaml_regexp "/tests/0/test" selftest_test_hsw_min_cpu
+    test_yaml_regexp "/tests/1/test" selftest_test_bdw_min_cpu
+    test_yaml_regexp "/tests/2/test" selftest_test_skx_min_cpu
+    test_yaml_regexp "/tests/3/test" selftest_test_icx_min_cpu
+    test_yaml_regexp "/tests/4/test" selftest_test_spr_min_cpu
+    test_yaml_regexp "/tests/5/test" selftest_test_srf_min_cpu
+    test_yaml_regexp "/tests/6/test" selftest_test_gnr_min_cpu
+    test_yaml_regexp "/tests/7/test" selftest_test_dmr_min_cpu
+}
