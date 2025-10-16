@@ -1387,17 +1387,8 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
     }
 }
 
-static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
+static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
 {
-    if (sApp->current_fork_mode() != SandstoneApplication::ForkMode::no_fork) {
-        protect_shmem();
-        sApp->select_main_thread(child_number);
-        pin_to_logical_processors(sApp->main_thread_data()->device_range, "control");
-        restrict_topology(sApp->main_thread_data()->device_range);
-        signals_init_child();
-        debug_init_child();
-    }
-
     TestResult state = TestResult::Passed;
 
     do {
@@ -1413,20 +1404,24 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         }
 
         if (test->test_init) {
-            // ensure the init function is run pinned to a specific logical
-            // processor but its pinning doesn't affect this control thread
-            auto init_thread_runner = [](void *testptr) {
-                auto test = static_cast</*nonconst*/ struct test *>(testptr);
-                pin_to_logical_processor(LogicalProcessor(cpu_info[0].cpu_number));
-                thread_num = -1;
-                intptr_t ret = test->test_init(test);
-                return reinterpret_cast<void *>(ret);
-            };
-            pthread_t init_thread;
-            void *retptr;
-            pthread_create(&init_thread, nullptr, init_thread_runner, test);
-            pthread_join(init_thread, &retptr);
-            ret = intptr_t(retptr);
+            if (init_in_aux_thread) {
+                // ensure the init function is run pinned to a specific logical
+                // processor but its pinning doesn't affect this control thread
+                auto init_thread_runner = [](void *testptr) {
+                    auto test = static_cast</*nonconst*/ struct test *>(testptr);
+                    pin_to_logical_processor(LogicalProcessor(cpu_info[0].cpu_number));
+                    thread_num = -1;
+                    intptr_t ret = test->test_init(test);
+                    return reinterpret_cast<void *>(ret);
+                };
+                pthread_t init_thread;
+                void *retptr;
+                pthread_create(&init_thread, nullptr, init_thread_runner, test);
+                pthread_join(init_thread, &retptr);
+                ret = intptr_t(retptr);
+            } else {
+                ret = test->test_init(test);
+            }
             if (ret > 0) {
                 state = TestResult::Failed;
             } else if (ret < 0) {
@@ -1475,6 +1470,20 @@ static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
     } while (false);
 
     return state;
+}
+
+static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
+{
+    if (sApp->current_fork_mode() != SandstoneApplication::ForkMode::no_fork) {
+        protect_shmem();
+        sApp->select_main_thread(child_number);
+        pin_to_logical_processors(sApp->main_thread_data()->device_range, "control");
+        restrict_topology(sApp->main_thread_data()->device_range);
+        signals_init_child();
+        debug_init_child();
+    }
+
+    return run_one_test_inner(test, true);
 }
 
 static StartedChild call_forkfd()
@@ -1749,6 +1758,12 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
     children.results.emplace_back(ChildExitStatus{ res });
 }
 
+static void run_one_test_in_parent(ChildrenList &children, const struct test *test)
+{
+    auto state = run_one_test_inner(const_cast<struct test*>(test));
+    children.results.emplace_back(ChildExitStatus{ state });
+}
+
 static TestResult run_one_test_once(const struct test *test)
 {
     ChildrenList children;
@@ -1773,6 +1788,8 @@ static TestResult run_one_test_once(const struct test *test)
         init_per_thread_data();
         log_skip(TestResourceIssueSkipCategory, "Test %s is in BETA quality, try again using --beta option", test->id);
         children.results.emplace_back(ChildExitStatus{ TestResult::Skipped });
+    } else if (test->flags & test_in_parent) {
+        run_one_test_in_parent(children, test);
     } else if (test->flags & test_init_in_parent) {
         run_one_test_init_in_parent(children, test);
     } else {

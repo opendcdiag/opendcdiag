@@ -76,6 +76,12 @@ static void check_is_main_process()
     }
 }
 
+static int selftest_pass_init(struct test *test)
+{
+    printf("# This was printed from the test. YOU SHOULD NOT SEE THIS!\n");
+    return EXIT_SUCCESS;
+}
+
 static int selftest_pass_run(struct test *test, int cpu)
 {
     printf("# This was printed from the test. YOU SHOULD NOT SEE THIS!\n");
@@ -528,6 +534,7 @@ static int selftest_timed_randomfail_run(struct test *test, int cpu)
 
 static int selftest_fail_run(struct test *test, int cpu)
 {
+    log_info("run returns FAIL");
     return EXIT_FAILURE;
 }
 
@@ -1120,6 +1127,12 @@ template <initfunc F> static int selftest_init_mainproc(struct test *test)
     return F(test);
 }
 
+template <runfunc F> static int selftest_run_mainproc(struct test *test, int cpu)
+{
+    check_is_main_process();
+    return F(test, cpu);
+}
+
 static initfunc group_init_skip_init() noexcept
 {
     check_is_main_process();
@@ -1523,6 +1536,35 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
     .flags = test_schedule_sequential,
+},
+{
+    .id = "selftest_test_mainproc",
+    .description = "Checks test with flag test_in_parent if runs entirely in main process",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_init_mainproc<selftest_pass_init>,
+    .test_run = selftest_run_mainproc<selftest_pass_run>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_in_parent,
+},
+{
+    .id = "selftest_fail_run_mainproc",
+    .description = "Fails in the run function in main process",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_run_mainproc<selftest_fail_run>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_in_parent,
+},
+{
+    .id = "selftest_fail_cleanup_mainproc",
+    .description = "Fails in the cleanup function in main process",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_run_mainproc<selftest_pass_run>,
+    .test_cleanup = selftest_init_mainproc<selftest_fail_cleanup>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_in_parent,
 },
 
 #if defined(__linux__) && defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
