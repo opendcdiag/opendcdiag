@@ -373,14 +373,20 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
 bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...)
 {
     bool ok = true;
-    if (fmt) {
-        char *buf;
+    size_t size = 256;
+    while (fmt) {
+        char buf[size];  // nowarn: -Wvla-cxx-extension, -Wvla
         va_list va;
         va_start(va, fmt);
-        vasprintf(&buf, fmt, va);
+        int n = vsnprintf(buf, size, fmt, va);
         va_end(va);
-        ok = strchr(buf, '\n') == nullptr;
-        free(buf);
+        if (n < size) {
+            ok = strchr(buf, '\n') == nullptr;
+            break;
+        }
+
+        // insufficient buffer, try again
+        size = n;
     }
     return ok;
 }
