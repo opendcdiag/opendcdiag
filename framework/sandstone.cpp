@@ -369,6 +369,23 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
     return -1;
 }
 
+#ifndef NDEBUG
+bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...)
+{
+    bool ok = true;
+    if (fmt) {
+        char *buf;
+        va_list va;
+        va_start(va, fmt);
+        vasprintf(&buf, fmt, va);
+        va_end(va);
+        ok = strchr(buf, '\n') == nullptr;
+        free(buf);
+    }
+    return ok;
+}
+#endif
+
 void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, DataType type, const char *fmt, ...)
 {
     // Execute UD2 early if we've failed

@@ -385,7 +385,8 @@ struct test {
     struct test_data_per_thread *per_thread;
 };
 
-/* internal function; see C macro and C++ templates at the end of this file */
+/* internal functions; see C macro and C++ templates at the end of this file */
+extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);
 extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, enum DataType, const char *fmt, ...)
     ATTRIBUTE_PRINTF(5, 6) __attribute__((cold, noreturn));
 
@@ -585,6 +586,9 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
     size_t elemSize = 1;
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
+
+    assert(_memcmp_or_fail_check_fmt_nonewline(fmt, std::forward<FmtArgs>(args)...)
+           && "Data descriptions should not include a newline");
     if (__builtin_memcmp(actual, expected, count * elemSize) != 0)
         memcmp_fail_report(actual, expected, count, fmt, std::forward<FmtArgs>(args)...);
 }
@@ -604,6 +608,8 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
         _Pragma("GCC diagnostic push");                             \
         _Pragma("GCC diagnostic ignored \"-Wformat-security\"");    \
         _Pragma("GCC diagnostic ignored \"-Wunused-variable\"");    \
+        assert(_memcmp_or_fail_check_fmt_nonewline((fmt), ##__VA_ARGS__) \
+               && "Data descriptions should not include a newline");\
         _memcmp_fail_report((actual), (expected), _size2, _type,    \
                             *(fmt) ? (fmt) : NULL, ##__VA_ARGS__);  \
         _Pragma("GCC diagnostic pop");                              \
