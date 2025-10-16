@@ -303,6 +303,10 @@ typedef enum test_flag {
     /// the state. Do not cause a "memory" effect between tests, and do not use
     /// the random generator.
     test_init_in_parent             = 0x10000,
+
+    /// Indicates that test will be run entirely in parent, regardless of mode selected
+    /// from the command line.
+    test_in_parent                  = 0x20000,
 } test_flags;
 
 struct test_data_per_thread
