@@ -1166,6 +1166,11 @@ const static test_group group_test_is_optional = {
     .description = "Self-tests used to test test_is_optional flag"
 };
 
+const static test_group group_hw_features = {
+    .id = "hw_features",
+    .description = "Self-tests that depend on CPU features"
+};
+
 static struct test selftests_array[] = {
 {
     .id = "selftest_pass",
@@ -2103,7 +2108,79 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_BETA,
     .flags = test_is_optional,
-}
+},
+{
+    .id = "selftest_test_hsw_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_haswell",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .minimum_cpu = cpu_haswell,
+},
+{
+    .id = "selftest_test_bdw_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_broadwell",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .minimum_cpu = cpu_broadwell,
+},
+{
+    .id = "selftest_test_skx_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_skylake_avx512",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .minimum_cpu = cpu_skylake_avx512,
+},
+{
+    .id = "selftest_test_icx_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_icelake_server",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .minimum_cpu = cpu_icelake_server,
+},
+{
+    .id = "selftest_test_spr_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_sapphirerapids",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .minimum_cpu = cpu_sapphirerapids,
+},
+{
+    .id = "selftest_test_srf_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_sierraforrest",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .minimum_cpu = cpu_sierraforrest,
+},
+{
+    .id = "selftest_test_gnr_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_graniterapids",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .minimum_cpu = cpu_graniterapids,
+},
+{
+    .id = "selftest_test_dmr_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_diamondrapids",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .minimum_cpu = cpu_diamondrapids,
+},
 };
 
 extern const std::span<struct test> selftests;
