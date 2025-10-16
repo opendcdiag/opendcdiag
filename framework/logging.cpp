@@ -1060,6 +1060,11 @@ static std::string_view escape_for_single_line(std::string_view message, std::st
     return storage;
 }
 
+static std::string_view escape_for_single_line(std::string_view msg, std::string &&storage = {})
+{
+    return escape_for_single_line(msg, storage);
+}
+
 static void log_data_common(const char *message, const uint8_t *ptr, size_t size, bool from_memcmp)
 {
     std::string spaces;
@@ -1328,8 +1333,7 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
             if (v.data() == nullptr) {
                 return "null";
             } else {
-                std::string storage;
-                return stdprintf("'%s'", escape_for_single_line(v, storage).data());
+                return stdprintf("'%s'", escape_for_single_line(v).data());
             }
         }
     };
@@ -1358,8 +1362,7 @@ static void print_content_single_line(int fd, std::string_view before,
                                       std::string_view message,
                                       std::string_view after)
 {
-    std::string escaped;
-    writeln(fd, before, escape_for_single_line(message, escaped), after);
+    writeln(fd, before, escape_for_single_line(message), after);
 }
 
 std::string AbstractLogger::get_skip_message(int thread_num)
