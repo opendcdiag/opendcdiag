@@ -628,7 +628,9 @@ void logging_mark_thread_skipped(int thread_num) noexcept;
 void logging_cleanup_failure_callback() noexcept;
 void logging_run_callback();
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,
-                                    size_t size, ptrdiff_t offset, const char *fmt, va_list);
+                                    size_t size, ptrdiff_t offset,
+                                    SandstoneMemcmpOrFail::FormatterCallback formatter,
+                                    const void *token1, void *token2);
 void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout);
 void logging_print_iteration_start();
 void logging_print_footer();
