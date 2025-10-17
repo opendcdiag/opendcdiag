@@ -309,6 +309,7 @@ unittests_sources += files(
     'sandstone_chrono.cpp',
     'sandstone_data.cpp',
     'sandstone_utils.cpp',
+    'sandstone_opts.cpp',
     'test_knobs.cpp',
     'Floats.cpp',
     'unit-tests/sandstone_data_tests.cpp',
@@ -317,4 +318,5 @@ unittests_sources += files(
     'unit-tests/test_knob_tests.cpp',
     'unit-tests/tests_dummy.cpp',
     'unit-tests/topology_tests.cpp',
+    'unit-tests/opts_parser_tests.cpp',
 )
