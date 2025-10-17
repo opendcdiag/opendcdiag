@@ -742,7 +742,8 @@ static int selftest_datacompare_nodifference_run(struct test *, int)
     memcpy(expected, actual, sizeof(actual));
 
     memcmp_or_fail(actual, expected, sizeof(actual));        // won't fail
-    memcmp_fail_report(actual, expected, sizeof(actual), nullptr);
+    // now pretend we did see a failure and call the internal reporting function
+    _memcmp_fail_report(actual, expected, sizeof(actual), UInt8Data, nullptr);
 }
 
 static int selftest_cxxthrow_run(struct test *, int) noexcept(false)
