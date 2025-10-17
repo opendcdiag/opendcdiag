@@ -277,6 +277,7 @@ sandstone_tests_link = []
 sandstone_tests_link_whole = []
 
 unittests_sources = []
+unittests_flags = []
 
 subdir('framework')
 subdir('tests')
@@ -319,6 +320,7 @@ executable(
         debug_c_flags,
         default_cpp_warn,
         '-USANDSTONE',
+        unittests_flags,
     ],
     build_by_default: false,
     native: true,

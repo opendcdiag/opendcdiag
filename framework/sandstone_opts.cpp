@@ -15,6 +15,15 @@
 #include <type_traits>
 #include <vector>
 
+#ifdef SANDSTONE_UNITTESTS
+extern FILE* test_stream;
+#define OUT_STREAM test_stream
+#define ERR_STREAM test_stream
+#else
+#define OUT_STREAM stdout
+#define ERR_STREAM stderr
+#endif
+
 using namespace std::chrono;
 
 using namespace std::chrono_literals;
@@ -195,7 +204,7 @@ static struct option long_options[]  = {
 };
 
 void suggest_help(char **argv) {
-    printf("Try '%s --help' for more information.\n", argv[0]);
+    fprintf(OUT_STREAM, "Try '%s --help' for more information.\n", argv[0]);
 }
 
 void usage(char **argv)
@@ -310,7 +319,7 @@ Available command-line options are:
      --version      Display version number.
 )";
 
-    printf(SandstoneConfig::RestrictedCommandLine ? restrictedUsageText : usageText, argv[0]);
+    fprintf(OUT_STREAM, SandstoneConfig::RestrictedCommandLine ? restrictedUsageText : usageText, argv[0]);
 }
 
 enum class OutOfRangeMode { Exit, Saturate };
@@ -330,7 +339,7 @@ template <typename Integer = int> struct ParseIntArgument
     {
         // i18n style guide says to never construct sentences...
         if (explanation)
-            fprintf(stderr, "%s: value is %s\n", program_invocation_name, explanation);
+            fprintf(ERR_STREAM, "%s: value is %s\n", program_invocation_name, explanation);
     }
 
     void print_range_error(const char *arg) const
@@ -339,11 +348,11 @@ template <typename Integer = int> struct ParseIntArgument
         if (range_mode == OutOfRangeMode::Exit)
             severity = "error";
         if constexpr (std::is_signed_v<Integer>) {
-            fprintf(stderr,
+            fprintf(ERR_STREAM,
                     "%s: %s: value out of range for option '%s': %s (minimum is %lld, maximum %lld)\n",
                     program_invocation_name, severity, name, arg, min, max);
         } else {
-            fprintf(stderr,
+            fprintf(ERR_STREAM,
                     "%s: %s: value out of range for option '%s': %s (minimum is %llu, maximum %llu)\n",
                     program_invocation_name, severity, name, arg, min, max);
         }
@@ -370,7 +379,7 @@ template <typename Integer = int> struct ParseIntArgument
         if (*end != '\0' || *arg == '\0') {
             // strtoll() did not consume the entire string or there wasn't anything to consume,
             // so it can't be valid
-            fprintf(stderr, "%s: invalid argument for option '%s': %s\n", program_invocation_name,
+            fprintf(ERR_STREAM, "%s: invalid argument for option '%s': %s\n", program_invocation_name,
                     name, arg);
             print_explanation();
             return std::nullopt;
@@ -395,7 +404,7 @@ template <typename Integer = int> struct ParseIntArgument
 
 void warn_deprecated_opt(const char *opt)
 {
-    fprintf(stderr, "%s: option '%s' is ignored and will be removed in a future version.\n",
+    fprintf(ERR_STREAM, "%s: option '%s' is ignored and will be removed in a future version.\n",
             program_invocation_name, opt);
 }
 
@@ -483,7 +492,7 @@ struct ProgramOptionsParser {
 
             case use_builtin_test_list_option:
                 if (!SandstoneConfig::HasBuiltinTestList) {
-                    fprintf(stderr, "%s: --use-builtin-test-list specified but this build does not "
+                    fprintf(ERR_STREAM, "%s: --use-builtin-test-list specified but this build does not "
                                     "have a built-in test list.\n", argv[0]);
                     return EX_USAGE;
                 }
@@ -493,7 +502,7 @@ struct ProgramOptionsParser {
 #if SANDSTONE_FREQUENCY_MANAGER
             case vary_frequency:
                 if (!FrequencyManager::FrequencyManagerWorks) {
-                    fprintf(stderr, "%s: --vary-frequency works only on Linux\n", program_invocation_name);
+                    fprintf(ERR_STREAM, "%s: --vary-frequency works only on Linux\n", program_invocation_name);
                     return EX_USAGE;
                 }
                 opts_map.emplace(vary_frequency, true);
@@ -501,7 +510,7 @@ struct ProgramOptionsParser {
 
             case vary_uncore_frequency:
                 if (!FrequencyManager::FrequencyManagerWorks) {
-                    fprintf(stderr, "%s: --vary-uncore-frequency works only on Linux\n", program_invocation_name);
+                    fprintf(ERR_STREAM, "%s: --vary-uncore-frequency works only on Linux\n", program_invocation_name);
                     return EX_USAGE;
                 }
                 opts_map.emplace(vary_uncore_frequency, true);
@@ -834,7 +843,7 @@ struct ProgramOptionsParser {
                 app_cfg->fork_mode = SandstoneApplication::ForkMode::fork_each_test;
 #endif
             } else {
-                fprintf(stderr, "unknown value to -f\n");
+                fprintf(ERR_STREAM, "unknown value to -f\n");
                 return EX_USAGE;
             }
         }
@@ -855,7 +864,7 @@ struct ProgramOptionsParser {
         if (auto value = string_opt_for(reschedule_option)) {
             app_cfg->device_scheduler = make_rescheduler(value);
             if (!app_cfg->device_scheduler) {
-                fprintf(stderr, "%s: unknown reschedule option: %s\n", argv[0], value);
+                fprintf(ERR_STREAM, "%s: unknown reschedule option: %s\n", argv[0], value);
                 return EX_USAGE;
             }
         }
@@ -864,7 +873,7 @@ struct ProgramOptionsParser {
             opts.shmem_cfg.log_test_knobs = true;
             for (auto knob : std::get<std::vector<const char*>>(it->second)) {
                 if (!set_knob_from_key_value_string(knob)) {
-                    fprintf(stderr, "%s: Malformed test knob: \"%s\" (should be in the form KNOB=VALUE)\n",
+                    fprintf(ERR_STREAM, "%s: Malformed test knob: \"%s\" (should be in the form KNOB=VALUE)\n",
                             argv[0], knob);
                     return EX_USAGE;
                 }
@@ -903,7 +912,7 @@ struct ProgramOptionsParser {
                     opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::no_output;
                     opts.shmem_cfg.verbosity = -1;
                 } else {
-                    fprintf(stderr, "%s: unknown output format: %s\n", argv[0], value);
+                    fprintf(ERR_STREAM, "%s: unknown output format: %s\n", argv[0], value);
                     return EX_USAGE;
                 }
                 break;
@@ -1075,7 +1084,7 @@ struct ProgramOptionsParser {
             switch (opt) {
             case 'q':
                 // ### FIXME
-                fprintf(stderr, "%s: --query not implemented yet\n", argv[0]);
+                fprintf(ERR_STREAM, "%s: --query not implemented yet\n", argv[0]);
                 abort();
             case 's':
                 // keep in sync above
