@@ -736,7 +736,15 @@ static int selftest_datacompare_nodifference_run(struct test *, int)
     memset_random(actual, sizeof(actual));
     memcpy(expected, actual, sizeof(actual));
 
-    memcmp_or_fail(actual, expected, sizeof(actual));        // won't fail
+    auto formatter = [&](ptrdiff_t idx) -> std::string {
+        assert(idx >= -1);
+        assert(idx < ptrdiff_t(sizeof(actual)));
+        std::string r = "random data\ndata: 0h";
+        for (uint8_t b : actual)
+            r += stdprintf("%02x", b);
+        return r;
+    };
+    memcmp_or_fail(actual, expected, sizeof(actual), formatter);    // won't fail
     // now pretend we did see a failure and call the internal reporting function
     _memcmp_fail_report(actual, expected, sizeof(actual), UInt8Data, nullptr);
 }
