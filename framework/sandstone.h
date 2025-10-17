@@ -670,19 +670,6 @@ using SandstoneMemcmpOrFail::memcmp_or_fail;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
-template <typename T, typename... FmtArgs> [[noreturn, gnu::cold]] static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
-memcmp_fail_report(const T *actual, const T *expected, size_t count, const char *fmt, FmtArgs &&... args)
-{
-    DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
-    size_t elemSize = 1;
-    if constexpr (!std::is_same_v<T, void>)
-        elemSize = sizeof(T);
-    if (SandstoneConfig::NoLogging)
-        _memcmp_fail_report(actual, expected, count * elemSize, type, nullptr);
-    else
-        _memcmp_fail_report(actual, expected, count * elemSize, type, fmt, std::forward<FmtArgs>(args)...);
-}
-
 /// compares the arrays actual and expected, both of which are expected to have count elements,
 /// and fails the test if the two arrays are not equal.  In the case of a mismatch the calling
 /// thread will exit and diagnostic information will be output to the logs to indicate the
@@ -693,14 +680,21 @@ memcmp_fail_report(const T *actual, const T *expected, size_t count, const char 
 template <typename T, typename... FmtArgs> static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
 memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt, FmtArgs &&... args)
 {
+    DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
     size_t elemSize = 1;
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
 
     assert(_memcmp_or_fail_check_fmt_nonewline(fmt, std::forward<FmtArgs>(args)...)
            && "Data descriptions should not include a newline");
+    if (SandstoneConfig::NoLogging)
+        fmt = nullptr;
+    if (!fmt)
+        memcmp_or_fail(actual, expected, count);
+
+    // printf style instead
     if (__builtin_memcmp(actual, expected, count * elemSize) != 0)
-        memcmp_fail_report(actual, expected, count, fmt, std::forward<FmtArgs>(args)...);
+        _memcmp_fail_report(actual, expected, count * elemSize, type, fmt, std::forward<FmtArgs>(args)...);
 }
 #pragma GCC diagnostic pop
 
