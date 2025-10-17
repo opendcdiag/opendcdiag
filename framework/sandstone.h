@@ -611,6 +611,15 @@ template <typename Callback> void install_failure_callback(Callback cb)
     }
 }
 
+namespace SandstoneMemcmpOrFail {
+using namespace SandstoneDataDetails;
+
+using FormatterCallback = std::string (*)(const void *token1, void *token2, ptrdiff_t idx);
+[[noreturn, gnu::cold]] void
+report(const void *, const void *, size_t, DataType, FormatterCallback,
+       const void * = nullptr, void * = nullptr);
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
 template <typename T, typename... FmtArgs> [[noreturn, gnu::cold]] static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
