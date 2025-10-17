@@ -389,18 +389,37 @@ void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size
     if (sApp->shmem->cfg.ud_on_failure)
         ud2();
 
+    using namespace SandstoneMemcmpOrFail;
+    if (!SandstoneConfig::NoLogging)
+        fmt = nullptr;
+    if (!fmt)
+        report(_actual, _expected, size, type, nullptr, nullptr);
+
+    auto wrapper = [](const void *pfmt, void *pva, ptrdiff_t) {
+        return vstdprintf(static_cast<const char *>(pfmt), *static_cast<va_list *>(pva));
+    };
+    va_list va;
+    va_start(va, fmt);
+    report(_actual, _expected, size, type, wrapper, fmt, &va);
+    va_end(va);
+}
+
+void SandstoneMemcmpOrFail::report(const void *_actual, const void *_expected, size_t size,
+                                   DataType type, FormatterCallback formatter, const void *t1, void *t2)
+{
+    // Execute UD2 early if we've failed
+    if (sApp->shmem->cfg.ud_on_failure)
+        ud2();
+
     if (!SandstoneConfig::NoLogging) {
-        if (fmt)
-            assert(strchr(fmt, '\n') == nullptr && "Data descriptions should not include a newline");
+        // mark time-to-fail before the calling the callback
+        logging_mark_thread_failed(thread_num);
 
         auto actual = static_cast<const uint8_t *>(_actual);
         auto expected = static_cast<const uint8_t *>(_expected);
         ptrdiff_t offset = memcmp_offset(actual, expected, size);
 
-        va_list va;
-        va_start(va, fmt);
-        logging_report_mismatched_data(type, actual, expected, size, offset, fmt, va);
-        va_end(va);
+        logging_report_mismatched_data(type, actual, expected, size, offset, formatter, t1, t2);
     }
 
     report_fail_common();

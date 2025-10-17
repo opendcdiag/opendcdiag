@@ -1181,7 +1181,11 @@ static void logging_format_data(DataType type, std::string_view description, con
     };
 
     buffer += "description: '";
-    buffer += description;
+    if (description.size()) {
+        assert(description.find('\n') == std::string::npos \
+               && "Data descriptions should not include a newline");
+        buffer += escape_for_single_line(description);
+    }
     buffer += "'\ntype:        ";
 
     const char *typeName = SandstoneDataDetails::type_name(type);
@@ -1230,20 +1234,21 @@ static void logging_format_data(DataType type, std::string_view description, con
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
-                                    size_t size, ptrdiff_t offset, const char *fmt, va_list va)
+                                    size_t size, ptrdiff_t offset,
+                                    SandstoneMemcmpOrFail::FormatterCallback formatter,
+                                    const void *token1, void *token2)
 {
     logging_mark_thread_failed(thread_num);
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
 
-    {
+    if (formatter) {
         // create the description of what failed
-        std::string description, escaped_description;
-        if (fmt && *fmt)
-            description = vstdprintf(fmt, va);
-
-        logging_format_data(type, escape_for_single_line(description, escaped_description),
-                            actual, expected, offset);
+        ptrdiff_t idx = offset / SandstoneDataDetails::type_size(type);
+        std::string description = formatter(token1, token2, idx);
+        logging_format_data(type, description, actual, expected, offset);
+    } else {
+        logging_format_data(type, {}, actual, expected, offset);
     }
     if (offset < 0) {
         // we couldn't find a difference
