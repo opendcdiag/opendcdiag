@@ -30,6 +30,7 @@
 
 #ifdef __cplusplus
 #include <atomic>
+#include <functional>
 #include <memory>
 using std::atomic_int;
 extern "C" {
@@ -396,6 +397,7 @@ struct test {
 
 /* internal functions; see C macro and C++ templates at the end of this file */
 extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);
+extern bool _memcmp_fail_check_cb(char *(*cb)(void *token, ptrdiff_t), void *, size_t);
 extern void _memcmp_fail_report_cb(const void *actual, const void *expected, size_t size,
                                    enum DataType, char *(*cb)(void *token, ptrdiff_t), void *)
     __attribute__((cold, noreturn));
@@ -625,6 +627,8 @@ using FormatterCallback = std::string (*)(const void *token1, void *token2, ptrd
 [[noreturn, gnu::cold]] void
 report(const void *, const void *, size_t, DataType, FormatterCallback,
        const void * = nullptr, void * = nullptr);
+bool test_formatter(std::function<std::string ()> cb, size_t max);
+bool test_formatter(std::function<std::string (ptrdiff_t)> cb, size_t max);
 
 /// compares the arrays actual and expected, both of which are expected to have
 /// count elements, and fails the test if the two arrays are not equal. In the
@@ -640,8 +644,11 @@ static inline void memcmp_or_fail(const T *actual, const T *expected, size_t cou
     size_t elemSize = 1;
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
-    if (__builtin_memcmp(actual, expected, count * elemSize) == 0) [[likely]]
+    if (__builtin_memcmp(actual, expected, count * elemSize) == 0) [[likely]] {
+        if constexpr (!std::is_null_pointer_v<Fn>)
+            assert(test_formatter(formatter, count));
         return;         // no mismatch!
+    }
 
     FormatterCallback cb = {};
     const void *token = nullptr;
@@ -732,6 +739,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
         __auto_type _expected = expected;                           \
         size_t _size = sizeof(*_actual) * size;                     \
         enum DataType _type = DATATYPEFORTYPE(*_actual);            \
+        assert(!cb || _memcmp_fail_check_cb(cb, token, size));      \
         if (__builtin_expect(__builtin_memcmp(_actual, _expected, _size), 0)) \
             _memcmp_fail_report_cb(_actual, _expected, _size, _type,\
                                    cb, token);                      \

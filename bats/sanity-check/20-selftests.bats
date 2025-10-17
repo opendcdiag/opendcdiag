@@ -1539,17 +1539,24 @@ function selftest_logerror_common() {
         fail_common
         [[ "$test" != *_with_cb ]] || fail_callback_common
         for ((i = 1; i <= MAX_PROC; ++i)); do
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/type" $type
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/offset" '\[.*\]'
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/address" '(0x)?[0-9a-f]+'
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/actual" "$dataregexp"
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/expected" "$dataregexp"
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/mask" '0x[0-9a-f]+'
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/actual data" '[0-9a-f ]+'
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/expected data" '[0-9a-f ]+'
-            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/details/rare" False
-            test_yaml_numeric "/tests/0/threads/$i/messages/0/data-miscompare/details/count" 'value == 16'
+            # there may be debug messages ahead of our error
+            local found=0
+            for ((j = 0; !found && j < ${yamldump[/tests/0/threads/$i/messages@len]}; ++j)); do
+                [[ "${yamldump[/tests/0/threads/$i/messages/$j/level]}" = error ]] || continue
+                found=1
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/level" error
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/type" $type
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/offset" '\[.*\]'
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/address" '(0x)?[0-9a-f]+'
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/actual" "$dataregexp"
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/expected" "$dataregexp"
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/mask" '0x[0-9a-f]+'
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/actual data" '[0-9a-f ]+'
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/expected data" '[0-9a-f ]+'
+                test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/details/rare" False
+                test_yaml_numeric "/tests/0/threads/$i/messages/$j/data-miscompare/details/count" 'value == 16'
+            done
+            ((found))
         done
     done
 }
@@ -1558,14 +1565,21 @@ function selftest_datacompare_nodifference_common() {
     sandstone_selftest "$@"
     fail_common
     for ((i = 1; i <= MAX_PROC; ++i)); do
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/type" 'uint8_t'
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/offset" None
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/address" '(0x)?[0-9a-f]+'
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/actual" None
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/expected" None
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/mask" None
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/remark" '.+'
+        # there may be debug messages ahead of our error
+        local found=0
+        for ((j = 0; !found && j < ${yamldump[/tests/0/threads/$i/messages@len]}; ++j)); do
+            [[ "${yamldump[/tests/0/threads/$i/messages/$j/level]}" = error ]] || continue
+            found=1
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/level" error
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/type" 'uint8_t'
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/offset" None
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/address" '(0x)?[0-9a-f]+'
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/actual" None
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/expected" None
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/mask" None
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/remark" '.+'
+        done
+        ((found))
     done
 }
 
