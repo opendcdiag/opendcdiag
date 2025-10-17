@@ -40,6 +40,10 @@ if target_machine.system() == 'windows' and get_option('buildtype') == 'debug'
 endif
 
 tests_set_base.add(
+    tests_set_common,
+)
+
+tests_set_base.add(
     files(
         'ifs/sandstone_ifs.c',
         'ifs/ifs.c',

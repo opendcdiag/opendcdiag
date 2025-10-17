@@ -28,11 +28,11 @@
 
 #include "sandstone_p.h"
 
+#if defined(__linux__) && defined(__x86_64__)
 #include <cassert>
 #include <climits>
 #include <numeric>
 #include <vector>
-
 
 namespace {
 // we can use globals as it's run for 0th cpu only (data won't be shared accross >1 threads)
@@ -108,28 +108,42 @@ int mce_check_run(struct test *test, int cpu)
 }
 }
 
+// Member function defined here as we're using mce_counts_start
 bool InterruptMonitor::observed_mce_events()
 {
     return get_mce_interrupt_counts() != mce_counts_start;
 }
+#endif
 
 // The MCE test is special in that it is not handled like a normal test
 // We do not use the macros to specify it because we do not want it to
 // be in the acutal test list - it is an "inserted" test in that the test
 // is always inserted in the end.
-struct test mce_test = {  // This variable is used in the framework!
+
+#if !defined(__linux__) || !defined(__x86_64__)
+// no MCE test outside Linux
+static_assert(!InterruptMonitor::InterruptMonitorWorks);
+#endif
+
+struct test mce_test = {
 #ifdef TEST_ID_mce_check
         .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
         .description = nullptr,
 #else
         .id = "mce_check",
         .description = "Machine Check Exceptions/Events count",
-#endif
+#endif // TEST_ID_mce_check
+
+#if defined(__linux__) && defined(__x86_64__)
         .test_preinit = mce_check_preinit,
         .test_run = mce_check_run,
         .desired_duration = -1,
         .fracture_loop_count = -1,
         .quality_level = TEST_QUALITY_PROD,
         .flags = test_schedule_sequential,
+#else
+        .quality_level = TEST_QUALITY_SKIP,
+#endif // __linux__ && __x86_64__
 };
+
 // Do not convert to use the test declaration macros - read above
