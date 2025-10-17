@@ -47,6 +47,8 @@ public:
 
     struct Package : CoreGrouping
     {
+        // We consider different core types in a heterogeneous system to be a
+        // different "NUMA" nodes.
         std::vector<NumaNode> numa_domains;
         int id() const
         {
