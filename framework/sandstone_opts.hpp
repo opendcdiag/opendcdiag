@@ -45,7 +45,9 @@ struct ProgramOptions {
     };
     const char *builtin_test_list_name = nullptr;
 
-    int parse(int argc, char** argv, SandstoneApplication* app);
+    bool test_tests = false;
+
+    int parse(int argc, char** argv, SandstoneApplicationConfig* app_cfg);
 
     // for RestrictedCommandLine put it here to enable code elimination
     void apply_restrictions() {
@@ -57,10 +59,12 @@ struct ProgramOptions {
         on_crash_arg = nullptr;
         builtin_test_list_name = "auto";
     }
+
+    TestConfig shmem_cfg;
 };
 
-inline int parse_cmdline(int argc, char** argv, SandstoneApplication* app, ProgramOptions& opts) {
-    auto ret = opts.parse(argc, argv, app);
+inline int parse_cmdline(int argc, char** argv, SandstoneApplicationConfig* app_cfg, ProgramOptions& opts) {
+    auto ret = opts.parse(argc, argv, app_cfg);
     if constexpr (SandstoneConfig::RestrictedCommandLine) {
         opts.apply_restrictions(); // enable code elimination
     }
