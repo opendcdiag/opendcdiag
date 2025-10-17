@@ -116,7 +116,7 @@ static SandstoneApplication::OutputFormat current_output_format()
 {
     if (SandstoneConfig::NoLogging)
         return SandstoneApplication::OutputFormat::no_output;
-    return sApp->shmem->output_format;
+    return sApp->shmem->cfg.output_format;
 }
 
 std::string_view AbstractLogger::indent_spaces()
@@ -124,7 +124,7 @@ std::string_view AbstractLogger::indent_spaces()
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return {};
 
-    static const std::string spaces(sApp->shmem->output_yaml_indent, ' ');
+    static const std::string spaces(sApp->shmem->cfg.output_yaml_indent, ' ');
     return spaces;
 }
 
@@ -342,7 +342,7 @@ int logging_stdout_fd(void)
 
 static inline int open_new_log()
 {
-    if (sApp->current_fork_mode() == SandstoneApplication::exec_each_test)
+    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test)
         return open_memfd(MemfdInheritOnExec);
     else
         return open_memfd(MemfdCloseOnExec);
@@ -373,7 +373,7 @@ void AbstractLogger::munmap_and_truncate_log(PerThreadData::Common *data, mmap_r
 
 void logging_init_global_child()
 {
-    assert(sApp->current_fork_mode() == SandstoneApplication::child_exec_each_test);
+    assert(sApp->current_fork_mode() == SandstoneApplication::ForkMode::child_exec_each_test);
 
     AbstractLogger::file_log_fd = AbstractLogger::real_stdout_fd = STDOUT_FILENO;
 #ifndef NDEBUG
@@ -536,7 +536,7 @@ int logging_close_global(int exitcode)
         const char *exitline = [&] {
             switch (exitcode) {
             case EXIT_SUCCESS:
-                if (sApp->shmem->verbosity >= 0)
+                if (sApp->shmem->cfg.verbosity >= 0)
                     return "pass";
                 return (const char *)nullptr;
             case EXIT_FAILURE:
@@ -647,7 +647,7 @@ void log_message_preformatted(int thread_num, int level, std::string_view msg)
         return;
 
     std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
-    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread)
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
         return;
 
     if (msg[msg.size() - 1] == '\n')
@@ -709,7 +709,7 @@ void logging_printf(int level, const char *fmt, ...)
     if (msg.empty())
         return;     // can happen if fmt was "%s" and the string ended up empty
 
-    if (level <= sApp->shmem->verbosity && AbstractLogger::file_log_fd != AbstractLogger::real_stdout_fd) {
+    if (level <= sApp->shmem->cfg.verbosity && AbstractLogger::file_log_fd != AbstractLogger::real_stdout_fd) {
         progress_bar_flush();
         int fd = AbstractLogger::real_stdout_fd;
         if (level < 0)
@@ -884,7 +884,7 @@ void logging_print_iteration_start()
         return;                 // short-circuit
 
     std::string random_seed = random_format_seed();
-    switch (sApp->shmem->output_format) {
+    switch (sApp->shmem->cfg.output_format) {
     case SandstoneApplication::OutputFormat::key_value:
         return logging_printf(LOG_LEVEL_QUIET, "random_generator_state = %s\n", random_seed.c_str());
     case SandstoneApplication::OutputFormat::tap:
@@ -932,7 +932,7 @@ void logging_flush(void)
 
 void logging_init(const struct test *test)
 {
-    if (sApp->shmem->verbosity <= 0)
+    if (sApp->shmem->cfg.verbosity <= 0)
         progress_bar_update();
 
     switch (current_output_format()) {
@@ -1072,7 +1072,7 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
 
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::yaml:
-        spaces.resize(sApp->shmem->output_yaml_indent + 4 + (from_memcmp ? 3 : 0), ' ');
+        spaces.resize(sApp->shmem->cfg.output_yaml_indent + 4 + (from_memcmp ? 3 : 0), ' ');
         if (from_memcmp) {
             // no escaping, the message is proper YAML
             buffer = message;
@@ -1135,9 +1135,9 @@ void log_data(const char *message, const void *data, size_t size)
 
     std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
     std::atomic<unsigned> &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
-    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->max_messages_per_thread)
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
         return;
-    if (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->shmem->max_logdata_per_thread)
+    if (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->shmem->cfg.max_logdata_per_thread)
         return;
 
     log_data_common(message, static_cast<const uint8_t *>(data), size, false);
@@ -1146,7 +1146,7 @@ void log_data(const char *message, const void *data, size_t size)
 static void logging_format_data(DataType type, std::string_view description, const uint8_t *data1,
                                 const uint8_t *data2, ptrdiff_t offset)
 {
-    std::string spaces(sApp->shmem->output_yaml_indent + 7, ' ');
+    std::string spaces(sApp->shmem->cfg.output_yaml_indent + 7, ' ');
     std::string buffer;
     switch (current_output_format()) {
     case SandstoneApplication::OutputFormat::tap:
@@ -1246,14 +1246,14 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     // Log the data that failed. We have two buffers of size bytes to log, but
     // we'll obey the max_logdata_per_thread limit (shared with log_data()).
     // Note: this didn't need to be atomic...
-    //   size_t avail = sApp->shmem->max_logdata_per_thread - bytes_logged;
+    //   size_t avail = sApp->shmem->cfg.max_logdata_per_thread - bytes_logged;
     //   size_t len = std::min(size, avail / 2);
     auto &bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
     size_t len = size;
     if (size_t old_total = bytes_logged.fetch_add(2 * size, std::memory_order_relaxed);
-            sApp->shmem->max_logdata_per_thread - old_total < 2 * size) {
+            sApp->shmem->cfg.max_logdata_per_thread - old_total < 2 * size) {
         // trim how much data we'll print so we stick to the limit
-        len = (sApp->shmem->max_logdata_per_thread - old_total) / 2;
+        len = (sApp->shmem->cfg.max_logdata_per_thread - old_total) / 2;
     }
 
     ptrdiff_t start;
@@ -1304,7 +1304,7 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
     }
 #endif
 
-    if (!sApp->shmem->log_test_knobs)
+    if (!sApp->shmem->cfg.log_test_knobs)
         return;
 
     struct Visitor {
@@ -1477,7 +1477,7 @@ void AbstractLogger::print_child_stderr_common(std::function<void(int)> header)
 
     header(AbstractLogger::file_log_fd);
     print_content_indented(AbstractLogger::file_log_fd, indent, contents);
-    if (AbstractLogger::file_log_fd != AbstractLogger::real_stdout_fd && sApp->shmem->verbosity > 0) {
+    if (AbstractLogger::file_log_fd != AbstractLogger::real_stdout_fd && sApp->shmem->cfg.verbosity > 0) {
         header(AbstractLogger::real_stdout_fd);
         print_content_indented(AbstractLogger::real_stdout_fd, indent, contents);
     }
@@ -1718,7 +1718,7 @@ bool YamlLogger::want_slice_resource_usage(int slice)
     case TestResult::Passed:
     case TestResult::Failed:
     case TestResult::OperatingSystemError:
-        return sApp->shmem->verbosity >= 3;
+        return sApp->shmem->cfg.verbosity >= 3;
 
     case TestResult::Killed:
     case TestResult::CoreDumped:
@@ -1864,7 +1864,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
             break;
 
         case UsedKnobValue:
-            assert(sApp->shmem->log_test_knobs);
+            assert(sApp->shmem->cfg.log_test_knobs);
             continue;       // not break
         }
 
@@ -1878,7 +1878,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
 void YamlLogger::print_result_line(int &init_skip_message_bytes)
 {
     int loglevel = this->loglevel();
-    if (loglevel == LOG_LEVEL_QUIET && file_log_fd != real_stdout_fd && sApp->shmem->verbosity < 1) {
+    if (loglevel == LOG_LEVEL_QUIET && file_log_fd != real_stdout_fd && sApp->shmem->cfg.verbosity < 1) {
         // logging_init won't have printed "- test:" to stdout, so do it now
         progress_bar_flush();
         print_tests_header(OnFirstFail);
@@ -1904,7 +1904,7 @@ void YamlLogger::print_result_line(int &init_skip_message_bytes)
                 logging_printf(loglevel, "  skip-category: %s\n",
                                char_to_skip_category(init_skip_message[0]));
                 std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
-                if (loglevel <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd)
+                if (loglevel <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd)
                     format_and_print_skip_reason(real_stdout_fd, message);
                 format_and_print_skip_reason(file_log_fd, message);
                 init_skip_message_bytes = init_skip_message.size() + 2;
@@ -2003,12 +2003,12 @@ void YamlLogger::print_fixed()
     if (std::isfinite(freq_avg) && freq_avg != 0.0)
         logging_printf(LOG_LEVEL_VERBOSE(1), "  avg-freq-mhz: %.1f\n", freq_avg);
 
-    if (sApp->shmem->log_test_knobs) {
+    if (sApp->shmem->cfg.log_test_knobs) {
         struct mmap_region main_mmap = maybe_mmap_log(sApp->main_thread_data());
         if (main_mmap.size) {
             int count = print_test_knobs(file_log_fd, main_mmap);
             if (count && real_stdout_fd != file_log_fd
-                    && sApp->shmem->verbosity >= UsedKnobValueLoggingLevel)
+                    && sApp->shmem->cfg.verbosity >= UsedKnobValueLoggingLevel)
                 print_test_knobs(real_stdout_fd, main_mmap);
             munmap_file(main_mmap);
         }
@@ -2020,7 +2020,7 @@ void YamlLogger::print_thread_messages()
     // print the thread messages
     auto doprint = [this](PerThreadData::Common *data, int s_tid) {
         struct mmap_region r = maybe_mmap_log(data);
-        bool want_print = data->has_failed() || sApp->shmem->verbosity >= 3;
+        bool want_print = data->has_failed() || sApp->shmem->cfg.verbosity >= 3;
         ssize_t min_size = 0;
 
         /* for main threads (negative ids) adjust the message size to account
@@ -2038,9 +2038,9 @@ void YamlLogger::print_thread_messages()
         print_thread_header(file_log_fd, s_tid, INT_MAX);
         int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX);
 
-        if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, s_tid, sApp->shmem->verbosity);
-            print_one_thread_messages(real_stdout_fd, r, sApp->shmem->verbosity);
+        if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
+            print_thread_header(real_stdout_fd, s_tid, sApp->shmem->cfg.verbosity);
+            print_one_thread_messages(real_stdout_fd, r, sApp->shmem->cfg.verbosity);
         }
 
         munmap_and_truncate_log(data, r);
@@ -2122,7 +2122,7 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
     }
 
     // if we're in quiet mode, we print the header only on first fail
-    if (mode == AtStart && sApp->shmem->verbosity == 0 && file_log_fd != real_stdout_fd)
+    if (mode == AtStart && sApp->shmem->cfg.verbosity == 0 && file_log_fd != real_stdout_fd)
         return;
 
     if (file_log_fd != real_stdout_fd)

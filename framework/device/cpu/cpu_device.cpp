@@ -35,7 +35,7 @@ void dump_device_info()
             detected = arch.name;
             break;
         }
-        if (sApp->shmem->verbosity > 1)
+        if (sApp->shmem->cfg.verbosity > 1)
             printf("CPU is not %s: missing %s\n", arch.name,
                    device_features_to_string(arch.features & ~device_features).c_str());
     }

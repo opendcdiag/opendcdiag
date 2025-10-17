@@ -140,7 +140,7 @@ framework_config.set_quoted('SANDSTONE_FALLBACK_EXEC', get_option('fallback_exec
 framework_config.set10('SANDSTONE_NO_LOGGING', get_option('logging_format') == 'no_output')
 framework_config.set(
     'SANDSTONE_DEFAULT_LOGGING',
-    'SandstoneApplication::OutputFormat::' + get_option('logging_format'),
+    'TestConfig::OutputFormat::' + get_option('logging_format'),
 )
 
 framework_config.set10(
@@ -309,6 +309,7 @@ unittests_sources += files(
     'sandstone_chrono.cpp',
     'sandstone_data.cpp',
     'sandstone_utils.cpp',
+    'sandstone_opts.cpp',
     'test_knobs.cpp',
     'Floats.cpp',
     'unit-tests/sandstone_data_tests.cpp',
@@ -317,4 +318,5 @@ unittests_sources += files(
     'unit-tests/test_knob_tests.cpp',
     'unit-tests/tests_dummy.cpp',
     'unit-tests/topology_tests.cpp',
+    'unit-tests/opts_parser_tests.cpp',
 )

@@ -267,7 +267,7 @@ struct HardwareInfo
 #endif
 };
 
-struct SandstoneApplication : public test_the_test_data<SandstoneConfig::Debug>
+struct TestConfig
 {
     enum class OutputFormat : int8_t {
         no_output   = 0,
@@ -277,12 +277,85 @@ struct SandstoneApplication : public test_the_test_data<SandstoneConfig::Debug>
     };
     static constexpr auto DefaultOutputFormat = SANDSTONE_DEFAULT_LOGGING;
 
-    enum ForkMode : int8_t {
+    // test execution
+    bool selftest = false;
+    bool ud_on_failure = false;
+    bool use_strict_runtime = false;
+
+    // logging parameters
+    int verbosity = -1;
+    int max_messages_per_thread = 5;
+    unsigned max_logdata_per_thread = 128;
+    OutputFormat output_format = DefaultOutputFormat;
+    uint8_t output_yaml_indent = 0;
+    bool log_test_knobs = false;
+};
+
+// Isolate variables set during opts parsing into a separate struct.
+// This struct is passed to parse_cmdline(), instead of sApp.
+struct SandstoneApplicationConfig {
+    enum class ForkMode : int8_t {
         no_fork,
         fork_each_test,
         exec_each_test,
         child_exec_each_test,       // when parent is exec_each_test
     };
+
+    static constexpr int DefaultQualityLevel = int(TEST_QUALITY_PROD);
+    int requested_quality = DefaultQualityLevel;
+    std::string file_log_path;
+    const char *syslog_ident = nullptr;
+
+    MonotonicTimePoint starttime = MonotonicTimePoint::clock::now();
+    MonotonicTimePoint endtime;
+    ShortDuration test_time = {};
+    ShortDuration max_test_time = {};
+    ShortDuration timeout_to_kill = std::chrono::seconds(20);
+    ShortDuration delay_between_tests = std::chrono::milliseconds(5);
+
+#ifdef NDEBUG
+    static constexpr struct {
+        size_t size() const { return 0; }
+        char *c_str() const { return nullptr; }
+    } gdb_server_comm = {};
+#else
+    std::string gdb_server_comm;
+#endif
+
+    bool fatal_skips = false;
+
+    ForkMode fork_mode =
+#ifdef _WIN32
+        ForkMode::exec_each_test;
+#else
+        ForkMode::fork_each_test;
+#endif
+
+    bool ignore_mce_errors = false;
+    bool ignore_os_errors = false;
+    bool force_test_time = false;
+    bool service_background_scan = false;
+    bool vary_frequency_mode = false;
+    bool vary_uncore_frequency_mode = false;
+    bool include_optional = false;
+    int inject_idle = 0;
+
+    int retest_count = 10;
+    int total_retest_count = -2;
+    int max_test_count = INT_MAX;
+    int max_test_loop_count = 0;
+
+    static constexpr int DefaultTemperatureThreshold = -1;
+    int thermal_throttle_temp = DefaultTemperatureThreshold;
+
+    int thread_count;
+
+    std::unique_ptr<DeviceScheduler> device_scheduler = nullptr;
+};
+
+struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_data<SandstoneConfig::Debug>
+{
+    using OutputFormat = TestConfig::OutputFormat;
 
     struct SlicePlans {
         static constexpr int MinimumCpusPerSocket = 8;
@@ -305,43 +378,12 @@ struct SandstoneApplication : public test_the_test_data<SandstoneConfig::Debug>
     SharedMemory *shmem = nullptr;
     int shmemfd = -1;
 
-    static constexpr int DefaultQualityLevel = int(TEST_QUALITY_PROD);
-    int requested_quality = DefaultQualityLevel;
-    std::string file_log_path;
-    const char *syslog_ident = nullptr;
-
-    bool fatal_skips = false;
-
-    ForkMode fork_mode =
-#ifdef _WIN32
-            exec_each_test;
-#else
-            fork_each_test;
-#endif
-    bool ignore_mce_errors = false;
-    bool ignore_os_errors = false;
-    bool force_test_time = false;
-    bool service_background_scan = false;
-    bool vary_frequency_mode = false;
-    bool vary_uncore_frequency_mode = false;
-    bool include_optional = false;
-    int inject_idle = 0;
     static constexpr int MaxRetestCount = sizeof(PerThreadFailures::value_type) * 8;
-    int retest_count = 10;
-    int total_retest_count = -2;
-    int max_test_count = INT_MAX;
-    int max_test_loop_count = 0;
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
     int current_test_count;
-    MonotonicTimePoint starttime = MonotonicTimePoint::clock::now();
-    MonotonicTimePoint endtime;
     MonotonicTimePoint current_test_starttime;
     static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
     ShortDuration current_test_duration;
-    ShortDuration test_time = {};
-    ShortDuration max_test_time = {};
-    ShortDuration timeout_to_kill = std::chrono::seconds(20);
-    ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
 #if SANDSTONE_FREQUENCY_MANAGER
@@ -351,27 +393,15 @@ struct SandstoneApplication : public test_the_test_data<SandstoneConfig::Debug>
 #ifndef __linux__
     std::string path_to_self;
 #endif
-#ifdef NDEBUG
-    static constexpr struct {
-        size_t size() const { return 0; }
-        char *c_str() const { return nullptr; }
-    } gdb_server_comm = {};
-#else
-    std::string gdb_server_comm;
-#endif
-
-    static constexpr int DefaultTemperatureThreshold = -1;
-    int thermal_throttle_temp = DefaultTemperatureThreshold;
     int threshold_time_remaining = 30000;
 
     HardwareInfo hwinfo;
 
-    int thread_count;
     ForkMode current_fork_mode() const
     {
 #ifndef _WIN32
         if (SandstoneConfig::RestrictedCommandLine) {
-            return SandstoneApplication::fork_each_test;
+            return ForkMode::fork_each_test;
         }
 #endif
         return fork_mode;
@@ -386,8 +416,6 @@ struct SandstoneApplication : public test_the_test_data<SandstoneConfig::Debug>
     void select_main_thread(int slice);
 
     SandstoneBackgroundScan background_scan;
-
-    std::unique_ptr<DeviceScheduler> device_scheduler = nullptr;
 
 private:
     SandstoneApplication() = default;
@@ -404,21 +432,12 @@ struct SandstoneApplication::SharedMemory
     // state shared with child processes (input only)
     ptrdiff_t thread_data_offset = 0;
 
+    TestConfig cfg;
+
     // test execution
     MonotonicTimePoint current_test_endtime = {};
     int current_max_loop_count = 0;
     std::chrono::duration<int, std::micro> current_test_sleep_duration = {};
-    bool selftest = false;
-    bool ud_on_failure = false;
-    bool use_strict_runtime = false;
-
-    // logging parameters
-    int verbosity = -1;
-    int max_messages_per_thread = 5;
-    unsigned max_logdata_per_thread = 128;
-    OutputFormat output_format = DefaultOutputFormat;
-    uint8_t output_yaml_indent = 0;
-    bool log_test_knobs = false;
 
     // child debugging
 #ifdef _WIN32
@@ -481,7 +500,7 @@ inline PerThreadData::Test *SandstoneApplication::test_thread_data(int thread)
 
 inline void SandstoneApplication::select_main_thread(int slice)
 {
-    assert(current_fork_mode() != no_fork || slice == 0);
+    assert(current_fork_mode() != ForkMode::no_fork || slice == 0);
     main_thread_data_ptr += slice;
     test_thread_data_ptr += main_thread_data_ptr->device_range.starting_device;
 }

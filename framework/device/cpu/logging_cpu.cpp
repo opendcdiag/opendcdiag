@@ -123,15 +123,15 @@ void KeyValuePairLogger::print_thread_messages()
     auto doprint = [this](PerThreadData::Common *data, int i) {
         struct mmap_region r = maybe_mmap_log(data);
 
-        if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
+        if (r.size == 0 && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
             return;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
         int lowest_level = print_one_thread_messages_tdata(file_log_fd, data, r, INT_MAX);
 
-        if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
+        if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, test->id);
-            print_one_thread_messages_tdata(real_stdout_fd, data, r, sApp->shmem->verbosity);
+            print_one_thread_messages_tdata(real_stdout_fd, data, r, sApp->shmem->cfg.verbosity);
         }
 
         munmap_and_truncate_log(data, r);
@@ -216,7 +216,7 @@ void TapFormatLogger::print(int tc)
     logging_printf(loglevel(), "%s\n", tap_line.c_str());
 
     print_thread_messages();
-    if (sApp->shmem->verbosity >= 1)
+    if (sApp->shmem->cfg.verbosity >= 1)
         print_child_stderr();
 
     if (file_terminator)
@@ -323,15 +323,15 @@ void TapFormatLogger::print_thread_messages()
     auto doprint = [this](PerThreadData::Common *data, int i) {
         struct mmap_region r = maybe_mmap_log(data);
 
-        if (r.size == 0 && !data->has_failed() && sApp->shmem->verbosity < 3)
+        if (r.size == 0 && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
             return;             /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, INT_MAX);
         int lowest_level = print_one_thread_messages_tdata(file_log_fd, data, r, INT_MAX);
 
-        if (lowest_level <= sApp->shmem->verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, i, sApp->shmem->verbosity);
-            print_one_thread_messages_tdata(real_stdout_fd, data, r, sApp->shmem->verbosity);
+        if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
+            print_thread_header(real_stdout_fd, i, sApp->shmem->cfg.verbosity);
+            print_one_thread_messages_tdata(real_stdout_fd, data, r, sApp->shmem->cfg.verbosity);
         }
 
         munmap_and_truncate_log(data, r);
