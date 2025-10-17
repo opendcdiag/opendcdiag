@@ -1548,6 +1548,8 @@ function selftest_logerror_common() {
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/mask" '0x[0-9a-f]+'
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/actual data" '[0-9a-f ]+'
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/expected data" '[0-9a-f ]+'
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/details/rare" False
+            test_yaml_numeric "/tests/0/threads/$i/messages/0/data-miscompare/details/count" 'value == 16'
         done
     done
 }

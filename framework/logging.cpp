@@ -1232,6 +1232,23 @@ static void logging_format_data(DataType type, std::string_view description, con
                   "remark:      'memcmp_offset() could not locate difference'";
     }
 
+    // are there more details supplied by the callback?
+    if (description.size()) {
+        buffer += "\ndetails:\n";
+        std::string_view details = description;
+        size_t lastpos = 0;
+        size_t nl = details.find('\n', lastpos);
+        while (nl != std::string_view::npos) {
+            buffer += "  ";
+            ++nl;       // include newline
+            buffer += details.substr(lastpos, nl - lastpos);
+            lastpos = nl;
+            nl = details.find('\n', lastpos);
+        }
+        buffer += "  ";
+        buffer += details.substr(lastpos);
+    }
+
     PerThreadData::Common *thread = sApp->thread_data(thread_num);
     log_message_for_thread(thread, LogTypes::RawYaml, LOG_LEVEL_QUIET, buffer);
 }
