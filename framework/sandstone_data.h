@@ -58,7 +58,7 @@ struct Float128
 #endif
 #ifdef __cplusplus
     Float128() = default;
-    Float128(long double f) : payload(f) {}
+    Float128(long double f) : payload{f} {}
 
     static constexpr int digits = 113;
     static constexpr int digits10 = 33;
@@ -150,13 +150,13 @@ static inline float frombf16_emulated(BFloat16 r)
 #ifdef __cplusplus
 } // extern "C"
 
-inline Float16::Float16(float f)
-    : Float16(tofp16(f))
+constexpr inline Float16::Float16(float f)
+    : Float16{tofp16(f)}
 {
 }
 
-inline BFloat16::BFloat16(float f)
-    : BFloat16(tobf16_emulated(f))
+constexpr inline BFloat16::BFloat16(float f)
+    : BFloat16{tobf16_emulated(f)}
 {
 }
 
