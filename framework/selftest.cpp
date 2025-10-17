@@ -665,8 +665,12 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     values[diff] = make_datacompare_value<T>();
 
     auto formatter = [&](ptrdiff_t idx) {
-        return stdprintf("data at index %td", idx);
+        return stdprintf("data at index %td\n"
+                         "rare: false\n"
+                         "modified_at: %d\n"
+                         "count: %zu", idx, diff, Count);
     };
+
     if constexpr (std::is_integral_v<T>) {
         // use the C++ way with a lambda
         memcmp_or_fail(values, values + 1, Count, formatter);
