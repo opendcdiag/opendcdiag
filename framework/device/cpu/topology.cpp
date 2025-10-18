@@ -457,8 +457,8 @@ bool TopologyDetector::create_mock_topology(const char *topo)
         struct cpu_info *info = &cpu_info[cpu_count];
         ++cpu_count;
 
-        info->package_id = info->numa_id = info->tile_id =
-                info->module_id = info->core_id = info->thread_id = 0;
+        info->package_id = info->core_id = info->thread_id = 0;
+        info->numa_id = info->module_id = info->tile_id = -1;
         info->native_core_type = core_type_unknown;
 
         // mock cache too (8 kB L1, 32 kB L2, 256 kB L3)
@@ -505,6 +505,11 @@ bool TopologyDetector::create_mock_topology(const char *topo)
 
             c = topo ? topo[0] | 0x20 : '\0';
         }
+
+        if (info->module_id < 0)
+            info->module_id = info->core_id;
+        if (info->numa_id < 0)
+            info->numa_id = info->package_id;
 
         while (topo && (*topo == ' ' || *topo == ','))
             ++topo;
