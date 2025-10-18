@@ -29,6 +29,8 @@ struct test mce_test = {
 };
 #endif
 
+std::vector<struct test*> special_tests;
+
 void SandstoneTestSet::load_all_tests()
 {
     std::span<struct test> known_tests = cfg.is_selftest ? selftests : regular_tests;
@@ -42,8 +44,10 @@ void SandstoneTestSet::load_all_tests()
         }
     }
 
-    /* add "special" mce_check as well */
-    all_tests.push_back(&mce_test);
+    /* add "special" tests */
+    for (auto special_test : special_tests) {
+        all_tests.push_back(special_test);
+    }
 }
 
 /* Looks up a name or a pattern among all "known" tests. Returns all the
