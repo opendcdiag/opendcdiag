@@ -10,6 +10,8 @@
 
 #if SANDSTONE_DEVICE_CPU
 #include <device/cpu/logging_cpu.h>
+#elif SANDSTONE_DEVICE_GPU
+// #include <device/gpu/logging_gpu.h>
 #endif
 
 #endif /* INC_LOGGING_DEVICE_H */
