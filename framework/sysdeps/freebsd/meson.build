@@ -7,4 +7,5 @@ framework_files += \
         'malloc.cpp',
         '../generic/kvm.c',
         '../generic/memfpt.c',
+        '../generic/physicaladdress.c',
     )
