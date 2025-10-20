@@ -370,10 +370,11 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
         enum Type : int8_t {
             FullSystem = -1,
             IsolateSockets,
+            IsolateNuma,
             Heuristic,
         };
         using Slices = std::vector<DeviceRange>;
-        std::array<Slices, 2> plans;
+        std::array<Slices, 3> plans;
     };
 
     struct SharedMemory;

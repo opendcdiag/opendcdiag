@@ -1681,6 +1681,7 @@ void slice_plan_init(int max_cores_per_slice)
 
         // set up proper plans
         std::vector<DeviceRange> &isolate_socket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
+        std::vector<DeviceRange> &isolate_numa = sApp->slice_plans.plans[SlicePlans::IsolateNuma];
         std::vector<DeviceRange> &split = sApp->slice_plans.plans[SlicePlans::Heuristic];
         auto push_to = [](std::vector<DeviceRange> &to, auto start, auto end) {
             int start_cpu = start[0].threads.front().cpu();
@@ -1695,20 +1696,12 @@ void slice_plan_init(int max_cores_per_slice)
 
             push_to(isolate_socket, p.cores.begin(), p.cores.end());
 
-            bool homogeneous_package =
-                    (p.cores.front().threads[0].native_core_type ==
-                     p.cores.back().threads[0].native_core_type);
-            if (homogeneous_package && p.cores.size() <= max_cores_per_slice) {
-                // easy case: package has fewer than max_cores_per_slice and is
-                // homogeneous
-                push_to(split, p.cores.begin(), p.cores.end());
-                continue;
-            }
-
             // if we have to split, we'll try to split along NUMA node lines
             for (const Topology::NumaNode &n : p.numa_domains) {
                 if (n.cores.size() == 0)
                     continue;   // untested node (shouldn't happen!)
+
+                push_to(isolate_numa, n.cores.begin(), n.cores.end());
 
                 auto begin = n.cores.begin();
                 const auto end = n.cores.end();

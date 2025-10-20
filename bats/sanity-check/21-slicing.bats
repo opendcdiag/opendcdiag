@@ -114,6 +114,38 @@ function cpuset_unique_modules() {
     test_yaml_numeric "/test-plans/fullsocket/1/starting_cpu" "value == $socket0count"
 }
 
+@test "slicing NUMA domains" {
+    declare -A yamldump
+
+    # attempt to run on one socket with multiple NUMA domains
+    MAX_PROC=`nproc`
+    if (( `nproc` >= 8 )); then
+        export SANDSTONE_MOCK_TOPOLOGY='n0c0 n0c1 n0c2 n0c3 n1c64 n1c65 n1c66 n1c67'
+    elif (( MAX_PROC >= 4 )); then
+        export SANDSTONE_MOCK_TOPOLOGY='n0c0 n0c1 n1c64 n1c65'
+    else
+        skip "Test needs at least 4 different CPUs to test"
+    fi
+    sandstone_yq --cpuset=p0 --disable=\* --max-cores-per-slice=$MAX_PROC
+
+    # did we see different NUMA domains?
+    local domains=(`query_jq -r '[ ."cpu-info"[].numa_node ] | unique | .[]'`)
+    test_yaml_numeric "/test-plans/isolate_numa@len" "value == ${#domains[@]}"
+
+    if [[ "${#domains[@]}" == 1 ]]; then
+        skip "Test only works with Debug builds (to mock the topology) or in systems with different NUMA domains"
+    fi
+
+    local i idx
+    for ((i = 0, idx = 0; i < ${#domains[@]}; ++i)); do
+        local d=${domains[$i]}
+        local cpucount=`query_jq -r '[ ."cpu-info"[] | select(.numa_node == '$d') ] | length'`
+        test_yaml_numeric "/test-plans/isolate_numa/$i/starting_cpu" "value == $idx"
+        test_yaml_numeric "/test-plans/isolate_numa/$i/count" "value == $cpucount"
+        idx=$((idx + cpucount))
+    done
+}
+
 @test "slicing cores" {
     declare -A yamldump
 

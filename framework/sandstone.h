@@ -265,6 +265,12 @@ typedef enum test_flag {
     /// system, with all cores.
     test_schedule_isolate_socket    = 3,
 
+    /// Asks the framework to run one child process per NUMA domain in each
+    /// socket in the system, with all cores. Note: on hybrid systems with
+    /// different core types, each core type is considered a different "NUMA"
+    /// domain.
+    test_schedule_isolate_numa_domain = 4,
+
     test_schedule_mask              = 0x0f,
 
     /// Tells the --test-tests mode to ignore memory consumption for this test
