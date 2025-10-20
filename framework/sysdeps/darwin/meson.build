@@ -8,4 +8,5 @@ framework_files += \
         'pthread_barrier.cpp',
         '../generic/kvm.c',
         '../generic/memfpt.c',
+        '../generic/physicaladdress.c',
     )

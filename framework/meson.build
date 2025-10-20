@@ -264,14 +264,8 @@ endif
 
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
     subdir('sysdeps/unix')
-    if fs.is_dir('device' / device_type / 'sysdeps' / 'unix')
-        subdir('device' / device_type / 'sysdeps' / 'unix')
-    endif
 endif
 subdir(sysdeps_dir)
-if devicedeps_sys_dir.contains('device')
-    subdir(devicedeps_sys_dir)
-endif
 
 configure_file(
     input: 'sandstone_config.h.in',
