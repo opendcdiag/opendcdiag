@@ -10,6 +10,8 @@
 
 #if SANDSTONE_DEVICE_CPU
 #include <device/cpu/test_data_cpu.h>
+#elif SANDSTONE_DEVICE_GPU
+#include <device/gpu/test_data_gpu.h>
 #endif
 
 #endif /* INC_TEST_DATA_DEVICE_H */

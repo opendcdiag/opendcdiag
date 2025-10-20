@@ -10,6 +10,8 @@
 
 #if SANDSTONE_DEVICE_CPU
 #include <device/cpu/topology_cpu.h>
+#elif SANDSTONE_DEVICE_GPU
+#include <device/gpu/topology_gpu.h>
 #endif
 
 #endif /* INC_DEVICE_TOPOLOGY_H */
