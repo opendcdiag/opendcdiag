@@ -212,13 +212,11 @@ static struct timespec elapsed_runtime(void)
     return (struct timespec){ secs, nsecs };
 }
 
-#if !SANDSTONE_LOGGING_YAML_ONLY
 std::string AbstractLogger::log_timestamp()
 {
     struct timespec elapsed = elapsed_runtime();
     return stdprintf("[%5ld.%06d] ", (long)elapsed.tv_sec, (int)elapsed.tv_nsec / 1000);
 }
-#endif
 
 static bool is_dumb_terminal()
 {
@@ -1391,7 +1389,6 @@ static std::string_view format_skip_message(std::string_view message)
     return message.substr(1);
 }
 
-#if !SANDSTONE_LOGGING_YAML_ONLY
 void AbstractLogger::format_and_print_message(int fd, std::string_view message, bool from_thread_message)
 {
     if (message.find('\n') != std::string_view::npos) {
@@ -1464,7 +1461,6 @@ int AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Commo
 
     return lowest_level;
 }
-#endif // !SANDSTONE_LOGGING_YAML_ONLY
 
 void AbstractLogger::print_child_stderr_common(std::function<void(int)> header)
 {

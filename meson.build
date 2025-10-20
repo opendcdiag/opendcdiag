@@ -311,6 +311,7 @@ executable(
         'framework/sysdeps/linux/malloc.cpp',
     ),
     unittests_sources,
+    generated_files,
     dependencies: [gtest_dep, pthread_dep],
     include_directories: [
         framework_incdir,
