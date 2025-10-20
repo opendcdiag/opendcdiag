@@ -505,10 +505,12 @@ function selftest_log_skip_init_common() {
     test_yaml_numeric "/tests/$((i-1))/time-at-start/elapsed" 'value < 250'
 }
 
-@test "selftest_timedpass -t 1150" {
-    # With over 800 ms, we should see fracturing
+@test "selftest_timedpass -t 490 fracturing" {
+    # With over 100 ms, we should see fracturing
+    # Note: this test depends on the selftest_timedpass_run() function being
+    # run with 10ms sleep times.
     declare -A yamldump
-    sandstone_selftest -e selftest_timedpass -t 1150
+    sandstone_selftest -e selftest_timedpass -t 490 --max-test-loop-count=10
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
 
@@ -525,10 +527,19 @@ function selftest_log_skip_init_common() {
         [[ "$value" != "$last_seed" ]]
         last_seed=$value
 
-        if ((i == yamldump[/tests@len] - 1)); then
-            test_yaml_numeric "/tests/1/test-runtime" 'value >= 10'
+        # The runtime must be bigger than at least one loop
+        test_yaml_numeric "/tests/$i/test-runtime" 'value >= 10'
+
+        local test_start_time=${yamldump[/tests/$i/time-at-start/elapsed]%.*}
+        # The first fracture must definitely have run for 100 ms
+        if ((i == 0)); then
+            test_yaml_numeric "/tests/$i/test-runtime" 'value >= 100'
+        elif ((test_start_time < 400)); then
+            # Any fractures started before elapsed=400 must too
+            test_yaml_numeric "/tests/$i/test-runtime" 'value >= 100'
         else
-            test_yaml_numeric "/tests/0/test-runtime" 'value >= 400 && value <= 1000'
+            # the last fracture has a shorter time
+            test_yaml_numeric "/tests/$i/test-runtime" "value >= 500 - $test_start_time"
         fi
     done
 }
