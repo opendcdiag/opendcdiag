@@ -59,6 +59,10 @@ public:
     [[gnu::pure]] static const char *crash_reason(const ChildExitStatus &status);
     [[gnu::pure]] static const char *sysexit_reason(const ChildExitStatus &status);
 
+    // device-specific interfaces
+    static std::string thread_id_header_for_device(int device, int verbosity);
+    static void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
+
     const struct test *test;
     MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
     std::span<const ChildExitStatus> slices;
@@ -114,12 +118,10 @@ private:
     void print_result_line(int &init_skip_message_bytes);
 };
 
-std::string thread_id_header_for_device(int device, int verbosity);
-void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
 #if SANDSTONE_NO_LOGGING
-inline std::string thread_id_header_for_device(int device, int verbosity)
+inline std::string AbstractLogger::thread_id_header_for_device(int device, int verbosity)
 { __builtin_unreachable(); return {}; }
-inline void print_thread_header_for_device(int fd, PerThreadData::Test *thr)
+inline void AbstractLogger::print_thread_header_for_device(int fd, PerThreadData::Test *thr)
 { __builtin_unreachable(); }
 #endif
 
