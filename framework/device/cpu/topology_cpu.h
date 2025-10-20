@@ -81,8 +81,6 @@ struct Topology::Data
     std::vector<Topology::Thread> all_threads;
 };
 
-bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const char *thread_name = nullptr);
-
 class BarrierDeviceScheduler : public DeviceScheduler
 {
 public:
