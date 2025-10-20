@@ -62,6 +62,7 @@ public:
     // device-specific interfaces
     static std::string thread_id_header_for_device(int device, int verbosity);
     static void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
+    static void print_fixed_for_device();
 
     const struct test *test;
     MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
@@ -122,6 +123,8 @@ private:
 inline std::string AbstractLogger::thread_id_header_for_device(int device, int verbosity)
 { __builtin_unreachable(); return {}; }
 inline void AbstractLogger::print_thread_header_for_device(int fd, PerThreadData::Test *thr)
+{ __builtin_unreachable(); }
+inline void AbstractLogger::print_fixed_for_device()
 { __builtin_unreachable(); }
 #endif
 

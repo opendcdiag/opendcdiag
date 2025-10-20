@@ -892,8 +892,10 @@ static uintptr_t thread_runner(int thread_number)
     // indicate to SIGQUIT handler that we're running
     this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
 
+#if SANDSTONE_DEVICE_CPU
     CPUTimeFreqStamp before;
     before.Snapshot(thread_number);
+#endif
     test_start();
 
     try {
@@ -905,9 +907,11 @@ static uintptr_t thread_runner(int thread_number)
 
     cleanup.run_now();
 
+#if SANDSTONE_DEVICE_CPU
     CPUTimeFreqStamp after;
     after.Snapshot(thread_number);
     this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
+#endif
 
     if (sApp->shmem->cfg.verbosity >= 3)
         log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
