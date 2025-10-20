@@ -3,6 +3,5 @@
 
 framework_files += \
     files(
-        'cpu_affinity.cpp',
         'physicaladdress.cpp',
     )
