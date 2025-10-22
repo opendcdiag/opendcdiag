@@ -362,6 +362,7 @@ struct SandstoneApplicationConfig {
 
 struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_data<SandstoneConfig::Debug>
 {
+    static constexpr int MaxRetestCount = sizeof(PerThreadFailures::value_type) * 8;
     using OutputFormat = TestConfig::OutputFormat;
 
     struct SlicePlans {
@@ -379,6 +380,7 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
 
     struct SharedMemory;
 
+    HardwareInfo hwinfo;
     SlicePlans slice_plans;
     std::vector<test_data_per_thread> user_thread_data;
     PerThreadData::Main *main_thread_data_ptr;  // points to somewhere in the shmem
@@ -386,12 +388,12 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     SharedMemory *shmem = nullptr;
     int shmemfd = -1;
 
-    static constexpr int MaxRetestCount = sizeof(PerThreadFailures::value_type) * 8;
+    static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
     int current_test_count;
-    MonotonicTimePoint current_test_starttime;
-    static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
     ShortDuration current_test_duration;
+    MonotonicTimePoint current_test_starttime;
+    int threshold_time_remaining = 30000;
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
 #if SANDSTONE_FREQUENCY_MANAGER
@@ -401,9 +403,6 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
 #ifndef __linux__
     std::string path_to_self;
 #endif
-    int threshold_time_remaining = 30000;
-
-    HardwareInfo hwinfo;
 
     ForkMode current_fork_mode() const
     {
