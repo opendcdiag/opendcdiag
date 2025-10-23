@@ -271,6 +271,7 @@ selftest_pass() {
     test_yaml_numeric "/tests/0/time-at-start/elapsed" 'value >= 0'
     test_yaml_numeric "/tests/0/time-at-end/elapsed" 'value >= 0'
     test_yaml_numeric "/tests/0/test-runtime" 'value >= 0'
+    test_yaml_absent "/tests/0/messages"    # no messages
 }
 
 @test "selftest_pass" {
@@ -691,6 +692,19 @@ function selftest_log_skip_init_common() {
     test_yaml_regexp "/tests/0/threads/0/messages/1/text" '.*NullStringValue = 0x1'
     test_yaml_regexp "/tests/0/threads/0/messages/2/text" '.*Numbers: 1 4097'
     test_yaml_regexp "/tests/0/threads/0/messages/3/text" '.*Double: -8.125'
+}
+
+@test "positive_with_cb" {
+    # Ensure that the positive tests *don't* run the callback
+    declare -A yamldump
+    sandstone_selftest -vvv --quick --max-messages=0 -e "@positive"
+    for ((i = 0; i < ${yamldump[/tests@len]}; ++i)); do
+        test_yaml_regexp "/tests/$i/result" 'pass|skip'
+        for ((j = 0; j < ${yamldump[/tests/$i/messages@len]-0}; ++j)); do
+            test_yaml_expr "tests/$i/messages/$j/level" != error
+            [[ "${yamldump[/tests/$i/messages/$j/text]}" != *'Callback in thread'* ]]
+        done
+    done
 }
 
 @test "selftest_logs_random_init" {
@@ -1228,9 +1242,42 @@ fail_common() {
     test_yaml_numeric "/tests/0/fail/time-to-fail" 'value > 0'
 
     ttf=${yamldump[/tests/0/fail/time-to-fail]}
-    for ((i = 1; i <= MAX_PROC; ++i)); do
+    for ((i = 0; i < ${yamldump[/tests/0/threads@len]}; ++i)); do
+        [[ "${yamldump[/tests/0/threads/$i/thread]}" = [0-9]* ]] || continue
         test_yaml_regexp "/tests/0/threads/$i/state" failed
         test_yaml_numeric "/tests/0/threads/$i/time-to-fail" "value >= $ttf"
+    done
+}
+
+fail_callback_common() {
+    local testnr=0
+    local i
+    local trigger=${1-trigger}
+    for ((i = 0; i < ${yamldump[/tests/$testnr/threads@len]}; ++i)); do
+        # Callbacks are only used for test threads, not the main thread
+        [[ "${yamldump[/tests/$testnr/threads/$i/thread]}" = [0-9]* ]] || continue
+
+        local n=
+        if [[ "$trigger" = "notrigger" ]]; then
+            # Without a trigger (i.e., when the test's run() function simply
+            # returns EXIT_FAILURE), our message should simply be the last one.
+            n=$((${yamldump[/tests/$testnr/threads/$i/messages@len]} - 1))
+        else
+            # With a trigger (i.e., another error), our message is the message
+            # after the first level=error message. Find it.
+            local j
+            for ((j = 0; j < ${yamldump[/tests/$testnr/threads/$i/messages@len]}; ++j)); do
+                [[ "${yamldump[/tests/$testnr/threads/$i/messages/$j/level]}" = error ]] || continue
+                printf >&2 'Error message triggering the callback was #%d: %s\n' \
+                    $j "${yamldump[/tests/$testnr/threads/$i/messages/$j]}"
+
+                n=$((j + 1))
+                break
+            done
+        fi
+        test_yaml_expr "/tests/$testnr/threads/$i/messages/$n/level" = warning
+        test_yaml_regexp "/tests/$testnr/threads/$i/messages/$n/text" \
+            "W> Callback in thread ${yamldump[/tests/$testnr/threads/$i/thread]}.*"
     done
 }
 
@@ -1238,6 +1285,13 @@ fail_common() {
     declare -A yamldump
     sandstone_selftest -vvv -e selftest_fail
     fail_common
+}
+
+@test "selftest_fail_with_cb" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_with_cb
+    fail_common
+    fail_callback_common notrigger
 }
 
 @test "selftest_fail --retest-on-failure=3" {
@@ -1280,33 +1334,66 @@ fail_common() {
 }
 
 function selftest_logerror_common() {
-    declare -A yamldump
-    sandstone_selftest -vvv -e $1
+    sandstone_selftest -e $1
     pattern=$2
     set -e
     fail_common
-    for ((i = 1; i <= MAX_PROC; ++i)); do
+    for ((i = 0; i < ${yamldump[/tests/0/threads@len]}; ++i)); do
+        local cpu=${yamldump[/tests/0/threads/$i/thread]}
+        [[ "$cpu" = [0-9]* ]] || continue   # skip main thread
         test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" 'E> '"${pattern/@CPU@/$((i - 1))}"
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" 'E> '"${pattern/@CPU@/$cpu}"
+        if [[ "$1" = "selftest_logerror"* ]]; then
+            # Check that the second log_error() was printed and was the last thing
+            local msgcount=${yamldump[/tests/0/threads/$i/messages@len]}
+            test_yaml_expr "/tests/0/threads/$i/messages/$((msgcount - 1))/text" = "E> This is an another error message"
+        fi
     done
 }
 
 @test "selftest_logerror" {
+    declare -A yamldump
     selftest_logerror_common selftest_logerror "This is an error.*CPU @CPU@"
 }
 
+@test "selftest_logerror_with_cb" {
+    declare -A yamldump
+    selftest_logerror_common selftest_logerror_with_cb "This is an error.*CPU @CPU@"
+    fail_callback_common
+}
+
 @test "selftest_reportfail" {
+    declare -A yamldump
     selftest_logerror_common selftest_reportfail 'Failed at .*selftest\.cpp:[0-9]+'
 }
 @test "selftest_reportfailmsg" {
+    declare -A yamldump
     selftest_logerror_common selftest_reportfailmsg 'Failed at .*selftest\.cpp:[0-9]+: Failure message from thread @CPU@'
 }
 
+@test "selftest_reportfail_with_cb" {
+    declare -A yamldump
+    selftest_logerror_common selftest_reportfail_with_cb 'Failed at .*selftest\.cpp:[0-9]+'
+    fail_callback_common
+}
+@test "selftest_reportfailmsg_with_cb" {
+    declare -A yamldump
+    selftest_logerror_common selftest_reportfailmsg_with_cb 'Failed at .*selftest\.cpp:[0-9]+: Failure message from thread @CPU@'
+    fail_callback_common
+}
+
 @test "selftest_cxxthrow" {
+    declare -A yamldump
     selftest_logerror_common selftest_cxxthrow 'Caught C\+\+ exception: .*'
 }
 
-@test "selftest_datacompare" {
+@test "selftest_cxxthrow_with_cb" {
+    declare -A yamldump
+    selftest_logerror_common selftest_cxxthrow_with_cb 'Caught C\+\+ exception: .*'
+    fail_callback_common
+}
+
+@test "selftest_datacompare" {  # also "_with_cb" version
     declare -A yamldump
     local dataregexp='0x[0-9a-f]+( \(([-0-9]+|[-+0-9a-fpx.]+)\))?'
     for test in `$SANDSTONE --selftests --list-tests | sed -n '/^selftest_datacomparefail/s/\r$//p'`; do
@@ -1318,6 +1405,7 @@ function selftest_logerror_common() {
         sandstone_selftest -vvv -e $test
         set -e
         fail_common
+        [[ "$test" != *_with_cb ]] || fail_callback_common
         for ((i = 1; i <= MAX_PROC; ++i)); do
             test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/type" $type
@@ -1332,9 +1420,8 @@ function selftest_logerror_common() {
     done
 }
 
-@test "selftest_datacompare_nodifference" {
-    declare -A yamldump
-    sandstone_selftest -vvv -e selftest_datacompare_nodifference
+function selftest_datacompare_nodifference_common() {
+    sandstone_selftest "$@"
     fail_common
     for ((i = 1; i <= MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
@@ -1346,6 +1433,16 @@ function selftest_logerror_common() {
         test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/mask" None
         test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/remark" '.+'
     done
+}
+
+@test "selftest_datacompare_nodifference" {
+    declare -A yamldump
+    selftest_datacompare_nodifference_common -vvv -e selftest_datacompare_nodifference
+}
+@test "selftest_datacompare_nodifference_with_cb" {
+    declare -A yamldump
+    selftest_datacompare_nodifference_common -vvv -e selftest_datacompare_nodifference_with_cb
+    fail_callback_common
 }
 
 @test "selftest_freeze" {

@@ -897,6 +897,7 @@ static uintptr_t thread_runner(int thread_number)
             if (sApp->shmem->cfg.ud_on_failure)
                 ud2();
             logging_mark_thread_failed(thread_number);
+            logging_run_callback();
         } else if (new_state == thread_skipped) {
             logging_mark_thread_skipped(thread_number);
         }
