@@ -93,6 +93,8 @@ RtlGetVersion(
 #  include <gnu/libc-version.h>
 #endif
 
+static constexpr const char *levels[] = { "error", "warning", "info", "debug" };
+
 static int tty = -1;
 static int stderr_fd = -1;
 static bool delete_log_on_success;
@@ -109,6 +111,7 @@ enum LogTypes {
     Preformatted = 1,
     UsedKnobValue = 2,
     SkipMessages = 3,
+    RawYaml = 4,
 };
 } // unnamed namespace
 
@@ -137,7 +140,7 @@ static const char *strnchr(const char *buffer, char c, size_t len)
 
 static uint8_t message_code(enum LogTypes logType, int level)
 {
-    assert((int)logType < 4);
+    assert((int)logType < 0xf);
     unsigned code = ((unsigned)logType + 1) << 4;
     code |= (level & 0xf);
     return (uint8_t)code;
@@ -1096,7 +1099,7 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
         [[fallthrough]];
 
     case SandstoneApplication::OutputFormat::key_value:
-        spaces.resize(4 + (from_memcmp ? 3 : 0), ' ');
+        spaces.resize(4 + (from_memcmp ? 1 : 0), ' ');
         buffer += spaces;
         buffer += "data(";
         buffer += message;
@@ -1146,36 +1149,20 @@ void log_data(const char *message, const void *data, size_t size)
 static void logging_format_data(DataType type, std::string_view description, const uint8_t *data1,
                                 const uint8_t *data2, ptrdiff_t offset)
 {
-    std::string spaces(sApp->shmem->cfg.output_yaml_indent + 7, ' ');
-    std::string buffer;
-    switch (current_output_format()) {
-    case SandstoneApplication::OutputFormat::tap:
-    case SandstoneApplication::OutputFormat::key_value:
-        buffer += "  - data-miscompare:\n";
-        break;
-
-    case SandstoneApplication::OutputFormat::yaml:
-        buffer += stdprintf("%s- level: error\n"
-                            "%s  data-miscompare:\n",
-                            spaces.c_str() + 3,
-                            spaces.c_str() + 3);
-        break;
-
-    case SandstoneApplication::OutputFormat::no_output:
-        assert(false && "Shouldn't have reached here");
-        __builtin_unreachable();
-        break;
-    }
-
-    auto formatAddresses = [&spaces](const uint8_t *ptr) {
-        std::string result = stdprintf("%saddress:     '%p'\n", spaces.c_str(), ptr);
+    // see format_and_print_raw_yaml() for the line protocol
+    std::string buffer = "data-miscompare:\n\n";
+    auto formatAddresses = [&](const uint8_t *ptr) {
+        std::string result = stdprintf("address:     '%p'\n", ptr);
         if (uint64_t physaddr = retrieve_physical_address(ptr)) {
             // 2^48-1 requires 12 hex digits
-            result += stdprintf("%sphysical:    '%#012" PRIx64 "'\n",
-                                 spaces.c_str(), physaddr);
+            result += stdprintf("physical:    '%#012" PRIx64 "'\n", physaddr);
         }
         return result;
     };
+
+    buffer += "description: '";
+    buffer += description;
+    buffer += "'\ntype:        ";
 
     const char *typeName = SandstoneDataDetails::type_name(type);
     if (!typeName) {
@@ -1183,10 +1170,8 @@ static void logging_format_data(DataType type, std::string_view description, con
         type = UInt8Data;
         typeName = SandstoneDataDetails::type_name(type);
     }
-    buffer += stdprintf("%sdescription: '%.*s'\n"
-                        "%stype:        %s\n",
-                        spaces.c_str(), int(description.size()), description.data(),
-                        spaces.c_str(), typeName);
+    buffer += typeName;
+    buffer += '\n';
 
     if (offset >= 0) {
         // typical case
@@ -1201,27 +1186,26 @@ static void logging_format_data(DataType type, std::string_view description, con
         for (int i = 0; i < typeSize; ++i)
             xormask[i] = data1[alignedOffset + i] ^ data2[alignedOffset + i];
 
-        buffer += stdprintf("%soffset:      [ %td, %td ]\n",
-                            spaces.c_str(), alignedOffset, offset - alignedOffset);
+        buffer += stdprintf("offset:      [ %td, %td ]\n",
+                            alignedOffset, offset - alignedOffset);
         buffer += formatAddresses(data1 + offset);
-        buffer += stdprintf("%sactual:      '0x%s'\n"
-                            "%sexpected:    '0x%s'\n"
-                            "%smask:        '0x%s'\n",
-                            spaces.c_str(), format_single_type(type, typeSize, data1 + alignedOffset, true).c_str(),
-                            spaces.c_str(), format_single_type(type, typeSize, data2 + alignedOffset, true).c_str(),
-                            spaces.c_str(), format_single_type(type, typeSize, xormask, false).c_str());
+        buffer += stdprintf("actual:      '0x%s'\n"
+                            "expected:    '0x%s'\n"
+                            "mask:        '0x%s'",
+                            format_single_type(type, typeSize, data1 + alignedOffset, true).c_str(),
+                            format_single_type(type, typeSize, data2 + alignedOffset, true).c_str(),
+                            format_single_type(type, typeSize, xormask, false).c_str());
     } else {
         // no difference was found: memcmp_offset() disagrees with memcmp_or_fail()
-        buffer += stdprintf("%soffset:      null\n", spaces.c_str());
+        buffer += "offset:      null\n";
         buffer += formatAddresses(data1);
-        buffer += stdprintf("%sactual:      null\n"
-                            "%sexpected:    null\n"
-                            "%smask:        null\n"
-                            "%sremark:      'memcmp_offset() could not locate difference'\n",
-                            spaces.c_str(), spaces.c_str(), spaces.c_str(), spaces.c_str());
+        buffer += "actual:      null\n"
+                  "expected:    null\n"
+                  "mask:        null\n"
+                  "remark:      'memcmp_offset() could not locate difference'";
     }
 
-    log_message_for_thread(thread_num, Preformatted, LOG_LEVEL_QUIET, buffer);
+    log_message_for_thread(thread_num, RawYaml, LOG_LEVEL_QUIET, buffer);
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
@@ -1280,6 +1264,24 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     };
     do_log_data("actual", actual);
     do_log_data("expected", expected);
+}
+
+#undef log_yaml
+void log_yaml(char levelchar, const char *yaml)
+{
+    int level = status_level(levelchar);
+    if (levelchar == 'E')
+        logging_mark_thread_failed(thread_num);
+    if (!SandstoneConfig::Debug && levelchar == 'd')
+        return;             // no Debug in non-debug build
+    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+        return;             // short-circuit
+
+    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
+    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
+        return;
+
+    log_message_for_thread(thread_num, RawYaml, level, '\n', yaml);
 }
 
 void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigin origin)
@@ -1391,6 +1393,61 @@ static std::string_view format_skip_message(std::string_view message)
     return message.substr(1);
 }
 
+static void format_and_print_raw_yaml(int fd, int message_level, std::string_view message)
+{
+    assert(size_t(message_level) < std::size(levels));
+    while (message.ends_with('\n'))
+        message.remove_suffix(1);       // remove trailing newline
+
+    int indent = sApp->shmem->cfg.output_yaml_indent + 2;
+    if (current_output_format() == SandstoneApplication::OutputFormat::yaml)
+        indent += 2;    // under "messages:"
+
+    std::string buffer(indent, ' ');
+    buffer += "- level: ";
+    buffer += levels[message_level];
+    buffer += '\n';
+    indent += 2;
+
+    // the first line is the heading; for log_yaml(), it's always "details:"
+    std::string_view heading = "details:\n";
+    ptrdiff_t nl = message.find('\n');
+    assert(nl >= 0);
+    if (nl)
+        heading = message.substr(0, nl + 1);    // include the newline
+    message.remove_prefix(nl + 1);
+
+    // the second line is the optional description for "text:"
+    nl = message.find('\n');
+    assert(nl >= 0);
+    if (nl) {
+        buffer.append(indent, ' ');
+        buffer += "text: '";
+        buffer += escape_for_single_line(message.substr(0, nl));
+        buffer += "'\n";
+    }
+    message.remove_prefix(nl + 1);
+
+    buffer.append(indent, ' ');
+    buffer += heading;
+
+    indent += 1; // nest inside "details:"
+    nl = message.find('\n');
+    while (nl >= 0) {
+        buffer.append(indent, ' ');
+
+        // write the newline too
+        ++nl;
+        buffer += message.substr(0, nl);
+        message.remove_prefix(nl);
+        nl = message.find('\n');
+    }
+    buffer.append(indent, ' ');
+    buffer += message;
+    buffer += '\n';
+    writevec(fd, buffer);
+}
+
 #if !SANDSTONE_LOGGING_YAML_ONLY
 void AbstractLogger::format_and_print_message(int fd, std::string_view message, bool from_thread_message)
 {
@@ -1432,6 +1489,10 @@ int AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Commo
         switch (log_type_from_code(code)) {
         case UserMessages:
             format_and_print_message(fd, message, true);
+            break;
+
+        case RawYaml:
+            format_and_print_raw_yaml(fd, message_level, message);
             break;
 
         case Preformatted:
@@ -1824,8 +1885,6 @@ void YamlLogger::format_and_print_skip_reason(int fd, std::string_view message)
 
 inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level)
 {
-    const char *levels[] = { "error", "warning", "info", "debug" };
-
     int lowest_level = INT_MAX;
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
@@ -1850,6 +1909,11 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
         case UserMessages:
             assert(size_t(message_level) < std::size(levels));
             format_and_print_message(fd, levels[message_level], message);
+            break;
+
+        case RawYaml:
+            assert(size_t(message_level) < std::size(levels));
+            format_and_print_raw_yaml(fd, message_level, message);
             break;
 
         case Preformatted:

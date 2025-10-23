@@ -182,6 +182,17 @@ static int selftest_log_platform_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int selftest_lograwyaml_run(struct test *test, int cpu)
+{
+    log_yaml(SANDSTONE_LOG_INFO,
+             stdprintf("Some details from the test\n"
+                       "cpu: %d\n"
+                       "random: 0h%016llx\n"
+                       "text: foo bar\n\n",
+                       cpu, (unsigned long long)random64()).c_str());
+    return EXIT_SUCCESS;
+}
+
 static int selftest_logs_options_init(struct test *test)
 {
     const char *strvalue = get_testspecific_knob_value_string(test, "StringValue", "DefaultValue");
@@ -1260,6 +1271,14 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_init = selftest_log_platform_init,
     .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_log_raw_yaml",
+    .description = "Logs YAML content",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_lograwyaml_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
