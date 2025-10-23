@@ -77,11 +77,9 @@ private:
 
 #ifdef _WIN32
         buflen = ftell(test_stream);
-        if (buflen < 0) {
-            buffer = new char;
-            return;
-        }
-        buffer = new char[buflen];
+        if (buflen < 0)
+            buflen = 0;
+        buffer = (char *)malloc(buflen);
         fseek(test_stream, 0, SEEK_SET);
         fread(buffer, 1, buflen, test_stream);
 #endif
