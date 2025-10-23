@@ -30,6 +30,7 @@
 
 #ifdef __cplusplus
 #include <atomic>
+#include <memory>
 using std::atomic_int;
 extern "C" {
 #else
@@ -396,6 +397,15 @@ extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);
 extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, enum DataType, const char *fmt, ...)
     ATTRIBUTE_PRINTF(5, 6) __attribute__((cold, noreturn));
 
+/// Installs @p cb and will call it (with @p token as a parameter) the first
+/// time this thread logs an error (with memcmp_or_fail(), log_error(),
+/// report_fail_msg(), throwing an exception, or by returning with error from
+/// the test's run function). The callback is called at most once per thread.
+///
+/// This function must be called from the main thread (usually, from the test's
+/// init function).
+extern void install_failure_callback(void (*cb)(void *), void *token);
+
 /// can be called from a test's test_run function to fail the test.
 /// This macro will kill the calling thread and cause the test to
 /// exit.
@@ -567,6 +577,21 @@ constexpr inline test_flags operator|(test_flag f1, test_flag f2)
     return test_flags(unsigned(f1) | unsigned(f2));
 }
 
+template <typename Callback> void install_failure_callback(Callback cb)
+    requires std::is_invocable_v<Callback>
+{
+    using Stateless = void (*)();
+    if constexpr (std::is_constructible_v<Stateless, Callback>) {
+        install_failure_callback(reinterpret_cast<void (*)(void *)>(+cb), nullptr);
+    } else {
+        auto copy = new Callback(std::forward<Callback>(cb));
+        install_failure_callback([](void *token) {
+            std::unique_ptr<Callback> self(static_cast<Callback *>(token));
+            (*self)();
+        }, copy);
+    }
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
 template <typename T, typename... FmtArgs> [[noreturn, gnu::cold]] static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
@@ -645,6 +670,8 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 #  undef log_yaml
 #  undef report_fail
 #  undef report_fail_msg
+
+#  define install_failure_callback(cb, ...)     (void)cb
 
 #  define log_data(message, data, size)     (void)0
 #  define log_error(...)                    log_message(thread_num, SANDSTONE_LOG_ERROR "")

@@ -623,13 +623,33 @@ void logging_mark_thread_skipped(int thread_num) noexcept
     thr->fail_time = MonotonicTimePoint(Duration(-1));
 }
 
+void logging_run_callback()
+{
+    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+        return;
+    if (thread_num < 0)
+        return;     // callbacks don't apply to the main thread
+
+    PerThreadData::Common *thr = sApp->thread_data(thread_num);
+    if (thr->thread_flags & PerThreadData::Common::Flag::CallbackCalled)
+        return;     // already done
+
+    // make sure so we don't recurse in case the callback calls log_error()
+    thr->thread_flags |= uint32_t(PerThreadData::Common::Flag::CallbackCalled);
+    if (!SandstoneConfig::NoLogging && sApp->current_test_failure_callback.cb)
+        sApp->current_test_failure_callback.cb(sApp->current_test_failure_callback.token);
+}
+
 static void log_message_preformatted(int thread_num, std::string_view msg)
 {
     int level = status_level(msg[0]);
-    if (msg[0] == 'E')
+    bool is_error = msg[0] == 'E';
+    if (is_error)
         logging_mark_thread_failed(thread_num);
 
-    return log_message_preformatted(thread_num, level, msg);
+    log_message_preformatted(thread_num, level, msg);
+    if (is_error)
+        logging_run_callback();
 }
 
 void log_message_preformatted(int thread_num, int level, std::string_view msg)
@@ -923,6 +943,7 @@ void logging_flush(void)
 
 void logging_init(const struct test *test)
 {
+    sApp->current_test_failure_callback = {};
     if (sApp->shmem->cfg.verbosity <= 0)
         progress_bar_update();
 
@@ -1022,6 +1043,15 @@ void log_message(int thread_num, const char *fmt, ...)
     va_end(va);
     log_message_preformatted(thread_num, msg);
 }
+
+#if SANDSTONE_NO_LOGGING == 0
+void install_failure_callback(void (*cb)(void *), void *token)
+{
+    assert(thread_num < 0 && "callbacks can only be installed from the main thread");
+    sApp->current_test_failure_callback.token = token;
+    sApp->current_test_failure_callback.cb = cb;
+}
+#endif
 
 /// Escapes \c{message} suitable for a single-quote YAML line and returns it.
 /// The \c{storage} parameter is used in case we need to do escaping.
@@ -1231,8 +1261,11 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
         logging_format_data(type, escape_for_single_line(description, escaped_description),
                             actual, expected, offset);
     }
-    if (offset < 0)
-        return;         // we couldn't find a difference
+    if (offset < 0) {
+        // we couldn't find a difference
+        logging_run_callback();
+        return;
+    }
 
     // Log the data that failed. We have two buffers of size bytes to log, but
     // we'll obey the max_logdata_per_thread limit (shared with log_data()).
@@ -1271,6 +1304,7 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     };
     do_log_data("actual", actual);
     do_log_data("expected", expected);
+    logging_run_callback();
 }
 
 #undef log_yaml
@@ -1289,6 +1323,8 @@ void log_yaml(char levelchar, const char *yaml)
         return;
 
     log_message_for_thread(thread_num, RawYaml, level, '\n', yaml);
+    if (levelchar == 'E')
+        logging_run_callback();
 }
 
 void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigin origin)
