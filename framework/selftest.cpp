@@ -1179,10 +1179,12 @@ const static test_group group_test_is_optional = {
     .description = "Self-tests used to test test_is_optional flag"
 };
 
+#if defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
 const static test_group group_test_hw_features = {
     .id = "test_hw_features",
     .description = "Self-tests that depend on CPU features"
 };
+#endif
 
 static struct test selftests_array[] = {
 {
@@ -2168,7 +2170,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
     .test_run = selftest_pass_run,
     .minimum_cpu = cpu_skylake,
-    .desired_duration = -1, 
+    .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 
 },
@@ -2178,7 +2180,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
     .test_run = selftest_pass_run,
     .minimum_cpu = cpu_skylake_avx512,
-    .desired_duration = -1, 
+    .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 
 },
