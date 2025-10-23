@@ -606,7 +606,7 @@ static std::string create_filtered_message_string(const char *fmt, va_list va)
 }
 
 // function must be async-signal-safe
-void logging_mark_thread_failed(int thread_num)
+void logging_mark_thread_failed(int thread_num) noexcept
 {
     PerThreadData::Common *thr = sApp->thread_data(thread_num);
     if (thr->has_failed())
@@ -622,7 +622,7 @@ void logging_mark_thread_failed(int thread_num)
     }
 }
 
-void logging_mark_thread_skipped(int thread_num)
+void logging_mark_thread_skipped(int thread_num) noexcept
 {
     PerThreadData::Common *thr = sApp->thread_data(thread_num);
     if (thr->has_failed())
