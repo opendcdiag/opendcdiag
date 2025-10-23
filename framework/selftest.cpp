@@ -507,6 +507,14 @@ static constexpr unsigned maskFromRatio()
     return 1U << BitPosition;
 }
 
+static int selftest_callbackfail_init(struct test *test)
+{
+    install_failure_callback([] {
+        log_warning("Callback in thread %d", thread_num);
+    });
+    return EXIT_SUCCESS;
+}
+
 template <typename Ratio>
 static int selftest_randomfail_run(struct test *test, int cpu)
 {
@@ -588,6 +596,7 @@ static int selftest_logskip_and_logerror_init(struct test *test)
 static int selftest_logerror_run(struct test *test, int cpu)
 {
     log_error("This is an error message from CPU %d", cpu);
+    log_error("This is an another error message");
     return EXIT_SUCCESS;
 }
 
@@ -1789,6 +1798,15 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_fail_with_cb",
+    .description = "Fails by way of returning (callback active)",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_callbackfail_init,
+    .test_run = selftest_fail_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_fail_cleanup",
     .description = "Fails in the cleanup function",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
@@ -1833,6 +1851,15 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_logerror_with_cb",
+    .description = "Fails by calling log_error() (callback active)",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_callbackfail_init,
+    .test_run = selftest_logerror_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_errormsg_cleanup",
     .description = "Fails by calling log_error() in the cleanup function",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
@@ -1852,10 +1879,28 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_reportfail_with_cb",
+    .description = "Fails by calling report_fail() (callback active)",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_callbackfail_init,
+    .test_run = selftest_reportfail_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_reportfailmsg",
     .description = "Fails by calling report_fail_msg()",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_randomprint_init,
+    .test_run = selftest_reportfailmsg_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_reportfailmsg_with_cb",
+    .description = "Fails by calling report_fail_msg() (callback active)",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_callbackfail_init,
     .test_run = selftest_reportfailmsg_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
@@ -1879,6 +1924,15 @@ static struct test selftests_array[] = {
     .test_run = selftest_datacomparefail_run<Type>,                     \
     .desired_duration = -1,                                             \
     .quality_level = TEST_QUALITY_PROD,                                 \
+},                                                                      \
+{                                                                       \
+    .id = "selftest_datacomparefail_" SANDSTONE_STRINGIFY(Type) "_with_cb", \
+    .description = "Attempts to compare one " SANDSTONE_STRINGIFY(Type) " (callback active)", \
+    .groups = DECLARE_TEST_GROUPS(&group_negative),                     \
+    .test_init = selftest_callbackfail_init,                            \
+    .test_run = selftest_datacomparefail_run<Type>,                     \
+    .desired_duration = -1,                                             \
+    .quality_level = TEST_QUALITY_PROD,                                 \
 },
 FOREACH_DATATYPE(DATACOMPARE_TEST)
 #undef DATACOMPARE_TEST
@@ -1886,7 +1940,16 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .id = "selftest_datacompare_nodifference",
     .description = "Fakes a memcmp_or_fail that finds a difference that isn't there",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
-            .test_run = selftest_datacompare_nodifference_run,
+    .test_run = selftest_datacompare_nodifference_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_datacompare_nodifference_with_cb",
+    .description = "Fakes a memcmp_or_fail that finds a difference that isn't there (callback active)",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_callbackfail_init,
+    .test_run = selftest_datacompare_nodifference_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
@@ -1895,6 +1958,15 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .id = "selftest_cxxthrow",
     .description = "Throws C++ exception",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_cxxthrow_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_cxxthrow_with_cb",
+    .description = "Throws C++ exception",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_callbackfail_init,
     .test_run = selftest_cxxthrow_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
