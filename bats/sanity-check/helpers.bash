@@ -52,12 +52,13 @@ test_yaml_expr() {
     local value
     extract_from_yaml "$query"
     shift
-    if test "$value" "$@"; then
+    set "$value" "$@"
+    if test "$@"; then
         return 0
     fi
     printf "Expression test failed:\n"
     printf "query:      %s\n" "$query"
-    printf "expression: %s\n" "$value $*"
+    printf "expression: %s\n" "${*@Q}"
     return 1
 }
 
