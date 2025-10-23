@@ -19,7 +19,6 @@ public:
 #ifdef _WIN32
         test_stream = tmpfile();
 #else
-        size_t buflen = 0;
         test_stream = open_memstream(&buffer, &buflen);
 #endif
     }
@@ -77,7 +76,7 @@ private:
         fflush(test_stream);
 
 #ifdef _WIN32
-        auto buflen = ftell(test_stream);
+        buflen = ftell(test_stream);
         if (buflen < 0) {
             buffer = new char;
             return;
@@ -89,6 +88,7 @@ private:
     }
 
     char* buffer = nullptr;
+    size_t buflen = 0;
 };
 
 class DummyScheduler : public DeviceScheduler
