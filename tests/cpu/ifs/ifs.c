@@ -68,7 +68,7 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
     next_test = get_testspecific_knob_value_int(test, "test_file", -1);
     if (next_test == -1)
     {
-        if (memcmp(ifs_info->image_id, "none", strlen("none")) == 0)
+        if (strcmp(ifs_info->image_id, "none") == 0)
             next_test = DEFAULT_TEST_ID;
         else
         {
@@ -83,7 +83,7 @@ static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t 
                 return false;
             }
 
-            if (memcmp(status_buf, "untested", strlen("untested")) == 0)
+            if (strcmp(status_buf, "untested") == 0)
             {
                 log_info("Test file %s remains untested, so try again", ifs_info->image_id);
                 next_test = current_test;
@@ -144,7 +144,7 @@ static int scan_common_init(struct test *test)
         char status_buf[BUFLEN] = {};
         read_file(ifs_fd, "status", status_buf);
         int enforce_run = get_testspecific_knob_value_int(test, "enforce_run", test_is_retry());
-        if (memcmp(status_buf, "fail", strlen("fail")) == 0 && enforce_run != 1 )
+        if (strcmp(status_buf, "fail") == 0 && enforce_run != 1 )
         {
             log_skip(TestResourceIssueSkipCategory, "Previous run failure found! This test will skip until enforced adding flag: "
                         "-O %s.enforce_run=1", test->id);
@@ -238,7 +238,7 @@ static int scan_run(struct test *test, int cpu)
                 return EXIT_SKIP;
         }
 
-        if (memcmp(result, "fail", strlen("fail")) == 0) {
+        if (strcmp(result, "fail") == 0) {
                 /* failed, get status code */
                 ssize_t n = read_file(ifsfd, "details", result);
                 close(ifsfd);
@@ -256,7 +256,7 @@ static int scan_run(struct test *test, int cpu)
                         return EXIT_FAILURE;
                 }
                 //break;
-        } else if (memcmp(result, "untested", strlen("untested")) == 0) {
+        } else if (strcmp(result, "untested") == 0) {
                 ssize_t n = read_file(ifsfd, "details", result);
                 if (n < 0)
                 {
@@ -279,7 +279,7 @@ static int scan_run(struct test *test, int cpu)
                     }
                 }
                 return -EAGAIN;     // Try again
-        } else if (memcmp(result, "pass", strlen("pass")) == 0) {
+        } else if (strcmp(result, "pass") == 0) {
                 log_debug("Test \"%s\" passed", ifs_info->sys_dir);
         }
 
