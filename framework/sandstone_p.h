@@ -634,8 +634,8 @@ int logging_close_global(int exitcode);
 void logging_print_log_file_name();
 void logging_restricted(int level, const char *fmt, ...);
 void logging_printf(int level, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
-void logging_mark_thread_failed(int thread_num);
-void logging_mark_thread_skipped(int thread_num);
+void logging_mark_thread_failed(int thread_num) noexcept;
+void logging_mark_thread_skipped(int thread_num) noexcept;
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,
                                     size_t size, ptrdiff_t offset, const char *fmt, va_list);
 void logging_print_header(int argc, char **argv, ShortDuration test_duration, ShortDuration test_timeout);
