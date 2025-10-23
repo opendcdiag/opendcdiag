@@ -25,11 +25,11 @@ void *test_setup(const ifs_unit &setup_data)
     setup_sysfs_directory(setup_data);
 
     // Setup dummy test_t struct
-    test *test_t = (test *) malloc(sizeof(test));
+    test *test_t = (test *) calloc(1, sizeof(test));
     test_t->id = setup_data.name;
 
     // Setup data
-    ifs_test_t *ifs_info = (ifs_test_t *) malloc(sizeof(ifs_test_t));
+    ifs_test_t *ifs_info = (ifs_test_t *) calloc(1, sizeof(ifs_test_t));
     ifs_info->sys_dir = setup_data.name;
     test_t->data = ifs_info;
 
@@ -73,10 +73,10 @@ static const char *file_contents_by_name(const ifs_unit &setup_data, const char 
 TEST(IFSRequirements, DriverNotFound)
 {
     // Create a dummy test struct
-    test *test_t = (test *) malloc(sizeof(test));
+    test *test_t = (test *) calloc(1, sizeof(test));
 
     // Setup data with dummy sysfs that does not exists
-    ifs_test_t *ifs_info = (ifs_test_t *) malloc(sizeof(ifs_test_t));
+    ifs_test_t *ifs_info = (ifs_test_t *) calloc(1, sizeof(ifs_test_t));
     ifs_info->sys_dir = "/tmp/intel_ifs_0";
     test_t->data = ifs_info;
 
