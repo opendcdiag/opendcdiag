@@ -4,8 +4,11 @@
  */
 
 #if defined(__x86_64__) && defined(__linux__)
+#include "ifs_unit_utils.h"
+
 #include <errno.h>
 #include <fcntl.h>
+#include <memory>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,16 +16,21 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#include "ifs_unit_utils.h"
+namespace {
+struct FreeDeleter
+{
+    void operator()(void* x) { free(x); }
+};
+}
 
 int setup_sysfs_file(const char *tmp_dir, const char *file, const char *contents)
 {
     // Build full path
-    char *file_path = (char *) malloc(strlen(tmp_dir) + strlen(file) + 2);
-    sprintf(file_path, "%s/%s", tmp_dir, file);
+    std::unique_ptr<char, FreeDeleter> file_path{(char*) malloc(strlen(tmp_dir) + strlen(file) + 2)};
+    sprintf(file_path.get(), "%s/%s", tmp_dir, file);
 
     // Create file
-    FILE *fp = fopen(file_path, "w");
+    FILE *fp = fopen(file_path.get(), "w");
     if (!fp)
         return -errno;
 
@@ -38,11 +46,11 @@ int setup_sysfs_file(const char *tmp_dir, const char *file, const char *contents
 int read_sysfs_file(const char *tmp_dir, const char *file, char *contents)
 {
     // Build full path
-    char *file_path = (char *) malloc(strlen(tmp_dir) + strlen(file) + 2);
-    sprintf(file_path, "%s/%s", tmp_dir, file);
+    std::unique_ptr<char, FreeDeleter> file_path{(char*) malloc(strlen(tmp_dir) + strlen(file) + 2)};
+    sprintf(file_path.get(), "%s/%s", tmp_dir, file);
 
     // Open file
-    FILE *fp = fopen(file_path, "r");
+    FILE *fp = fopen(file_path.get(), "r");
     if (!fp)
         return -errno;
 
