@@ -121,6 +121,7 @@ static struct option long_options[]  = {
     { "deviceset", required_argument, nullptr, deviceset_option },
     { "disable", required_argument, nullptr, disable_option },
     { "dump-cpu-info", no_argument, nullptr, dump_cpu_info_option },
+    { "dump-device-info", no_argument, nullptr, dump_cpu_info_option },
     { "enable", required_argument, nullptr, 'e' },
     { "fatal-errors", no_argument, nullptr, 'F'},
     { "fatal-skips", no_argument, nullptr, fatal_skips_option },
