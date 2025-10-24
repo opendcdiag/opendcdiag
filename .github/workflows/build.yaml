@@ -48,7 +48,7 @@ jobs:
             ninja-build \
             python3-yaml \
             yq \
-            zlib1g-dev 
+            zlib1g-dev
     - uses: actions/checkout@v4
     - name: meson setup
       run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized ${{ matrix.meson_args }}
@@ -83,7 +83,6 @@ jobs:
         nproc=$((nproc > 4 ? 4 : nproc))
         builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
     - name: upload test run logs
-      if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
         name: test-linux-${{ matrix.name }}-logs
