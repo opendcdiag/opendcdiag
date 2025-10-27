@@ -308,6 +308,7 @@ unittests_sources += files(
     'Floats.cpp',
     'unit-tests/sandstone_data_tests.cpp',
     'unit-tests/sandstone_test_utils_tests.cpp',
+    'unit-tests/sandstone_utils_tests.c',
     'unit-tests/sandstone_utils_tests.cpp',
     'unit-tests/test_knob_tests.cpp',
     'unit-tests/tests_dummy.cpp',

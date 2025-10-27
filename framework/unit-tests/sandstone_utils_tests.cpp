@@ -322,7 +322,8 @@ TEST(DataCompare, BFloat8)
 
 namespace {
 template <> struct my_numeric_limits<HFloat8> : HFloat8 {
-    static constexpr HFloat8 neg_infinity()  { return -infinity(); }
+    static constexpr HFloat8 infinity()      { return inf_nan(); }
+    static constexpr HFloat8 neg_infinity()  { return -inf_nan(); }
     static constexpr HFloat8 denorm_min()    { return HFloat8(0, HFLOAT8_DENORM_EXPONENT, 1); }
     static constexpr HFloat8 overflow()      { return HFloat8(0, HFLOAT8_SATURATED_OVERFLOW_VALUE); }
 };
@@ -347,13 +348,18 @@ TEST(DataCompare, HFloat8)
     // no NaN values, these are treated as infinity
 }
 
-// dummy mock to allow new_random_xxx() compilation
-uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
-    assert(!"Not implemented");
-    return 0;
-}
+// dummy mocks to allow new_random_xxx() compilation
 __attribute__((weak)) uint32_t random32() {
     return random();
+}
+uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
+    if (bitwidth > 64) {
+        assert(!"bitwidth > 64");
+    }
+    uint64_t r = random32();
+    r <<= 32;
+    r |= random32();
+    return r & MASK(bitwidth);
 }
 
 // test conversion f32 -> bf8 (s.eeeee.mm)
@@ -482,12 +488,12 @@ TEST(FloatConversions, HF8fromFloat) {
 
     // infinite/nan, saturated/overflow
     EXPECT_EQ(HFLOAT8_SATURATED_OVERFLOW_VALUE, to_hfloat8((float) (1 << (HFLOAT8_INF_NAN_EXPONENT + 1))).value);
-    EXPECT_EQ(HFLOAT8_NAN_INF_VALUE,            to_hfloat8(Float32{0, FLOAT32_INFINITY_EXPONENT, 0}.as_float).value);
-    EXPECT_EQ(HFLOAT8_NAN_INF_VALUE,            to_hfloat8(Float32{0, FLOAT32_NAN_EXPONENT, 1}.as_float).value);
+    EXPECT_EQ(HFLOAT8_INF_NAN_VALUE,            to_hfloat8(Float32{0, FLOAT32_INFINITY_EXPONENT, 0}.as_float).value);
+    EXPECT_EQ(HFLOAT8_INF_NAN_VALUE,            to_hfloat8(Float32{0, FLOAT32_NAN_EXPONENT, 1}.as_float).value);
 
     EXPECT_EQ(HFLOAT8_SATURATED_OVERFLOW_VALUE, (-to_hfloat8((float) (1 << (HFLOAT8_INF_NAN_EXPONENT + 1)))).value);
-    EXPECT_EQ(HFLOAT8_NAN_INF_VALUE,            (-to_hfloat8(Float32{0, FLOAT32_INFINITY_EXPONENT, 0}.as_float)).value);
-    EXPECT_EQ(HFLOAT8_NAN_INF_VALUE,            (-to_hfloat8(Float32{0, FLOAT32_NAN_EXPONENT, 1}.as_float)).value);
+    EXPECT_EQ(HFLOAT8_INF_NAN_VALUE,            (-to_hfloat8(Float32{0, FLOAT32_INFINITY_EXPONENT, 0}.as_float)).value);
+    EXPECT_EQ(HFLOAT8_INF_NAN_VALUE,            (-to_hfloat8(Float32{0, FLOAT32_NAN_EXPONENT, 1}.as_float)).value);
 
     static constexpr uint8_t ONE = 0b0'0111'000;
     static constexpr uint8_t TWO = 0b0'1000'000;
@@ -595,4 +601,154 @@ TEST(FloatConversions, HF8toFloat) {
     EXPECT_EQ(F32INF.as_float, from_hfloat8(to_hfloat8(MAX1 + 7.0f * 32.0f)));
     EXPECT_EQ(F32INF.as_float, from_hfloat8(to_hfloat8(2.0f * MAX1)));
 
+}
+
+extern "C" int test_floats_prototypes_c(void);
+
+int test_floats_prototypes_cpp(void)
+{
+    HFloat8 hfloat8 = new_hfloat8(0, 0, 0);
+    BFloat8 bfloat8 = new_bfloat8(0, 0, 0);
+    Float16 float16 = new_float16(0, 0, 0);
+    BFloat16 bfloat16 = new_bfloat16(0, 0, 0);
+    Float32 float32 = new_float32(0, 0, 0);
+    float f = 0.0f;
+    Float64 float64 = new_float64(0, 0, 0);
+    double d = 0.0;
+    Float80 float80 = new_float80(0, 0, 0, 0);
+
+    if (IS_NEGATIVE(hfloat8)) return __LINE__;
+    if (IS_NEGATIVE(bfloat8)) return __LINE__;
+    if (IS_NEGATIVE(float16)) return __LINE__;
+    if (IS_NEGATIVE(bfloat16)) return __LINE__;
+    if (IS_NEGATIVE(float32)) return __LINE__;
+    if (IS_NEGATIVE(f)) return __LINE__;
+    if (IS_NEGATIVE(float64)) return __LINE__;
+    if (IS_NEGATIVE(d)) return __LINE__;
+    if (IS_NEGATIVE(float80)) return __LINE__;
+
+    if (!IS_ZERO(hfloat8)) return __LINE__;
+    if (!IS_ZERO(bfloat8)) return __LINE__;
+    if (!IS_ZERO(float16)) return __LINE__;
+    if (!IS_ZERO(bfloat16)) return __LINE__;
+    if (!IS_ZERO(float32)) return __LINE__;
+    if (!IS_ZERO(f)) return __LINE__;
+    if (!IS_ZERO(float64)) return __LINE__;
+    if (!IS_ZERO(d)) return __LINE__;
+    if (!IS_ZERO(float80)) return __LINE__;
+
+    if (IS_DENORMAL(hfloat8)) return __LINE__;
+    if (IS_DENORMAL(bfloat8)) return __LINE__;
+    if (IS_DENORMAL(float16)) return __LINE__;
+    if (IS_DENORMAL(bfloat16)) return __LINE__;
+    if (IS_DENORMAL(float32)) return __LINE__;
+    if (IS_DENORMAL(f)) return __LINE__;
+    if (IS_DENORMAL(float64)) return __LINE__;
+    if (IS_DENORMAL(d)) return __LINE__;
+    if (IS_DENORMAL(float80)) return __LINE__;
+
+    if (!IS_FINITE(hfloat8)) return __LINE__;
+    if (!IS_FINITE(bfloat8)) return __LINE__;
+    if (!IS_FINITE(float16)) return __LINE__;
+    if (!IS_FINITE(bfloat16)) return __LINE__;
+    if (!IS_FINITE(float32)) return __LINE__;
+    if (!IS_FINITE(f)) return __LINE__;
+    if (!IS_FINITE(float64)) return __LINE__;
+    if (!IS_FINITE(d)) return __LINE__;
+    if (!IS_FINITE(float80)) return __LINE__;
+
+    if (IS_INF_NAN(hfloat8)) return __LINE__;
+    if (IS_OVERFLOW(hfloat8)) return __LINE__;
+    if (IS_OVERFLOW(bfloat8)) return __LINE__;
+
+    if (IS_INF(bfloat8)) return __LINE__;
+    if (IS_INF(float16)) return __LINE__;
+    if (IS_INF(bfloat16)) return __LINE__;
+    if (IS_INF(float32)) return __LINE__;
+    if (IS_INF(f)) return __LINE__;
+    if (IS_INF(float64)) return __LINE__;
+    if (IS_INF(d)) return __LINE__;
+    if (IS_INF(float80)) return __LINE__;
+
+    if (IS_NAN(bfloat8)) return __LINE__;
+    if (IS_NAN(float16)) return __LINE__;
+    if (IS_NAN(bfloat16)) return __LINE__;
+    if (IS_NAN(float32)) return __LINE__;
+    if (IS_NAN(f)) return __LINE__;
+    if (IS_NAN(float64)) return __LINE__;
+    if (IS_NAN(d)) return __LINE__;
+    if (IS_NAN(float80)) return __LINE__;
+
+    if (IS_SNAN(bfloat8)) return __LINE__;
+    if (IS_SNAN(float16)) return __LINE__;
+    if (IS_SNAN(bfloat16)) return __LINE__;
+    if (IS_SNAN(float32)) return __LINE__;
+    if (IS_SNAN(f)) return __LINE__;
+    if (IS_SNAN(float64)) return __LINE__;
+    if (IS_SNAN(d)) return __LINE__;
+    if (IS_SNAN(float80)) return __LINE__;
+
+    if (IS_QNAN(bfloat8)) return __LINE__;
+    if (IS_QNAN(float16)) return __LINE__;
+    if (IS_QNAN(bfloat16)) return __LINE__;
+    if (IS_QNAN(float32)) return __LINE__;
+    if (IS_QNAN(f)) return __LINE__;
+    if (IS_QNAN(float64)) return __LINE__;
+    if (IS_QNAN(d)) return __LINE__;
+    if (IS_QNAN(float80)) return __LINE__;
+
+    if (GET_NAN_PAYLOAD(float16) != 0) return __LINE__;
+    if (GET_NAN_PAYLOAD(bfloat16) != 0) return __LINE__;
+    if (GET_NAN_PAYLOAD(float32) != 0) return __LINE__;
+    if (GET_NAN_PAYLOAD(f) != 0) return __LINE__;
+    if (GET_NAN_PAYLOAD(float64) != 0) return __LINE__;
+    if (GET_NAN_PAYLOAD(d) != 0) return __LINE__;
+    if (GET_NAN_PAYLOAD(float80) != 0) return __LINE__;
+
+    if (AS_FP(hfloat8) != 0.0) return __LINE__;
+    if (AS_FP(bfloat8) != 0.0) return __LINE__;
+    if (AS_FP(float16) != 0.0) return __LINE__;
+    if (AS_FP(bfloat16) != 0.0) return __LINE__;
+    if (AS_FP(float32) != 0.0) return __LINE__;
+    if (AS_FP(f) != 0.0) return __LINE__;
+    if (AS_FP(float64) != 0.0) return __LINE__;
+    if (AS_FP(d) != 0.0) return __LINE__;
+    if (AS_FP(float80) != 0.0) return __LINE__;
+
+    hfloat8 = new_random_hfloat8();
+    bfloat8 = new_random_bfloat8();
+    float16 = new_random_float16();
+    bfloat16 = new_random_bfloat16();
+    float32 = new_random_float32();
+    f = new_random_float();
+    float64 = new_random_float64();
+    d = new_random_double();
+    float80 = new_random_float80();
+
+    SET_RANDOM(hfloat8);
+    SET_RANDOM(bfloat8);
+    SET_RANDOM(float16);
+    SET_RANDOM(bfloat16);
+    SET_RANDOM(float32);
+    SET_RANDOM(f);
+    SET_RANDOM(float64);
+    SET_RANDOM(d);
+    SET_RANDOM(float80);
+
+    bfloat8 = new_random(BFloat8);
+    hfloat8 = new_random(HFloat8);
+    float16 = new_random(Float16);
+    bfloat16 = new_random(BFloat16);
+    float32 = new_random(Float32);
+    f = new_random(float);
+    float64 = new_random(Float64);
+    d = new_random(double);
+    float80 = new_random(Float80);
+    return 0;
+}
+
+TEST(FloatGeneration, new_random_float_prototypes) {
+    // briefly verify C interface
+    ASSERT_EQ(0, test_floats_prototypes_c());
+    ASSERT_EQ(0, test_floats_prototypes_cpp());
 }

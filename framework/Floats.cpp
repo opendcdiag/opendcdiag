@@ -171,8 +171,6 @@ static_assert(FLOAT80_SIGN_BITS + FLOAT80_EXPONENT_BITS + FLOAT80_JBIT_BITS + FL
  * @brief C function definitions
  * @{
  */
-extern "C" {
-
 BFloat8 to_bfloat8_emulated(float f) {
     Float32 f32{ f };
     // "copy" NaNs (quiet and silent) and Inf to the output
@@ -234,7 +232,7 @@ float from_bfloat8_emulated(BFloat8 f) {
         f.is_denormal() ?
             f.mantissa >= 2 ? Float32{ (uint8_t)f.sign, FLOAT32_EXPONENT_BIAS - BFLOAT8_EXPONENT_BIAS - BFLOAT8_MANTISSA_BITS + 2, ((uint32_t) f.mantissa) << (FLOAT32_MANTISSA_BITS - BFLOAT8_MANTISSA_BITS + 1)} :
             Float32{ f.sign, FLOAT32_EXPONENT_BIAS - BFLOAT8_EXPONENT_BIAS - BFLOAT8_MANTISSA_BITS + 1, ((uint32_t) f.mantissa) << (FLOAT32_MANTISSA_BITS - BFLOAT8_MANTISSA_BITS + 2) } :
-        f.is_valid() ? Float32{ f.sign, f.exponent + FLOAT32_EXPONENT_BIAS - BFLOAT8_EXPONENT_BIAS, (uint32_t) f.mantissa << (FLOAT32_MANTISSA_BITS - BFLOAT8_MANTISSA_BITS) } :
+        f.is_finite() ? Float32{ f.sign, f.exponent + FLOAT32_EXPONENT_BIAS - BFLOAT8_EXPONENT_BIAS, (uint32_t) f.mantissa << (FLOAT32_MANTISSA_BITS - BFLOAT8_MANTISSA_BITS) } :
         f.is_inf() || f.is_overflow() ? Float32{ f.sign, FLOAT32_INFINITY_EXPONENT, 0 } :
         f.is_qnan() ? Float32{ f.sign, FLOAT32_NAN_EXPONENT, FLOAT32_MANTISSA_QUIET_NAN_MASK | 1 } :
         Float32{ f.sign, FLOAT32_NAN_EXPONENT, 1 };
@@ -245,7 +243,7 @@ HFloat8 to_hfloat8_emulated(float f) {
     Float32 f32{ f };
     // NaN/Inf always reported as NAN_INF
     if (f32.exponent == FLOAT32_INFINITY_EXPONENT) {
-        return { (uint8_t) f32.sign, HFLOAT8_NAN_INF_VALUE };
+        return { (uint8_t) f32.sign, HFLOAT8_INF_NAN_VALUE };
     }
     // big values are immediately reported as SATURATE/OVERFLOW
     int exp = ((int) f32.exponent) - FLOAT32_EXPONENT_BIAS + HFLOAT8_EXPONENT_BIAS;
@@ -299,9 +297,31 @@ float from_hfloat8_emulated(HFloat8 f) {
             f.mantissa >= 4 ? Float32{ f.sign, FLOAT32_EXPONENT_BIAS - HFLOAT8_EXPONENT_BIAS - HFLOAT8_MANTISSA_BITS + 3, ((uint32_t) f.mantissa) << (FLOAT32_MANTISSA_BITS - HFLOAT8_MANTISSA_BITS + 1) } :
             f.mantissa >= 2 ? Float32{ f.sign, FLOAT32_EXPONENT_BIAS - HFLOAT8_EXPONENT_BIAS - HFLOAT8_MANTISSA_BITS + 2, ((uint32_t) f.mantissa) << (FLOAT32_MANTISSA_BITS - HFLOAT8_MANTISSA_BITS + 2)} :
             Float32{ f.sign, FLOAT32_EXPONENT_BIAS - HFLOAT8_EXPONENT_BIAS - HFLOAT8_MANTISSA_BITS + 1, ((uint32_t) f.mantissa) << (FLOAT32_MANTISSA_BITS - HFLOAT8_MANTISSA_BITS + 3) } :
-        f.is_valid() ? Float32{ f.sign, f.exponent + FLOAT32_EXPONENT_BIAS - HFLOAT8_EXPONENT_BIAS, (uint32_t) f.mantissa << (FLOAT32_MANTISSA_BITS - HFLOAT8_MANTISSA_BITS) } :
+        f.is_finite() ? Float32{ f.sign, f.exponent + FLOAT32_EXPONENT_BIAS - HFLOAT8_EXPONENT_BIAS, (uint32_t) f.mantissa << (FLOAT32_MANTISSA_BITS - HFLOAT8_MANTISSA_BITS) } :
         Float32{ f.sign, FLOAT32_INFINITY_EXPONENT, 0 };
     return f32.as_float;
+}
+
+HFloat8 new_random_hfloat8()
+{
+    HFloat8 f;
+
+    // keep the pattern of random bits from other new_random_xxx() functions
+    f.sign = random32();
+    f.exponent = random32();
+    f.mantissa = set_random_bits(random32() % (HFLOAT8_MANTISSA_BITS + 1), HFLOAT8_MANTISSA_BITS);
+    return f;
+}
+
+BFloat8 new_random_bfloat8()
+{
+    BFloat8 f;
+
+    // keep the pattern of random bits from other new_random_xxx() functions
+    f.sign = random32();
+    f.exponent = random32();
+    f.mantissa = set_random_bits(random32() % (BFLOAT8_MANTISSA_BITS + 1), BFLOAT8_MANTISSA_BITS);
+    return f;
 }
 
 Float16 new_random_float16()
@@ -355,5 +375,4 @@ Float80 new_random_float80()
     return f;
 }
 
-}
 /** @} */
