@@ -2205,7 +2205,7 @@ static int exec_mode_run(int argc, char **argv)
     int child_number = parse_int(argv[3]);
 
     attach_shmem(parse_int(argv[2]));
-    cpu_info = sApp->shmem->cpu_info;
+    cpu_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 
