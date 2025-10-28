@@ -316,9 +316,9 @@ void debug_crashed_child(std::span<const pid_t> children)
             break;
 
         auto ctx = reinterpret_cast<CrashContext *>(buf.data());
-        int cpu = ctx->header.thread_num;
-        if (cpu < -1 || cpu > sApp->thread_count)
-            cpu = ctx->header.thread_num = -1;
+        int thread = ctx->header.thread_num;
+        if (thread < -1 || thread > sApp->thread_count)
+            thread = ctx->header.thread_num = -1;
         print_exception_info(ctx);
 
         std::string log;
@@ -329,7 +329,7 @@ void debug_crashed_child(std::span<const pid_t> children)
 
         if (log.size()) {
             log.insert(0, "Registers:\n");
-            log_message_preformatted(cpu, LOG_LEVEL_VERBOSE(2), log);
+            log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
         }
     }
 

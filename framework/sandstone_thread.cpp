@@ -31,7 +31,7 @@ struct SandstoneTestThreadAttributes
     SandstoneTestThreadAttributes &operator=(const SandstoneTestThreadAttributes &) = delete;
 
     static unsigned char *allocate_stack_block();
-    void update_with_stack_for(int cpu);
+    void update_with_stack_for(int thread);
 };
 } // unnamed namespace
 
@@ -52,12 +52,12 @@ unsigned char *SandstoneTestThreadAttributes::allocate_stack_block()
     return ptr;
 }
 
-void SandstoneTestThreadAttributes::update_with_stack_for(int cpu)
+void SandstoneTestThreadAttributes::update_with_stack_for(int thread)
 {
     if (!stacks_block)
         return;
     unsigned char *stacktop = stacks_block;
-    stacktop -= (THREAD_STACK_SIZE + GuardSize) * unsigned(cpu);
+    stacktop -= (THREAD_STACK_SIZE + GuardSize) * unsigned(thread);
     pthread_attr_setstack(&thread_attr, stacktop - THREAD_STACK_SIZE, THREAD_STACK_SIZE);
 }
 #else
@@ -81,7 +81,7 @@ void SandstoneTestThreadAttributes::update_with_stack_for(int)
 #endif
 }
 
-void SandstoneTestThread::start(RunnerFunction *f, int cpu)
+void SandstoneTestThread::start(RunnerFunction *f, int t)
 {
     assert(check_run_from_correct_thread());
 
@@ -94,9 +94,9 @@ void SandstoneTestThread::start(RunnerFunction *f, int cpu)
         return reinterpret_cast<void *>(self->target(self->thread_num));
     };
 
-    thread_num = cpu;
+    thread_num = t;
     target = f;
-    thread_attributes.update_with_stack_for(cpu);
+    thread_attributes.update_with_stack_for(t);
     pthread_create(&thread, &thread_attributes.thread_attr, runner, this);
 }
 

@@ -413,7 +413,7 @@ struct SandstoneApplication::SharedMemory
 
     // per-thread & variable length
     int main_thread_count = 0;
-    int total_cpu_count = 0;
+    int total_thread_count = 0;
     alignas(64) device_info cpu_info[];         // C99 Flexible Array Member
 
 #if 0
@@ -421,7 +421,7 @@ struct SandstoneApplication::SharedMemory
     // layout is:
     alignas(PAGE_SIZE)
     PerThreadData::Main main_thread_data[main_thread_count];
-    PerThreadData::Test per_thread[total_cpu_count];
+    PerThreadData::Test per_thread[total_thread_count];
 #endif
 };
 

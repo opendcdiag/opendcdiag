@@ -380,9 +380,9 @@ auto thread_core_spacing()
 }
 } // end unnamed namespace
 
-std::string AbstractLogger::thread_id_header_for_device(int cpu, int verbosity)
+std::string AbstractLogger::thread_id_header_for_device(int thread, int verbosity)
 {
-    struct cpu_info *info = cpu_info + cpu;
+    struct cpu_info *info = cpu_info + thread;
     std::string line;
 #ifdef _WIN32
     line = stdprintf("{ logical-group: %2u, logical: %2u, ",

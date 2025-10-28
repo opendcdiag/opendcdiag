@@ -246,7 +246,7 @@ struct test;
 typedef int (*initfunc)(struct test *test);
 typedef int (*cleanupfunc)(struct test *test);
 
-typedef int (*runfunc)(struct test *test, int cpu);
+typedef int (*runfunc)(struct test *test, int thread);
 
 typedef enum test_flag {
     /// Lets the framework heuristically choose the best slicing technique for
@@ -342,7 +342,7 @@ struct test {
     /* methods */
     initfunc test_preinit;        ///! called from the parent
     initfunc test_init;           ///! called from the child's main thread (unless set otherwise with test_init_in_parent flag)
-    runfunc test_run;             ///! called from the child, per CPU
+    runfunc test_run;             ///! called from the child, per device
     cleanupfunc test_cleanup;     ///! called from the child's main thread
 
     /// kvm_config for kvm test type
@@ -351,7 +351,7 @@ struct test {
     /* generic data for test running */
     /* filled in by framework, used by framework and tests */
 
-    /// minimum CPU required to be run, skipped if too old
+    /// minimum device required to be run, skipped if too old
     device_features_t minimum_cpu; // we need to keep that name for legacy reasons, ideally should be `minimum_device_to_run`
 
     /// duration (in ms) the test wants to run for
@@ -435,7 +435,7 @@ bool test_is_retry() noexcept __attribute__((pure));
 /// outputs msg to the logs, prefixing it with the string "Platform issue:"
 /// This function is usually used to log a warning when an error is detected
 /// in a test's test_init or test_run functions that is due to a platform issue
-/// rather than a problem with the CPU.  Examples, of such errors include
+/// rather than a problem with the device.  Examples, of such errors include
 /// failures to allocate memory or create a file.
 extern void log_platform_message(const char *msg, ...) ATTRIBUTE_PRINTF(1, 2);
 extern void log_message(int thread_num, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
@@ -541,7 +541,7 @@ extern device_features_t device_features;
 
 /// thread_num always contains the integer identifier for the executing
 /// thread.  It can be used to index the cpu_info array and is equivalent
-/// to the cpu parameter in the test_run function.
+/// to the thread parameter in the test_run function.
 #ifdef __llvm__
 extern thread_local int thread_num;
 #else

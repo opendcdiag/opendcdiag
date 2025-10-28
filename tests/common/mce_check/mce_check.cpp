@@ -49,11 +49,11 @@ int mce_check_preinit(struct test *test)
     return EXIT_SUCCESS;
 }
 
-int mce_check_run(struct test *test, int cpu)
+int mce_check_run(struct test *test, int thread)
 {
     int errorcount = 0;
     (void) test;
-    if (cpu != 0)
+    if (thread != 0)
         return EXIT_SUCCESS;
 
     std::vector<uint32_t> counts = InterruptMonitor::get_mce_interrupt_counts();
@@ -75,13 +75,13 @@ int mce_check_run(struct test *test, int cpu)
     // check the CPUs we were running tests on
     for (int i = 0; i < thread_count(); ++i) {
         // translate our thread number to the OS CPU number
-        cpu = cpu_info[i].cpu_number;
-        assert(cpu < differences.size());
+        thread = cpu_info[i].cpu_number;
+        assert(thread < differences.size());
 
-        if (differences[cpu] != 0) {
+        if (differences[thread] != 0) {
             log_message(i, SANDSTONE_LOG_ERROR "MCE detected (%u interrupts since start)",
-                        differences[cpu]);
-            differences[cpu] = 0;
+                        differences[thread]);
+            differences[thread] = 0;
             ++errorcount;
         }
     }

@@ -60,8 +60,8 @@ using uint128_t = __uint128_t;
 
 struct SelftestException : std::exception
 {
-    int cpu;
-    SelftestException(int cpu = -1) : cpu(cpu) {}
+    int thread;
+    SelftestException(int thread = -1) : thread(thread) {}
     const char *what() const noexcept override
     {
         return "OpenDCDiag C++ selftest exception";
@@ -82,14 +82,14 @@ static int selftest_pass_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_pass_run(struct test *test, int cpu)
+static int selftest_pass_run(struct test * test, int)
 {
     printf("# This was printed from the test. YOU SHOULD NOT SEE THIS!\n");
     return EXIT_SUCCESS;
 }
 
 template <useconds_t Usecs>
-static int selftest_timedpass_run(struct test *test, int cpu)
+static int selftest_timedpass_run(struct test *test, int)
 {
     do {
         if (Usecs)
@@ -99,7 +99,7 @@ static int selftest_timedpass_run(struct test *test, int cpu)
 }
 
 template <useconds_t Usecs>
-static int selftest_timedpass_whileloop_run(struct test *test, int cpu)
+static int selftest_timedpass_whileloop_run(struct test *test, int)
 {
     while (test_time_condition(test)) {
         if (Usecs)
@@ -109,7 +109,7 @@ static int selftest_timedpass_whileloop_run(struct test *test, int cpu)
 }
 
 template <useconds_t Usecs>
-static int selftest_timedpass_noloop_run(struct test *test, int cpu)
+static int selftest_timedpass_noloop_run(struct test *test, int)
 {
     if (Usecs)
         usleep(Usecs);
@@ -152,15 +152,15 @@ static int selftest_logs_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_logs_run(struct test *test, int cpu)
+static int selftest_logs_run(struct test *test, int thread)
 {
-    log_debug("This is a debug message from cpu %d", cpu);
-    log_info("This is a multiline info message from cpu %d\nSecond line.", cpu);
-    log_warning("This is a warning message from cpu %d. Random number: %d'", cpu, rand());
+    log_debug("This is a debug message from cpu %d", thread);
+    log_info("This is a multiline info message from cpu %d\nSecond line.", thread);
+    log_warning("This is a warning message from cpu %d. Random number: %d'", thread, rand());
     return EXIT_SUCCESS;
 }
 
-static int selftest_logdata_run(struct test *test, int cpu)
+static int selftest_logdata_run(struct test *test, int thread)
 {
     char buf[] =
             "0123456789" "0123456789" "0123456789"
@@ -220,7 +220,7 @@ static int get_cpu()
     return cpu_number;
 }
 
-static int selftest_logs_getcpu_run(struct test *test, int cpu)
+static int selftest_logs_getcpu_run(struct test *test, int)
 {
     int cpu_number = get_cpu();
     log_info("%d", cpu_number);
@@ -242,23 +242,23 @@ static int selftest_logs_reschedule_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_logs_reschedule_run(struct test *test, int cpu)
+static int selftest_logs_reschedule_run(struct test *test, int thread)
 {
     sem_t *semaphores = (sem_t *) test->data;
     int cpu_number = get_cpu();
     log_info("%d", cpu_number);
 
     // Let's wait unit previous CPU has finished
-    if (cpu > 0)
-        sem_wait(&semaphores[cpu-1]);
+    if (thread > 0)
+        sem_wait(&semaphores[thread-1]);
 
     if (sApp->device_scheduler)
         sApp->device_scheduler->reschedule_to_next_device();
 
     // When we finish, instruct next thread it can proceed
     // unless we are the last one
-    if (cpu < thread_count()-1)
-        sem_post(&semaphores[cpu]);
+    if (thread < thread_count()-1)
+        sem_post(&semaphores[thread]);
 
     cpu_number = get_cpu();
     log_info("%d", cpu_number);
@@ -286,17 +286,17 @@ static int selftest_logs_random_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_logs_random_run(struct test *test, int cpu)
+static int selftest_logs_random_run(struct test *test, int)
 {
     return selftest_logs_random_init(test);
 }
 
-static int selftest_cxxthrowcatch_run(struct test *test, int cpu)
+static int selftest_cxxthrowcatch_run(struct test *test, int thread)
 {
     try {
-        throw SelftestException(cpu);
+        throw SelftestException(thread);
     } catch (SelftestException &e) {
-        memcmp_or_fail(&e.cpu, &cpu, 1);
+        memcmp_or_fail(&e.thread, &thread, 1);
         return EXIT_SUCCESS;
     }
 }
@@ -308,7 +308,7 @@ static int selftest_skip_init(struct test *test)
     return EXIT_SKIP;
 }
 
-static int selftest_skip_run(struct test *test, int cpu)
+static int selftest_skip_run(struct test *test, int)
 {
     log_error("We should not reach here");
     abort();
@@ -382,22 +382,22 @@ template <int PackageId> static int selftest_log_skip_socket_init(struct test *t
     return EXIT_SUCCESS;
 }
 
-template <int PackageId> static int selftest_log_skip_socket_run(struct test *test, int cpu)
+template <int PackageId> static int selftest_log_skip_socket_run(struct test *test, int thread)
 {
     if (num_packages() == 1 && cpu_info[0].package_id == PackageId)
-        return selftest_skip_run(test, cpu);
+        return selftest_skip_run(test, thread);
     return EXIT_SUCCESS;
 }
 
-static int selftest_log_skip_run_all_threads(struct test *test, int cpu)
+static int selftest_log_skip_run_all_threads(struct test *test, int)
 {
     log_skip(SelftestSkipCategory, "Skipping on all threads");
     return EXIT_SUCCESS;
 }
 
-static int selftest_log_skip_run_even_threads(struct test *test, int cpu)
+static int selftest_log_skip_run_even_threads(struct test *test, int thread)
 {
-    if (cpu % 2 == 0) {
+    if (thread % 2 == 0) {
         log_skip(SelftestSkipCategory, "Skipping on even numbered threads");
         return EXIT_SKIP;
     }
@@ -410,27 +410,27 @@ static int selftest_log_skip_newline_init(struct test *test)
     return EXIT_SKIP;
 }
 
-static int selftest_log_skip_newline_run(struct test *test, int cpu)
+static int selftest_log_skip_newline_run(struct test *test, int)
 {
     log_skip(SelftestSkipCategory, "This message should never be displayed");
     return EXIT_FAILURE;
 }
 
-static std::atomic<int> selftest_sequential_last_cpu = -1;
+static std::atomic<int> selftest_sequential_last_thread = -1;
 static int selftest_check_sequential_init(struct test *test)
 {
-    selftest_sequential_last_cpu = thread_num;      // -1
+    selftest_sequential_last_thread = thread_num;      // -1
     return EXIT_SUCCESS;
 }
 
-static int selftest_check_sequential_run(struct test *test, int cpu)
+static int selftest_check_sequential_run(struct test *test, int thread)
 {
     usleep(1'000 * (random() % 16u));   // sleep up to 16 ms
-    int n = selftest_sequential_last_cpu.load(std::memory_order_relaxed);
+    int n = selftest_sequential_last_thread.load(std::memory_order_relaxed);
     log_debug("Last CPU was %d", n);
-    if (n != cpu - 1)
+    if (n != thread - 1)
         report_fail_msg("Last CPU %d was not expected", n);
-    selftest_sequential_last_cpu.store(cpu, std::memory_order_relaxed);
+    selftest_sequential_last_thread.store(thread, std::memory_order_relaxed);
     return EXIT_SUCCESS;
 }
 
@@ -450,7 +450,7 @@ static int selftest_uses_too_much_mem_run(struct test *, int)
     return EXIT_SUCCESS;
 }
 
-static int selftest_noreturn_run(struct test *test, int cpu)
+static int selftest_noreturn_run(struct test *test, int)
 {
     struct timespec forever = { LLONG_MAX, 0 };
     nanosleep(&forever, NULL);
@@ -476,17 +476,17 @@ template <auto F> static int selftest_if_socket1_initcleanup(struct test *test)
     return EXIT_SUCCESS;
 }
 
-template <auto F> static int selftest_if_socket1_run(struct test *test, int cpu)
+template <auto F> static int selftest_if_socket1_run(struct test *test, int thread)
 {
-    if (cpu_info[cpu].package_id == 1)
-        return F(test, adjust_cpu_for_isolate_socket(cpu));
+    if (cpu_info[thread].package_id == 1)
+        return F(test, adjust_cpu_for_isolate_socket(thread));
     return EXIT_SUCCESS;
 }
 
-static int selftest_50pct_freeze_fail_run(struct test *test, int cpu)
+static int selftest_50pct_freeze_fail_run(struct test *test, int thread)
 {
     if (rand() & 1)
-        return selftest_noreturn_run(test, cpu);
+        return selftest_noreturn_run(test, thread);
     return EXIT_FAILURE;
 }
 
@@ -508,7 +508,7 @@ static constexpr unsigned maskFromRatio()
 }
 
 template <typename Ratio>
-static int selftest_randomfail_run(struct test *test, int cpu)
+static int selftest_randomfail_run(struct test *test, int)
 {
     constexpr unsigned Value = maskFromRatio<Ratio>();
     unsigned ratio = (Value * sApp->thread_count);
@@ -516,7 +516,7 @@ static int selftest_randomfail_run(struct test *test, int cpu)
 }
 
 template <useconds_t Sleeptime, typename Ratio>
-static int selftest_timed_randomfail_run(struct test *test, int cpu)
+static int selftest_timed_randomfail_run(struct test *test, int)
 {
     constexpr unsigned Value = maskFromRatio<Ratio>();
 
@@ -532,7 +532,7 @@ static int selftest_timed_randomfail_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
-static int selftest_fail_run(struct test *test, int cpu)
+static int selftest_fail_run(struct test *test, int)
 {
     log_info("run returns FAIL");
     return EXIT_FAILURE;
@@ -544,7 +544,7 @@ static int selftest_failinit_init(struct test *test)
     return EXIT_FAILURE;
 }
 
-static int selftest_failinit_run(struct test *test, int cpu)
+static int selftest_failinit_run(struct test *test, int)
 {
     log_error("We should not reach here");
     abort();
@@ -585,13 +585,13 @@ static int selftest_logskip_and_logerror_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_logerror_run(struct test *test, int cpu)
+static int selftest_logerror_run(struct test *test, int thread)
 {
-    log_error("This is an error message from CPU %d", cpu);
+    log_error("This is an error message from CPU %d", thread);
     return EXIT_SUCCESS;
 }
 
-static int selftest_reportfail_run(struct test *test, int cpu)
+static int selftest_reportfail_run(struct test *test, int)
 {
     report_fail(test);
     log_error("We should not reach here");
@@ -599,9 +599,9 @@ static int selftest_reportfail_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
-static int selftest_reportfailmsg_run(struct test *test, int cpu)
+static int selftest_reportfailmsg_run(struct test *test, int thread)
 {
-    report_fail_msg("Failure message from thread %d", cpu);
+    report_fail_msg("Failure message from thread %d", thread);
     log_error("We should not reach here");
     abort();
     return EXIT_SUCCESS;
@@ -613,12 +613,12 @@ template <typename T> static T make_datacompare_value();
 FOREACH_DATATYPE(MAKE_DATA_VALUE)
 #undef MAKE_DATA_VALUE
 
-template <typename T> static int selftest_datacomparefail_run(struct test *, int cpu)
+template <typename T> static int selftest_datacomparefail_run(struct test *, int thread)
 {
     constexpr size_t Count = 16;
     T values[Count + 1] = {};
 
-    int diff = (cpu & (Count - 1));
+    int diff = (thread & (Count - 1));
     values[diff] = make_datacompare_value<T>();
 
     memcmp_or_fail(values, values + 1, Count);
@@ -626,7 +626,7 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
 }
 
 template <typename Ratio, typename T = uint32_t>
-static int selftest_datacomparefailrare_run(struct test *, int cpu)
+static int selftest_datacomparefailrare_run(struct test *, int)
 {
     constexpr size_t Count = 16;
     static_assert(Count * CHAR_BIT < std::numeric_limits<std::intmax_t>::max() / Ratio::den,
@@ -658,7 +658,7 @@ static int selftest_datacomparefailrare_run(struct test *, int cpu)
     return EXIT_SUCCESS;
 }
 
-static int selftest_datacompare_nodifference_run(struct test *, int cpu)
+static int selftest_datacompare_nodifference_run(struct test *, int)
 {
     uint8_t actual[16], expected[16];
     memset_random(actual, sizeof(actual));
@@ -668,7 +668,7 @@ static int selftest_datacompare_nodifference_run(struct test *, int cpu)
     memcmp_fail_report(actual, expected, sizeof(actual), nullptr);
 }
 
-static int selftest_cxxthrow_run(struct test *, int cpu) noexcept(false)
+static int selftest_cxxthrow_run(struct test *, int) noexcept(false)
 {
     throw SelftestException();
     log_error("We should not reach here");
@@ -690,9 +690,9 @@ template <auto F> static int selftest_crash_initcleanup(struct test *)
 }
 
 template <auto F>
-static int selftest_crash_run(struct test *test, int cpu)
+static int selftest_crash_run(struct test *test, int thread)
 {
-    if (cpu == 1 || sApp->thread_count == 1) {
+    if (thread == 1 || sApp->thread_count == 1) {
         usleep(10000);
         run_crashing_function<F>();
     }
@@ -876,7 +876,7 @@ static void raise_sigkill()
 }
 #endif
 
-static int selftest_malloc_fail(struct test *test, int cpu)
+static int selftest_malloc_fail(struct test *test, int)
 {
     // ask for a very, very silly allocation size, which malloc can't possibly honor
     size_t size = size_t(1) << 62;
@@ -887,7 +887,7 @@ static int selftest_malloc_fail(struct test *test, int cpu)
     return ret;
 }
 
-static int selftest_oserror_run(struct test *test, int cpu)
+static int selftest_oserror_run(struct test *test, int)
 {
     _exit(EX_CONFIG);
 }
@@ -906,7 +906,7 @@ static int selftest_ignore_termination_init(struct test *)
 }
 
 template <runfunc ParentFunc, runfunc ChildFunc = ParentFunc>
-static int selftest_fork_run(struct test *test, int cpu)
+static int selftest_fork_run(struct test *test, int thread)
 {
     int pid = fork();
     if (pid < 0)
@@ -915,9 +915,9 @@ static int selftest_fork_run(struct test *test, int cpu)
     if (pid > 0) {
         // ParentProcess
         log_info("Child pid: %d", pid);
-        return ParentFunc(test, cpu);
+        return ParentFunc(test, thread);
     } else {
-        return ChildFunc(test, cpu);
+        return ChildFunc(test, thread);
     }
 }
 #endif
@@ -990,10 +990,10 @@ BEGIN_ASM16_FUNCTION(payload_real_setup_check)
         "hlt");
 END_ASM_FUNCTION()
 
-static int selftest_kvm_setup_check_setup(kvm_ctx_t *ctx, struct test *test, int cpu)
+static int selftest_kvm_setup_check_setup(kvm_ctx_t *ctx, struct test *test, int thread)
 {
     struct kvm_sregs sregs;
-    uint16_t ints[2] = { 0xffff, static_cast<uint16_t>(cpu) };
+    uint16_t ints[2] = { 0xffff, static_cast<uint16_t>(thread) };
 
     if (ioctl(ctx->cpu_fd, KVM_GET_SREGS, &sregs) == -1)
         return -errno;
@@ -1007,15 +1007,15 @@ static int selftest_kvm_setup_check_setup(kvm_ctx_t *ctx, struct test *test, int
     return EXIT_SUCCESS;
 }
 
-static int selftest_kvm_setup_check_check(kvm_ctx_t *ctx, struct test *test, int cpu)
+static int selftest_kvm_setup_check_check(kvm_ctx_t *ctx, struct test *test, int thread)
 {
     struct kvm_regs regs;
 
     if (ioctl(ctx->cpu_fd, KVM_GET_REGS, &regs) == -1)
         return -errno;
 
-    if (static_cast<uint16_t>(regs.rdx) != static_cast<uint16_t>(cpu)) {
-        log_error("Expected %d got %d\n", static_cast<uint16_t>(cpu),
+    if (static_cast<uint16_t>(regs.rdx) != static_cast<uint16_t>(thread)) {
+        log_error("Expected %d got %d\n", static_cast<uint16_t>(thread),
                       static_cast<uint16_t>(regs.rdx));
         return EXIT_FAILURE;
     }
@@ -1100,12 +1100,12 @@ static const kvm_config_t *selftest_kvm_config_real_16bit_fail()
 }
 #endif // __linux__ && x86-64
 
-static int selftest_inject_idle(struct test *test, int cpu)
+static int selftest_inject_idle(struct test *test, int thread)
 {
     auto loop_start = std::chrono::steady_clock::now();
     TEST_LOOP(test, 1) {
         for (int i = 0; i < 10000; ++i) {
-            int a_variable = cpu * 2;
+            int a_variable = thread * 2;
             a_variable += 1;
             // use the result so the compiler doesn't optimize this away
             __asm__ volatile ("" : "+g" (a_variable));
@@ -1127,10 +1127,10 @@ template <initfunc F> static int selftest_init_mainproc(struct test *test)
     return F(test);
 }
 
-template <runfunc F> static int selftest_run_mainproc(struct test *test, int cpu)
+template <runfunc F> static int selftest_run_mainproc(struct test *test, int thread)
 {
     check_is_main_process();
-    return F(test, cpu);
+    return F(test, thread);
 }
 
 static initfunc group_init_skip_init() noexcept
