@@ -35,20 +35,20 @@ int initialize_smi_counts(struct test*)
     return EXIT_SUCCESS;
 }
 
-int smi_count_run(struct test *test, int cpu)
+int smi_count_run(struct test *test, int thread)
 {
     (void) test;
 
-    if (smi_counts_start.size() > cpu) {
-        int real_cpu_number = cpu_info[cpu].cpu_number;
-        auto initial_count = smi_counts_start[cpu];
+    if (smi_counts_start.size() > thread) {
+        int real_cpu_number = cpu_info[thread].cpu_number;
+        auto initial_count = smi_counts_start[thread];
         auto current_count = InterruptMonitor::count_smi_events(real_cpu_number);
         if (current_count) {
             uint64_t difference = *current_count - initial_count;
 
             if (difference) {
                 log_platform_message(SANDSTONE_LOG_INFO "SMI count difference detected: %" PRIu64 " new SMI detected on thread %d cpu_number %d\n",
-                                     difference, cpu, real_cpu_number);
+                                     difference, thread, real_cpu_number);
             }
         }
     }

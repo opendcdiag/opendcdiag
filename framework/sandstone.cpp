@@ -442,12 +442,11 @@ inline void test_the_test_data<true>::test_tests_iteration(const struct test *th
     if (!shouldTestTheTest(the_test))
         return;
 
-    int cpu = thread_num;
-    int n = sApp->test_thread_data(cpu)->inner_loop_count;
+    int n = sApp->test_thread_data(thread_num)->inner_loop_count;
     if (n >= DesiredIterations)
         return;
 
-    auto &me = per_thread[cpu];
+    auto &me = per_thread[thread_num];
     me.iteration_times[n] = std::chrono::steady_clock::now();
 }
 
@@ -523,8 +522,8 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
         Duration average = {};
         int average_counts = 0;
         int while_loops = 0;
-        for (int cpu = 0; cpu < thread_count(); ++cpu) {
-            PerThread &thr = per_thread[cpu];
+        for (int t = 0; t < thread_count(); ++t) {
+            PerThread &thr = per_thread[t];
             if (thr.iteration_times[0].time_since_epoch().count() == 0)
                 continue;
 
@@ -548,7 +547,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
             }
             ++average_counts;
 
-            log_message(cpu, SANDSTONE_LOG_DEBUG "Sampled iteration timings: %s, %s, %s, %s",
+            log_message(t, SANDSTONE_LOG_DEBUG "Sampled iteration timings: %s, %s, %s, %s",
                         format_duration(iteration_times[0]).c_str(),
                         format_duration(iteration_times[1]).c_str(),
                         format_duration(iteration_times[2]).c_str(),
@@ -563,10 +562,10 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
                                 "run() function appears to use while (test_time_condition()) instead of do {} while");
 
             // find the threads where test_time_condition() wasn't called
-            for (int cpu = 0; average_counts != thread_count() && cpu < thread_count(); ++cpu) {
-                PerThread &thr = per_thread[cpu];
+            for (int t = 0; average_counts != thread_count() && t < thread_count(); ++t) {
+                PerThread &thr = per_thread[t];
                 if (thr.iteration_times[0].time_since_epoch().count() == 0)
-                    log_message(cpu, SANDSTONE_LOG_WARNING "run() function did not call test_time_condition() in this thread");
+                    log_message(t, SANDSTONE_LOG_WARNING "run() function did not call test_time_condition() in this thread");
             }
 
             average /= average_counts;
@@ -1013,7 +1012,7 @@ static void commit_shmem()
     const std::vector<DeviceRange> &plan = sApp->slice_plans.plans.end()[-1];
     size_t main_thread_count = plan.size();
     sApp->shmem->main_thread_count = main_thread_count;
-    sApp->shmem->total_cpu_count = thread_count();
+    sApp->shmem->total_thread_count = thread_count();
 
     // unmap the current area, because Windows doesn't allow us to have two
     // blocks for this file
@@ -1107,10 +1106,10 @@ static void run_threads_sequentially(const struct test *test)
     // we still start one thread, in case the test uses report_fail_msg()
     // (which uses pthread_cancel())
     SandstoneTestThread thread;
-    thread.start([](int cpu) {
-        for ( ; cpu != thread_count(); thread_num = ++cpu)
-            thread_runner(cpu);
-        return uintptr_t(cpu);
+    thread.start([](int t) {
+        for ( ; t != thread_count(); thread_num = ++t)
+            thread_runner(t);
+        return uintptr_t(t);
     }, 0);
     thread.join();
 }
@@ -1902,7 +1901,7 @@ run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failur
         per_thread_failures.clear();
         per_thread_failures.resize(thread_count(), 0);
     }
-    auto mark_up_per_cpu_fail = [&per_thread_failures, &fail_count](int i) {
+    auto mark_up_per_thread_fail = [&per_thread_failures, &fail_count](int i) {
         ++fail_count;
         if (i >= SandstoneApplication::MaxRetestCount)
             return;
@@ -1978,7 +1977,7 @@ run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failur
 
         if (state != TestResult::Passed) {
             // this counts as the first failure regardless of how many fractures we've run
-            mark_up_per_cpu_fail(0);
+            mark_up_per_thread_fail(0);
             break;
         }
 
@@ -2021,7 +2020,7 @@ run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failur
             cleanup_internal(test);
 
             if (state > TestResult::Passed)
-                mark_up_per_cpu_fail(iterations);
+                mark_up_per_thread_fail(iterations);
         }
 
         analyze_test_failures(test, fail_count, iterations, per_thread_failures);
@@ -2207,7 +2206,7 @@ static int exec_mode_run(int argc, char **argv)
 
     attach_shmem(parse_int(argv[2]));
     cpu_info = sApp->shmem->cpu_info;
-    sApp->thread_count = sApp->shmem->total_cpu_count;
+    sApp->thread_count = sApp->shmem->total_thread_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 
     test_set = new SandstoneTestSet({ .is_selftest = sApp->shmem->cfg.selftest, }, SandstoneTestSet::enable_all_tests);

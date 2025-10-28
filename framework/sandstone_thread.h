@@ -14,7 +14,7 @@
 struct SandstoneTestThread
 {
     using RunnerFunction = uintptr_t (int);
-    void start(RunnerFunction *, int cpu);
+    void start(RunnerFunction*, int);
     uintptr_t join();
 
     pthread_t thread;

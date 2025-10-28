@@ -648,7 +648,7 @@ static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
     return result;
 }
 
-static void generate_backtrace(const char *pidstr, int slice, uintptr_t handle = 0, int cpu = -1)
+static void generate_backtrace(const char *pidstr, int slice, uintptr_t handle = 0, int thread = -1)
 {
     if (!SandstoneConfig::ChildBacktrace) {
         assert(false && "Should not have reached here");
@@ -694,7 +694,7 @@ static void generate_backtrace(const char *pidstr, int slice, uintptr_t handle =
 
     auto r = communicate_gdb_backtrace(gdb_out.in(), gdb_in.out(), handle);
     if (r.thread_info.size())
-        log_message(cpu, SANDSTONE_LOG_WARNING "%s", r.thread_info.c_str());
+        log_message(thread, SANDSTONE_LOG_WARNING "%s", r.thread_info.c_str());
     if (r.backtrace.size())
         log_message_preformatted(-slice - 1, LOG_LEVEL_VERBOSE(2), r.backtrace);
 
@@ -843,10 +843,10 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
     const char *(*code_string_fn)(int) = nullptr;
     (void)code_string_fn;
 
-    int cpu = ctx.thread_num;
+    int thread = ctx.thread_num;
     switch (ctx.signum) {
     case SIGABRT:
-        log_message(cpu, SANDSTONE_LOG_WARNING
+        log_message(thread, SANDSTONE_LOG_WARNING
                     "Received signal %d (Abort) - could be a software error", SIGABRT);
         return false;
 
@@ -910,19 +910,19 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
 #endif
     }
 
-    log_message(cpu, SANDSTONE_LOG_ERROR "%s", message.c_str());
+    log_message(thread, SANDSTONE_LOG_ERROR "%s", message.c_str());
     return true;
 }
 
 static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
 {
-    int cpu = -1;
+    int thread = -1;
     uintptr_t handle = 0;
     if (ctx.contents & CrashContext::FixedContext) {
-        cpu = ctx.fixed.thread_num;
+        thread = ctx.fixed.thread_num;
         handle = ctx.fixed.handle;
-        if (cpu < -1 || cpu > sApp->thread_count)
-            ctx.fixed.thread_num = cpu = -1;
+        if (thread < -1 || thread > sApp->thread_count)
+            ctx.fixed.thread_num = thread = -1;
 
         bool print_registers = print_signal_info(ctx.fixed);
         if (!print_registers)
@@ -932,7 +932,7 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
     if (SandstoneConfig::ChildBacktrace
             && (on_crash_action & backtrace_on_crash) == backtrace_on_crash) {
         // generate the backtrace as a second step
-        generate_backtrace(pidstr, slice, handle, cpu);
+        generate_backtrace(pidstr, slice, handle, thread);
     }
 
     // now include the register state
@@ -946,7 +946,7 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
 
         if (log.size()) {
             log.insert(0, "Registers:\n");
-            log_message_preformatted(cpu, LOG_LEVEL_VERBOSE(2), log);
+            log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
         }
     }
 }
