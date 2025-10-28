@@ -81,8 +81,8 @@ bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const 
 bool pin_to_logical_processors(DeviceRange range, const char *thread_name)
 {
     set_thread_name(thread_name);
-    const struct cpu_info *first_cpu = &cpu_info[range.starting_device];
-    const struct cpu_info *last_cpu = &cpu_info[range.starting_device + range.device_count - 1];
+    const cpu_info_t *first_cpu = &cpu_info[range.starting_device];
+    const cpu_info_t *last_cpu = &cpu_info[range.starting_device + range.device_count - 1];
     PROCESSOR_NUMBER first = to_processor_number(LogicalProcessor(first_cpu->cpu_number));
     PROCESSOR_NUMBER last = to_processor_number(LogicalProcessor(last_cpu->cpu_number));
     if (first.Group != last.Group) {

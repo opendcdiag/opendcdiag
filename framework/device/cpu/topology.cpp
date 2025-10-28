@@ -31,7 +31,7 @@
 #   include <windows.h>
 #endif
 
-// Because of the anonymous struct inside of struct cpu_info
+// Because of the anonymous struct inside of struct cpu_info_t
 #pragma GCC diagnostic ignored "-Waddress-of-packed-member"
 
 namespace {
@@ -115,7 +115,7 @@ private:
 };
 } // unnamed namespace
 
-static void update_topology(std::span<const struct cpu_info> new_cpu_info,
+static void update_topology(std::span<const cpu_info_t> new_cpu_info,
                             std::span<const Topology::Package> sockets = {});
 
 int num_cpus()
@@ -260,7 +260,7 @@ void RandomDeviceScheduler::reschedule_to_next_device()
     return;
 }
 
-struct cpu_info *cpu_info = nullptr;
+cpu_info_t *cpu_info = nullptr;
 
 static Topology &cached_topology()
 {
@@ -351,22 +351,22 @@ void TopologyDetector::ProcCpuInfoData::load()
 }
 #endif
 
-static bool cpu_compare(const struct cpu_info &cpu1, const struct cpu_info &cpu2)
+static bool cpu_compare(const cpu_info_t &cpu1, const cpu_info_t &cpu2)
 {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #  error "This doesn't work on big endian systems! Please contribute a fix."
 #endif
     // Confirm that the members are in the right order in a 16-byte block
-    static_assert(sizeof(cpu_info::package_id) == 2);
-    static_assert(offsetof(struct cpu_info, cpu_number) + 14 == offsetof(struct cpu_info, package_id));
-    static_assert(offsetof(struct cpu_info, cpu_number) + 12 == offsetof(struct cpu_info, numa_id));
-    static_assert(offsetof(struct cpu_info, cpu_number) + 11 == offsetof(struct cpu_info, native_core_type));
-    static_assert(offsetof(struct cpu_info, cpu_number) + 9 == offsetof(struct cpu_info, tile_id));
-    static_assert(offsetof(struct cpu_info, cpu_number) + 7 == offsetof(struct cpu_info, module_id));
-    static_assert(offsetof(struct cpu_info, cpu_number) + 5 == offsetof(struct cpu_info, core_id));
-    static_assert(offsetof(struct cpu_info, cpu_number) + 4 == offsetof(struct cpu_info, thread_id));
+    static_assert(sizeof(cpu_info_t::package_id) == 2);
+    static_assert(offsetof(cpu_info_t, cpu_number) + 14 == offsetof(cpu_info_t, package_id));
+    static_assert(offsetof(cpu_info_t, cpu_number) + 12 == offsetof(cpu_info_t, numa_id));
+    static_assert(offsetof(cpu_info_t, cpu_number) + 11 == offsetof(cpu_info_t, native_core_type));
+    static_assert(offsetof(cpu_info_t, cpu_number) + 9 == offsetof(cpu_info_t, tile_id));
+    static_assert(offsetof(cpu_info_t, cpu_number) + 7 == offsetof(cpu_info_t, module_id));
+    static_assert(offsetof(cpu_info_t, cpu_number) + 5 == offsetof(cpu_info_t, core_id));
+    static_assert(offsetof(cpu_info_t, cpu_number) + 4 == offsetof(cpu_info_t, thread_id));
 
-    static auto cpu_tuple = [](const struct cpu_info &c) {
+    static auto cpu_tuple = [](const cpu_info_t &c) {
         unsigned __int128 result;
         memcpy(&result, &c.cpu_number, sizeof(result));
         return result;
@@ -401,7 +401,7 @@ bool TopologyDetector::old_create_mock_topology(const char *topo)
         if (cpu_count == sApp->thread_count)
             break;      // can't add more
 
-        struct cpu_info *info = &cpu_info[cpu_count];
+        cpu_info_t *info = &cpu_info[cpu_count];
         ++cpu_count;
 
         info->package_id = info->module_id = info->core_id = info->thread_id = 0;
@@ -458,7 +458,7 @@ bool TopologyDetector::create_mock_topology(const char *topo)
         if (cpu_count == sApp->thread_count)
             break;      // can't add more
 
-        struct cpu_info *info = &cpu_info[cpu_count];
+        cpu_info_t *info = &cpu_info[cpu_count];
         ++cpu_count;
 
         info->package_id = info->core_id = info->thread_id = 0;
@@ -664,8 +664,8 @@ bool TopologyDetector::detect_numa()
         }
 
         // Parse the list. This will *usually* be one or two ranges.
-        struct cpu_info *cpu = &cpu_info[0];
-        struct cpu_info *const end = cpu_info + sApp->thread_count;
+        cpu_info_t *cpu = &cpu_info[0];
+        cpu_info_t *const end = cpu_info + sApp->thread_count;
         const char *ptr = cpulist.c_str();
         while (*ptr && cpu != end) {
             auto [start, stop] = parse_cpulist_range(ptr);
@@ -812,10 +812,10 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
     static constexpr unsigned CpusPerGroup =
             std::numeric_limits<KAFFINITY>::digits;
 
-    struct cpu_info *const info = cpu_info;
+    cpu_info_t *const info = cpu_info;
     std::span infos(info, info + num_cpus());
-    auto first_cpu_for_group = [infos](unsigned group) -> struct cpu_info * {
-        for (struct cpu_info &info : infos) {
+    auto first_cpu_for_group = [infos](unsigned group) -> cpu_info_t * {
+        for (cpu_info_t &info : infos) {
             if (info.cpu_number / CpusPerGroup == group)
                 return &info;
         }
@@ -825,7 +825,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
     auto for_each_proc_in = [&](unsigned groupCount, GROUP_AFFINITY *groups, auto lambda) {
         // find the first CPU matching this group
         for (GROUP_AFFINITY &ga : std::span(groups, groupCount)) {
-            struct cpu_info *info = first_cpu_for_group(ga.Group);
+            cpu_info_t *info = first_cpu_for_group(ga.Group);
             if (!info)
                 continue;
 
@@ -859,7 +859,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
         switch (lpi->Relationship) {
         case RelationProcessorPackage:
             for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
-                             [&](struct cpu_info *info) {
+                             [&](cpu_info_t *info) {
                                  info->package_id = pkg_id;
                              }
                 );
@@ -870,7 +870,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
 
         case RelationProcessorModule:
             for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
-                              [&](struct cpu_info *info) {
+                              [&](cpu_info_t *info) {
                                   info->module_id = module_id;
                               }
                  );
@@ -879,7 +879,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
 
         case RelationProcessorCore:
             for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
-                             [&, thread_id = 0](struct cpu_info *info) mutable {
+                             [&, thread_id = 0](cpu_info_t *info) mutable {
                                  info->core_id = core_id;
                                  info->thread_id = thread_id++;
                              }
@@ -890,7 +890,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
         case RelationCache: {
             auto &cache = *reinterpret_cast<CACHE_RELATIONSHIP_2 *>(&lpi->Cache);
             for_each_proc_in(cache.GroupCount, cache.GroupMasks,
-                             [&](struct cpu_info *info) {
+                             [&](cpu_info_t *info) {
                                  int level = cache.Level - 1;
                                  if (level >= std::size(info->cache))
                                      return;
@@ -910,7 +910,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
             // this only works for Windows 20H2 or later, otherwise GroupCount = 0
             auto &numa = *reinterpret_cast<NUMA_NODE_RELATIONSHIP_2 *>(&lpi->NumaNode);
             for_each_proc_in(numa.GroupCount, numa.GroupMasks,
-                             [&](struct cpu_info *info) {
+                             [&](cpu_info_t *info) {
                                  info->numa_id = numa.NodeNumber;
                              }
                 );
@@ -928,7 +928,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
     if (info->module_id == -1) {
         // we got no RelationProcessorModule, so "fake" them by assuming
         // core_ids == module_ids
-        for (struct cpu_info &cpu : infos)
+        for (cpu_info_t &cpu : infos)
             cpu.module_id = cpu.core_id;
     }
     return true;
@@ -1329,15 +1329,15 @@ void apply_deviceset_param(char *param)
 {
     struct MatchCpuInfoByCpuNumber {
         int cpu_number;
-        bool operator()(const struct cpu_info &cpu)
+        bool operator()(const cpu_info_t &cpu)
         { return cpu.cpu_number == cpu_number; }
     };
 
     if (SandstoneConfig::RestrictedCommandLine)
         return;
 
-    std::span<struct cpu_info> old_cpu_info(cpu_info, sApp->thread_count);
-    std::vector<struct cpu_info> new_cpu_info;
+    std::span<cpu_info_t> old_cpu_info(cpu_info, sApp->thread_count);
+    std::vector<cpu_info_t> new_cpu_info;
     int total_matches = 0;
 
     LogicalProcessorSet result = {};
@@ -1371,7 +1371,7 @@ void apply_deviceset_param(char *param)
             arg = endptr;       // advance
             return int(n);
         };
-        auto apply_to_set = [&](const struct cpu_info &cpu) {
+        auto apply_to_set = [&](const cpu_info_t &cpu) {
             LogicalProcessor lp = LogicalProcessor(cpu.cpu_number);
             if (result.is_set(lp))
                 return;
@@ -1410,7 +1410,7 @@ void apply_deviceset_param(char *param)
             apply_to_set(*cpu);
         } else if (p == "odd" || p == "even"){
             int desired_remainder = (p == "odd" ? 1 : 0);
-            for (struct cpu_info &cpu : old_cpu_info)
+            for (cpu_info_t &cpu : old_cpu_info)
             {
                 if (cpu.cpu_number % 2 == desired_remainder)
                     apply_to_set(cpu);
@@ -1430,7 +1430,7 @@ void apply_deviceset_param(char *param)
                 return core_type_unknown;    // unreachable
             }();
 
-            for (const struct cpu_info &cpu : old_cpu_info) {
+            for (const cpu_info_t &cpu : old_cpu_info) {
                 if (cpu.native_core_type == expected)
                     apply_to_set(cpu);
             }
@@ -1468,7 +1468,7 @@ void apply_deviceset_param(char *param)
             } while (c != '\0');
 
             int match_count = 0;
-            for (struct cpu_info &cpu : old_cpu_info) {
+            for (cpu_info_t &cpu : old_cpu_info) {
                 if (package != -1 && cpu.package_id != package)
                     continue;
                 if (core != -1 && cpu.core_id != core)
@@ -1518,7 +1518,7 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
 
     // fill in cpu_info first
     {
-        struct cpu_info *info = &cpu_info[0];
+        cpu_info_t *info = &cpu_info[0];
         // -1 to indicate unknown yet
         info->package_id = -1;
         info->numa_id = -1;
@@ -1601,8 +1601,8 @@ static void populate_core_group(Topology::CoreGrouping *group, const Topology::T
 
 static Topology build_topology()
 {
-    struct cpu_info *info = cpu_info;
-    const struct cpu_info *const end = cpu_info + num_cpus();
+    cpu_info_t *info = cpu_info;
+    const cpu_info_t *const end = cpu_info + num_cpus();
 
     std::vector<Topology::Package> packages;
     if (int max_package_id = end[-1].package_id; max_package_id >= 0)
@@ -1796,16 +1796,16 @@ Topology::Data Topology::clone() const
     return result;
 }
 
-void update_topology(std::span<const struct cpu_info> new_cpu_info,
+void update_topology(std::span<const cpu_info_t> new_cpu_info,
                      std::span<const Topology::Package> packages)
 {
-    struct cpu_info *end;
+    cpu_info_t *end;
     if (packages.empty()) {
         // copy all
         end = std::copy(new_cpu_info.begin(), new_cpu_info.end(), cpu_info);
     } else {
         // copy only if matching the socket ID
-        auto matching = [=](const struct cpu_info &ci) {
+        auto matching = [=](const cpu_info_t &ci) {
             for (const Topology::Package &p : packages) {
                 if (p.id() == ci.package_id)
                     return true;
@@ -1817,7 +1817,7 @@ void update_topology(std::span<const struct cpu_info> new_cpu_info,
 
     int new_thread_count = end - cpu_info;
     if (int excess = sApp->thread_count - new_thread_count; excess > 0)
-        std::fill_n(end, excess, (struct cpu_info){});
+        std::fill_n(end, excess, (cpu_info_t){});
 
     sApp->thread_count = new_thread_count;
     cached_topology() = build_topology();
