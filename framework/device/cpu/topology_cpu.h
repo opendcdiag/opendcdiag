@@ -12,6 +12,7 @@
 
 #include "gettid.h"
 
+#include <algorithm>
 #include <barrier>
 #include <functional>
 #include <span>

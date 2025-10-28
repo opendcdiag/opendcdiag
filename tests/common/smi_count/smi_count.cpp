@@ -13,6 +13,8 @@
 
 #include "sandstone_p.h"
 
+#include "interrupt_monitor.hpp"
+
 #include <cinttypes>
 #include <vector>
 

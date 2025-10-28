@@ -6,12 +6,9 @@
 #ifndef __INCLUDE_GUARD_SANDSTONE_H_
 #define __INCLUDE_GUARD_SANDSTONE_H_
 
-#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <assert.h>
 
 #ifdef __x86_64__
@@ -30,7 +27,6 @@
 #include "sandstone_data.h"
 #include <sandstone_test_groups.h>
 #include "test_knobs.h"
-#include "sandstone_chrono.h"
 
 #ifdef __cplusplus
 #include <atomic>

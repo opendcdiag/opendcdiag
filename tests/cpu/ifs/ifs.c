@@ -40,6 +40,8 @@
 #if defined(__x86_64__)
 #if defined(__linux__)
 
+#include "sandstone_ifs.h"
+
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -48,8 +50,6 @@
 #include <paths.h>
 #include <stdio.h>
 #include <unistd.h>
-
-#include "sandstone_ifs.h"
 
 static bool load_test_file(int dfd, int batch_fd, struct test *test, ifs_test_t *ifs_info,
                            const char *status_buf)
