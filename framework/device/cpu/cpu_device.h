@@ -146,7 +146,7 @@ typedef uint8_t NativeCoreType;                 // C17 or older
 /// contains a value >= 0.  Fields with negative values are invalid.
 /// TODO: consider changing this, with L1D & L1I being the same size, they are
 /// indistinguishable from a unified cache.
-struct cache_info
+struct cache_info_t
 {
     int cache_instruction;
     int cache_data;
@@ -183,7 +183,7 @@ struct cpu_info
     /// On x86, it's the APICID or x2APICID, if known; -1 if not.
     int hwid;
 
-    struct cache_info cache[3]; ///! Cache info from OS
+    struct cache_info_t cache[3]; ///! Cache info from OS
 
 #ifdef __cplusplus
     int cpu() const;        ///! Internal CPU number
