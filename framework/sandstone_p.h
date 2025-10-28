@@ -15,7 +15,6 @@
 
 #include <assert.h>
 #include <fcntl.h>
-#include <getopt.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -172,25 +171,6 @@ struct test_group
    const char *description;
    initfunc (*group_init)() noexcept;       // returns a replacement init function (or not)
 };
-
-inline int simple_getopt(int argc, char **argv, struct option *options, int *coptind = nullptr)
-{
-    // cache the result
-    static std::string cached_short_opts = [=]() {
-        std::string result;
-        for (struct option *o = options; o->name; ++o) {
-            if (o->flag || o->val < ' ' || o->val > '\x7f')
-                continue;
-            result += char(o->val);
-            if (o->has_arg != no_argument)
-                result += ':';
-            if (o->has_arg == optional_argument)
-                result += ':';
-        }
-        return result;
-    }();
-    return getopt_long(argc, argv, cached_short_opts.c_str(), options, coptind);
-}
 
 template <bool IsDebug> struct test_the_test_data
 {
