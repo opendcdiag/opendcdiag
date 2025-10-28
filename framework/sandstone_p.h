@@ -101,11 +101,9 @@ struct mmap_region
 };
 
 /*
- * Called from sandstone_main(). The default weak implementation performs no
- * checks, they just return. Feel free to implement a strong version elsewhere
- * if you prefer the framework to check for system or CPU criteria.
+ * Called from sandstone_main(). A function for framework to check for system or device criteria.
  */
-void cpu_specific_init(void);
+void device_specific_init(void);
 
 /* splitlock_detect.c */
 bool splitlock_enforcement_enabled(void);
