@@ -9,7 +9,7 @@
 
 #include <cinttypes>
 
-static constexpr const char *native_device_type(const struct cpu_info *info)
+static constexpr const char *native_device_type(const cpu_info_t *info)
 {
     switch (info->native_core_type) {
     case core_type_efficiency:
@@ -92,7 +92,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int device, const char *pre
         return;
     }
 
-    struct cpu_info *info = cpu_info + device;
+    cpu_info_t *info = cpu_info + device;
     const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
     PerThreadData::Test *thr = sApp->test_thread_data(device);
     if (std::string time = format_duration(thr->fail_time); time.size()) {
@@ -283,7 +283,7 @@ void TapFormatLogger::print_thread_header(int fd, int device, int verbosity)
         return;
     }
 
-    struct cpu_info *info = cpu_info + device;
+    cpu_info_t *info = cpu_info + device;
     std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", device,
             info->cpu_number, info->package_id, info->core_id, info->thread_id);
     if (const char *type = native_device_type(info))
@@ -382,7 +382,7 @@ auto thread_core_spacing()
 
 std::string AbstractLogger::thread_id_header_for_device(int thread, int verbosity)
 {
-    struct cpu_info *info = cpu_info + thread;
+    cpu_info_t *info = cpu_info + thread;
     std::string line;
 #ifdef _WIN32
     line = stdprintf("{ logical-group: %2u, logical: %2u, ",
