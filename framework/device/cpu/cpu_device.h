@@ -122,7 +122,7 @@
 /// This macro is provided in case tests need more fine grained control.
 #define cpu_has_feature(f)      ((device_compiler_features & (f)) == (f) || (device_features & (f)) == (f))
 
-/// Describes the field @c native_core_type in @ref cpu_info
+/// Describes the field @c native_core_type in @ref cpu_info_t
 // use typed enums
 enum NativeCoreType
 #if defined(__cplusplus) || __STDC_VERSION__ >= 202311L
@@ -152,8 +152,8 @@ struct cache_info_t
     int cache_data;
 };
 
-/// cpu_info contains information about a logical CPU
-struct cpu_info
+/// cpu_info_t contains information about a logical CPU
+struct cpu_info // TODO: ultimately rename to cpu_info_t
 {
     uint64_t microcode;     ///! Microcode version read from /sys
 
@@ -190,17 +190,19 @@ struct cpu_info
 #endif
 };
 
-// Alias for use in common framework code
+// Alias for use in common framework code.
 typedef struct cpu_info device_info_t;
+// Temporary alias until we rename this struct to cpu_info_t.
+typedef struct cpu_info cpu_info_t;
 
-/// cpu_info is an array of cpu_info structures.  Each element of the array
+/// cpu_info is an array of cpu_info_t structures.  Each element of the array
 /// contains information about a logical CPU that will be used to
 /// execute a test's test_run function.  The size of this array is
 /// equal to the value returned by num_cpus().
 extern struct cpu_info *cpu_info;
 
 #ifdef __cplusplus
-inline int cpu_info::cpu() const
+inline int cpu_info_t::cpu() const
 {
     return this - ::cpu_info;
 }

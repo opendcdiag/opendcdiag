@@ -21,7 +21,7 @@ using EnabledDevices = LogicalProcessorSet;
 class Topology
 {
 public:
-    using Thread = struct cpu_info;
+    using Thread = cpu_info_t;
     struct Core
     {
         std::span<const Thread> threads;
