@@ -15,6 +15,8 @@
 #include <type_traits>
 #include <vector>
 
+#include <getopt.h>
+
 #ifdef SANDSTONE_UNITTESTS
 extern FILE* test_stream;
 #define OUT_STREAM test_stream
@@ -407,6 +409,25 @@ void warn_deprecated_opt(const char *opt)
 {
     fprintf(ERR_STREAM, "%s: option '%s' is ignored and will be removed in a future version.\n",
             program_invocation_name, opt);
+}
+
+inline int simple_getopt(int argc, char **argv, struct option *options, int *coptind = nullptr)
+{
+    // cache the result
+    static std::string cached_short_opts = [=]() {
+        std::string result;
+        for (struct option *o = options; o->name; ++o) {
+            if (o->flag || o->val < ' ' || o->val > '\x7f')
+                continue;
+            result += char(o->val);
+            if (o->has_arg != no_argument)
+                result += ':';
+            if (o->has_arg == optional_argument)
+                result += ':';
+        }
+        return result;
+    }();
+    return getopt_long(argc, argv, cached_short_opts.c_str(), options, coptind);
 }
 
 struct ProgramOptionsParser {
