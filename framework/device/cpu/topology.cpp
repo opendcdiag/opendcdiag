@@ -5,17 +5,20 @@
 
 #include "topology.h"
 #include "sandstone_p.h"
+#include "thermal_monitor.hpp"
 
 #include <algorithm>
+#include <cassert>
+#include <cinttypes>
 #include <map>
+#include <mutex>
+#include <random>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
-#include <assert.h>
 #include <dirent.h>
 #include <fcntl.h>
-#include <inttypes.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>

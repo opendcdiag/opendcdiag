@@ -7,7 +7,6 @@
 #define INC_TEST_DATA_H
 
 #include "sandstone_chrono.h"
-#include "topology.h"
 
 #include <atomic>
 

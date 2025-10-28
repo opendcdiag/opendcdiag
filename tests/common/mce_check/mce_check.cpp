@@ -27,11 +27,11 @@
  */
 
 #include "sandstone_p.h"
+#include "interrupt_monitor.hpp"
+
+#include <cassert>
 
 #if defined(__linux__) && defined(__x86_64__)
-#include <cassert>
-#include <climits>
-#include <numeric>
 #include <vector>
 
 namespace {

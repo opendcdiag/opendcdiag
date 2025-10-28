@@ -10,34 +10,25 @@
 #define _GNU_SOURCE
 #endif
 
-#include <algorithm>
 #include <chrono>
-#include <iterator>
 #include <new>
 #include <map>
-#include <numeric>
-#include <utility>
 #include <vector>
 
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
 #if __has_include(<malloc.h>)
 #  include <malloc.h>
 #endif
-#include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #ifdef __unix__
 #  include <poll.h>
 #endif
 #include <pthread.h>
-#include <signal.h>
 #include <stdint.h>
 #if __has_include(<sys/auxv.h>)         // FreeBSD and Linux
 #  include <sys/auxv.h>
@@ -56,6 +47,7 @@
 
 #include "forkfd.h"
 
+#include "interrupt_monitor.hpp"
 #include "sandstone.h"
 #include "sandstone_p.h"
 #include "sandstone_opts.hpp"
@@ -70,6 +62,10 @@
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
 #  include "sandstone_ssl_rand.h"
+#endif
+
+#if SANDSTONE_DEVICE_CPU
+#   include "effective_cpu_freq.hpp"
 #endif
 
 #ifdef _WIN32

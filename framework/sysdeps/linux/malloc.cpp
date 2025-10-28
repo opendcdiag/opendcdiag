@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <malloc.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>

@@ -13,24 +13,12 @@
 
 #define _DARWIN_C_SOURCE 1
 
-#include <assert.h>
-#include <fcntl.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/param.h>
-#include <sys/uio.h>
-#include <unistd.h>
-
 #include <sandstone.h>
 
+#include <assert.h>
+#include <fcntl.h>
+
 #ifdef __cplusplus
-#include <atomic>
-#include <chrono>
-#include <memory>
-#include <mutex>
-#include <random>
 #include <span>
 #include <vector>
 
@@ -45,10 +33,7 @@
 #include "gettid.h"
 #include "test_data.h"
 #include "topology.h"
-#include "interrupt_monitor.hpp"
-#if SANDSTONE_DEVICE_CPU
-#   include "thermal_monitor.hpp"
-#   include "effective_cpu_freq.hpp"
+#if SANDSTONE_FREQUENCY_MANAGER
 #   include "frequency_manager.hpp"
 #endif
 

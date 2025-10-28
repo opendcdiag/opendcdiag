@@ -6,13 +6,8 @@
 #include "sandstone_p.h"
 #include "sandstone_opts.hpp"
 
-#include <barrier>
-#include <cinttypes>
-#include <functional>
-#include <iostream>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <vector>
 
 #include <getopt.h>
