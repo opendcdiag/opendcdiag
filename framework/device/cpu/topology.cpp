@@ -1524,7 +1524,7 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
         info->thread_id = -1;
         info->hwid = -1;
 
-        std::fill(std::begin(info->cache), std::end(info->cache), cache_info{-1, -1});
+        std::fill(std::begin(info->cache), std::end(info->cache), cache_info_t{-1, -1});
     }
     std::fill_n(&cpu_info[1], count - 1, cpu_info[0]);
 
