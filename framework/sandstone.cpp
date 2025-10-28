@@ -1074,7 +1074,7 @@ __attribute__((weak, noclone, noinline)) void print_application_banner()
 {
 }
 
-__attribute__((weak, noclone, noinline)) void cpu_specific_init()
+__attribute__((weak, noclone, noinline)) void device_specific_init()
 {
 }
 
@@ -2650,7 +2650,7 @@ int main(int argc, char **argv)
 
     print_application_banner();
     logging_init_global();
-    cpu_specific_init();
+    device_specific_init();
     random_init_global(opts.seed);
     background_scan_init();
 
