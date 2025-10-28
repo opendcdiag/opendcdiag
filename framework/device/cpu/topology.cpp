@@ -1504,7 +1504,7 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
 {
     assert(sApp->thread_count);
     assert(sApp->thread_count == enabled_cpus.count());
-    cpu_info = sApp->shmem->cpu_info;
+    cpu_info = sApp->shmem->device_info;
 
     // detect this CPU's family - it's impossible for them to be different
     detect_family_via_cpuid();
@@ -1849,7 +1849,7 @@ void setup_devices<LogicalProcessorSet>(const LogicalProcessorSet &enabled_devic
 void restrict_topology(DeviceRange range)
 {
     assert(range.starting_device + range.device_count <= sApp->thread_count);
-    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->cpu_info + range.starting_device);
+    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->device_info + range.starting_device);
     int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
 
     Topology &topo = cached_topology();

@@ -8,7 +8,7 @@
 #define UNITTESTS_NUM_CPUS 16
 
 /* Define dummy setup struct that can be used by unittests when needed */
-device_info *cpu_info = nullptr;
+device_info_t *cpu_info = nullptr;
 
 /* Define dummy number of dummy cpus */
 int num_cpus() { return UNITTESTS_NUM_CPUS; }

@@ -191,7 +191,7 @@ struct cpu_info
 };
 
 // Alias for use in common framework code
-typedef struct cpu_info device_info;
+typedef struct cpu_info device_info_t;
 
 /// cpu_info is an array of cpu_info structures.  Each element of the array
 /// contains information about a logical CPU that will be used to
