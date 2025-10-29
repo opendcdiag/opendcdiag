@@ -155,19 +155,7 @@ function query_jq()
         false "Cannot find output contents. Did you run a query using sandstone_yq?"
     fi
 
-    local -a args=()
-    while [[ $# ]]; do
-        if ! [[ "$1" = -* ]]; then
-            break
-        fi
-        args+=($1)
-        shift
-    done
-    if (( $# == 1 )); then
-        jq < $json "${args[@]}" "$@"
-    else
-        jq < $json "${args[@]}" -e "($1) == $2"
-    fi
+    jq < $json "$@"
 }
 
 setup_sandstone
