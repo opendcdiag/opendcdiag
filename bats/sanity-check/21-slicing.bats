@@ -180,48 +180,41 @@ function cpuset_unique_modules() {
     export SANDSTONE_MOCK_TOPOLOGY='c0yp c0t1yp c4ye c5ye c16yp c17yp c20ye c21ye'
 
     # --cpuset=p0 to avoid having slicing per sockets
-    # --max-cores-per-slice=$MAX_PROC will cause all cores of a given slice to
-    # be grouped together in a slice, not bound by the 32-core limit
+    # --max-cores-per-slice=$MAX_PROC to make the heuristic and NUMA-isolating
+    # slices match
     sandstone_yq --disable=\* --cpuset=p0 --max-cores-per-slice=$MAX_PROC
 
-    # Count the core types (if any are known)
-    local -A threadcount
-    threadcount['e']=`query_jq '[."cpu-info"[] | select(.core_type == "e")] | length'`
-    threadcount['p']=`query_jq '[."cpu-info"[] | select(.core_type == "p")] | length'`
-
-    if [[ ${threadcount['e']-0} = 0 ]] && [[ ${threadcount['p']-0} = 0 ]]; then
+    # Using uniq(1) instead of jq's unique function to retain the input order
+    local core_types=(`query_jq -r '."cpu-info"[] | select(.core_type != null).core_type' | uniq`)
+    echo "Found core types:" ${core_types[@]}
+    if [[ ${#core_types[@]} -eq 0 ]]; then
         skip "Test only works with Debug builds (to mock the topology) or on systems reporting core type"
     fi
 
-    if [[ ${threadcount['e']-0} = 0 ]] || [[ ${threadcount['p']-0} = 0 ]]; then
-        # This is not a hybrid system
-        test_yaml_numeric "/test-plans/heuristic@len" 'value == 1'
-    else
-        # Hybrid system: two entries in the heuristic plan
-        test_yaml_numeric "/test-plans/heuristic@len" 'value == 2'
-    fi
+    local starting_cpu=0 slice=0
+    local core_type
+    for core_type in ${core_types[@]}; do
+        # How many NUMA nodes in this core type?
+        local numa_nodes=(`query_jq -r --arg c $core_type '[."cpu-info"[] | select(.core_type == $c) .numa_node] | unique[]'`)
+        echo "NUMA nodes for $core_type-cores:" "${numa_nodes[@]}"
+        for node in ${numa_nodes[@]}; do
+            # How many CPUs should be in this slice?
+            local count=`query_jq -r --arg c $core_type --argjson n $node \
+                         '[."cpu-info"[] | select(.core_type == $c and .numa_node == $n)] | length'`
+            echo "$core_type-core CPUs in NUMA node $node:" "$count"
 
-    # The first slice should be the P cores (if any)
-    local i
-    local e_slice
-    if [[ ${threadcount['p']-0} != 0 ]]; then
-        test_yaml_numeric "/test-plans/heuristic/0/starting_cpu" 'value == 0'
-        test_yaml_numeric "/test-plans/heuristic/0/count" "value == ${threadcount['p']}"
-        for ((i = 0; i < ${threadcount['p']}; ++i)); do
-            test_yaml_expr "/cpu-info/$i/core_type" = "p"
-        done
-        e_slice=1
-    else
-        # Not hybrid: system with homogeneous E-cores
-        e_slice=0
-    fi
+            test_yaml_expr "/test-plans/isolate_numa/$slice/starting_cpu" = $starting_cpu
+            test_yaml_expr "/test-plans/isolate_numa/$slice/count" = $count
+            test_yaml_expr "/test-plans/heuristic/$slice/starting_cpu" = $starting_cpu
+            test_yaml_expr "/test-plans/heuristic/$slice/count" = $count
 
-    # The other slice should be the E cores
-    if [[ ${threadcount['e']-0} != 0 ]]; then
-        test_yaml_numeric "/test-plans/heuristic/$e_slice/starting_cpu" "value == ${threadcount['p']-0}"
-        test_yaml_numeric "/test-plans/heuristic/$e_slice/count" "value == ${threadcount['e']}"
-        for (( ; i < ${threadcount['e']}; ++i)); do
-            test_yaml_expr "/cpu-info/$i/core_type" = "e"
+            slice=$((slice + 1))
+            starting_cpu=$((starting_cpu + count))
         done
-    fi
+    done
+
+    # Confirm we've reviewed all CPUs and plans
+    test_yaml_expr "/test-plans/isolate_numa@len" = $slice
+    test_yaml_expr "/test-plans/heuristic@len" = $slice
+    test_yaml_expr "/test-plans/fullsocket/0/count" = $starting_cpu
 }
