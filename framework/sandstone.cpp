@@ -1036,8 +1036,8 @@ static void commit_shmem()
         sApp->shmemfd = -1;
     }
 
-    // sApp->shmem has probably moved
-    restrict_topology({ 0, thread_count() });
+    // sApp->shmem has probably moved, update ptr
+    cpu_info = sApp->shmem->cpu_info;
 }
 
 static void attach_shmem(int fd)
