@@ -14,6 +14,22 @@
 #include <limits>
 #endif
 
+#ifdef __F16C__
+#include <immintrin.h>
+#endif
+
+#ifdef __cplusplus
+#define STATIC_INLINE static inline constexpr
+#else
+#define STATIC_INLINE static inline
+#endif
+
+#ifdef __cplusplus
+template<typename T>
+struct NotImplementedFor: std::is_same<T, void> {
+};
+#endif
+
 // GCC supports _Float16 on x86 and __fp16 on AArch64, in both cases it
 // only supports IEEE-754 format.
 // https://gcc.gnu.org/onlinedocs/gcc/Half-Precision.html
@@ -94,8 +110,9 @@ typedef SANDSTONE_FP16_TYPE fp16_t;
 #define HFLOAT8_SIGN_BITS          1
 #define HFLOAT8_EXPONENT_BITS      4
 #define HFLOAT8_MANTISSA_BITS      3
-#define HFLOAT8_NAN_INF_VALUE            0x7f
+#define HFLOAT8_INF_NAN_VALUE            0x7f
 #define HFLOAT8_SATURATED_OVERFLOW_VALUE 0x7e
+#define HFLOAT8_MAX_VALUE                0x7d
 
 #define FLOAT16_SIGN_BITS        1
 #define FLOAT16_EXPONENT_BITS    5
@@ -155,10 +172,6 @@ typedef SANDSTONE_FP16_TYPE fp16_t;
 #define BFLOAT16_MIN              (0x1p-126f)
 #define BFLOAT16_NORM_MAX         BFLOAT16_MAX
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct BFloat8
 {
     union {
@@ -177,25 +190,32 @@ struct BFloat8
     };
 
 #ifdef __cplusplus
-    inline BFloat8() = default;
+    constexpr inline BFloat8() = default;
     inline BFloat8(float f);
 
     constexpr inline BFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa(m), exponent(e), sign(s) { }
     constexpr inline BFloat8(uint8_t s, uint8_t v): value(v), signv(s) { }
 
-    static constexpr BFloat8 min()      { return BFloat8(Holder{ 0b0'00001'00 }); }
-    static constexpr BFloat8 max()      { return BFloat8(Holder{ 0b0'11110'11 }); }
-    static constexpr BFloat8 infinity() { return BFloat8(Holder{ 0b0'11111'00 }); }
+    inline float as_fp() const;
+
+    static constexpr inline BFloat8 min()        { return BFloat8(Holder{ 0b0'00001'00 }); }
+    static constexpr inline BFloat8 max()        { return BFloat8(Holder{ 0b0'11110'11 }); }
+    static constexpr inline BFloat8 denorm_min() { return BFloat8(Holder{ 0b0'00000'01 }); }
+    static constexpr inline BFloat8 infinity()   { return BFloat8(Holder{ 0b0'11111'00 }); }
+    static constexpr inline BFloat8 overflow()   { return BFloat8(Holder{ 0b0'11111'01 }); }
+    static constexpr inline BFloat8 snan()       { return BFloat8(Holder{ 0b0'11111'10 }); }
+    static constexpr inline BFloat8 qnan()       { return BFloat8(Holder{ 0b0'11111'11 }); }
 
     constexpr inline bool is_negative() const { return (sign != 0); }
     constexpr inline bool is_zero() const     { return (value == 0); }
     constexpr inline bool is_denormal() const { return (exponent == BFLOAT8_DENORM_EXPONENT) && (mantissa != 0); }
-    constexpr inline bool is_valid() const    { return (exponent != BFLOAT8_NAN_EXPONENT); }
+    constexpr inline bool is_finite() const   { return (exponent != BFLOAT8_NAN_EXPONENT); }
     constexpr inline bool is_inf() const      { return (exponent == BFLOAT8_INFINITY_EXPONENT) && (mantissa == 0); }
     constexpr inline bool is_overflow() const { return (exponent == BFLOAT8_EXPONENT_MASK) && (mantissa == BFLOAT8_OVERFLOW_MANTISSA); }
     constexpr inline bool is_nan() const      { return (exponent == BFLOAT8_NAN_EXPONENT) && ((mantissa == BFLOAT8_SNAN_AT_INPUT_MANTISSA) || (mantissa == BFLOAT8_QNAN_AT_INPUT_MANTISSA)); }
     constexpr inline bool is_snan() const     { return (exponent == BFLOAT8_NAN_EXPONENT) && (mantissa == BFLOAT8_SNAN_AT_INPUT_MANTISSA); }
     constexpr inline bool is_qnan() const     { return (exponent == BFLOAT8_NAN_EXPONENT) && (mantissa == BFLOAT8_QNAN_AT_INPUT_MANTISSA); }
+    constexpr inline bool is_max() const      { return (exponent == BFLOAT8_INFINITY_EXPONENT - 1) && (mantissa == BFLOAT8_MANTISSA_MASK); }
 
     constexpr inline BFloat8 operator-() const {
         return { (uint8_t) (sign ^ 1), exponent, mantissa };
@@ -209,15 +229,16 @@ private:
 typedef struct BFloat8 BFloat8;
 
 // C interface
-static inline bool BFloat8_is_negative(BFloat8 f) { return (f.sign != 0); }
-static inline bool BFloat8_is_zero(BFloat8 f)     { return (f.value == 0); }
-static inline bool BFloat8_is_denormal(BFloat8 f) { return (f.exponent == BFLOAT8_DENORM_EXPONENT) && (f.mantissa != 0); }
-static inline bool BFloat8_is_valid(BFloat8 f)    { return (f.exponent != BFLOAT8_NAN_EXPONENT); }
-static inline bool BFloat8_is_inf(BFloat8 f)      { return (f.exponent == BFLOAT8_INFINITY_EXPONENT) && (f.mantissa == 0); }
-static inline bool BFloat8_is_overflow(BFloat8 f) { return (f.exponent == BFLOAT8_NAN_EXPONENT) && (f.mantissa == BFLOAT8_OVERFLOW_MANTISSA); }
-static inline bool BFloat8_is_nan(BFloat8 f)      { return (f.exponent == BFLOAT8_NAN_EXPONENT) && ((f.mantissa == BFLOAT8_SNAN_AT_INPUT_MANTISSA) || (f.mantissa == BFLOAT8_QNAN_AT_INPUT_MANTISSA)); }
-static inline bool BFloat8_is_snan(BFloat8 f)     { return (f.exponent == BFLOAT8_NAN_EXPONENT) && (f.mantissa == BFLOAT8_SNAN_AT_INPUT_MANTISSA); }
-static inline bool BFloat8_is_qnan(BFloat8 f)     { return (f.exponent == BFLOAT8_NAN_EXPONENT) && (f.mantissa == BFLOAT8_QNAN_AT_INPUT_MANTISSA); }
+STATIC_INLINE bool BFloat8_is_negative(BFloat8 f) { return (f.sign != 0); }
+STATIC_INLINE bool BFloat8_is_zero(BFloat8 f)     { return (f.value == 0); }
+STATIC_INLINE bool BFloat8_is_denormal(BFloat8 f) { return (f.exponent == BFLOAT8_DENORM_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool BFloat8_is_finite(BFloat8 f)   { return (f.exponent != BFLOAT8_NAN_EXPONENT); }
+STATIC_INLINE bool BFloat8_is_inf(BFloat8 f)      { return (f.exponent == BFLOAT8_INFINITY_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool BFloat8_is_overflow(BFloat8 f) { return (f.exponent == BFLOAT8_NAN_EXPONENT) && (f.mantissa == BFLOAT8_OVERFLOW_MANTISSA); }
+STATIC_INLINE bool BFloat8_is_nan(BFloat8 f)      { return (f.exponent == BFLOAT8_NAN_EXPONENT) && ((f.mantissa == BFLOAT8_SNAN_AT_INPUT_MANTISSA) || (f.mantissa == BFLOAT8_QNAN_AT_INPUT_MANTISSA)); }
+STATIC_INLINE bool BFloat8_is_snan(BFloat8 f)     { return (f.exponent == BFLOAT8_NAN_EXPONENT) && (f.mantissa == BFLOAT8_SNAN_AT_INPUT_MANTISSA); }
+STATIC_INLINE bool BFloat8_is_qnan(BFloat8 f)     { return (f.exponent == BFLOAT8_NAN_EXPONENT) && (f.mantissa == BFLOAT8_QNAN_AT_INPUT_MANTISSA); }
+STATIC_INLINE bool BFloat8_is_max(BFloat8 f)      { return (f.exponent == BFLOAT8_INFINITY_EXPONENT - 1) && (f.mantissa == BFLOAT8_MANTISSA_MASK); }
 
 #ifdef __cplusplus
 extern "C" {
@@ -236,11 +257,15 @@ static inline float from_bfloat8(BFloat8 f8) {
 }
 
 #ifdef __cplusplus
-BFloat8::BFloat8(float f):
+inline BFloat8::BFloat8(float f):
     payload(to_bfloat8(f).payload)
 {}
+inline float BFloat8::as_fp() const {
+    return from_bfloat8(*this);
+}
 #endif
 
+STATIC_INLINE float BFloat8_as_fp(BFloat8 f) { return from_bfloat8(f); }
 
 struct HFloat8
 {
@@ -260,23 +285,28 @@ struct HFloat8
     };
 
 #ifdef __cplusplus
-    inline HFloat8() = default;
+    constexpr inline HFloat8() = default;
     inline HFloat8(float f);
 
     constexpr inline HFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa(m), exponent(e), sign(s) { }
     constexpr inline HFloat8(uint8_t s, uint8_t v): value(v), signv(s) { }
 
-    static constexpr HFloat8 min()      { return HFloat8(Holder{ 0b0'0001'000 }); }
-    static constexpr HFloat8 max()      { return HFloat8(Holder{ 0b0'1111'101 }); }
-    static constexpr HFloat8 max1()     { return HFloat8(Holder{ 0b0'1111'000 }); }
-    static constexpr HFloat8 infinity() { return HFloat8(Holder{ 0b0'1111'111 }); }
+    inline float as_fp() const;
+
+    static constexpr inline HFloat8 min()        { return HFloat8(Holder{ 0b0'0001'000 }); }
+    static constexpr inline HFloat8 max()        { return HFloat8(Holder{ 0b0'1111'101 }); }
+    static constexpr inline HFloat8 max1()       { return HFloat8(Holder{ 0b0'1111'000 }); }
+    static constexpr inline HFloat8 denorm_min() { return HFloat8(Holder{ 0b0'0000'001 }); }
+    static constexpr inline HFloat8 inf_nan()    { return HFloat8(Holder{ 0b0'1111'111 }); }
+    static constexpr inline HFloat8 overflow()   { return HFloat8(Holder{ 0b0'1111'110 }); }
 
     constexpr inline bool is_negative() const { return (sign != 0); }
     constexpr inline bool is_zero() const     { return (value == 0); }
     constexpr inline bool is_denormal() const { return (exponent == HFLOAT8_DENORM_EXPONENT) && (mantissa != 0); }
-    constexpr inline bool is_valid() const    { return (value != HFLOAT8_NAN_INF_VALUE) && (value != HFLOAT8_SATURATED_OVERFLOW_VALUE); }
-    constexpr inline bool is_nan_inf() const  { return value == HFLOAT8_NAN_INF_VALUE; }
+    constexpr inline bool is_finite() const   { return (value != HFLOAT8_INF_NAN_VALUE) && (value != HFLOAT8_SATURATED_OVERFLOW_VALUE); }
+    constexpr inline bool is_inf_nan() const  { return value == HFLOAT8_INF_NAN_VALUE; }
     constexpr inline bool is_overflow() const { return value == HFLOAT8_SATURATED_OVERFLOW_VALUE; }
+    constexpr inline bool is_max() const      { return value == HFLOAT8_MAX_VALUE; }
 
     constexpr inline HFloat8 operator-() const {
         return { (uint8_t) (sign ^ 1), exponent, mantissa };
@@ -290,12 +320,13 @@ private:
 typedef struct HFloat8 HFloat8;
 
 // C interface
-static inline bool HFloat8_is_negative(HFloat8 f) { return (f.sign != 0); }
-static inline bool HFloat8_is_zero(HFloat8 f)     { return (f.value == 0); }
-static inline bool HFloat8_is_denormal(HFloat8 f) { return (f.exponent == HFLOAT8_DENORM_EXPONENT) && (f.mantissa != 0); }
-static inline bool HFloat8_is_valid(HFloat8 f)    { return (f.value != HFLOAT8_NAN_INF_VALUE) && (f.value != HFLOAT8_SATURATED_OVERFLOW_VALUE); }
-static inline bool HFloat8_is_nan_inf(HFloat8 f)  { return (f.value == HFLOAT8_NAN_INF_VALUE); }
-static inline bool HFloat8_is_overflow(HFloat8 f) { return (f.value == HFLOAT8_SATURATED_OVERFLOW_VALUE); }
+STATIC_INLINE bool HFloat8_is_negative(HFloat8 f) { return (f.sign != 0); }
+STATIC_INLINE bool HFloat8_is_zero(HFloat8 f)     { return (f.value == 0); }
+STATIC_INLINE bool HFloat8_is_denormal(HFloat8 f) { return (f.exponent == HFLOAT8_DENORM_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool HFloat8_is_finite(HFloat8 f)   { return (f.value != HFLOAT8_INF_NAN_VALUE) && (f.value != HFLOAT8_SATURATED_OVERFLOW_VALUE); }
+STATIC_INLINE bool HFloat8_is_inf_nan(HFloat8 f)  { return (f.value == HFLOAT8_INF_NAN_VALUE); }
+STATIC_INLINE bool HFloat8_is_overflow(HFloat8 f) { return (f.value == HFLOAT8_SATURATED_OVERFLOW_VALUE); }
+STATIC_INLINE bool HFloat8_is_max(HFloat8 f)      { return f.value == HFLOAT8_MAX_VALUE; }
 
 #ifdef __cplusplus
 extern "C" {
@@ -317,7 +348,12 @@ static inline float from_hfloat8(HFloat8 f8) {
 HFloat8::HFloat8(float f):
     payload(to_hfloat8(f).payload)
 {}
+inline float HFloat8::as_fp() const {
+    return from_hfloat8(*this);
+}
 #endif
+
+STATIC_INLINE float HFloat8_as_fp(HFloat8 f) { return from_hfloat8(f); }
 
 struct Float16
 {
@@ -342,10 +378,11 @@ struct Float16
     };
 
 #ifdef __cplusplus
-    inline Float16() = default;
+    constexpr inline Float16() = default;
     inline Float16(float f);
 
     constexpr inline Float16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
+    inline float as_fp() const;
 
     static constexpr int digits = FLOAT16_MANT_DIG;
     static constexpr int digits10 = FLOAT16_DIG;
@@ -372,29 +409,32 @@ struct Float16
     static constexpr std::float_round_style round_style =
             std::round_toward_zero;   // unlike std::numeric_limits<float>::round_style
 
-    static constexpr Float16 min()              { return Float16(Holder{0x0400}); }
-    static constexpr Float16 max()              { return Float16(Holder{0x7bff}); }
-    static constexpr Float16 lowest()           { return Float16(Holder{0xfbff}); }
-    static constexpr Float16 denorm_min()       { return Float16(Holder{0x0001}); }
-    static constexpr Float16 epsilon()          { return Float16(Holder{0x1400}); }
-    static constexpr Float16 round_error()      { return Float16(Holder{0x3800}); }
-    static constexpr Float16 infinity()         { return Float16(Holder{0x7c00}); }
-    static constexpr Float16 neg_infinity()     { return Float16(Holder{0xfc00}); }
-    static constexpr Float16 quiet_NaN()        { return Float16(Holder{0x7e00}); }
-    static constexpr Float16 signaling_NaN()    { return Float16(Holder{0x7d00}); }
+    static constexpr inline Float16 min()              { return Float16(Holder{0x0400}); }
+    static constexpr inline Float16 max()              { return Float16(Holder{0x7bff}); }
+    static constexpr inline Float16 lowest()           { return Float16(Holder{0xfbff}); }
+    static constexpr inline Float16 denorm_min()       { return Float16(Holder{0x0001}); }
+    static constexpr inline Float16 epsilon()          { return Float16(Holder{0x1400}); }
+    static constexpr inline Float16 round_error()      { return Float16(Holder{0x3800}); }
+    static constexpr inline Float16 infinity()         { return Float16(Holder{0x7c00}); }
+    static constexpr inline Float16 neg_infinity()     { return Float16(Holder{0xfc00}); }
+    static constexpr inline Float16 quiet_NaN()        { return Float16(Holder{0x7e00}); }
+    static constexpr inline Float16 signaling_NaN()    { return Float16(Holder{0x7d00}); }
 
     constexpr inline bool     is_negative() const         { return sign != 0; }
     constexpr inline bool     is_zero() const             { return (exponent == FLOAT16_DENORM_EXPONENT) && (mantissa == 0); }
     constexpr inline bool     is_denormal() const         { return (exponent == FLOAT16_DENORM_EXPONENT) && (mantissa != 0); }
     constexpr inline bool     is_inf() const              { return (exponent == FLOAT16_INFINITY_EXPONENT) && (mantissa == 0); }
-
     constexpr inline bool     is_nan() const              { return (exponent == FLOAT16_NAN_EXPONENT) && (mantissa != 0); }
     constexpr inline bool     is_snan() const             { return is_nan() && ((mantissa & FLOAT16_MANTISSA_QUIET_NAN_MASK) == 0); }
     constexpr inline bool     is_qnan() const             { return is_nan() && ((mantissa & FLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
-    constexpr inline bool     is_valid() const            { return exponent != FLOAT16_NAN_EXPONENT; }
+    constexpr inline bool     is_finite() const           { return exponent != FLOAT16_NAN_EXPONENT; }
+    constexpr inline bool     is_max() const              { return (exponent == FLOAT16_INFINITY_EXPONENT - 1) && (mantissa == FLOAT16_MANTISSA_MASK); }
 
     constexpr inline uint16_t get_nan_payload() const     { return mantissa & (~FLOAT16_MANTISSA_QUIET_NAN_MASK); }
 
+    constexpr inline Float16 operator-() const {
+        return { (uint16_t) (sign ^ 1), exponent, mantissa };
+    }
 private:
     struct Holder { uint16_t payload; };
     explicit constexpr Float16(Holder h) : as_hex(h.payload) {}
@@ -403,18 +443,58 @@ private:
 typedef struct Float16 Float16;
 
 // C interface
-static inline bool     Float16_is_negative(Float16 f)         { return f.sign != 0; }
-static inline bool     Float16_is_zero(Float16 f)             { return (f.exponent == FLOAT16_DENORM_EXPONENT) && (f.mantissa == 0); }
-static inline bool     Float16_is_denormal(Float16 f)         { return (f.exponent == FLOAT16_DENORM_EXPONENT) && (f.mantissa != 0); }
-static inline bool     Float16_is_inf(Float16 f)              { return (f.exponent == FLOAT16_INFINITY_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool Float16_is_negative(Float16 f) { return f.sign != 0; }
+STATIC_INLINE bool Float16_is_zero(Float16 f)     { return (f.exponent == FLOAT16_DENORM_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool Float16_is_denormal(Float16 f) { return (f.exponent == FLOAT16_DENORM_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool Float16_is_finite(Float16 f)   { return f.exponent != FLOAT16_NAN_EXPONENT; }
+STATIC_INLINE bool Float16_is_inf(Float16 f)      { return (f.exponent == FLOAT16_INFINITY_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool Float16_is_nan(Float16 f)      { return (f.exponent == FLOAT16_NAN_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool Float16_is_snan(Float16 f)     { return Float16_is_nan(f) && (f.as_nan.quiet == 0); }
+STATIC_INLINE bool Float16_is_qnan(Float16 f)     { return Float16_is_nan(f) && (f.as_nan.quiet != 0); }
+STATIC_INLINE bool Float16_is_max(Float16 f)      { return (f.exponent == FLOAT16_INFINITY_EXPONENT - 1) && (f.mantissa == FLOAT16_MANTISSA_MASK); }
 
-static inline bool     Float16_is_nan(Float16 f)              { return (f.exponent == FLOAT16_NAN_EXPONENT) && (f.mantissa != 0); }
-static inline bool     Float16_is_snan(Float16 f)             { return Float16_is_nan(f) && (f.as_nan.quiet == 0); }
-static inline bool     Float16_is_qnan(Float16 f)             { return Float16_is_nan(f) && (f.as_nan.quiet != 0); }
-static inline bool     Float16_is_valid(Float16 f)            { return f.exponent != FLOAT16_NAN_EXPONENT; }
+STATIC_INLINE uint16_t Float16_get_nan_payload(Float16 f) { return f.as_nan.payload; }
 
-static inline uint16_t Float16_get_nan_payload(Float16 f)     { return f.as_nan.payload; }
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern Float16 tofp16_emulated(float f);
+extern float fromfp16_emulated(Float16 f);
+#ifdef __cplusplus
+}
+#endif
 
+static inline Float16 tofp16(float f)
+{
+#ifdef __F16C__
+    Float16 r;
+    r.as_hex = _cvtss_sh(f, _MM_FROUND_TRUNC);
+    return r;
+#else
+    return tofp16_emulated(f);
+#endif
+}
+
+static inline float fromfp16(Float16 f)
+{
+#ifdef __F16C__
+    return _cvtsh_ss(f.as_hex);
+#else
+    return fromfp16_emulated(f);
+#endif
+}
+
+#ifdef __cplusplus
+inline Float16::Float16(float f)
+    : Float16(tofp16(f))
+{
+}
+inline float Float16::as_fp() const {
+    return fromfp16(*this);
+}
+#endif
+
+STATIC_INLINE float Float16_as_fp(Float16 f) { return fromfp16(f); }
 
 struct BFloat16
 {
@@ -435,9 +515,11 @@ struct BFloat16
     };
 
 #ifdef __cplusplus
-    inline BFloat16() = default;
+    constexpr inline BFloat16() = default;
     inline BFloat16(float f);
     constexpr inline BFloat16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
+
+    inline float as_fp() const;
 
     // same API as std::numeric_limits:
     static constexpr int digits = BFLOAT16_MANT_DIG;
@@ -465,31 +547,35 @@ struct BFloat16
     static constexpr std::float_round_style round_style =
             std::round_toward_zero;   // unlike std::numeric_limits<float>::round_style
 
-    static constexpr BFloat16 max()           { return BFloat16(Holder{0x7f7f}); }
-    static constexpr BFloat16 min()           { return BFloat16(Holder{0x0080}); }
-    static constexpr BFloat16 lowest()        { return BFloat16(Holder{0xff7f}); }
-    static constexpr BFloat16 denorm_min()    { return BFloat16(Holder{0x0001}); }
-    static constexpr BFloat16 epsilon()       { return BFloat16(Holder{0x3c00}); }
-    static constexpr BFloat16 round_error()   { return BFloat16(Holder{0x3f00}); }
-    static constexpr BFloat16 infinity()      { return BFloat16(Holder{0x7f80}); }
-    static constexpr BFloat16 neg_infinity()  { return BFloat16(Holder{0xff80}); }
-    static constexpr BFloat16 quiet_NaN()     { return BFloat16(Holder{0x7fc0}); }
-    static constexpr BFloat16 signaling_NaN() { return BFloat16(Holder{0x7fa0}); }
+    static constexpr inline BFloat16 max()           { return BFloat16(Holder{0x7f7f}); }
+    static constexpr inline BFloat16 min()           { return BFloat16(Holder{0x0080}); }
+    static constexpr inline BFloat16 lowest()        { return BFloat16(Holder{0xff7f}); }
+    static constexpr inline BFloat16 denorm_min()    { return BFloat16(Holder{0x0001}); }
+    static constexpr inline BFloat16 epsilon()       { return BFloat16(Holder{0x3c00}); }
+    static constexpr inline BFloat16 round_error()   { return BFloat16(Holder{0x3f00}); }
+    static constexpr inline BFloat16 infinity()      { return BFloat16(Holder{0x7f80}); }
+    static constexpr inline BFloat16 neg_infinity()  { return BFloat16(Holder{0xff80}); }
+    static constexpr inline BFloat16 quiet_NaN()     { return BFloat16(Holder{0x7fc0}); }
+    static constexpr inline BFloat16 signaling_NaN() { return BFloat16(Holder{0x7fa0}); }
 
     // extra
     static constexpr float epsilon_v()        { return std::numeric_limits<float>::epsilon() * 65536; }
 
-    constexpr inline bool     is_negative() const       { return sign != 0; }
-    constexpr inline bool     is_zero() const           { return (exponent == BFLOAT16_DENORM_EXPONENT) && (mantissa == 0); }
-    constexpr inline bool     is_denormal() const       { return (exponent == BFLOAT16_DENORM_EXPONENT) && (mantissa != 0); }
-    constexpr inline bool     is_inf() const            { return (exponent == BFLOAT16_INFINITY_EXPONENT) && (mantissa == 0); }
-
-    // NaNs
-    constexpr inline bool     is_nan() const            { return  (exponent == BFLOAT16_NAN_EXPONENT) && (mantissa != 0); }
-    constexpr inline bool     is_snan() const           { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) == 0); }
-    constexpr inline bool     is_qnan() const           { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
+    constexpr inline bool is_negative() const { return sign != 0; }
+    constexpr inline bool is_zero() const     { return (exponent == BFLOAT16_DENORM_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool is_max() const      { return (exponent == BFLOAT16_INFINITY_EXPONENT - 1) && (mantissa == BFLOAT16_MANTISSA_MASK); }
+    constexpr inline bool is_denormal() const { return (exponent == BFLOAT16_DENORM_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool is_finite() const   { return exponent != BFLOAT16_NAN_EXPONENT; }
+    constexpr inline bool is_inf() const      { return (exponent == BFLOAT16_INFINITY_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool is_nan() const      { return  (exponent == BFLOAT16_NAN_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool is_snan() const     { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) == 0); }
+    constexpr inline bool is_qnan() const     { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
 
     constexpr inline uint16_t get_nan_payload() const   { return mantissa & (~BFLOAT16_MANTISSA_QUIET_NAN_MASK); }
+
+    constexpr inline BFloat16 operator-() const {
+        return { (uint16_t) (sign ^ 1), exponent, mantissa };
+    }
 
 private:
     struct Holder { uint16_t payload; };
@@ -499,17 +585,58 @@ private:
 typedef struct BFloat16 BFloat16;
 
 // C interface
-static inline bool     BFloat16_is_negative(BFloat16 f)         { return f.sign != 0; }
-static inline bool     BFloat16_is_zero(BFloat16 f)             { return (f.exponent == BFLOAT16_DENORM_EXPONENT) && (f.mantissa == 0); }
-static inline bool     BFloat16_is_denormal(BFloat16 f)         { return (f.exponent == BFLOAT16_DENORM_EXPONENT) && (f.mantissa != 0); }
-static inline bool     BFloat16_is_inf(BFloat16 f)              { return (f.exponent == BFLOAT16_INFINITY_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool BFloat16_is_negative(BFloat16 f) { return f.sign != 0; }
+STATIC_INLINE bool BFloat16_is_zero(BFloat16 f)     { return (f.exponent == BFLOAT16_DENORM_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool BFloat16_is_denormal(BFloat16 f) { return (f.exponent == BFLOAT16_DENORM_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool BFloat16_is_finite(BFloat16 f)   { return (f.exponent != BFLOAT16_NAN_EXPONENT); }
+STATIC_INLINE bool BFloat16_is_inf(BFloat16 f)      { return (f.exponent == BFLOAT16_INFINITY_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool BFloat16_is_nan(BFloat16 f)      { return (f.exponent == BFLOAT16_NAN_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool BFloat16_is_snan(BFloat16 f)     { return BFloat16_is_nan(f) && (f.as_nan.quiet == 0); }
+STATIC_INLINE bool BFloat16_is_qnan(BFloat16 f)     { return BFloat16_is_nan(f) && (f.as_nan.quiet != 0); }
 
-static inline bool     BFloat16_is_nan(BFloat16 f)              { return (f.exponent == BFLOAT16_NAN_EXPONENT) && (f.mantissa != 0); }
-static inline bool     BFloat16_is_snan(BFloat16 f)             { return BFloat16_is_nan(f) && (f.as_nan.quiet == 0); }
-static inline bool     BFloat16_is_qnan(BFloat16 f)             { return BFloat16_is_nan(f) && (f.as_nan.quiet != 0); }
+STATIC_INLINE uint16_t BFloat16_get_nan_payload(BFloat16 f) { return f.as_nan.payload; }
 
-static inline uint16_t BFloat16_get_nan_payload(BFloat16 f)     { return f.as_nan.payload; }
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern BFloat16 tobf16_emulated(float f);
+#ifdef __cplusplus
+}
+#endif
 
+static inline float frombf16_emulated(BFloat16 r) {
+    // we zero-extend, shamelessly
+    union {
+        float f;
+        uint32_t x;
+    } v;
+    v.x = r.as_hex;
+    v.x <<= 16;
+#ifndef __FAST_MATH__
+    v.f += 0;     // normalize and quiet any SNaNs
+#endif
+    return v.f;
+}
+
+/* TODO handle with _mm_cvtneps_pbh */
+static inline BFloat16 tobf16(float f) {
+    return tobf16_emulated(f);
+}
+static inline float frombf16(BFloat16 r) {
+    return frombf16_emulated(r);
+}
+
+#ifdef __cplusplus
+inline BFloat16::BFloat16(float f)
+    : BFloat16(tobf16(f))
+{
+}
+inline float BFloat16::as_fp() const {
+    return frombf16(*this);
+}
+#endif
+
+STATIC_INLINE float BFloat16_as_fp(BFloat16 f) { return frombf16(f); }
 
 struct Float32 {
     union {
@@ -529,12 +656,48 @@ struct Float32 {
     };
 
 #ifdef __cplusplus
-    inline Float32() = default;
+    constexpr inline Float32() = default;
     constexpr inline Float32(float f) : as_float(f) { }
     constexpr inline Float32(uint32_t s, uint32_t e, uint32_t m): mantissa(m), exponent(e), sign(s) { }
+
+    constexpr inline float as_fp() const {
+        return as_float;
+    }
+
+    static constexpr inline Float32 max()     { return { 0, FLOAT32_INFINITY_EXPONENT - 1, FLOAT32_MANTISSA_MASK }; }
+
+    constexpr inline bool is_negative() const { return sign != 0; }
+    constexpr inline bool is_zero() const     { return (exponent == FLOAT32_DENORM_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool is_denormal() const { return (exponent == FLOAT32_DENORM_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool is_finite() const   { return exponent != FLOAT32_NAN_EXPONENT; }
+    constexpr inline bool is_inf() const      { return (exponent == FLOAT32_INFINITY_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool is_nan() const      { return  (exponent == FLOAT32_NAN_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool is_snan() const     { return is_nan() && ((mantissa & FLOAT32_MANTISSA_QUIET_NAN_MASK) == 0); }
+    constexpr inline bool is_qnan() const     { return is_nan() && ((mantissa & FLOAT32_MANTISSA_QUIET_NAN_MASK) != 0); }
+    constexpr inline bool is_max() const      { return (exponent == FLOAT32_INFINITY_EXPONENT - 1) && (mantissa == FLOAT32_MANTISSA_MASK); }
+
+    constexpr inline uint32_t get_nan_payload() const   { return mantissa & (~FLOAT32_MANTISSA_QUIET_NAN_MASK); }
+
+    constexpr inline Float32 operator-() const {
+        return { (uint32_t) (sign ^ 1), exponent, mantissa };
+    }
+
 #endif
 };
 typedef struct Float32 Float32;
+
+STATIC_INLINE bool Float32_is_negative(Float32 f) { return f.sign != 0; }
+STATIC_INLINE bool Float32_is_zero(Float32 f)     { return (f.exponent == FLOAT32_DENORM_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool Float32_is_denormal(Float32 f) { return (f.exponent == FLOAT32_DENORM_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool Float32_is_finite(Float32 f)   { return f.exponent != FLOAT32_NAN_EXPONENT; }
+STATIC_INLINE bool Float32_is_inf(Float32 f)      { return (f.exponent == FLOAT32_INFINITY_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool Float32_is_nan(Float32 f)      { return (f.exponent == FLOAT32_NAN_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool Float32_is_snan(Float32 f)     { return Float32_is_nan(f) && ((f.mantissa & FLOAT32_QUIET_BITS) == 0); }
+STATIC_INLINE bool Float32_is_qnan(Float32 f)     { return Float32_is_nan(f) && ((f.mantissa & FLOAT32_QUIET_BITS) != 0); }
+STATIC_INLINE bool Float32_is_max(Float32 f)      { return (f.exponent == FLOAT32_INFINITY_EXPONENT - 1) && (f.mantissa == FLOAT32_MANTISSA_MASK); }
+
+STATIC_INLINE uint32_t Float32_get_nan_payload(Float32 f) { return f.as_nan.payload; }
+STATIC_INLINE float Float32_as_fp(Float32 f) { return f.as_float; }
 
 struct Float64 {
     union {
@@ -558,12 +721,47 @@ struct Float64 {
     };
 
 #ifdef __cplusplus
-    inline Float64() = default;
-    constexpr inline Float64(float f) : as_float(f) { }
+    constexpr inline Float64() = default;
+    constexpr inline Float64(double f) : as_float(f) { }
     constexpr inline Float64(uint64_t s, uint64_t e, uint64_t m): mantissa(m), exponent(e), sign(s) { }
+
+    constexpr inline double as_fp() const {
+        return as_float;
+    }
+
+    static constexpr inline Float64 max()     { return { 0, FLOAT64_INFINITY_EXPONENT - 1, FLOAT64_MANTISSA_MASK }; }
+
+    constexpr inline bool is_negative() const { return sign != 0; }
+    constexpr inline bool is_zero() const     { return (exponent == FLOAT64_DENORM_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool is_denormal() const { return (exponent == FLOAT64_DENORM_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool is_finite() const   { return exponent != FLOAT64_NAN_EXPONENT; }
+    constexpr inline bool is_inf() const      { return (exponent == FLOAT64_INFINITY_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool is_nan() const      { return  (exponent == FLOAT64_NAN_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool is_snan() const     { return is_nan() && ((mantissa & FLOAT64_MANTISSA_QUIET_NAN_MASK) == 0); }
+    constexpr inline bool is_qnan() const     { return is_nan() && ((mantissa & FLOAT64_MANTISSA_QUIET_NAN_MASK) != 0); }
+    constexpr inline bool is_max() const      { return (exponent == FLOAT64_INFINITY_EXPONENT - 1) && (mantissa == FLOAT64_MANTISSA_MASK); }
+
+    constexpr inline uint64_t get_nan_payload() const   { return mantissa & (~FLOAT64_MANTISSA_QUIET_NAN_MASK); }
+
+    constexpr inline Float64 operator-() const {
+        return { (uint64_t) (sign ^ 1), exponent, mantissa };
+    }
 #endif
 };
 typedef struct Float64 Float64;
+
+STATIC_INLINE bool Float64_is_negative(Float64 f) { return f.sign != 0; }
+STATIC_INLINE bool Float64_is_zero(Float64 f)     { return (f.exponent == FLOAT64_DENORM_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool Float64_is_denormal(Float64 f) { return (f.exponent == FLOAT64_DENORM_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool Float64_is_finite(Float64 f)   { return f.exponent != FLOAT64_NAN_EXPONENT; }
+STATIC_INLINE bool Float64_is_inf(Float64 f)      { return (f.exponent == FLOAT64_INFINITY_EXPONENT) && (f.mantissa == 0); }
+STATIC_INLINE bool Float64_is_nan(Float64 f)      { return (f.exponent == FLOAT64_NAN_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool Float64_is_snan(Float64 f)     { return Float64_is_nan(f) && ((f.mantissa & FLOAT64_QUIET_BITS) == 0); }
+STATIC_INLINE bool Float64_is_qnan(Float64 f)     { return Float64_is_nan(f) && ((f.mantissa & FLOAT64_QUIET_BITS) != 0); }
+STATIC_INLINE bool Float64_is_max(Float64 f)      { return (f.exponent == FLOAT64_INFINITY_EXPONENT - 1) && (f.mantissa == FLOAT64_MANTISSA_MASK); }
+
+STATIC_INLINE uint64_t Float64_get_nan_payload(Float64 f) { return f.as_nan.payload; }
+STATIC_INLINE double Float64_as_fp(Float64 f) { return f.as_float; }
 
 struct Float80 {
     union {
@@ -593,26 +791,51 @@ struct Float80 {
     };
 
 #ifdef __cplusplus
-    inline Float80() = default;
+    constexpr inline Float80() = default;
     constexpr inline Float80(long double f) : as_float(f) { }
     constexpr inline Float80(uint64_t s, uint64_t e, uint64_t j, uint64_t m): mantissa(m), jbit(j), exponent(e), sign(s) { }
+    constexpr inline Float80(uint64_t s, uint64_t e, uint64_t m): mantissa(m), jbit(e == 0 ? 0 : 1), exponent(e), sign(s) { }
+
+    constexpr inline long double as_fp() const {
+        return as_float;
+    }
+
+    static constexpr inline Float80 max()     { return { 0, FLOAT80_INFINITY_EXPONENT - 1, FLOAT80_MANTISSA_MASK }; }
+
+    constexpr inline bool is_negative() const { return sign != 0; }
+    constexpr inline bool is_zero() const     { return (jbit == 0) && (mantissa == 0); }
+    constexpr inline bool is_denormal() const { return (jbit == 0) && (mantissa != 0); }
+    constexpr inline bool is_finite() const   { return exponent != FLOAT80_NAN_EXPONENT; }
+    constexpr inline bool is_max() const      { return (exponent == FLOAT80_INFINITY_EXPONENT - 1) && (jbit == 1) && (mantissa == FLOAT80_MANTISSA_MASK); }
+    constexpr inline bool is_inf() const      { return (exponent == FLOAT80_INFINITY_EXPONENT) && (mantissa == 0); }
+    constexpr inline bool is_nan() const      { return  (exponent == FLOAT80_NAN_EXPONENT) && (mantissa != 0); }
+    constexpr inline bool is_snan() const     { return is_nan() && ((mantissa & FLOAT80_MANTISSA_QUIET_NAN_MASK) == 0); }
+    constexpr inline bool is_qnan() const     { return is_nan() && ((mantissa & FLOAT80_MANTISSA_QUIET_NAN_MASK) != 0); }
+    constexpr inline uint64_t get_nan_payload() const   { return mantissa & (~FLOAT80_MANTISSA_QUIET_NAN_MASK); }
+    constexpr inline Float80 operator-() const {
+        return { (uint64_t) (sign ^ 1), exponent, jbit, mantissa };
+    }
 #endif
 };
 typedef struct Float80 Float80;
 
+STATIC_INLINE bool Float80_is_negative(Float80 f) { return f.sign != 0; }
+STATIC_INLINE bool Float80_is_zero(Float80 f)     { return (f.jbit == 0) && (f.mantissa == 0); }
+STATIC_INLINE bool Float80_is_denormal(Float80 f) { return (f.jbit == 0) && (f.mantissa != 0); }
+STATIC_INLINE bool Float80_is_finite(Float80 f)   { return f.exponent != FLOAT80_NAN_EXPONENT; }
+STATIC_INLINE bool Float80_is_max(Float80 f)      { return (f.exponent == FLOAT80_INFINITY_EXPONENT - 1) && (f.jbit == 1) && (f.mantissa == FLOAT80_MANTISSA_MASK); }
+STATIC_INLINE bool Float80_is_inf(Float80 f)      { return (f.exponent == FLOAT80_INFINITY_EXPONENT) && (f.jbit == 1) && (f.mantissa == 0); }
+STATIC_INLINE bool Float80_is_nan(Float80 f)      { return (f.exponent == FLOAT80_NAN_EXPONENT) && (f.mantissa != 0); }
+STATIC_INLINE bool Float80_is_snan(Float80 f)     { return Float80_is_nan(f) && ((f.mantissa & FLOAT80_QUIET_BITS) == 0); }
+STATIC_INLINE bool Float80_is_qnan(Float80 f)     { return Float80_is_nan(f) && ((f.mantissa & FLOAT80_QUIET_BITS) != 0); }
+
+STATIC_INLINE uint64_t Float80_get_nan_payload(Float80 f) { return f.as_nan.payload; }
+STATIC_INLINE long double Float80_as_fp(Float80 f) { return f.as_float; }
+
 /**
  * @brief C/C++ builders (inlined)
- *
- * "variadic" C/C++ builders, either constructor (C++) or direct struct initialization (C)
- *
  * @{
  */
-
-#ifdef __cplusplus
-#define STATIC_INLINE static inline constexpr
-#else
-#define STATIC_INLINE static inline
-#endif
 
 STATIC_INLINE BFloat8 new_bfloat8(uint8_t sign, uint8_t exponent, uint8_t mantissa)
 {
@@ -678,6 +901,406 @@ STATIC_INLINE Float80 new_float80(uint64_t sign, uint64_t exponent, uint64_t jbi
 }
 /** @} */
 
+/**
+ * @brief C/C++ unified predicates (inlined)
+ * @{
+ */
+
+STATIC_INLINE bool float_is_negative(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_negative(tmp); }
+STATIC_INLINE bool double_is_negative(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_negative(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_NEGATIVE(T v) {
+    return v.is_negative();
+}
+template<>
+constexpr inline bool IS_NEGATIVE(float v) {
+    return IS_NEGATIVE(Float32(v));
+}
+template<>
+constexpr inline bool IS_NEGATIVE(double v) {
+    return IS_NEGATIVE(Float64(v));
+}
+#else
+#define IS_NEGATIVE(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_negative,\
+        HFloat8: HFloat8_is_negative,\
+        Float16: Float16_is_negative,\
+        BFloat16: BFloat16_is_negative,\
+        Float32: Float32_is_negative,\
+        Float64: Float64_is_negative,\
+        Float80: Float80_is_negative,\
+        double: double_is_negative,\
+        float: float_is_negative\
+    )(v)
+#endif
+
+STATIC_INLINE bool float_is_zero(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_zero(tmp); }
+STATIC_INLINE bool double_is_zero(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_zero(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_ZERO(T v) {
+    return v.is_zero();
+}
+template<>
+constexpr inline bool IS_ZERO(float v) {
+    return Float32(v).is_zero();
+}
+template<>
+constexpr inline bool IS_ZERO(double v) {
+    return Float64(v).is_zero();
+}
+#else
+#define IS_ZERO(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_zero,\
+        HFloat8: HFloat8_is_zero,\
+        Float16: Float16_is_zero,\
+        BFloat16: BFloat16_is_zero,\
+        Float32: Float32_is_zero,\
+        Float64: Float64_is_zero,\
+        Float80: Float80_is_zero,\
+        double: double_is_zero,\
+        float: float_is_zero\
+    )(v)
+#endif
+
+STATIC_INLINE bool float_is_denormal(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_denormal(tmp); }
+STATIC_INLINE bool double_is_denormal(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_denormal(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_DENORMAL(T v) {
+    return v.is_denormal();
+}
+template<>
+constexpr inline bool IS_DENORMAL(float v) {
+    return Float32(v).is_denormal();
+}
+template<>
+constexpr inline bool IS_DENORMAL(double v) {
+    return Float64(v).is_denormal();
+}
+#else
+#define IS_DENORMAL(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_denormal,\
+        HFloat8: HFloat8_is_denormal,\
+        Float16: Float16_is_denormal,\
+        BFloat16: BFloat16_is_denormal,\
+        Float32: Float32_is_denormal,\
+        Float64: Float64_is_denormal,\
+        Float80: Float80_is_denormal,\
+        double: double_is_denormal,\
+        float: float_is_denormal\
+    )(v)
+#endif
+
+STATIC_INLINE bool float_is_finite(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_finite(tmp); }
+STATIC_INLINE bool double_is_finite(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_finite(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_FINITE(T v) {
+    return v.is_finite();
+}
+template<>
+constexpr inline bool IS_FINITE(float v) {
+    return Float32(v).is_finite();
+}
+template<>
+constexpr inline bool IS_FINITE(double v) {
+    return Float64(v).is_finite();
+}
+#else
+#define IS_FINITE(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_finite,\
+        HFloat8: HFloat8_is_finite,\
+        Float16: Float16_is_finite,\
+        BFloat16: BFloat16_is_finite,\
+        Float32: Float32_is_finite,\
+        Float64: Float64_is_finite,\
+        Float80: Float80_is_finite,\
+        double: double_is_finite,\
+        float: float_is_finite\
+    )(v)
+#endif
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_INF_NAN(T v) {
+    static_assert(NotImplementedFor<T>::value, "type does not have single INF_NAN value");
+    return false;
+}
+template<>
+constexpr inline bool IS_INF_NAN(HFloat8 v) {
+    return v.is_inf_nan();
+}
+#else
+#define IS_INF_NAN(v) \
+    _Generic((v),\
+        HFloat8: HFloat8_is_inf_nan\
+    )(v)
+#endif
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_OVERFLOW(T v) {
+    static_assert(NotImplementedFor<T>::value, "type does not have single OVERFLOW value");
+    return false;
+}
+template<>
+constexpr inline bool IS_OVERFLOW(HFloat8 v) {
+    return v.is_overflow();
+}
+template<>
+constexpr inline bool IS_OVERFLOW(BFloat8 v) {
+    return v.is_overflow();
+}
+#else
+#define IS_OVERFLOW(v) \
+    _Generic((v),\
+        HFloat8: HFloat8_is_overflow,\
+        BFloat8: BFloat8_is_overflow\
+    )(v)
+#endif
+
+STATIC_INLINE bool float_is_inf(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_inf(tmp); }
+STATIC_INLINE bool double_is_inf(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_inf(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_INF(T v) {
+    return v.is_inf();
+}
+template<>
+constexpr inline bool IS_INF(float v) {
+    return Float32(v).is_inf();
+}
+template<>
+constexpr inline bool IS_INF(double v) {
+    return Float64(v).is_inf();
+}
+#else
+#define IS_INF(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_inf,\
+        Float16: Float16_is_inf,\
+        BFloat16: BFloat16_is_inf,\
+        Float32: Float32_is_inf,\
+        Float64: Float64_is_inf,\
+        Float80: Float80_is_inf,\
+        double: double_is_inf,\
+        float: float_is_inf\
+    )(v)
+#endif
+
+STATIC_INLINE bool float_is_nan(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_nan(tmp); }
+STATIC_INLINE bool double_is_nan(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_nan(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_NAN(T v) {
+    return v.is_nan();
+}
+template<>
+constexpr inline bool IS_NAN(float v) {
+    return Float32(v).is_nan();
+}
+template<>
+constexpr inline bool IS_NAN(double v) {
+    return Float64(v).is_nan();
+}
+#else
+#define IS_NAN(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_nan,\
+        Float16: Float16_is_nan,\
+        BFloat16: BFloat16_is_nan,\
+        Float32: Float32_is_nan,\
+        Float64: Float64_is_nan,\
+        Float80: Float80_is_nan,\
+        double: double_is_nan,\
+        float: float_is_nan\
+    )(v)
+#endif
+
+STATIC_INLINE bool float_is_snan(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_snan(tmp); }
+STATIC_INLINE bool double_is_snan(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_snan(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_SNAN(T v) {
+    return v.is_snan();
+}
+template<>
+constexpr inline bool IS_SNAN(float v) {
+    return Float32(v).is_snan();
+}
+template<>
+constexpr inline bool IS_SNAN(double v) {
+    return Float64(v).is_snan();
+}
+#else
+#define IS_SNAN(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_snan,\
+        Float16: Float16_is_snan,\
+        BFloat16: BFloat16_is_snan,\
+        Float32: Float32_is_snan,\
+        Float64: Float64_is_snan,\
+        Float80: Float80_is_snan,\
+        double: double_is_snan,\
+        float: float_is_snan\
+    )(v)
+#endif
+
+STATIC_INLINE bool float_is_qnan(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_qnan(tmp); }
+STATIC_INLINE bool double_is_qnan(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_qnan(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_QNAN(T v) {
+    return v.is_qnan();
+}
+template<>
+constexpr inline bool IS_QNAN(float v) {
+    return Float32(v).is_qnan();
+}
+template<>
+constexpr inline bool IS_QNAN(double v) {
+    return Float64(v).is_qnan();
+}
+#else
+#define IS_QNAN(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_qnan,\
+        Float16: Float16_is_qnan,\
+        BFloat16: BFloat16_is_qnan,\
+        Float32: Float32_is_qnan,\
+        Float64: Float64_is_qnan,\
+        Float80: Float80_is_qnan,\
+        double: double_is_qnan,\
+        float: float_is_qnan\
+    )(v)
+#endif
+
+STATIC_INLINE bool float_is_max(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_max(tmp); }
+STATIC_INLINE bool double_is_max(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_max(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline bool IS_MAX(T v) {
+    return v.is_max();
+}
+template<>
+constexpr inline bool IS_MAX(float v) {
+    return Float32(v).is_max();
+}
+template<>
+constexpr inline bool IS_MAX(double v) {
+    return Float64(v).is_max();
+}
+#else
+#define IS_MAX(v) \
+    _Generic((v),\
+        BFloat8: BFloat8_is_max,\
+        Float16: Float16_is_max,\
+        BFloat16: BFloat16_is_max,\
+        Float32: Float32_is_max,\
+        Float64: Float64_is_max,\
+        Float80: Float80_is_max,\
+        double: double_is_max,\
+        float: float_is_max\
+    )(v)
+#endif
+
+STATIC_INLINE uint32_t float_get_nan_payload(float f) { Float32 tmp; tmp.as_float = f; return Float32_get_nan_payload(tmp); }
+STATIC_INLINE uint64_t double_get_nan_payload(double d) { Float64 tmp; tmp.as_float = d; return Float64_get_nan_payload(tmp); }
+
+#ifdef __cplusplus
+template<typename T>
+constexpr inline int GET_NAN_PAYLOAD(T v) {
+    static_assert(NotImplementedFor<T>::value, "type does not have NaN payload");
+    return 0;
+}
+constexpr inline uint16_t GET_NAN_PAYLOAD(Float16 v) {
+    return v.get_nan_payload();
+}
+constexpr inline uint16_t GET_NAN_PAYLOAD(BFloat16 v) {
+    return v.get_nan_payload();
+}
+constexpr inline uint32_t GET_NAN_PAYLOAD(Float32 v) {
+    return v.get_nan_payload();
+}
+constexpr inline uint32_t GET_NAN_PAYLOAD(float v) {
+    return Float32(v).get_nan_payload();
+}
+constexpr inline uint64_t GET_NAN_PAYLOAD(Float64 v) {
+    return v.get_nan_payload();
+}
+constexpr inline uint64_t GET_NAN_PAYLOAD(double v) {
+    return Float64(v).get_nan_payload();
+}
+constexpr inline uint64_t GET_NAN_PAYLOAD(Float80 v) {
+    return v.get_nan_payload();
+}
+#else
+#define GET_NAN_PAYLOAD(v) \
+    _Generic((v),\
+        Float16: Float16_get_nan_payload,\
+        BFloat16: BFloat16_get_nan_payload,\
+        Float32: Float32_get_nan_payload,\
+        Float64: Float64_get_nan_payload,\
+        Float80: Float80_get_nan_payload,\
+        double: double_get_nan_payload,\
+        float: float_get_nan_payload\
+    )(v)
+#endif
+
+STATIC_INLINE float float_as_fp(float f) { return f; }
+STATIC_INLINE double double_as_fp(double d) { return d; }
+
+#ifdef __cplusplus
+template<typename F>
+inline float AS_FP(F f) {
+    return f.as_fp();
+}
+template<>
+inline float AS_FP(float f) {
+    return f;
+}
+template<>
+inline float AS_FP(double d) {
+    return d;
+}
+#else
+#define AS_FP(v) \
+    _Generic((v),\
+        HFloat8:  HFloat8_as_fp,\
+        BFloat8:  BFloat8_as_fp,\
+        Float16:  Float16_as_fp,\
+        BFloat16: BFloat16_as_fp,\
+        Float32:  Float32_as_fp,\
+        Float64:  Float64_as_fp,\
+        Float80:  Float80_as_fp,\
+        double:   double_as_fp,\
+        float:    float_as_fp\
+    )(v)
+#endif
+
+/** @} */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+HFloat8 new_random_hfloat8();
+BFloat8 new_random_bfloat8();
 Float16 new_random_float16();
 BFloat16 new_random_bfloat16();
 Float32 new_random_float32();
@@ -690,79 +1313,69 @@ static inline double new_random_double() {
 }
 Float80 new_random_float80();
 
-#define SET_RANDOM(v) \
-    v = \
-    _Generic((v),\
-        Float16: new_random_float16,\
-        BFloat16: new_random_bfloat16,\
-        float: new_random_float,\
-        Float32: new_random_float32,\
-        double: new_random_double,\
-        Float64: new_random_float64,\
-        Float80: new_random_float80\
-    )()
-
-#define IS_NEGATIVE(v) \
-    _Generic((v),\
-        BFloat8: BFloat8_is_negative,\
-        HFloat8: HFloat8_is_negative,\
-        Float16: Float16_is_negative,\
-        BFloat16: BFloat16_is_negative\
-    )(v)
-#define IS_ZERO(v) \
-    _Generic((v),\
-        BFloat8: BFloat8_is_zero,\
-        HFloat8: HFloat8_is_zero,\
-        Float16: Float16_is_zero,\
-        BFloat16: BFloat16_is_zero\
-    )(v)
-#define IS_DENORMAL(v) \
-    _Generic((v),\
-        BFloat8: BFloat8_is_denormal,\
-        HFloat8: HFloat8_is_denormal,\
-        Float16: Float16_is_denormal,\
-        BFloat16: BFloat16_is_denormal\
-    )(v)
-#define IS_VALID(v) \
-    _Generic((v),\
-        BFloat8: BFloat8_is_valid,\
-        HFloat16: HFloat8_is_valid,\
-        Float16: Float16_is_valid,\
-        BFloat16: BFloat16_is_valid\
-    )(v)
-#define IS_INF(v) \
-    _Generic((v),\
-        BFloat8: BFloat8_is_inf,\
-        Float16: Float16_is_inf,\
-        BFloat16: BFloat16_is_inf\
-    )(v)
-#define IS_NAN(v) \
-    _Generic((v),\
-        BFloat8: BFloat8_is_nan,\
-        Float16: Float16_is_nan,\
-        BFloat16: BFloat16_is_nan\
-    )(v)
-#define IS_SNAN(v) \
-    _Generic((v),\
-        BFloat8: BFloat8_is_snan,\
-        Float16: Float16_is_snan,\
-        BFloat16: BFloat16_is_snan\
-    )(v)
-#define IS_QNAN(v) \
-    _Generic((v),\
-        BFloat8: BFloat8_is_qnan,\
-        Float16: Float16_is_qnan,\
-        BFloat16: BFloat16_is_qnan\
-    )(v)
-
-#define GET_NAN_PAYLOAD(v) \
-    _Generic((v),\
-        Float16: Float16_get_nan_payload,\
-        BFloat16: BFloat16_get_nan_payload\
-    )(v)
-
 #ifdef __cplusplus
-} // extern "C"
+}
 #endif
 
+#ifdef __cplusplus
+template<typename T>
+inline T SET_RANDOM(T& v) {
+    static_assert(NotImplementedFor<T>::value, "Type not handled");
+    return v;
+}
+template<>
+inline HFloat8 SET_RANDOM(HFloat8& v) {
+    return v = new_random_hfloat8();
+}
+template<>
+inline BFloat8 SET_RANDOM(BFloat8& v) {
+    return v = new_random_bfloat8();
+}
+template<>
+inline Float16 SET_RANDOM(Float16& v) {
+    return v = new_random_float16();
+}
+template<>
+inline BFloat16 SET_RANDOM(BFloat16& v) {
+    return v = new_random_bfloat16();
+}
+template<>
+inline Float32 SET_RANDOM(Float32& v) {
+    return v = new_random_float32();
+}
+template<>
+inline float SET_RANDOM(float& v) {
+    return v = new_random_float();
+}
+template<>
+inline Float64 SET_RANDOM(Float64& v) {
+    return v = new_random_float64();
+}
+template<>
+inline double SET_RANDOM(double& v) {
+    return v = new_random_double();
+}
+template<>
+inline Float80 SET_RANDOM(Float80& v) {
+    return v = new_random_float80();
+}
+#else
+#define SET_RANDOM(v, ...) \
+    v = \
+    _Generic((v),\
+        HFloat8: new_random_hfloat8,\
+        BFloat8: new_random_bfloat8,\
+        Float16: new_random_float16,\
+        BFloat16: new_random_bfloat16,\
+        Float32: new_random_float32,\
+        Float64: new_random_float64,\
+        Float80: new_random_float80,\
+        double: new_random_double,\
+        float: new_random_float\
+    )(__VA_ARGS__)
+#endif
+
+#define new_random(T, ...) ({ T v; SET_RANDOM(v, ##__VA_ARGS__); v; })
+
+#undef STATIC_INLINE
 #endif //FRAMEWORK_FP_VECTORS_FLOATS_H

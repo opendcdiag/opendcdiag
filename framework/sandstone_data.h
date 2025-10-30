@@ -14,14 +14,6 @@
 
 #include "fp_vectors/Floats.h"
 
-#ifdef __F16C__
-#  include <immintrin.h>
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 enum DataType {
     //SizeMask = 0x3f,
     UInt8Data = 0,
@@ -109,56 +101,7 @@ struct Float128
 };
 #endif // __FLT128_MAX__
 
-extern Float16 tofp16_emulated(float f);
-extern float fromfp16_emulated(Float16 f);
-extern BFloat16 tobf16_emulated(float f);
-
-static inline Float16 tofp16(float f)
-{
-#ifdef __F16C__
-    Float16 r;
-    r.as_hex = _cvtss_sh(f, _MM_FROUND_TRUNC);
-    return r;
-#else
-    return tofp16_emulated(f);
-#endif
-}
-
-static inline float fromfp16(Float16 f)
-{
-#ifdef __F16C__
-    return _cvtsh_ss(f.as_hex);
-#else
-    return fromfp16_emulated(f);
-#endif
-}
-
-static inline float frombf16_emulated(BFloat16 r)
-{
-    // we zero-extend, shamelessly
-    float f;
-    uint32_t x = r.as_hex;
-    x <<= 16;
-    memcpy(&f, &x, sizeof(f));
-
-#ifndef __FAST_MATH__
-    f += 0;     // normalize and quiet any SNaNs
-#endif
-    return f;
-}
-
 #ifdef __cplusplus
-} // extern "C"
-
-inline Float16::Float16(float f)
-    : Float16(tofp16(f))
-{
-}
-
-inline BFloat16::BFloat16(float f)
-    : BFloat16(tobf16_emulated(f))
-{
-}
 
 namespace SandstoneDataDetails {
 enum { MaxDataTypeSize = 16 };

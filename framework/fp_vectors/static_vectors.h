@@ -20,13 +20,6 @@ Float32 random_float32(int pct_fixed);
 Float64 random_float64(int pct_fixed);
 Float80 random_float80(int pct_fixed);
 
-Float16 new_random_float16();
-Float32 new_random_float32();
-Float64 new_random_float64();
-Float80 new_random_float80();
-
-
-
 // =================================
 // Float 16 static vector interface
 // =================================
