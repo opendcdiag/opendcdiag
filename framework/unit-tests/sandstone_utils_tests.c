@@ -148,3 +148,83 @@ int test_floats_prototypes_c(void)
 
     return 0;
 }
+
+#define ASSERT_EQ(exp, act) do { if ((exp) != (act)) { return __LINE__; }} while (0)
+
+// NAN is a predefined __builtin, undefine it to properly handle local IS_NAN
+#undef NAN
+
+#define IS0()
+#define IS1(o)       OVERLOAD(IS_, o)(f)
+#define IS2(o, ...)  IS1(o); IS1(__VA_ARGS__)
+#define IS3(o, ...)  IS1(o); IS2(__VA_ARGS__)
+#define IS4(o, ...)  IS1(o); IS3(__VA_ARGS__)
+#define IS5(o, ...)  IS1(o); IS4(__VA_ARGS__)
+#define IS6(o, ...)  IS1(o); IS5(__VA_ARGS__)
+#define IS7(o, ...)  IS1(o); IS6(__VA_ARGS__)
+#define IS8(o, ...)  IS1(o); IS7(__VA_ARGS__)
+#define IS9(o, ...)  IS1(o); IS8(__VA_ARGS__)
+#define IS10(o, ...) IS1(o); IS9(__VA_ARGS__)
+#define IS(...)      OVERLOAD(IS, NARGS(__VA_ARGS__))(__VA_ARGS__)
+
+#define CHECK(F, ...) do {\
+        F f = new_random(F);\
+        IS(__VA_ARGS__); \
+        AS_FP(f);\
+    } while (0)
+
+int test_new_random_float_prototypes_c(void) {
+    new_random_hfloat8(FP_PATTERNED);
+    new_random_bfloat8(FP_PATTERNED);
+    new_random_float16(FP_PATTERNED);
+    new_random_bfloat16(FP_PATTERNED);
+    new_random_float32(FP_PATTERNED);
+    new_random_float(FP_PATTERNED);
+    new_random_float64(FP_PATTERNED);
+    new_random_double(FP_PATTERNED);
+    new_random_float80(FP_PATTERNED);
+
+    new_random_hfloat8(FP_FAST_MEMSET);
+    new_random_bfloat8(FP_FAST_MEMSET);
+    new_random_float16(FP_FAST_MEMSET);
+    new_random_bfloat16(FP_FAST_MEMSET);
+    new_random_float32(FP_FAST_MEMSET);
+    new_random_float(FP_FAST_MEMSET);
+    new_random_float64(FP_FAST_MEMSET);
+    new_random_double(FP_FAST_MEMSET);
+    new_random_float80(FP_FAST_MEMSET);
+
+
+    CHECK(HFloat8, NEGATIVE, ZERO, DENORMAL, FINITE, INF_NAN, OVERFLOW);
+    CHECK(BFloat8, NEGATIVE, ZERO, DENORMAL, FINITE, INF, NAN, SNAN, QNAN, OVERFLOW);
+    CHECK(Float16, NEGATIVE, ZERO, DENORMAL, FINITE, INF, NAN, SNAN, QNAN);
+    CHECK(BFloat16, NEGATIVE, ZERO, DENORMAL, FINITE, INF, NAN, SNAN, QNAN);
+    CHECK(Float32, NEGATIVE, ZERO, DENORMAL, FINITE, INF, NAN, SNAN, QNAN);
+    CHECK(Float64, NEGATIVE, ZERO, DENORMAL, FINITE, INF, NAN, SNAN, QNAN);
+    CHECK(Float80);
+
+    // default generator with a range
+    new_random_hfloat8(12.0, 13.0);
+    new_random_bfloat8(12.0, 13.0);
+    new_random_float16(12.0, 13.0);
+    new_random_bfloat16(12.0, 13.0);
+    new_random_float32(12.0, 13.0);
+    new_random_float(12.0, 13.0);
+    new_random_float64(12.0, 13.0);
+    new_random_double(12.0, 13.0);
+    new_random_float80(12.0, 13.0);
+
+    // generator with a range
+    const float MAX_FLOAT = 3.4028235e38f;
+    new_random_hfloat8(0, MAX_FLOAT);
+    new_random_bfloat8(0, MAX_FLOAT);
+    new_random_float16(0, MAX_FLOAT);
+    new_random_bfloat16(0, MAX_FLOAT);
+    new_random_float32(0, MAX_FLOAT);
+    new_random_float(0, MAX_FLOAT);
+    new_random_float64(0, MAX_FLOAT);
+    new_random_double(0, MAX_FLOAT);
+    new_random_float80(0, MAX_FLOAT);
+
+    return 0;
+}

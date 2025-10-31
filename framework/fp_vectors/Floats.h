@@ -190,6 +190,8 @@ struct BFloat8
     };
 
 #ifdef __cplusplus
+    using base_type = uint8_t;
+
     constexpr inline BFloat8() = default;
     inline BFloat8(float f);
 
@@ -216,6 +218,9 @@ struct BFloat8
     constexpr inline bool is_snan() const     { return (exponent == BFLOAT8_NAN_EXPONENT) && (mantissa == BFLOAT8_SNAN_AT_INPUT_MANTISSA); }
     constexpr inline bool is_qnan() const     { return (exponent == BFLOAT8_NAN_EXPONENT) && (mantissa == BFLOAT8_QNAN_AT_INPUT_MANTISSA); }
     constexpr inline bool is_max() const      { return (exponent == BFLOAT8_INFINITY_EXPONENT - 1) && (mantissa == BFLOAT8_MANTISSA_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return BFLOAT8_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return BFLOAT8_EXPONENT_BITS; }
 
     constexpr inline BFloat8 operator-() const {
         return { (uint8_t) (sign ^ 1), exponent, mantissa };
@@ -285,6 +290,7 @@ struct HFloat8
     };
 
 #ifdef __cplusplus
+    using base_type = uint8_t;
     constexpr inline HFloat8() = default;
     inline HFloat8(float f);
 
@@ -307,6 +313,9 @@ struct HFloat8
     constexpr inline bool is_inf_nan() const  { return value == HFLOAT8_INF_NAN_VALUE; }
     constexpr inline bool is_overflow() const { return value == HFLOAT8_SATURATED_OVERFLOW_VALUE; }
     constexpr inline bool is_max() const      { return value == HFLOAT8_MAX_VALUE; }
+
+    static constexpr inline uint32_t mantissa_bits() { return HFLOAT8_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return HFLOAT8_EXPONENT_BITS; }
 
     constexpr inline HFloat8 operator-() const {
         return { (uint8_t) (sign ^ 1), exponent, mantissa };
@@ -378,6 +387,7 @@ struct Float16
     };
 
 #ifdef __cplusplus
+    using base_type = uint16_t;
     constexpr inline Float16() = default;
     inline Float16(float f);
 
@@ -432,9 +442,13 @@ struct Float16
 
     constexpr inline uint16_t get_nan_payload() const     { return mantissa & (~FLOAT16_MANTISSA_QUIET_NAN_MASK); }
 
+    static constexpr inline uint32_t mantissa_bits() { return FLOAT16_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return FLOAT16_EXPONENT_BITS; }
+
     constexpr inline Float16 operator-() const {
         return { (uint16_t) (sign ^ 1), exponent, mantissa };
     }
+
 private:
     struct Holder { uint16_t payload; };
     explicit constexpr Float16(Holder h) : as_hex(h.payload) {}
@@ -515,6 +529,7 @@ struct BFloat16
     };
 
 #ifdef __cplusplus
+    using base_type = uint16_t;
     constexpr inline BFloat16() = default;
     inline BFloat16(float f);
     constexpr inline BFloat16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
@@ -572,6 +587,9 @@ struct BFloat16
     constexpr inline bool is_qnan() const     { return is_nan() && ((mantissa & BFLOAT16_MANTISSA_QUIET_NAN_MASK) != 0); }
 
     constexpr inline uint16_t get_nan_payload() const   { return mantissa & (~BFLOAT16_MANTISSA_QUIET_NAN_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return BFLOAT16_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return BFLOAT16_EXPONENT_BITS; }
 
     constexpr inline BFloat16 operator-() const {
         return { (uint16_t) (sign ^ 1), exponent, mantissa };
@@ -656,6 +674,7 @@ struct Float32 {
     };
 
 #ifdef __cplusplus
+    using base_type = uint32_t;
     constexpr inline Float32() = default;
     constexpr inline Float32(float f) : as_float(f) { }
     constexpr inline Float32(uint32_t s, uint32_t e, uint32_t m): mantissa(m), exponent(e), sign(s) { }
@@ -677,6 +696,9 @@ struct Float32 {
     constexpr inline bool is_max() const      { return (exponent == FLOAT32_INFINITY_EXPONENT - 1) && (mantissa == FLOAT32_MANTISSA_MASK); }
 
     constexpr inline uint32_t get_nan_payload() const   { return mantissa & (~FLOAT32_MANTISSA_QUIET_NAN_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return FLOAT32_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return FLOAT32_EXPONENT_BITS; }
 
     constexpr inline Float32 operator-() const {
         return { (uint32_t) (sign ^ 1), exponent, mantissa };
@@ -721,6 +743,7 @@ struct Float64 {
     };
 
 #ifdef __cplusplus
+    using base_type = uint64_t;
     constexpr inline Float64() = default;
     constexpr inline Float64(double f) : as_float(f) { }
     constexpr inline Float64(uint64_t s, uint64_t e, uint64_t m): mantissa(m), exponent(e), sign(s) { }
@@ -742,6 +765,9 @@ struct Float64 {
     constexpr inline bool is_max() const      { return (exponent == FLOAT64_INFINITY_EXPONENT - 1) && (mantissa == FLOAT64_MANTISSA_MASK); }
 
     constexpr inline uint64_t get_nan_payload() const   { return mantissa & (~FLOAT64_MANTISSA_QUIET_NAN_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return FLOAT64_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return FLOAT64_EXPONENT_BITS; }
 
     constexpr inline Float64 operator-() const {
         return { (uint64_t) (sign ^ 1), exponent, mantissa };
@@ -791,6 +817,7 @@ struct Float80 {
     };
 
 #ifdef __cplusplus
+    using base_type = uint64_t;
     constexpr inline Float80() = default;
     constexpr inline Float80(long double f) : as_float(f) { }
     constexpr inline Float80(uint64_t s, uint64_t e, uint64_t j, uint64_t m): mantissa(m), jbit(j), exponent(e), sign(s) { }
@@ -812,6 +839,10 @@ struct Float80 {
     constexpr inline bool is_snan() const     { return is_nan() && ((mantissa & FLOAT80_MANTISSA_QUIET_NAN_MASK) == 0); }
     constexpr inline bool is_qnan() const     { return is_nan() && ((mantissa & FLOAT80_MANTISSA_QUIET_NAN_MASK) != 0); }
     constexpr inline uint64_t get_nan_payload() const   { return mantissa & (~FLOAT80_MANTISSA_QUIET_NAN_MASK); }
+
+    static constexpr inline uint32_t mantissa_bits() { return FLOAT80_MANTISSA_BITS; }
+    static constexpr inline uint32_t exponent_bits() { return FLOAT80_EXPONENT_BITS; }
+
     constexpr inline Float80 operator-() const {
         return { (uint64_t) (sign ^ 1), exponent, jbit, mantissa };
     }
@@ -1278,6 +1309,10 @@ template<>
 inline float AS_FP(double d) {
     return d;
 }
+template<>
+inline float AS_FP(long double d) {
+    return d;
+}
 #else
 #define AS_FP(v) \
     _Generic((v),\
@@ -1294,6 +1329,9 @@ inline float AS_FP(double d) {
 #endif
 
 /** @} */
+
+#if defined(OBSOLETE_RANDOM_GENERATORS)
+// previous simple random generators
 
 #ifdef __cplusplus
 extern "C" {
@@ -1376,6 +1414,234 @@ inline Float80 SET_RANDOM(Float80& v) {
 #endif
 
 #define new_random(T, ...) ({ T v; SET_RANDOM(v, ##__VA_ARGS__); v; })
+
+#elif !defined(OBSOLETE_RANDOM_GENERATORS)
+// new random generators with flags
+
+enum FP_RANDOM_GEN_FLAGS {
+    FP_RANDOM_GEN_FLAGS_CMATH_MASK          = 0xf,  // C math library generation
+    // FP_NORMAL
+    // FP_SUBNORMAL
+    // FP_ZERO
+    // FP_INFINITE
+    // FP_NAN:: cannot be used as a selector, GCC assigns 0 to it!
+
+    // mantissa generation
+    FP_RANDOM_GEN_FLAGS_MANTISSA_MASK       = 0x70,
+    FP_RANDOM_GEN_FLAGS_MANTISSA_BITS       = 0x00, // fetch appropriate number of bits from the "factory"
+    FP_RANDOM_GEN_FLAGS_MANTISSA_RANDOM     = 0x10, // random32()/random64()
+    FP_RANDOM_GEN_FLAGS_MANTISSA_UNHANDLED1 = 0x20,
+    FP_RANDOM_GEN_FLAGS_MANTISSA_UNHANDLED2 = 0x30,
+    FP_RANDOM_GEN_FLAGS_MANTISSA_VECTOR     = 0x40, // get_float_vector(random_vector_index)
+    FP_RANDOM_GEN_FLAGS_MANTISSA_PATTERNED  = 0x50, // set_random_bits(), compatibility with previous generators
+    FP_RANDOM_GEN_FLAGS_MANTISSA_UNHANDLED3 = 0x60,
+    FP_RANDOM_GEN_FLAGS_MANTISSA_ZERO       = 0x70, // zero, all bits set
+
+    // random exponent generation
+    FP_RANDOM_GEN_FLAGS_EXPONENT_MASK      = 0xf00,
+    FP_RANDOM_GEN_FLAGS_EXPONENT_BITS      = 0x000, // fetch appropriate number of bits from the "factory", flat distribution
+    FP_RANDOM_GEN_FLAGS_EXPONENT_RANDOM    = 0x100, // random32(), compatibility with previous generators
+    FP_RANDOM_GEN_FLAGS_EXPONENT_GAUSSIAN2 = 0x200, // n/2 + n/2 gaussian bell distribution, bits from the "factory"
+    FP_RANDOM_GEN_FLAGS_EXPONENT_GAUSSIAN4 = 0x300, // n/2 + n/4 + n/4 gaussian bell distribution
+    FP_RANDOM_GEN_FLAGS_EXPONENT_GAUSSIAN8 = 0x400, // n/2 + n/4 + n/8 + n/8 gaussian bell distribution
+
+    // special values for exponent
+    FP_RANDOM_GEN_FLAGS_EXPONENT_VECTOR    = 0x800, // get_float_vector(random_vector_index)
+    FP_RANDOM_GEN_FLAGS_EXPONENT_ZERO      = 0xd00, // zero exponent, no assumption on the mantissa (ti denormal/zero are expected)
+    FP_RANDOM_GEN_FLAGS_EXPONENT_MAX       = 0xe00, // max possible exponent, no assumption on the mantissa (Inf/NaN/overflow/large value, depending on the type), will skip some HFloat8 values!
+    FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS      = 0xf00, // exponent equal BIAS, t.i. values [1..2), forced when NORMALIZE_FP
+
+    // special values for exponent (with special mantissa handling done in next steps)
+    FP_RANDOM_GEN_FLAGS_VALUE_ZERO         = 0x500, // zero, mantissa eq zero forced
+    FP_RANDOM_GEN_FLAGS_VALUE_DENORMAL     = 0x600, // denormal number, 0s excluded (random bit is set to 1 if zero in mantissa)
+    FP_RANDOM_GEN_FLAGS_VALUE_INF          = 0x700, // infinity, zero in the mantissa implied/forced
+    FP_RANDOM_GEN_FLAGS_VALUE_OVERFLOW     = 0x900, // overflow
+    FP_RANDOM_GEN_FLAGS_VALUE_NAN          = 0xa00, // any NaN, Inf excluded (random bit is set to 1 if zero in mantissa)
+    FP_RANDOM_GEN_FLAGS_VALUE_SNAN         = 0xb00, // signalling NaN, Q bit is cleared
+    FP_RANDOM_GEN_FLAGS_VALUE_QNAN         = 0xc00, // quiet NaN, Q bit is set
+
+    // sign generation
+    FP_RANDOM_GEN_FLAGS_SIGN_MASK          = 0x3000,
+    FP_RANDOM_GEN_FLAGS_SIGN_BITS          = 0x0000, // fetch appropriate number of bits from the "factory"
+    FP_RANDOM_GEN_FLAGS_SIGN_RANDOM        = 0x3000, // random32(), compatibility with previous generators
+    FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE      = 0x1000, // forced sign=0
+    FP_RANDOM_GEN_FLAGS_SIGN_NEGATIVE      = 0x2000, // forced sign=1
+
+    // enforcement flags
+    FP_RANDOM_GEN_FLAGS_FORCE_FINITE       = 0x10000, // must be a finite number, Inf/NaNs/overflow excluded
+    FP_RANDOM_GEN_FLAGS_NO_SUBNORMALS      = 0x20000, // must not be a subnormal number, use with _FINITE to get normal number
+
+    // extra scenarios
+    FP_RANDOM_GEN_FLAGS_FAST_MEMSET        = 0x10000000, // whole value initialized with "memset_random()"
+    FP_RANDOM_GEN_FLAGS_OBSOLETE_GENERATOR = 0x20000000, // use obsolete simple random generator (no flags supported)
+    FP_RANDOM_GEN_FLAGS_FAST_ZERO          = 0x40000000, // fast zero (all bits cleared)
+
+    // short aliases
+    FP_POSITIVE = FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE,
+    FP_NEGATIVE = FP_RANDOM_GEN_FLAGS_SIGN_NEGATIVE,
+    FP_VAL_ZERO = FP_RANDOM_GEN_FLAGS_VALUE_ZERO,
+    FP_VAL_INF = FP_RANDOM_GEN_FLAGS_VALUE_INF,
+    FP_VAL_DENORMAL = FP_RANDOM_GEN_FLAGS_VALUE_DENORMAL,
+    FP_VAL_OVERFLOW = FP_RANDOM_GEN_FLAGS_VALUE_OVERFLOW,
+    FP_VAL_NAN = FP_RANDOM_GEN_FLAGS_VALUE_NAN,
+    FP_VAL_SNAN = FP_RANDOM_GEN_FLAGS_VALUE_SNAN,
+    FP_VAL_QNAN = FP_RANDOM_GEN_FLAGS_VALUE_QNAN,
+    FP_VAL_RANGE12 = FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS | FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE,
+
+    FP_PATTERNED = FP_RANDOM_GEN_FLAGS_MANTISSA_PATTERNED | FP_RANDOM_GEN_FLAGS_EXPONENT_RANDOM | FP_RANDOM_GEN_FLAGS_SIGN_RANDOM,
+    FP_STATIC_VECTOR = FP_RANDOM_GEN_FLAGS_MANTISSA_VECTOR | FP_RANDOM_GEN_FLAGS_EXPONENT_VECTOR,
+    FP_FAST_MEMSET = FP_RANDOM_GEN_FLAGS_FAST_MEMSET,
+};
+
+// C delegates to the template to generate the value of particular type. These
+// will be defined in C++ with the use of the shared impl template.
+// Make both available for C and C++ (not mangled version only!)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+HFloat8  gen_random_hfloat8 (uint32_t flags);
+BFloat8  gen_random_bfloat8 (uint32_t flags);
+Float16  gen_random_float16 (uint32_t flags);
+BFloat16 gen_random_bfloat16(uint32_t flags);
+Float32  gen_random_float32 (uint32_t flags);
+float    gen_random_float   (uint32_t flags);
+Float64  gen_random_float64 (uint32_t flags);
+double   gen_random_double  (uint32_t flags);
+Float80  gen_random_float80 (uint32_t flags);
+
+HFloat8  normalize_hfloat8 (HFloat8 val,  float v1, float v2, uint32_t flags);
+BFloat8  normalize_bfloat8 (BFloat8 val,  float v1, float v2, uint32_t flags);
+Float16  normalize_float16 (Float16 val,  float v1, float v2, uint32_t flags);
+BFloat16 normalize_bfloat16(BFloat16 val, float v1, float v2, uint32_t flags);
+Float32  normalize_float32 (Float32 val,  float v1, float v2, uint32_t flags);
+float    normalize_float   (float val,    float v1, float v2, uint32_t flags);
+Float64  normalize_float64 (Float64 val,  float v1, float v2, uint32_t flags);
+double   normalize_double  (double val,   float v1, float v2, uint32_t flags);
+Float80  normalize_float80 (Float80 val,  float v1, float v2, uint32_t flags);
+
+#ifdef __cplusplus
+}
+#endif
+
+#if !defined(__cplusplus)
+
+// "C" interface
+#define NEW_RANDOM_FP2(type, flags) \
+    ({ type val; SET_RANDOM2(val, flags); val; })
+#define SET_RANDOM2(val, flags) \
+    val = _Generic((val),\
+        HFloat8:  gen_random_hfloat8,\
+        BFloat8:  gen_random_bfloat8,\
+        Float16:  gen_random_float16,\
+        BFloat16: gen_random_bfloat16,\
+        Float32:  gen_random_float32,\
+        float:    gen_random_float,\
+        Float64:  gen_random_float64,\
+        double:   gen_random_double,\
+        Float80:  gen_random_float80\
+    )(flags)
+#define NORMALIZE_FP(val, v1, v2, flags) \
+    _Generic((val),\
+        HFloat8:  normalize_hfloat8,\
+        BFloat8:  normalize_bfloat8,\
+        Float16:  normalize_float16,\
+        BFloat16: normalize_bfloat16,\
+        Float32:  normalize_float32,\
+        float:    normalize_float,\
+        Float64:  normalize_float64,\
+        double:   normalize_double,\
+        Float80:  normalize_float80\
+    )(val, v1, v2, flags)
+
+#elif defined(__cplusplus)
+
+// "C++" interface
+namespace {
+
+// template to handle bits in sign/exponent/mantissa according given T
+template<typename T>
+inline T gen_random_fp_tmpl(uint32_t flags) {
+    static_assert(NotImplementedFor<T>::value, "type not handled");
+    return T{};
+}
+template<> inline HFloat8  gen_random_fp_tmpl(uint32_t flags) { return gen_random_hfloat8(flags); }
+template<> inline BFloat8  gen_random_fp_tmpl(uint32_t flags) { return gen_random_bfloat8(flags); }
+template<> inline Float16  gen_random_fp_tmpl(uint32_t flags) { return gen_random_float16(flags); }
+template<> inline BFloat16 gen_random_fp_tmpl(uint32_t flags) { return gen_random_bfloat16(flags); }
+template<> inline Float32  gen_random_fp_tmpl(uint32_t flags) { return gen_random_float32(flags); }
+template<> inline float    gen_random_fp_tmpl(uint32_t flags) { return gen_random_float(flags); }
+template<> inline Float64  gen_random_fp_tmpl(uint32_t flags) { return gen_random_float64(flags); }
+template<> inline double   gen_random_fp_tmpl(uint32_t flags) { return gen_random_double(flags); }
+template<> inline Float80  gen_random_fp_tmpl(uint32_t flags) { return gen_random_float80(flags); }
+
+template<typename T>
+inline T normalize_fp_tmpl(T val, float v1, float v2, uint32_t flags) {
+    static_assert(NotImplementedFor<T>::value, "type not handled");
+    return val;
+}
+template<> inline HFloat8 normalize_fp_tmpl(HFloat8 val, float v1, float v2, uint32_t flags) {
+    return normalize_hfloat8(val, v1, v2, flags);
+}
+template<> inline BFloat8 normalize_fp_tmpl(BFloat8 val, float v1, float v2, uint32_t flags) {
+    return normalize_bfloat8(val, v1, v2, flags);
+}
+template<> inline Float16 normalize_fp_tmpl(Float16 val, float v1, float v2, uint32_t flags) {
+    return normalize_float16(val, v1, v2, flags);
+}
+template<> inline BFloat16 normalize_fp_tmpl(BFloat16 val, float v1, float v2, uint32_t flags) {
+    return normalize_bfloat16(val, v1, v2, flags);
+}
+template<> inline Float32 normalize_fp_tmpl(Float32 val, float v1, float v2, uint32_t flags) {
+    return normalize_float32(val, v1, v2, flags);
+}
+template<> inline float normalize_fp_tmpl(float val, float v1, float v2, uint32_t flags) {
+    return normalize_float(val, v1, v2, flags);
+}
+template<> inline Float64 normalize_fp_tmpl(Float64 val, float v1, float v2, uint32_t flags) {
+    return normalize_float64(val, v1, v2, flags);
+}
+template<> inline double normalize_fp_tmpl(double val, float v1, float v2, uint32_t flags) {
+    return normalize_double(val, v1, v2, flags);
+}
+template<> inline Float80 normalize_fp_tmpl(Float80 val, float v1, float v2, uint32_t flags) {
+    return normalize_float80(val, v1, v2, flags);
+}
+
+#define NEW_RANDOM_FP2(type, flags) gen_random_fp_tmpl<type>(flags)
+#define SET_RANDOM2(val, flags) ({ val = gen_random_fp_tmpl<decltype(val)>(flags); })
+#define NORMALIZE_FP(val, v1, v2, flags) normalize_fp_tmpl(val, v1, v2, flags)
+
+#define SET_FLOAT(val, f) ({ val = decltype(val)(f); })
+
+} // anonymous namespace
+#endif // C/C++ interface
+
+#define SET_RANDOM1(val) SET_RANDOM2(val, 0)
+// SET_RANDOM2(val, flags) is defined on per-language basis (C/C++)
+#define SET_RANDOM(...) OVERLOAD(SET_RANDOM, NARGS(__VA_ARGS__))(__VA_ARGS__)
+
+#define NEW_RANDOM_FP1(type)                  NEW_RANDOM_FP2(type, FP_PATTERNED)
+// NEW_RANDOM2(type, flags) is defined on per-language basis (C/C++)
+
+// Run the generation with normalization. Normalization must be aware of the flags used
+// to generate the value, so it is passed to it as well.
+#define NEW_RANDOM_FP3(type, v1, v2)        NORMALIZE_FP(NEW_RANDOM_FP2(type, FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE | FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS), v1, v2, 0)
+#define NEW_RANDOM_FP4(type, flags, v1, v2) NORMALIZE_FP(NEW_RANDOM_FP2(type, flags), v1, v2, flags)
+#define NEW_RANDOM_FP(...)                  OVERLOAD(NEW_RANDOM_FP, NARGS(__VA_ARGS__))(__VA_ARGS__)
+
+#define new_random(type, ...)    NEW_RANDOM_FP(type,     ##__VA_ARGS__)
+#define new_random_hfloat8(...)  NEW_RANDOM_FP(HFloat8,  ##__VA_ARGS__)
+#define new_random_bfloat8(...)  NEW_RANDOM_FP(BFloat8,  ##__VA_ARGS__)
+#define new_random_float16(...)  NEW_RANDOM_FP(Float16,  ##__VA_ARGS__)
+#define new_random_bfloat16(...) NEW_RANDOM_FP(BFloat16, ##__VA_ARGS__)
+#define new_random_float32(...)  NEW_RANDOM_FP(Float32,  ##__VA_ARGS__)
+#define new_random_float(...)    NEW_RANDOM_FP(float,    ##__VA_ARGS__)
+#define new_random_float64(...)  NEW_RANDOM_FP(Float64,  ##__VA_ARGS__)
+#define new_random_double(...)   NEW_RANDOM_FP(double,   ##__VA_ARGS__)
+#define new_random_float80(...)  NEW_RANDOM_FP(Float80,  ##__VA_ARGS__)
+
+#endif // NEW/OBSOLETE_RANDOM_GENERATORS
 
 #undef STATIC_INLINE
 #endif //FRAMEWORK_FP_VECTORS_FLOATS_H

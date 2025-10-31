@@ -349,16 +349,41 @@ TEST(DataCompare, HFloat8)
 }
 
 // dummy mocks to allow new_random_xxx() compilation
+__attribute__((weak)) void* memset_random(void* buf, size_t n) {
+    uint8_t* b = (uint8_t*) buf;
+    do {
+        uint32_t r = random();
+        size_t s = (n > sizeof(r)) ? sizeof(r) : n;
+        memcpy(b, &r, s);
+        b += s;
+        n -= s;
+    } while (n > 0);
+    return buf;
+}
+__attribute__((weak)) __uint128_t random128() {
+    __uint128_t f;
+    memset_random(&f, sizeof(f));
+    return f;
+}
+__attribute__((weak)) uint64_t random64() {
+    uint64_t f;
+    memset_random(&f, sizeof(f));
+    return f;
+}
 __attribute__((weak)) uint32_t random32() {
-    return random();
+    uint32_t f;
+    memset_random(&f, sizeof(f));
+    return f;
 }
 uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
     if (bitwidth > 64) {
         assert(!"bitwidth > 64");
     }
     uint64_t r = random32();
-    r <<= 32;
-    r |= random32();
+    if (bitwidth >= 32) {
+        r <<= 32;
+        r |= random32();
+    }
     return r & MASK(bitwidth);
 }
 
@@ -603,6 +628,51 @@ TEST(FloatConversions, HF8toFloat) {
 
 }
 
+#define EXPECT_IN_RANGE(MIN, MAX, VAL) \
+    ({\
+        float val = AS_FP(VAL);\
+        EXPECT_GE(val, (MIN));\
+        EXPECT_LT(val, (MAX));\
+    })
+#define EXPECT_IN_RANGE_INCL(MIN, MAX, VAL) \
+    ({\
+        float val = AS_FP(VAL);\
+        EXPECT_GE(val, (MIN));\
+        EXPECT_LE(val, (MAX));\
+    })
+
+extern "C" {
+int num_float16_vectors() {
+    return 1;
+}
+#define VECTOR_FLOAT16 Float16{ 0, 2, 34 }
+Float16 get_float16_vector(int idx) {
+    return VECTOR_FLOAT16;
+}
+int num_float32_vectors() {
+    return 1;
+}
+#define VECTOR_FLOAT32 Float32{ 0, 3, 456 }
+Float32 get_float32_vector(int idx) {
+    return VECTOR_FLOAT32;
+}
+int num_float64_vectors() {
+    return 1;
+}
+#define VECTOR_FLOAT64 Float64{ 0, 12, 3456 }
+Float64 get_float64_vector(int idx) {
+    return VECTOR_FLOAT64;
+}
+int num_float80_vectors() {
+    return 1;
+}
+#define VECTOR_FLOAT80 Float80{ 0, 34, 5678 }
+Float80 get_float80_vector(int idx) {
+    return VECTOR_FLOAT80;
+}
+}
+
+extern "C" int test_new_random_float_prototypes_c(void);
 extern "C" int test_floats_prototypes_c(void);
 
 int test_floats_prototypes_cpp(void)
@@ -751,4 +821,239 @@ TEST(FloatGeneration, new_random_float_prototypes) {
     // briefly verify C interface
     ASSERT_EQ(0, test_floats_prototypes_c());
     ASSERT_EQ(0, test_floats_prototypes_cpp());
+    ASSERT_EQ(0, test_new_random_float_prototypes_c());
+
+    // unhandled mantissa selector specified
+    EXPECT_DEATH(new_random_hfloat8(FP_RANDOM_GEN_FLAGS_MANTISSA_UNHANDLED1), "");
+    EXPECT_DEATH(new_random_hfloat8(FP_RANDOM_GEN_FLAGS_MANTISSA_UNHANDLED2), "");
+    EXPECT_DEATH(new_random_hfloat8(FP_RANDOM_GEN_FLAGS_MANTISSA_UNHANDLED3), "");
+    // unhandled selector bits
+    EXPECT_DEATH(new_random_bfloat8(-1), "");
+
+    // verify cmath flags
+    float subnormal = new_random_float(FP_SUBNORMAL);
+    ASSERT_TRUE(IS_DENORMAL(subnormal) || IS_ZERO(subnormal));
+    float normal = new_random_float(FP_NORMAL);
+    ASSERT_TRUE((!IS_DENORMAL(normal)) && (!IS_ZERO(normal)) && IS_FINITE(normal));
+    ASSERT_TRUE(IS_ZERO(new_random_float(FP_ZERO)));
+    ASSERT_TRUE(IS_INF(new_random_float(FP_INFINITE)));
+
+    // FP_NAN is 0, therefore this cannot be used as NaN generation selector
+    // ASSERT_TRUE(IS_NAN(new_random_float(FP_NAN)));
+
+    new_random_hfloat8();
+    new_random_bfloat8();
+    new_random_float16();
+    new_random_bfloat16();
+    new_random_float32();
+    new_random_float();
+    new_random_float64();
+    new_random_double();
+    new_random_float80();
+
+    new_random_hfloat8(FP_PATTERNED);
+    new_random_bfloat8(FP_PATTERNED);
+    new_random_float16(FP_PATTERNED);
+    new_random_bfloat16(FP_PATTERNED);
+    new_random_float32(FP_PATTERNED);
+    new_random_float(FP_PATTERNED);
+    new_random_float64(FP_PATTERNED);
+    new_random_double(FP_PATTERNED);
+    new_random_float80(FP_PATTERNED);
+
+    EXPECT_EQ(1.0f, AS_FP(new_random_hfloat8(FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE | FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS | FP_RANDOM_GEN_FLAGS_MANTISSA_ZERO)));
+    EXPECT_EQ(1.0f, AS_FP(new_random_bfloat8(FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE | FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS | FP_RANDOM_GEN_FLAGS_MANTISSA_ZERO)));
+    EXPECT_EQ(1.0f, AS_FP(new_random_float16(FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE | FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS | FP_RANDOM_GEN_FLAGS_MANTISSA_ZERO)));
+    EXPECT_EQ(1.0f, AS_FP(new_random_bfloat16(FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE | FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS | FP_RANDOM_GEN_FLAGS_MANTISSA_ZERO)));
+    EXPECT_EQ(1.0f, AS_FP(new_random_float32(FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE | FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS | FP_RANDOM_GEN_FLAGS_MANTISSA_ZERO)));
+    EXPECT_EQ(1.0f, AS_FP(new_random_float64(FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE | FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS | FP_RANDOM_GEN_FLAGS_MANTISSA_ZERO)));
+    EXPECT_EQ(1.0f, AS_FP(new_random_float80(FP_RANDOM_GEN_FLAGS_SIGN_POSITIVE | FP_RANDOM_GEN_FLAGS_EXPONENT_BIAS | FP_RANDOM_GEN_FLAGS_MANTISSA_ZERO)));
+
+    EXPECT_DEATH(new_random_hfloat8(FP_STATIC_VECTOR), "");
+    EXPECT_DEATH(new_random_bfloat8(FP_STATIC_VECTOR), "");
+    EXPECT_DEATH(new_random_bfloat16(FP_STATIC_VECTOR), "");
+    EXPECT_EQ(AS_FP(VECTOR_FLOAT16), new_random_float16(FP_STATIC_VECTOR).as_fp());
+    EXPECT_EQ(AS_FP(VECTOR_FLOAT32), new_random_float32(FP_STATIC_VECTOR).as_fp());
+    EXPECT_EQ(AS_FP(VECTOR_FLOAT32), new_random_float(FP_STATIC_VECTOR));
+    // .as_fp() gives more precise result, AS_FP always reports float!
+    EXPECT_EQ(AS_FP(VECTOR_FLOAT64), (float) new_random_float64(FP_STATIC_VECTOR).as_fp());
+    EXPECT_EQ(AS_FP(VECTOR_FLOAT64), (float) new_random_double(FP_STATIC_VECTOR));
+    EXPECT_EQ(AS_FP(VECTOR_FLOAT80), (float) new_random_float80(FP_STATIC_VECTOR).as_fp());
+
+    ASSERT_EQ(0, new_random_float16(FP_VAL_SNAN).as_nan.quiet);
+    ASSERT_EQ(1, new_random_float16(FP_VAL_QNAN).as_nan.quiet);
+
+    ASSERT_TRUE(IS_ZERO(new_random_hfloat8(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_DENORMAL(new_random_hfloat8(FP_VAL_DENORMAL)));
+    // HFloat8 does not support infinities and NaNs as a separate values
+    // INF generates INF_NAN, NaN is not allowed
+    ASSERT_TRUE(IS_INF_NAN(new_random_hfloat8(FP_VAL_INF)));
+    EXPECT_DEATH(IS_INF_NAN(new_random_hfloat8(FP_VAL_NAN)), "");
+    ASSERT_TRUE(IS_FINITE(new_random_hfloat8(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_FINITE(new_random_hfloat8(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_FINITE(new_random_hfloat8(FP_VAL_RANGE12)));
+    ASSERT_FALSE(IS_FINITE(new_random_hfloat8(FP_VAL_INF)));
+
+    // NaNs are not supported in HFloat8
+    EXPECT_DEATH(new_random_hfloat8(FP_VAL_NAN), "");
+    EXPECT_DEATH(new_random_hfloat8(FP_VAL_SNAN), "");
+    EXPECT_DEATH(new_random_hfloat8(FP_VAL_QNAN), "");
+
+    ASSERT_TRUE(IS_ZERO(new_random_bfloat8(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_DENORMAL(new_random_bfloat8(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_INF(new_random_bfloat8(FP_VAL_INF)));
+    ASSERT_TRUE(IS_NAN(new_random_bfloat8(FP_VAL_NAN)));
+    ASSERT_TRUE(IS_SNAN(new_random_bfloat8(FP_VAL_SNAN)));
+    ASSERT_TRUE(IS_QNAN(new_random_bfloat8(FP_VAL_QNAN)));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(FP_VAL_RANGE12)));
+    ASSERT_FALSE(IS_FINITE(new_random_bfloat8(FP_VAL_INF)));
+    ASSERT_FALSE(IS_FINITE(new_random_bfloat8(FP_VAL_NAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_bfloat8(FP_VAL_SNAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_bfloat8(FP_VAL_QNAN)));
+
+    ASSERT_TRUE(IS_ZERO(new_random_float16(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_DENORMAL(new_random_float16(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_INF(new_random_float16(FP_VAL_INF)));
+    ASSERT_TRUE(IS_NAN(new_random_float16(FP_VAL_NAN)));
+    ASSERT_TRUE(IS_SNAN(new_random_float16(FP_VAL_SNAN)));
+    ASSERT_TRUE(IS_QNAN(new_random_float16(FP_VAL_QNAN)));
+    ASSERT_TRUE(IS_FINITE(new_random_float16(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_FINITE(new_random_float16(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_FINITE(new_random_float16(FP_VAL_RANGE12)));
+    ASSERT_FALSE(IS_FINITE(new_random_float16(FP_VAL_INF)));
+    ASSERT_FALSE(IS_FINITE(new_random_float16(FP_VAL_NAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_float16(FP_VAL_SNAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_float16(FP_VAL_QNAN)));
+
+    ASSERT_TRUE(IS_ZERO(new_random_bfloat16(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_DENORMAL(new_random_bfloat16(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_INF(new_random_bfloat16(FP_VAL_INF)));
+    ASSERT_TRUE(IS_NAN(new_random_bfloat16(FP_VAL_NAN)));
+    ASSERT_TRUE(IS_SNAN(new_random_bfloat16(FP_VAL_SNAN)));
+    ASSERT_TRUE(IS_QNAN(new_random_bfloat16(FP_VAL_QNAN)));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat16(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat16(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat16(FP_VAL_RANGE12)));
+    ASSERT_FALSE(IS_FINITE(new_random_bfloat16(FP_VAL_INF)));
+    ASSERT_FALSE(IS_FINITE(new_random_bfloat16(FP_VAL_NAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_bfloat16(FP_VAL_SNAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_bfloat16(FP_VAL_QNAN)));
+
+    ASSERT_TRUE(IS_ZERO(new_random_float32(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_DENORMAL(new_random_float32(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_INF(new_random_float32(FP_VAL_INF)));
+    ASSERT_TRUE(IS_NAN(new_random_float32(FP_VAL_NAN)));
+    ASSERT_TRUE(IS_SNAN(new_random_float32(FP_VAL_SNAN)));
+    ASSERT_TRUE(IS_QNAN(new_random_float32(FP_VAL_QNAN)));
+    ASSERT_TRUE(IS_FINITE(new_random_float32(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_FINITE(new_random_float32(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_FINITE(new_random_float32(FP_VAL_RANGE12)));
+    ASSERT_FALSE(IS_FINITE(new_random_float32(FP_VAL_INF)));
+    ASSERT_FALSE(IS_FINITE(new_random_float32(FP_VAL_NAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_float32(FP_VAL_SNAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_float32(FP_VAL_QNAN)));
+
+    ASSERT_TRUE(IS_ZERO(new_random_float64(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_DENORMAL(new_random_float64(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_INF(new_random_float64(FP_VAL_INF)));
+    ASSERT_TRUE(IS_NAN(new_random_float64(FP_VAL_NAN)));
+    ASSERT_TRUE(IS_SNAN(new_random_float64(FP_VAL_SNAN)));
+    ASSERT_TRUE(IS_QNAN(new_random_float64(FP_VAL_QNAN)));
+    ASSERT_TRUE(IS_FINITE(new_random_float64(FP_VAL_ZERO)));
+    ASSERT_TRUE(IS_FINITE(new_random_float64(FP_VAL_DENORMAL)));
+    ASSERT_TRUE(IS_FINITE(new_random_float64(FP_VAL_RANGE12)));
+    ASSERT_FALSE(IS_FINITE(new_random_float64(FP_VAL_INF)));
+    ASSERT_FALSE(IS_FINITE(new_random_float64(FP_VAL_NAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_float64(FP_VAL_SNAN)));
+    ASSERT_FALSE(IS_FINITE(new_random_float64(FP_VAL_QNAN)));
+
+    EXPECT_IN_RANGE(1.0, 2.0, new_random_hfloat8(FP_VAL_RANGE12).as_fp());
+    EXPECT_IN_RANGE(1.0, 2.0, new_random_bfloat8(FP_VAL_RANGE12).as_fp());
+    EXPECT_IN_RANGE(1.0, 2.0, new_random_float16(FP_VAL_RANGE12).as_fp());
+    EXPECT_IN_RANGE(1.0, 2.0, new_random_bfloat16(FP_VAL_RANGE12).as_fp());
+    EXPECT_IN_RANGE(1.0, 2.0, new_random_float32(FP_VAL_RANGE12).as_fp());
+    EXPECT_IN_RANGE(1.0, 2.0, new_random_float64(FP_VAL_RANGE12).as_fp());
+    EXPECT_IN_RANGE(1.0, 2.0, new_random_float80(FP_VAL_RANGE12).as_fp());
+
+    // some types are rounded up, make sure the range doesn't force up-rounding!
+    // (e.g. "almost" 12 will allways be 12 for hfloat8). Keeping mantissa tidy
+    // (t.i force power-of-2 ranges) might be profitable.
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_hfloat8(8.0, 16.0));
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_bfloat8(8.0, 16.0));
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_float16(8.0, 16.0));
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_bfloat16(8.0, 16.0));
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_float32(8.0, 16.0));
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_float(8.0, 16.0));
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_float64(8.0, 16.0));
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_double(8.0, 16.0));
+    EXPECT_IN_RANGE(8.0f, 16.0f, new_random_float80(8.0, 16.0));
+
+    EXPECT_IN_RANGE(2, 32, new_random_hfloat8(FP_PATTERNED, 2, 32));
+    EXPECT_IN_RANGE(2, 32, new_random_bfloat8(FP_PATTERNED, 2, 32));
+    EXPECT_IN_RANGE(2, 32, new_random_float16(FP_PATTERNED, 2, 32));
+    EXPECT_IN_RANGE(2, 32, new_random_bfloat16(FP_PATTERNED, 2, 32));
+    EXPECT_IN_RANGE(2, 32, new_random_float32(FP_PATTERNED, 2, 32));
+    EXPECT_IN_RANGE(2, 32, new_random_float(FP_PATTERNED, 2, 32));
+    EXPECT_IN_RANGE(2, 32, new_random_float64(FP_PATTERNED, 2, 32));
+    EXPECT_IN_RANGE(2, 32, new_random_double(FP_PATTERNED, 2, 32));
+    EXPECT_IN_RANGE(2, 32, new_random_float80(FP_PATTERNED, 2, 32));
+
+    // verify sanity checks
+    ASSERT_TRUE(IS_ZERO(new_random_bfloat8(0, 0)));
+    ASSERT_DEATH(new_random_bfloat8(FP_VAL_INF, 0, 0), "");
+    ASSERT_DEATH(new_random_bfloat8(FP_POSITIVE, -2, -1), "");
+    ASSERT_DEATH(new_random_bfloat8(FP_POSITIVE, -1, 0), "");
+    ASSERT_DEATH(new_random_bfloat8(FP_NEGATIVE, 1, 2), "");
+    ASSERT_DEATH(new_random_bfloat8(FP_NEGATIVE, 0, 1), "");
+
+    // normalization of special values: not allowed for Inf/NaN.
+    // Keep in mind that VALUE_ZERO will always be converted to beginning of the range (with the
+    // exception of "symetrical" range, where it will be 0..)
+    ASSERT_TRUE(IS_NAN(new_random_bfloat8(FP_VAL_NAN, 0, 1)));
+    ASSERT_TRUE(IS_INF(new_random_bfloat8(FP_VAL_INF, 0, 1)));
+    ASSERT_TRUE(IS_OVERFLOW(new_random_bfloat8(FP_VAL_OVERFLOW, 0, 1)));
+
+    // half-axes ranges. The distribution is not uniform here!
+    ASSERT_FALSE(IS_NEGATIVE(new_random_bfloat8(0, std::numeric_limits<float>::max())));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(0, std::numeric_limits<float>::max())));
+
+    ASSERT_TRUE(IS_NEGATIVE(new_random_bfloat8(-std::numeric_limits<float>::max(), 0)));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(-std::numeric_limits<float>::max(), 0)));
+
+    // no normalization forced.. Just to get any valid value
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(-std::numeric_limits<float>::max(), std::numeric_limits<float>::max())));
+
+    // symetrical ranges
+    ASSERT_FALSE(IS_NEGATIVE(new_random_bfloat8(std::numeric_limits<float>::max(), 0)));
+    ASSERT_TRUE(IS_NEGATIVE(new_random_bfloat8(0, -std::numeric_limits<float>::max())));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(std::numeric_limits<float>::max(), 0)));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(0, -std::numeric_limits<float>::max())));
+    ASSERT_TRUE(IS_FINITE(new_random_bfloat8(std::numeric_limits<float>::max(), -std::numeric_limits<float>::max())));
+
+    // contradicting flags
+    ASSERT_DEATH(new_random_bfloat8(FP_VAL_INF | FP_RANDOM_GEN_FLAGS_FORCE_FINITE), "");
+    ASSERT_DEATH(new_random_bfloat8(FP_VAL_NAN | FP_RANDOM_GEN_FLAGS_FORCE_FINITE), "");
+    ASSERT_DEATH(new_random_bfloat8(FP_VAL_SNAN | FP_RANDOM_GEN_FLAGS_FORCE_FINITE), "");
+    ASSERT_DEATH(new_random_bfloat8(FP_VAL_QNAN | FP_RANDOM_GEN_FLAGS_FORCE_FINITE), "");
+    ASSERT_DEATH(new_random_bfloat8(FP_VAL_OVERFLOW | FP_RANDOM_GEN_FLAGS_FORCE_FINITE), "");
+
+    // check floats
+    ASSERT_FALSE(IS_NEGATIVE(new_random_float(0, std::numeric_limits<float>::max())));
+    ASSERT_TRUE(IS_FINITE(new_random_float(0, std::numeric_limits<float>::max())));
+
+    ASSERT_TRUE(IS_NEGATIVE(new_random_float(-std::numeric_limits<float>::max(), 0)));
+    ASSERT_TRUE(IS_FINITE(new_random_float(-std::numeric_limits<float>::max(), 0)));
+
+    // 8 bit types use rounding-up when converting from higher types (and both minimal and maximal value are possible)
+    EXPECT_IN_RANGE_INCL(2, 32, BFloat8{ new_random_float(2, 32) });
+    EXPECT_IN_RANGE_INCL(2, 32, HFloat8{ new_random_float(2, 32) });
+    EXPECT_IN_RANGE(2, 32, BFloat16{ new_random_float(2, 32) });
+    EXPECT_IN_RANGE(2, 32, Float16{ new_random_float(2, 32) });
+
+    EXPECT_IN_RANGE_INCL(2, 32, BFloat8(new_random_float(2, 32)));
+    EXPECT_IN_RANGE_INCL(2, 32, HFloat8(new_random_float(2, 32)));
+    EXPECT_IN_RANGE(2, 32, BFloat16(new_random_float(2, 32)));
+    EXPECT_IN_RANGE(2, 32, Float16(new_random_float(2, 32)));
 }
