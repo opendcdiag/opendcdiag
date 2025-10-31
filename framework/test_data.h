@@ -33,6 +33,19 @@ struct Common
     /* Records the number of bytes log_data'ed per thread */
     std::atomic<unsigned> data_bytes_logged;
 
+    enum class Flag {
+        CallbackCalled = 0x0001,
+    };
+    uint32_t thread_flags;
+    friend constexpr inline uint32_t operator|(Flag f1, Flag f2)
+    {
+        return unsigned(f1) | unsigned(f2);
+    }
+    friend constexpr inline uint32_t operator&(uint32_t flags, Flag f2)
+    {
+        return flags & unsigned(f2);
+    }
+
     MonotonicTimePoint fail_time;
     bool has_failed() const
     {
@@ -46,9 +59,10 @@ struct Common
     void init()
     {
         thread_state.store(thread_not_started, std::memory_order_relaxed);
-        fail_time = MonotonicTimePoint{};
         messages_logged.store(0, std::memory_order_relaxed);
         data_bytes_logged.store(0, std::memory_order_relaxed);
+        fail_time = MonotonicTimePoint{};
+        thread_flags = {};
     }
 };
 
