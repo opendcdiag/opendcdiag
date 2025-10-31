@@ -1,0 +1,69 @@
+name: Pull Request
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [ main, mcisowsk/make-gpu-compile ]
+
+env:
+  GIT_CONFIG_SYSTEM: /tmp/gitconfig
+
+permissions:
+  contents: read
+
+jobs:
+  Linux:
+    runs-on: ubuntu-24.04${{ matrix.archsuffix }}
+    container: debian:sid
+    strategy:
+      matrix:
+        include:
+        - { name: GCC, unittests: "unittests" }
+        - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
+    steps:
+    - name: setup environment
+      run: printf '%s\n' ${{ matrix.env }} | tee -a ${GITHUB_ENV}
+    - name: Install distro packages
+      run: |
+        DEBIAN_FRONTEND=noninteractive apt-get -y update
+        DEBIAN_FRONTEND=noninteractive apt-get -y install \
+            bats \
+            ca-certificates \
+            ${CC} \
+            elfutils \
+            file \
+            gawk \
+            git \
+            jq \
+            libboost-dev \
+            libeigen3-dev \
+            libgtest-dev \
+            libhwloc-dev \
+            libssl-dev \
+            libzstd-dev \
+            meson \
+            ninja-build \
+            python3-yaml \
+            yq \
+            zlib1g-dev
+    - uses: actions/checkout@v4
+    - name: meson setup
+      run: meson setup builddir -Ddevice_type=gpu -Dbuildtype=debugoptimized ${{ matrix.meson_args }}
+    - name: ninja build
+      run: ninja -C builddir
+    - uses: actions/upload-artifact@v4
+      with:
+        name: linux-${{ matrix.name }}-binary
+        path: builddir/opendcdiag
+        retention-days: 3
+    - name: confirm opendcdiag runs
+      run: |
+        builddir/opendcdiag --version
+    - name: ninja build unittests
+      if: ${{ matrix.unittests }}
+      run: ninja -C builddir unittests
+    - name: run unittests
+      if: ${{ matrix.unittests }}
+      run: |
+        ./builddir/unittests

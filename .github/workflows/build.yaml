@@ -48,7 +48,7 @@ jobs:
             ninja-build \
             python3-yaml \
             yq \
-            zlib1g-dev 
+            zlib1g-dev
     - uses: actions/checkout@v4
     - name: meson setup
       run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized ${{ matrix.meson_args }}
