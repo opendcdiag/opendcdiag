@@ -7,6 +7,7 @@
 #include "sandstone_p.h"
 
 #include <charconv>
+#include <optional>
 
 using namespace std;
 using namespace std::chrono;
