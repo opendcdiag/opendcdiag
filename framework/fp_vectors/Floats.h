@@ -243,8 +243,8 @@ STATIC_INLINE bool BFloat8_is_max(BFloat8 f)      { return (f.exponent == BFLOAT
 #ifdef __cplusplus
 extern "C" {
 #endif
-BFloat8 to_bfloat8_emulated(float f32);
-float from_bfloat8_emulated(BFloat8 f8);
+extern BFloat8 to_bfloat8_emulated(float f32);
+extern float from_bfloat8_emulated(BFloat8 f8);
 #ifdef __cplusplus
 }
 #endif
@@ -265,7 +265,7 @@ inline float BFloat8::as_fp() const {
 }
 #endif
 
-STATIC_INLINE float BFloat8_as_fp(BFloat8 f) { return from_bfloat8(f); }
+static inline float BFloat8_as_fp(BFloat8 f) { return from_bfloat8(f); }
 
 struct HFloat8
 {
@@ -331,8 +331,8 @@ STATIC_INLINE bool HFloat8_is_max(HFloat8 f)      { return f.value == HFLOAT8_MA
 #ifdef __cplusplus
 extern "C" {
 #endif
-HFloat8 to_hfloat8_emulated(float f32);
-float from_hfloat8_emulated(HFloat8 f8);
+extern HFloat8 to_hfloat8_emulated(float f32);
+extern float from_hfloat8_emulated(HFloat8 f8);
 #ifdef __cplusplus
 }
 #endif
@@ -353,7 +353,7 @@ inline float HFloat8::as_fp() const {
 }
 #endif
 
-STATIC_INLINE float HFloat8_as_fp(HFloat8 f) { return from_hfloat8(f); }
+static inline float HFloat8_as_fp(HFloat8 f) { return from_hfloat8(f); }
 
 struct Float16
 {
@@ -494,7 +494,7 @@ inline float Float16::as_fp() const {
 }
 #endif
 
-STATIC_INLINE float Float16_as_fp(Float16 f) { return fromfp16(f); }
+static inline float Float16_as_fp(Float16 f) { return fromfp16(f); }
 
 struct BFloat16
 {
@@ -636,7 +636,7 @@ inline float BFloat16::as_fp() const {
 }
 #endif
 
-STATIC_INLINE float BFloat16_as_fp(BFloat16 f) { return frombf16(f); }
+static inline float BFloat16_as_fp(BFloat16 f) { return frombf16(f); }
 
 struct Float32 {
     union {
