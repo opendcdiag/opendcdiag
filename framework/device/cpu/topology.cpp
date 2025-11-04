@@ -12,6 +12,7 @@
 #include <cinttypes>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <random>
 #include <string>
 #include <utility>
