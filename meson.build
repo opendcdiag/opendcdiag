@@ -277,7 +277,13 @@ sandstone_tests_link = []
 sandstone_tests_link_whole = []
 
 unittests_sources = []
+unittests_deps = []
 unittests_flags = []
+
+unittests_deps += [
+    gtest_dep,
+    pthread_dep,
+]
 
 subdir('framework')
 subdir('tests')
@@ -312,7 +318,7 @@ executable(
     ),
     unittests_sources,
     generated_files,
-    dependencies: [gtest_dep, pthread_dep],
+    dependencies: unittests_deps,
     include_directories: [
         framework_incdir,
     ],
