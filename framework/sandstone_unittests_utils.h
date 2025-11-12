@@ -5,7 +5,7 @@
 
 #include "sandstone.h"
 
-#define UNITTESTS_NUM_CPUS 16
+#define UNITTESTS_THREAD_COUNT 16
 
 /* Define empty log_* macros not useful for unittests */
 #undef  log_warning
