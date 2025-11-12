@@ -6,8 +6,6 @@
 #ifndef INC_TOPOLOGY_H
 #define INC_TOPOLOGY_H
 
-#include <sandstone.h>
-
 #include <memory>
 #include <span>
 #include <string>

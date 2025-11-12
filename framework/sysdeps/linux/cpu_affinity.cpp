@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <sandstone.h>
 #include <topology.h>
 
 #include <sched.h>
 #include <stdio.h>
 #include <sysexits.h>
+#include <string.h>
 
 #ifdef __linux__
 #include <sys/prctl.h>
