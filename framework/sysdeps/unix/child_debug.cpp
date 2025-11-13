@@ -1146,7 +1146,7 @@ void debug_hung_child(pid_t child, std::span<const pid_t> children)
 
     if (on_hang_action == print_ps_on_hang) {
         const char *ps_args[] =
-            { "ps", "Hww", "-opid,tid,psr,vsz,rss,wchan,%cpu,stat,time,comm,args", buf, nullptr };
+            { "ps", "Hww", "-opid,tid,psr,vsz,rss,wchan:20,%cpu,stat,time,comm,args", buf, nullptr };
         std::string msg = run_process(ps_args);
         if (msg.size())
             log_message_preformatted(-slice - 1, LOG_LEVEL_VERBOSE(2), msg);
