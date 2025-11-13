@@ -381,6 +381,10 @@ function selftest_log_skip_init_common() {
     selftest_log_skip_init_common selftest_log_skip_preinit '.*skip from preinit'
 }
 
+@test "selftest_true_skip_in_preinit" {
+    selftest_log_skip_init_common selftest_true_skip_in_preinit '.*true skip from preinit'
+}
+
 @test "selftest_log_skip_init_mainproc" {
     selftest_log_skip_init_common selftest_log_skip_init_mainproc
 }
@@ -796,7 +800,7 @@ test_random() {
         [p1c0t0]="672773493 1071973933 867607355 1164627367"
         [p2c0t0]="65707667 538845702 2142028653 158189198"
         [p3c0t0]="647518054 617961218 490776568 784171714"
-    )    
+    )
 
     # Mocking 4 sockets of 1 core each
     test_random $SEED p0c0t0 p1c0t0 p2c0t0 p3c0t0

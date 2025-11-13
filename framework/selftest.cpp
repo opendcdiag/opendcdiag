@@ -361,6 +361,13 @@ static int selftest_log_skip_preinit(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int selftest_true_skip_in_preinit(struct test *test)
+{
+    check_is_main_process();
+    log_skip(SelftestSkipCategory, "This is a true skip from preinit");
+    return EXIT_SKIP;
+}
+
 static int selftest_errno_cleanup(struct test *test)
 {
     log_info("Unexpected OS error reported from cleanup");
@@ -1415,6 +1422,16 @@ static struct test selftests_array[] = {
     .description = "SKIP in the init function set from the test's preinit",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_preinit = selftest_log_skip_preinit,
+    .test_init = selftest_failinit_init,
+    .test_run = selftest_noreturn_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_true_skip_in_preinit",
+    .description = "SKIP in preinit",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_preinit = selftest_true_skip_in_preinit,
     .test_init = selftest_failinit_init,
     .test_run = selftest_noreturn_run,
     .desired_duration = -1,

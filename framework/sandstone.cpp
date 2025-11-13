@@ -729,25 +729,41 @@ static void preinit_tests()
         return e.replacement;
     };
 
+    static const initfunc preinit_replacement = [](struct test*) {
+        log_skip(RuntimeSkipCategory, "Skip replacement from preinit");
+        return EXIT_SKIP;
+    };
+    int preinit_ret = EXIT_SUCCESS;
+
     for (test_cfg_info &cfg : *test_set) {
         struct test *test = cfg.test;
+        preinit_ret = EXIT_SUCCESS;
         if (test->test_preinit) {
-            test->test_preinit(test);
+            preinit_ret = test->test_preinit(test);
             test->test_preinit = nullptr;   // don't rerun in case the test is re-added
         }
 
         // If the group_init function decides that the group cannot run at all,
         // it will return a pointer to a replacement function that will in turn
         // cause the test to fail or skip during test_init().
+        bool group_init_failed = false;
         if (test->groups) {
             for (auto ptr = test->groups; *ptr; ++ptr) {
                 const struct test_group *group = *ptr;
-                initfunc replacement = cached_replacement(group);
-                if (!replacement)
+                initfunc group_init_replacement = cached_replacement(group);
+                if (!group_init_replacement)
                     continue;
-                test->test_init = replacement;
+                group_init_failed = true;
+                test->test_init = group_init_replacement;
                 test->flags = test->flags | test_init_in_parent;
+                break;
             }
+        }
+
+        // Skip from group init has precendence over preinit.
+        if (!group_init_failed && preinit_ret != EXIT_SUCCESS) {
+            test->test_init = preinit_replacement;
+            test->flags = test->flags | test_init_in_parent; // for -fexec
         }
     }
 }
