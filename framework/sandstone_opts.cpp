@@ -212,37 +212,36 @@ Common command-line options are:
  -F, --fatal-errors
      Stop execution after first failure; do not continue to run tests.
  -T <time>, --total-time=<time>
-     Specify the minimum run time for the program.  A special value for <time>
-     of "forever" causes the program to loop indefinitely.  The defaults for <time>
-     is milliseconds, with s, m, and h available for seconds, minutes or hours.
+     Specify the minimum run time for the program. A special value for <time>
+     of "forever" causes the program to loop indefinitely. The default units for <time>
+     are milliseconds, with s, m, and h available for seconds, minutes or hours.
      Example: sandstone -T 60s     # run for at least 60 seconds.
-     Example: sandstone -T 5000    # run for at least 5,000 milliseconds
+     Example: sandstone -T 5000    # run for at least 5,000 milliseconds.
  --strict-runtime
      Use in conjunction with -T to force the program to stop execution after the
      specific time has elapsed.
  -t <test-time>
      Specify the execution time per test for the program in ms.
      Value for this field can also be specified with a label s, m, h for seconds,
-     minutes or hours.  Example: 200ms, 2s or 2m
+     minutes or hours. Example: 200ms, 2s or 2m
  --max-test-count <NUMBER>
-     Specify the maximum number of tests you want to execute.  Allows you
-     to run at most <NUMBER> tests in a program execution.
+     Specify the maximum number of tests to execute. Limits the number of tests
+     run to <NUMBER> per program invocation.
  --max-test-loop-count <NUMBER>
-     When this option is present, test execution will be limited by the number
-     of times the test executes its main execution loop. This option augments
+     Specifies how many times each test
+     executes its main loop. This option augments
      the time-based options in that the test will end if either the test time
-     condition is exceeded, or the test-max-loop-count is exhausted.  The use
+     condition is exceeded, or the test-max-loop-count is exhausted. The use
      of --max-test-loop-count disables test fracturing, the default mode of
      test execution in which individual tests are run multiple times with
-     different random number seeds during the same invocation of opendcdiag.
-     A value of 0 for --max-test-loop-count is interpreted as there being no
-     limit to the number of loop iterations.  This special value can be
-     used to disable test fracturing.  When specified tests will not be
-     fractured and their execution will be time limited.
+     different random seeds during the same invocation of opendcdiag.
+     The value of 0 for --max-test-loop-count is means no
+     limit to the number of loop iterations; it can be
+     used to disable test fracturing.
  --cpuset=<set>, --deviceset=<set>
-     Selects the CPUs to run tests on. The <set> option may be a comma-separated
+     Selects the CPUs to run tests on. The <set> option is a comma-separated
      list of either plain numbers that select based on the system's logical
-     processor number, or a letter  followed by a number to select based on
+     processor number, or a letter followed by a number to select based on
      topology: p for package, c for core and t for thread.
  --dump-cpu-info
      Prints the CPU information that the tool detects (package ID, core ID,
@@ -255,7 +254,7 @@ Common command-line options are:
      Continue execution of Sandstone even if a test encounters an operating
      system error (this includes tests timing out).
  --ignore-unknown-tests
-     Ignore unknown tests listed on --enable and --disable.
+     Ignore unknown tests specified with --enable, --disable, or test list file.
  -h, --help
      Print help.
  -l, --list
@@ -266,12 +265,12 @@ Common command-line options are:
      Lists the test groups.
  --max-messages <NUMBER>
      Limits the maximum number of log messages that can be output by a single
-     thread per test invocation.  A value of less than or equal to 0 means
-     that there is no limit.  The default value is 5.
+     thread per test invocation. A value of less than or equal to 0 means
+     that there is no limit. The default value is 5.
  --max-logdata <NUMBER>
      Limits the maximum number of bytes of binary data that can be logged
-     by a single thread per test invocation.  A value of less than or equal
-     to 0 means that there is no limit.  The default value is 128.
+     by a single thread per test invocation. A value of less than or equal
+     to 0 means that there is no limit. The default value is 128.
      Sandstone will not log partial data, so if the binary data would cause
      the thread to exceed this threshold it simply will not be output.
  -n <NUMBER>, --threads=<NUMBER>
@@ -279,13 +278,13 @@ Common command-line options are:
      0 is passed, then the test defaults to the number of CPUs in the system.
      Note the --cpuset and this parameter do not behave well together.
  -o, --output-log <FILE>
-     Place all logging information in <FILE>.  By default, a file name is
-     auto-generated by the program.  Use -o /dev/null to suppress creation of any file.
+     Place all logging information in <FILE>. By default, a file name is
+     auto-generated by the program. Use -o /dev/null to suppress creation of any file.
  -s <STATE>, --rng-state=<STATE>
      Specify the random generator state to reload. The seed is in the form:
        Engine:engine-specific-data
  -v, -q, --verbose, --quiet
-     Set logging output verbosity level.  Default is quiet.
+     Set logging output verbosity level. Default is quiet.
  --version
      Display program version information.
  --1sec, --30sec, --2min, --5min
@@ -295,9 +294,9 @@ Common command-line options are:
      Test priority is ignored when running in combination with the
      --test-list-file option.
  --test-list-file <file path>
-     Specifies the tests to run in a text file.  This will run the tests
+     Specifies the tests to run in a text file. This will run the tests
      in the order they appear in the file and also allows you to vary the
-     individual test durations.  See the User Guide for details.
+     individual test durations. See the User Guide for details.
  --test-list-randomize
      Randomizes the order in which tests are executed.
  --test-delay <time in ms>
