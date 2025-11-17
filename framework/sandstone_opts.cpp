@@ -300,9 +300,8 @@ Common command-line options are:
      Randomizes the order in which tests are executed.
  --test-delay <time in ms>
      Delay between individual test executions in milliseconds.
-  -Y, --yaml [<indentation>]
-     Use YAML for logging. The optional argument is the number of spaces to
-     indent each line by (defaults to 0).
+  -Y, --yaml
+     Use YAML for logging.
 For more options and information, please see the User Reference Guide.
 )";
 
