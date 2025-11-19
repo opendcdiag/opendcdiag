@@ -206,10 +206,6 @@ static int scan_run(struct test *test, int cpu)
         char result[BUFLEN] = {}, my_cpu[BUFLEN] = {};
         unsigned long long code;
 
-        /* HACK: Shadows global variable that log_warning() uses
-         * DON'T use report_fail_msg() */
-        (void) thread_num;
-
         if (cpu_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
 
