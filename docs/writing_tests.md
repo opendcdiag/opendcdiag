@@ -863,16 +863,16 @@ restricts the number of threads that are visible to OpenDCDiag in some way. The
 *num_cpus* function can be called in the *test_init*, *test_run* and
 *test_cleanup* functions.
 
-#### cpu_info and cpu
+#### device_info and cpu
 
 The *test_run* function's second parameter, *cpu*, has not been been discussed
 in much detail until now. This parameter is an OpenDCDiag specific identifier
 that identifies the hardware thread on which the current instance of the
 *test_run* function is executing. It will always be greater than or equal to zero
 and less than the value returned by *num_cpus*. It can be used as an index into
-a global array maintained by the framework called *cpu_info*. This is an array
-of structures, also called *cpu_info* that contain information about the
-hardware threads on which the test is being run. The *cpu_info* structure is
+a global array maintained by the framework called *device_info*. This is an array
+of structures, also called *device_info* that contain information about the
+hardware threads on which the test is being run. The *device_info* structure is
 documented in [sandstone.h](../framework/sandstone.h). It can be used for
 example to figure out which core the current thread is associated with, how much
 cache that core has, in which socket the current core is located, and what
@@ -905,7 +905,7 @@ not yet been run. The size of this set will be no greater than *max_threads*,
 although it may be smaller.
 3. It calls the init function on the main thread. The framework ensures that
 the return value of the framework's *num_cpu* function will return a value of no
-greater than *max_threads* and that the *cpu_info* structure contains the
+greater than *max_threads* and that the *device_info* structure contains the
 correct information for the current set of hardware threads.
 4. It then runs the *test_run* function on each of these threads.
 5. The *test_cleanup* function is called.
