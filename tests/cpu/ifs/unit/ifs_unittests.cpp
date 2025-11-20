@@ -274,7 +274,7 @@ TEST(IFSTrigger, AllCoresPass)
 
     // Setup dummy cpu_info array
     int cpu_num = 2;
-    cpu_info = new device_info_t[cpu_num];
+    cpu_info = new cpu_info_t[cpu_num];
     cpu_info[1].cpu_number = 1;
 
     // Loop over each cpu
