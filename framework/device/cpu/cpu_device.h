@@ -195,16 +195,16 @@ typedef struct cpu_info device_info_t;
 // Temporary alias until we rename this struct to cpu_info_t.
 typedef struct cpu_info cpu_info_t;
 
-/// cpu_info is an array of cpu_info_t structures.  Each element of the array
+/// device_info is an array of cpu_info_t structures.  Each element of the array
 /// contains information about a logical CPU that will be used to
 /// execute a test's test_run function.  The size of this array is
 /// equal to the value returned by num_cpus().
-extern struct cpu_info *cpu_info;
+extern struct cpu_info *device_info;
 
 #ifdef __cplusplus
 inline int cpu_info_t::cpu() const
 {
-    return this - ::cpu_info;
+    return this - ::device_info;
 }
 
 extern "C" {

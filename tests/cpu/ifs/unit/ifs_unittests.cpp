@@ -272,10 +272,10 @@ TEST(IFSTrigger, AllCoresPass)
     test *test_t = (test *) test_setup(trigger_test1);
     ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
 
-    // Setup dummy cpu_info array
+    // Setup dummy device_info array
     int cpu_num = 2;
-    cpu_info = new cpu_info_t[cpu_num];
-    cpu_info[1].cpu_number = 1;
+    device_info = new cpu_info_t[cpu_num];
+    device_info[1].cpu_number = 1;
 
     // Loop over each cpu
     for (size_t i=0; i < cpu_num; i++)
@@ -289,7 +289,7 @@ TEST(IFSTrigger, AllCoresPass)
         EXPECT_STREQ(contents, expected);
     }
 
-    delete [] cpu_info;
+    delete [] device_info;
     test_cleanup(test_t, ifs_info, trigger_test1);
 }
 
@@ -302,10 +302,10 @@ TEST(IFSTrigger, AllCoresFail)
     test *test_t = (test *) test_setup(trigger_test2);
     ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
 
-    // Setup dummy cpu_info array
+    // Setup dummy device_info array
     int cpu_num = 2;
-    cpu_info = new cpu_info_t[cpu_num];
-    cpu_info[1].cpu_number = 1;
+    device_info = new cpu_info_t[cpu_num];
+    device_info[1].cpu_number = 1;
 
     // Loop over each cpu
     for (size_t i=0; i < cpu_num; i++)
@@ -319,7 +319,7 @@ TEST(IFSTrigger, AllCoresFail)
         EXPECT_STREQ(contents, expected);
     }
 
-    delete [] cpu_info;
+    delete [] device_info;
     test_cleanup(test_t, ifs_info, trigger_test2);
 }
 
@@ -332,10 +332,10 @@ TEST(IFSTrigger, SingleCoreFail)
     test *test_t = (test *) test_setup(trigger_test3);
     ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
 
-    // Setup dummy cpu_info array
+    // Setup dummy device_info array
     int cpu_num = 2;
-    cpu_info = new cpu_info_t[cpu_num];
-    cpu_info[1].cpu_number = 1;
+    device_info = new cpu_info_t[cpu_num];
+    device_info[1].cpu_number = 1;
 
     // First run is expected to pass
     EXPECT_EQ(scan_run(test_t, 0), EXIT_SUCCESS);
@@ -344,7 +344,7 @@ TEST(IFSTrigger, SingleCoreFail)
     setup_sysfs_file(ifs_info->sys_dir, "status", "fail");
     EXPECT_EQ(scan_run(test_t, 1), EXIT_FAILURE);
 
-    delete [] cpu_info;
+    delete [] device_info;
     test_cleanup(test_t, ifs_info, trigger_test3);
 }
 
@@ -357,10 +357,10 @@ TEST(IFSTrigger, AllCoresUntested)
     test *test_t = (test *) test_setup(trigger_test4);
     ifs_test_t *ifs_info = (ifs_test_t *) test_t->data;
 
-    // Setup dummy cpu_info array
+    // Setup dummy device_info array
     int cpu_num = 2;
-    cpu_info = new cpu_info_t[cpu_num];
-    cpu_info[1].cpu_number = 1;
+    device_info = new cpu_info_t[cpu_num];
+    device_info[1].cpu_number = 1;
 
     // Loop over each cpu
     for (size_t i=0; i < cpu_num; i++)
@@ -374,7 +374,7 @@ TEST(IFSTrigger, AllCoresUntested)
         EXPECT_STREQ(contents, expected);
     }
 
-    delete [] cpu_info;
+    delete [] device_info;
     test_cleanup(test_t, ifs_info, trigger_test4);
 }
 
