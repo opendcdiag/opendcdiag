@@ -23,7 +23,7 @@ struct gpu_info_t
 // Alias for use in common framework code
 typedef struct gpu_info_t device_info_t;
 
-extern struct gpu_info_t *cpu_info;
+extern struct gpu_info_t *device_info;
 
 // Not used at the moment
 typedef unsigned __int128 device_features_t;

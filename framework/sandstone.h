@@ -549,7 +549,7 @@ uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth);
 extern device_features_t device_features;
 
 /// thread_num always contains the integer identifier for the executing
-/// thread.  It can be used to index the cpu_info array and is equivalent
+/// thread.  It can be used to index the device_info array and is equivalent
 /// to the thread parameter in the test_run function.
 #ifdef __llvm__
 extern thread_local int thread_num;

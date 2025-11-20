@@ -22,7 +22,7 @@ public:
 
     void Snapshot(const int thread_num)
     {
-        cpu_number = cpu_info[thread_num].cpu_number;
+        cpu_number = device_info[thread_num].cpu_number;
         ns = MonotonicTimePoint::clock::now();
         tsc = __rdtscp(&tsc_aux);
 
