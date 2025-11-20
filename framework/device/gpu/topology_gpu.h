@@ -48,7 +48,7 @@ public:
     static const Topology &topology();
 };
 
-/// Fills the topology (devices & their subdevices) based on cpu_info.
+/// Fills the topology (devices & their subdevices) based on device_info.
 /// Supports heterogenous topology (mixed kind of devices - End and Root).
 Topology build_topology();
 

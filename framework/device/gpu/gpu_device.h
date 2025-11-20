@@ -51,12 +51,12 @@ struct gpu_info_t
 // Alias for use in common framework code
 typedef struct gpu_info_t device_info_t;
 
-extern struct gpu_info_t *cpu_info;
+extern struct gpu_info_t *device_info;
 
 #ifdef __cplusplus
 inline int gpu_info_t::gpu() const
 {
-    return this - ::cpu_info;
+    return this - ::device_info;
 }
 #endif
 

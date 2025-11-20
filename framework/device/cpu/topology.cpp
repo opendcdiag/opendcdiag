@@ -163,7 +163,7 @@ void BarrierDeviceScheduler::reschedule_to_next_device()
 
         // Reschedule group members
         for (int i=0; i<group.tid.size(); i++) {
-            pin_to_next_cpu(cpu_info[group.next_cpu[i]].cpu_number, group.tid[i]);
+            pin_to_next_cpu(device_info[group.next_cpu[i]].cpu_number, group.tid[i]);
         }
     };
 
@@ -234,7 +234,7 @@ void QueueDeviceScheduler::reschedule_to_next_device()
     if (++q_idx == queue.size())
         q_idx = 0;
 
-    pin_to_next_cpu(cpu_info[next_idx].cpu_number);
+    pin_to_next_cpu(device_info[next_idx].cpu_number);
     return;
 }
 
@@ -255,12 +255,12 @@ void RandomDeviceScheduler::reschedule_to_next_device()
 {
     // Select a random cpu index among the ones available
     int next_idx = unsigned(random()) % num_cpus();
-    pin_to_next_cpu(cpu_info[next_idx].cpu_number);
+    pin_to_next_cpu(device_info[next_idx].cpu_number);
 
     return;
 }
 
-cpu_info_t *cpu_info = nullptr;
+cpu_info_t *device_info = nullptr;
 
 static Topology &cached_topology()
 {
@@ -378,7 +378,7 @@ static bool cpu_compare(const cpu_info_t &cpu1, const cpu_info_t &cpu2)
 __attribute__((noinline))
 void TopologyDetector::sort()
 {
-    std::sort(cpu_info, cpu_info + num_cpus(), cpu_compare);
+    std::sort(device_info, device_info + num_cpus(), cpu_compare);
 }
 
 bool TopologyDetector::old_create_mock_topology(const char *topo)
@@ -401,7 +401,7 @@ bool TopologyDetector::old_create_mock_topology(const char *topo)
         if (cpu_count == sApp->thread_count)
             break;      // can't add more
 
-        cpu_info_t *info = &cpu_info[cpu_count];
+        cpu_info_t *info = &device_info[cpu_count];
         ++cpu_count;
 
         info->package_id = info->module_id = info->core_id = info->thread_id = 0;
@@ -458,7 +458,7 @@ bool TopologyDetector::create_mock_topology(const char *topo)
         if (cpu_count == sApp->thread_count)
             break;      // can't add more
 
-        cpu_info_t *info = &cpu_info[cpu_count];
+        cpu_info_t *info = &device_info[cpu_count];
         ++cpu_count;
 
         info->package_id = info->core_id = info->thread_id = 0;
@@ -664,18 +664,18 @@ bool TopologyDetector::detect_numa()
         }
 
         // Parse the list. This will *usually* be one or two ranges.
-        cpu_info_t *cpu = &cpu_info[0];
-        cpu_info_t *const end = cpu_info + sApp->thread_count;
+        cpu_info_t *cpu = &device_info[0];
+        cpu_info_t *const end = device_info + sApp->thread_count;
         const char *ptr = cpulist.c_str();
         while (*ptr && cpu != end) {
             auto [start, stop] = parse_cpulist_range(ptr);
 
             // Find the starting CPU.
-            // At this point, the cpu_info array is sorted by cpu_number and,
+            // At this point, the device_info array is sorted by cpu_number and,
             // if we're running over the entire system, the array index
             // matches the cpu_number too.
-            if (start < sApp->thread_count && cpu_info[start].cpu_number == start) {
-                cpu = &cpu_info[start];
+            if (start < sApp->thread_count && device_info[start].cpu_number == start) {
+                cpu = &device_info[start];
             } else {
                 // no such luck, scan forward from the last cpu we marked
                 for ( ; cpu < end; ++cpu) {
@@ -812,7 +812,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
     static constexpr unsigned CpusPerGroup =
             std::numeric_limits<KAFFINITY>::digits;
 
-    cpu_info_t *const info = cpu_info;
+    cpu_info_t *const info = device_info;
     std::span infos(info, info + num_cpus());
     auto first_cpu_for_group = [infos](unsigned group) -> cpu_info_t * {
         for (cpu_info_t &info : infos) {
@@ -939,7 +939,7 @@ bool TopologyDetector::detect_via_os(Topology::Thread *info)
     detect_ucode_via_os(info);
     if (info->core_id >= 0)
         return true;                // detect_via_cpuid() has succeeded
-    if (info != &cpu_info[0])
+    if (info != &device_info[0])
         return info->core_id != -1; // we only need to run once
 
     return detect_topology_via_os(RelationAll);
@@ -947,7 +947,7 @@ bool TopologyDetector::detect_via_os(Topology::Thread *info)
 
 bool TopologyDetector::detect_numa()
 {
-    if (cpu_info[0].numa_id >= 0)
+    if (device_info[0].numa_id >= 0)
         return true;            // already filled in above
 
     return detect_topology_via_os(RelationNumaNodeEx);
@@ -1336,7 +1336,7 @@ void apply_deviceset_param(char *param)
     if (SandstoneConfig::RestrictedCommandLine)
         return;
 
-    std::span<cpu_info_t> old_cpu_info(cpu_info, sApp->thread_count);
+    std::span<cpu_info_t> old_cpu_info(device_info, sApp->thread_count);
     std::vector<cpu_info_t> new_cpu_info;
     int total_matches = 0;
 
@@ -1508,7 +1508,7 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
 {
     assert(sApp->thread_count);
     assert(sApp->thread_count == enabled_cpus.count());
-    cpu_info = sApp->shmem->device_info;
+    device_info = sApp->shmem->device_info;
 
     // detect this CPU's family - it's impossible for them to be different
     detect_family_via_cpuid();
@@ -1516,9 +1516,9 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
     int count = sApp->thread_count;
     [[assume(count > 0)]];
 
-    // fill in cpu_info first
+    // fill in device_info first
     {
-        cpu_info_t *info = &cpu_info[0];
+        cpu_info_t *info = &device_info[0];
         // -1 to indicate unknown yet
         info->package_id = -1;
         info->numa_id = -1;
@@ -1530,13 +1530,13 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info_t{-1, -1});
     }
-    // replicate cpu_info[0] over the entire range
-    std::fill_n(&cpu_info[1], count - 1, cpu_info[0]);
+    // replicate device_info[0] over the entire range
+    std::fill_n(&device_info[1], count - 1, device_info[0]);
 
     int i = 0;
     for (LogicalProcessor lp = enabled_cpus.next(); lp != LogicalProcessor::None; ++i) {
         // set the OS cpu id
-        auto info = cpu_info + i;
+        auto info = device_info + i;
         info->cpu_number = int(lp);
         lp = enabled_cpus.next(LogicalProcessor(int(lp) + 1));
     }
@@ -1551,7 +1551,7 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
         auto self = static_cast<TopologyDetector *>(ptr);
         int count = sApp->thread_count;
         [[assume(count > 0)]];
-        for (Topology::Thread &cpu : std::span(cpu_info, count)) {
+        for (Topology::Thread &cpu : std::span(device_info, count)) {
             pin_to_logical_processor(LogicalProcessor(cpu.cpu_number));
             self->detect_via_cpuid(&cpu);
             self->detect_via_os(&cpu);
@@ -1568,7 +1568,7 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
         pthread_join(detection_thread, nullptr);
     } else {
         // Use OS-level detection only (no pinning, no threads).
-        for (Topology::Thread &cpu : std::span(cpu_info, count)) {
+        for (Topology::Thread &cpu : std::span(device_info, count)) {
             detect_via_os(&cpu);
             last_package_id = cpu.package_id;
         }
@@ -1600,8 +1600,8 @@ static void populate_core_group(Topology::CoreGrouping *group, const Topology::T
 
 static Topology build_topology()
 {
-    cpu_info_t *info = cpu_info;
-    const cpu_info_t *const end = cpu_info + num_cpus();
+    cpu_info_t *info = device_info;
+    const cpu_info_t *const end = device_info + num_cpus();
 
     std::vector<Topology::Package> packages;
     if (int max_package_id = end[-1].package_id; max_package_id >= 0)
@@ -1780,7 +1780,7 @@ const Topology &Topology::topology()
 Topology::Data Topology::clone() const
 {
     Data result;
-    result.all_threads.assign(cpu_info, cpu_info + num_cpus());
+    result.all_threads.assign(device_info, device_info + num_cpus());
     result.packages = packages;
 
     // now update all spans to point to the data we carry
@@ -1801,7 +1801,7 @@ void update_topology(std::span<const cpu_info_t> new_cpu_info,
     cpu_info_t *end;
     if (packages.empty()) {
         // copy all
-        end = std::copy(new_cpu_info.begin(), new_cpu_info.end(), cpu_info);
+        end = std::copy(new_cpu_info.begin(), new_cpu_info.end(), device_info);
     } else {
         // copy only if matching the socket ID
         auto matching = [=](const cpu_info_t &ci) {
@@ -1811,10 +1811,10 @@ void update_topology(std::span<const cpu_info_t> new_cpu_info,
             }
             return false;
         };
-        end = std::copy_if(new_cpu_info.begin(), new_cpu_info.end(), cpu_info, matching);
+        end = std::copy_if(new_cpu_info.begin(), new_cpu_info.end(), device_info, matching);
     }
 
-    int new_thread_count = end - cpu_info;
+    int new_thread_count = end - device_info;
     if (int excess = sApp->thread_count - new_thread_count; excess > 0)
         std::fill_n(end, excess, (cpu_info_t){});
 
@@ -1852,11 +1852,11 @@ void setup_devices<LogicalProcessorSet>(const LogicalProcessorSet &enabled_devic
 void restrict_topology(DeviceRange range)
 {
     assert(range.starting_device + range.device_count <= sApp->thread_count);
-    auto old_cpu_info = std::exchange(cpu_info, sApp->shmem->device_info + range.starting_device);
+    auto old_cpu_info = std::exchange(device_info, sApp->shmem->device_info + range.starting_device);
     int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
 
     Topology &topo = cached_topology();
-    if (old_cpu_info != cpu_info || old_thread_count != sApp->thread_count ||
+    if (old_cpu_info != device_info || old_thread_count != sApp->thread_count ||
             topo.packages.size() == 0)
         topo = build_topology();
 }
@@ -2087,7 +2087,7 @@ uint32_t mixin_from_device_info(int thread_num)
     // Create a pattern based exclusively on the topology that we'll use
     // to seed the thread's generator. Algorithm very loosely inspired by
     // https://en.wikipedia.org/wiki/MurmurHash version 3.
-    auto& info = cpu_info[thread_num];
+    auto& info = device_info[thread_num];
     auto scramble = [](uint32_t k) {
         k *= 0xcc9e2d51;
         k = (k << 15) | (k >> 17);              // rotl(mixin, 15);

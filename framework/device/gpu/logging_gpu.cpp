@@ -16,11 +16,11 @@ auto calc_spacing()
     static const auto spacing = []() {
         struct { int gpu, cpu; } result {0, 0};
         auto max_gpu = std::max_element(
-            cpu_info, cpu_info + thread_count(),
+            device_info, device_info + thread_count(),
             [](const auto& g1, const auto& g2) { return g1.gpu_number < g2.gpu_number; }
         )->gpu_number;
         auto max_cpu = std::max_element(
-            cpu_info, cpu_info + thread_count(),
+            device_info, device_info + thread_count(),
             [](const auto& g1, const auto& g2) { return g1.cpu_number < g2.cpu_number; }
         )->cpu_number;
 
@@ -35,7 +35,7 @@ auto calc_spacing()
 
 std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerbosity verbosity)
 {
-    gpu_info_t *info = cpu_info + thread;
+    gpu_info_t *info = device_info + thread;
     std::string line;
     if (info->subdevice_index != -1) {
         line = std::format("{{ gpu_index: {}/{}, gpu_number: {:{}}, ", info->device_index, info->subdevice_index, info->gpu_number, calc_spacing().gpu);

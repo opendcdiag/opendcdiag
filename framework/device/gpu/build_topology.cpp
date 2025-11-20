@@ -9,8 +9,8 @@
 Topology build_topology()
 {
     Topology topo;
-    gpu_info_t* info = cpu_info;
-    const gpu_info_t* cend = cpu_info + thread_count();
+    gpu_info_t* info = device_info;
+    const gpu_info_t* cend = device_info + thread_count();
     auto root_first = info;
     while (info != cend) {
         if (info->subdevice_index == -1) {

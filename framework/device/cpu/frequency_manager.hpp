@@ -180,13 +180,13 @@ public:
         for (int cpu = 0; cpu < num_cpus(); cpu++) {
             //save scaling governor for every cpu
             std::string scaling_governor_path = BASE_CORE_FREQ_PATH;
-            scaling_governor_path += std::to_string(cpu_info[cpu].cpu_number);
+            scaling_governor_path += std::to_string(device_info[cpu].cpu_number);
             scaling_governor_path += SCALING_GOVERNOR;
             per_cpu_initial_scaling_governor.push_back(read_file(scaling_governor_path));
 
             //save frequency for every cpu
             std::string initial_scaling_setspeed_frequency_path = BASE_CORE_FREQ_PATH;
-            initial_scaling_setspeed_frequency_path += std::to_string(cpu_info[cpu].cpu_number);
+            initial_scaling_setspeed_frequency_path += std::to_string(device_info[cpu].cpu_number);
             initial_scaling_setspeed_frequency_path += SCALING_SETSPEED;
             per_cpu_initial_scaling_setspeed.push_back(read_file(initial_scaling_setspeed_frequency_path));
 
@@ -206,7 +206,7 @@ public:
             uint16_t total_sockets = 0;
 
             for (int cpu = 0; cpu < num_cpus(); cpu++) {
-                int socket_id = cpu_info[cpu].package_id;
+                int socket_id = device_info[cpu].package_id;
                 if (found_socket_ids.count(socket_id) == 0) {
                     total_sockets++;
                     found_socket_ids.insert(socket_id);
@@ -244,7 +244,7 @@ public:
 
         for (int cpu = 0; cpu < num_cpus(); cpu++) {
             std::string scaling_setspeed = BASE_CORE_FREQ_PATH;
-            scaling_setspeed += std::to_string(cpu_info[cpu].cpu_number);
+            scaling_setspeed += std::to_string(device_info[cpu].cpu_number);
             scaling_setspeed += SCALING_SETSPEED;
             write_file(scaling_setspeed, std::to_string(current_set_frequency));
         }
@@ -274,13 +274,13 @@ public:
         for (int cpu = 0; cpu < num_cpus(); cpu++) {
             //restore saved scaling governor for every cpu
             std::string scaling_governor_path = BASE_CORE_FREQ_PATH;
-            scaling_governor_path += std::to_string(cpu_info[cpu].cpu_number);
+            scaling_governor_path += std::to_string(device_info[cpu].cpu_number);
             scaling_governor_path += SCALING_GOVERNOR;
             write_file(scaling_governor_path, per_cpu_initial_scaling_governor[cpu]);
 
             //restore saved frequency for every cpu
             std::string scaling_setspeed_path = BASE_CORE_FREQ_PATH;
-            scaling_setspeed_path += std::to_string(cpu_info[cpu].cpu_number);
+            scaling_setspeed_path += std::to_string(device_info[cpu].cpu_number);
             scaling_setspeed_path += SCALING_SETSPEED;
             write_file(scaling_setspeed_path, per_cpu_initial_scaling_setspeed[cpu]);
         }
