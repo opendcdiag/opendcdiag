@@ -153,7 +153,7 @@ struct cache_info_t
 };
 
 /// cpu_info_t contains information about a logical CPU
-struct cpu_info // TODO: ultimately rename to cpu_info_t
+struct cpu_info_t
 {
     uint64_t microcode;     ///! Microcode version read from /sys
 
@@ -191,15 +191,13 @@ struct cpu_info // TODO: ultimately rename to cpu_info_t
 };
 
 // Alias for use in common framework code.
-typedef struct cpu_info device_info_t;
-// Temporary alias until we rename this struct to cpu_info_t.
-typedef struct cpu_info cpu_info_t;
+typedef struct cpu_info_t device_info_t;
 
 /// cpu_info is an array of cpu_info_t structures.  Each element of the array
 /// contains information about a logical CPU that will be used to
 /// execute a test's test_run function.  The size of this array is
 /// equal to the value returned by num_cpus().
-extern struct cpu_info *cpu_info;
+extern struct cpu_info_t *cpu_info;
 
 #ifdef __cplusplus
 inline int cpu_info_t::cpu() const
