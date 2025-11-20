@@ -54,7 +54,7 @@ TEST(Topology, HeterogenousTopology)
 
     gpu_info.emplace_back(make_gpu_info_entry(-1, 0xbadbabe)); // end
 
-    cpu_info = gpu_info.data();
+    device_info = gpu_info.data();
     Topology topo = build_topology();
 
     EXPECT_EQ(topo.devices.size(), 8);
@@ -103,7 +103,7 @@ TEST(Topology, TailingRoot)
     gpu_info.emplace_back(make_gpu_info_entry(4, 0xbadcafe));
     gpu_info.emplace_back(make_gpu_info_entry(5, 0xbadcafe));
 
-    cpu_info = gpu_info.data();
+    device_info = gpu_info.data();
     Topology topo = build_topology();
 
     EXPECT_EQ(topo.devices.size(), 2);

@@ -892,7 +892,7 @@ void reschedule()
 static uintptr_t thread_runner(int thread_number)
 {
     // convert from internal Sandstone numbering to the system one
-    pin_to_logical_processor(LogicalProcessor(cpu_info[thread_number].cpu_number), current_test->id);
+    pin_to_logical_processor(LogicalProcessor(device_info[thread_number].cpu_number), current_test->id);
 
     PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
     random_init_thread(thread_number);
@@ -1448,7 +1448,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
                 // processor but its pinning doesn't affect this control thread
                 auto init_thread_runner = [](void *testptr) {
                     auto test = static_cast</*nonconst*/ struct test *>(testptr);
-                    pin_to_logical_processor(LogicalProcessor(cpu_info[0].cpu_number));
+                    pin_to_logical_processor(LogicalProcessor(device_info[0].cpu_number));
                     thread_num = -1;
                     intptr_t ret = test->test_init(test);
                     return reinterpret_cast<void *>(ret);
@@ -2224,7 +2224,7 @@ static int exec_mode_run(int argc, char **argv)
     int child_number = parse_int(argv[3]);
 
     attach_shmem(parse_int(argv[2]));
-    cpu_info = sApp->shmem->device_info;
+    device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 

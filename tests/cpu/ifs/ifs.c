@@ -206,10 +206,10 @@ static int scan_run(struct test *test, int cpu)
         char result[BUFLEN] = {}, my_cpu[BUFLEN] = {};
         unsigned long long code;
 
-        if (cpu_info[cpu].thread_id != 0)
+        if (device_info[cpu].thread_id != 0)
                 return EXIT_SKIP;
 
-        snprintf(my_cpu, sizeof(my_cpu), "%d\n", cpu_info[cpu].cpu_number);
+        snprintf(my_cpu, sizeof(my_cpu), "%d\n", device_info[cpu].cpu_number);
 
         char sys_path[PATH_MAX];
         int n = snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir);
