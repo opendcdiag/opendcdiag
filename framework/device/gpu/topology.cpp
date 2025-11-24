@@ -6,7 +6,7 @@
 #include "topology.h"
 #include "sandstone_p.h"
 
-struct gpu_info_t *cpu_info = nullptr;
+struct gpu_info_t *device_info = nullptr;
 
 int num_packages()
 {
