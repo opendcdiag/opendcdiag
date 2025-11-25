@@ -25,8 +25,13 @@ std::vector<uint64_t> smi_counts_start;
 
 int initialize_smi_counts(struct test*)
 {
+    if (!InterruptMonitor::InterruptMonitorWorks) {
+        log_skip(RuntimeSkipCategory, "InterruptMonitorWorks off");
+        return EXIT_SKIP;
+    }
     std::optional<uint64_t> v = InterruptMonitor::count_smi_events(cpu_info[0].cpu_number);
     if (!v) {
+        log_skip(RuntimeSkipCategory, "Could not read msr");
         return EXIT_SKIP;
     }
     smi_counts_start.resize(thread_count());
@@ -60,7 +65,11 @@ int smi_count_run(struct test *test, int thread)
 
 DECLARE_TEST(smi_count, "Counts SMI events")
     .test_preinit = initialize_smi_counts,
-    .test_init = [](struct test *t) { return InterruptMonitor::InterruptMonitorWorks ? EXIT_SUCCESS : EXIT_SKIP; },
+    .test_init = [](struct test *t) {
+        // We should not reach here if !InterruptMonitor::InterruptMonitorWorks, so no need to call log_skip,
+        // as it's rather a sanity check.
+        return InterruptMonitor::InterruptMonitorWorks ? EXIT_SUCCESS : EXIT_SKIP;
+    },
     .test_run = smi_count_run,
     .test_cleanup = initialize_smi_counts,
     .desired_duration = -1,
