@@ -1834,7 +1834,7 @@ void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
             indent_spaces().data(),
             format_duration(utime, FormatDurationOptions::WithoutUnit).c_str(),
             format_duration(stime, FormatDurationOptions::WithoutUnit).c_str(),
-            (utime + stime) * 100.0 / runtime,
+            std::abs((utime + stime) * 100.0 / runtime),
             (long long)usage.ru_maxrss, (long long)usage.ru_majflt
 #ifndef _WIN32
             , (long long)usage.ru_minflt, (long long)usage.ru_nvcsw, (long long)usage.ru_nivcsw
