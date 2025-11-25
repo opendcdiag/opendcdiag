@@ -74,22 +74,28 @@ string format_duration(std::chrono::nanoseconds ns, FormatDurationOptions opts)
     using namespace std::chrono;
     std::string result;
 
-    auto us = duration_cast<microseconds>(ns);
-    milliseconds ms = duration_cast<milliseconds>(us);
-    us -= ms;
+    if (ns.count() < 0) {
+        result += "0.0";
+    } else {
+        auto us = duration_cast<microseconds>(ns);
+        milliseconds ms = duration_cast<milliseconds>(us);
+        us -= ms;
 
-    result = std::to_string(ms.count());
-    size_t i = result.size();
-    result.reserve(i + 7);
-    result.resize(i + 4);
-    result[i++] = '.';
-    if (us.count() < 100)
-        result[i++] = '0';
-    if (us.count() < 10)
-        result[i++] = '0';
-    std::to_chars(result.data() + i, result.data() + result.size(), us.count(), 10);
+        result = std::to_string(ms.count());
+        size_t i = result.size();
+        result.reserve(i + 7);
+        result.resize(i + 4);
+        result[i++] = '.';
+        if (us.count() < 100)
+            result[i++] = '0';
+        if (us.count() < 10)
+            result[i++] = '0';
+        std::to_chars(result.data() + i, result.data() + result.size(), us.count(), 10);
+    }
+
     if (unsigned(opts) & unsigned(FormatDurationOptions::WithUnit))
         result += " ms";
+
     return result;
 }
 
