@@ -768,6 +768,17 @@ static void preinit_tests()
     }
 }
 
+static void postcleanup_tests()
+{
+    for (test_cfg_info &cfg : *test_set) {
+        struct test *test = cfg.test;
+        if (test->test_postcleanup) {
+            // At this point it's too late to decide whether test passed or not.
+            [[maybe_unused]] auto ret = test->test_postcleanup(test);
+        }
+    }
+}
+
 static void init_internal(const struct test *test)
 {
     print_temperature_of_device();
@@ -2801,6 +2812,7 @@ int main(int argc, char **argv)
         if (total_tests_run >= sApp->max_test_count)
             break;
     }
+    postcleanup_tests();
 
     if (total_failures) {
         logging_print_footer();
