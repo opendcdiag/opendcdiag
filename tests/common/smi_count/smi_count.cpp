@@ -27,6 +27,7 @@ int initialize_smi_counts(struct test*)
 {
     std::optional<uint64_t> v = InterruptMonitor::count_smi_events(cpu_info[0].cpu_number);
     if (!v) {
+        log_skip(RuntimeSkipCategory, "Could not read msr");
         return EXIT_SKIP;
     }
     smi_counts_start.resize(thread_count());
