@@ -350,12 +350,6 @@ static int selftest_skip_cleanup(struct test *test)
     return EXIT_SKIP;
 }
 
-static int selftest_skip_postcleanup(struct test *test)
-{
-    // We cannot call log_info, as all test's messages have already been logged.
-    return EXIT_SKIP;
-}
-
 static int selftest_log_skip_preinit(struct test *test)
 {
     check_is_main_process();
@@ -1280,15 +1274,6 @@ static struct test selftests_array[] = {
     .test_init = selftest_preinit_init,
     .test_run = selftest_pass_run,
     .desired_duration = INT_MAX,        // we change to -1 in the preinit
-    .quality_level = TEST_QUALITY_PROD,
-},
-{
-    .id = "selftest_postcleanup",
-    .description = "Skip from postcleanup function is ignored",
-    .groups = DECLARE_TEST_GROUPS(&group_positive),
-    .test_run = selftest_pass_run,
-    .test_postcleanup = selftest_skip_postcleanup,
-    .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
 {
