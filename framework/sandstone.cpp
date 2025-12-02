@@ -773,8 +773,11 @@ static void postcleanup_tests()
     for (test_cfg_info &cfg : *test_set) {
         struct test *test = cfg.test;
         if (test->test_postcleanup) {
-            // At this point it's too late to decide whether test passed or not.
-            [[maybe_unused]] auto ret = test->test_postcleanup(test);
+            auto ret = test->test_postcleanup(test);
+
+            assert(ret == EXIT_SUCCESS && "Internal error: test_postcleanup must return EXIT_SUCCESS");
+            PerThreadData::Main *main = sApp->main_thread_data();
+            assert(!main->has_skipped() && !main->has_failed() && "Internal error: test_postcleanup must not cause test skip or fail");
         }
     }
 }

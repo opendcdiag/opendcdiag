@@ -327,14 +327,6 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/test" selftest_preinit
 }
 
-@test "selftest_postcleanup" {
-    declare -A yamldump
-    sandstone_selftest -e selftest_postcleanup
-    [[ "$status" -eq 0 ]]
-    test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/test" selftest_postcleanup
-}
-
 @test "selftest_cxxthrowcatch" {
     # Note: we want to test with the crash handler enabled (--on-crash)
     declare -A yamldump
