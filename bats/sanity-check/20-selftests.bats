@@ -45,7 +45,7 @@ load helpers
          \)
 
     # Run without the timeedpass tests to run more quickly
-    run $SANDSTONE -n$MAX_PROC --output-format=tap --selftests --quick --timeout=15s --disable=mce_check --disable='*timedpass*' -e @positive
+    run $SANDSTONE -n$MAX_PROC --output-format=tap --selftests --quick --timeout=15s --disable='*timedpass*' -e @positive
     [[ "$status" -eq 0 ]]
     while read line; do
         printf "# %s\n" "$line"
@@ -156,7 +156,7 @@ tap_negative_check() {
 }
 
 @test "TAP silent output" {
-    local -a opts=(--output-format=tap --quick --selftests --quiet --disable=mce_check --disable="*fork" -e @positive)
+    local -a opts=(--output-format=tap --quick --selftests --quiet --disable="*fork" -e @positive)
     $SANDSTONE "${opts[@]}" > $BATS_TEST_TMPDIR/output.tap
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.tap
@@ -179,7 +179,7 @@ tap_negative_check() {
 }
 
 @test "YAML silent output" {
-    local -a opts=(-Y --quick --selftests --quiet --disable=mce_check --disable="*fork" -e @positive)
+    local -a opts=(-Y --quick --selftests --quiet --disable="*fork" -e @positive)
     $SANDSTONE "${opts[@]}" > $BATS_TEST_TMPDIR/output.yaml
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.yaml
@@ -223,26 +223,30 @@ tap_negative_check() {
     test_yaml_numeric "/timing/duration" 'value == 1234'
     test_yaml_numeric "/timing/timeout" 'value == 12345'
 
-    # just verify these exist
-    local machine=`uname -m`
-    for ((i = 0; i < MAX_PROC; ++i)); do
-        if $is_windows; then
-            test_yaml_numeric "/cpu-info/$i/logical-group" 'value >= 0'
-        fi
-        test_yaml_numeric "/cpu-info/$i/logical" 'value >= 0'
-        test_yaml_numeric "/cpu-info/$i/package" 'value >= 0'
-        test_yaml_numeric "/cpu-info/$i/numa_node" 'value >= -1'
-        test_yaml_numeric "/cpu-info/$i/module" 'value >= 0'
-        test_yaml_numeric "/cpu-info/$i/core" 'value >= 0'
-        test_yaml_numeric "/cpu-info/$i/thread" 'value >= 0'
-        if [[ $machine = x86_64 ]]; then
-            test_yaml_numeric "/cpu-info/$i/family" 'value >= 0'
-            test_yaml_numeric "/cpu-info/$i/model" 'value >= 0'
-            test_yaml_numeric "/cpu-info/$i/stepping" 'value >= 0'
-            test_yaml_regexp "/cpu-info/$i/microcode" '(None|[0-9]+)'
-            test_yaml_regexp "/cpu-info/$i/ppin" '(None|[0-9a-f]{16})'
-        fi
-    done
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
+        # just verify these exist
+        local machine=`uname -m`
+        for ((i = 0; i < MAX_PROC; ++i)); do
+            if $is_windows; then
+                test_yaml_numeric "/cpu-info/$i/logical-group" 'value >= 0'
+            fi
+            test_yaml_numeric "/cpu-info/$i/logical" 'value >= 0'
+            test_yaml_numeric "/cpu-info/$i/package" 'value >= 0'
+            test_yaml_numeric "/cpu-info/$i/numa_node" 'value >= -1'
+            test_yaml_numeric "/cpu-info/$i/module" 'value >= 0'
+            test_yaml_numeric "/cpu-info/$i/core" 'value >= 0'
+            test_yaml_numeric "/cpu-info/$i/thread" 'value >= 0'
+            if [[ $machine = x86_64 ]]; then
+                test_yaml_numeric "/cpu-info/$i/family" 'value >= 0'
+                test_yaml_numeric "/cpu-info/$i/model" 'value >= 0'
+                test_yaml_numeric "/cpu-info/$i/stepping" 'value >= 0'
+                test_yaml_regexp "/cpu-info/$i/microcode" '(None|[0-9]+)'
+                test_yaml_regexp "/cpu-info/$i/ppin" '(None|[0-9a-f]{16})'
+            fi
+        done
+    # else
+    #     # TODO
+    fi
 
     # check some more timing parse
     sandstone_selftest -e selftest_pass -t 12ms --timeout 20s
@@ -453,16 +457,18 @@ function selftest_log_skip_init_common() {
 }
 
 @test "selftest_log_skip_run_even_threads" {
-    declare -A yamldump
-    sandstone_selftest -e selftest_log_skip_run_even_threads
-    [[ "$status" -eq 0 ]]
-    test_yaml_regexp "/exit" pass
-    test_yaml_regexp "/tests/0/test" selftest_log_skip_run_even_threads
-    test_yaml_regexp "/tests/0/result" pass
-    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" skip
-        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.*Skipping.*'
-    done
+    if [[ "$MAX_PROC" -gt 1 ]]; then
+        declare -A yamldump
+        sandstone_selftest -e selftest_log_skip_run_even_threads
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/exit" pass
+        test_yaml_regexp "/tests/0/test" selftest_log_skip_run_even_threads
+        test_yaml_regexp "/tests/0/result" pass
+        for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/level" skip
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.*Skipping.*'
+        done
+    fi
 }
 
 @test "selftest_log_skip_newline" {
@@ -762,54 +768,62 @@ test_random() {
 }
 
 @test "selftest_logs_random_lcg" {
-    local -Ar random_results=(
-        [p0c0t0]="2008263207 1313955870 34286625 1487267185"
-        [p0c0t1]="1704585366 1204267381 955907608 1782506326"
-        [p0c1t0]="1719058115 1886149085 1585783823 316322718"
-        [p0c1t1]="151737293 1591634133 1396278971 1007948046"
-        [p0c2t0]="1775100370 1272444970 2011359023 428234716"
-        [p0c3t0]="1929298235 1379265883 107930352 110693770"
-        [p1c0t0]="1694270094 1491978773 1295765691 296967739"
-        [p2c0t0]="566941671 1457287120 1732228388 1973237556"
-        [p3c0t0]="235862816 1523178389 1946393080 1930808430"
-    )
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
+        local -Ar random_results=(
+            [p0c0t0]="2008263207 1313955870 34286625 1487267185"
+            [p0c0t1]="1704585366 1204267381 955907608 1782506326"
+            [p0c1t0]="1719058115 1886149085 1585783823 316322718"
+            [p0c1t1]="151737293 1591634133 1396278971 1007948046"
+            [p0c2t0]="1775100370 1272444970 2011359023 428234716"
+            [p0c3t0]="1929298235 1379265883 107930352 110693770"
+            [p1c0t0]="1694270094 1491978773 1295765691 296967739"
+            [p2c0t0]="566941671 1457287120 1732228388 1973237556"
+            [p3c0t0]="235862816 1523178389 1946393080 1930808430"
+        )
 
-    # Mocking 4 sockets of 1 core each
-    test_random LCG:1348219713 p0c0t0 p1c0t0 p2c0t0 p3c0t0
+        # Mocking 4 sockets of 1 core each
+        test_random LCG:1348219713 p0c0t0 p1c0t0 p2c0t0 p3c0t0
 
-    # Mocking 1 socket of 4 single-thread cores
-    test_random LCG:1348219713 p0c0t0 p0c1t0 p0c2t0 p0c3t0
+        # Mocking 1 socket of 4 single-thread cores
+        test_random LCG:1348219713 p0c0t0 p0c1t0 p0c2t0 p0c3t0
 
-    # Mocking 1 socket of 4 hyperthreaded cores
-    test_random LCG:1348219713 p0c0t0 p0c0t1 p0c1t0 p0c1t1
+        # Mocking 1 socket of 4 hyperthreaded cores
+        test_random LCG:1348219713 p0c0t0 p0c0t1 p0c1t0 p0c1t1
+    # else
+    #     # TODO
+    fi
 }
 
 @test "selftest_logs_random_aes" {
-    if [[ "`uname -m`" != x86_64 ]]; then
-        skip "AES engine is only present on x86-64"
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
+        if [[ "`uname -m`" != x86_64 ]]; then
+            skip "AES engine is only present on x86-64"
+        fi
+
+        local -r SEED=AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
+        local -Ar random_results=(
+            [p0c0t0]="1442152966 848034066 1178242204 1152613460"
+            [p0c0t1]="801863574 1764783886 468436526 1150421294"
+            [p0c1t0]="1318899296 1591921602 1551294054 1334527618"
+            [p0c1t1]="517627017 379261874 2001880952 937361294"
+            [p0c2t0]="1041439551 1150890517 375859362 2139318920"
+            [p0c3t0]="563921477 676951712 16315069 1235380647"
+            [p1c0t0]="672773493 1071973933 867607355 1164627367"
+            [p2c0t0]="65707667 538845702 2142028653 158189198"
+            [p3c0t0]="647518054 617961218 490776568 784171714"
+        )
+
+        # Mocking 4 sockets of 1 core each
+        test_random $SEED p0c0t0 p1c0t0 p2c0t0 p3c0t0
+
+        # Mocking 1 socket of 4 single-thread cores
+        test_random $SEED p0c0t0 p0c1t0 p0c2t0 p0c3t0
+
+        # Mocking 1 socket of 4 hyperthreaded cores
+        test_random $SEED p0c0t0 p0c0t1 p0c1t0 p0c1t1
+    # else
+    #     # TODO
     fi
-
-    local -r SEED=AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
-    local -Ar random_results=(
-        [p0c0t0]="1442152966 848034066 1178242204 1152613460"
-        [p0c0t1]="801863574 1764783886 468436526 1150421294"
-        [p0c1t0]="1318899296 1591921602 1551294054 1334527618"
-        [p0c1t1]="517627017 379261874 2001880952 937361294"
-        [p0c2t0]="1041439551 1150890517 375859362 2139318920"
-        [p0c3t0]="563921477 676951712 16315069 1235380647"
-        [p1c0t0]="672773493 1071973933 867607355 1164627367"
-        [p2c0t0]="65707667 538845702 2142028653 158189198"
-        [p3c0t0]="647518054 617961218 490776568 784171714"
-    )
-
-    # Mocking 4 sockets of 1 core each
-    test_random $SEED p0c0t0 p1c0t0 p2c0t0 p3c0t0
-
-    # Mocking 1 socket of 4 single-thread cores
-    test_random $SEED p0c0t0 p0c1t0 p0c2t0 p0c3t0
-
-    # Mocking 1 socket of 4 hyperthreaded cores
-    test_random $SEED p0c0t0 p0c0t1 p0c1t0 p0c1t1
 }
 
 @test "--disable" {
@@ -1092,6 +1106,9 @@ test_list_file_ignores_beta() {
 
 # -- negative tests --
 
+FAILMASK_SIGNATURE=dev-mask
+[[ "$SANDSTONE_DEVICE_TYPE" != CPU ]] || FAILMASK_SIGNATURE=cpu-mask
+
 function selftest_failinit_common() {
     local testname=$1
     declare -A yamldump
@@ -1100,7 +1117,7 @@ function selftest_failinit_common() {
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/test" "$testname"
     test_yaml_regexp "/tests/0/result" fail
-    test_yaml_regexp "/tests/0/fail/cpu-mask" None
+    test_yaml_regexp "/tests/0/fail/$FAILMASK_SIGNATURE" None
     test_yaml_regexp "/tests/0/fail/time-to-fail" None
     test_yaml_regexp "/tests/0/fail/seed" '\w+:\w+'
     i=$((-1 + yamldump[/tests/0/threads/0/messages@len]))
@@ -1248,7 +1265,7 @@ fail_common() {
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/result" fail
-    test_yaml_regexp "/tests/0/fail/cpu-mask" '[X_.:]+'
+    test_yaml_regexp "/tests/0/fail/$FAILMASK_SIGNATURE" '[X_.:]+'
     test_yaml_regexp "/tests/0/state/seed" '\w+:\w+'
     [[ "${yamldump[/tests/0/fail/seed]}" = "${yamldump[/tests/0/state/seed]}" ]]
     test_yaml_numeric "/tests/0/fail/time-to-fail" 'value > 0'
@@ -1712,7 +1729,12 @@ selftest_crash_common() {
     test_yaml_regexp "/tests/0/result" skip
     test_yaml_regexp "/tests/0/skip-category" IgnoredMceCategory
     test_yaml_regexp "/tests/0/skip-reason" "Debugging SIGTRAP"
-    test_yaml_regexp "/tests/0/threads/2/messages/0/text" "W> MCE was delivered to or is related to this thread"
+    if [[ "$MAX_PROC" -gt 1 ]]; then
+        local thread_num=2
+    else
+        local thread_num=1
+    fi
+    test_yaml_regexp "/tests/0/threads/$thread_num/messages/0/text" "W> MCE was delivered to or is related to this thread"
 }
 
 @test "selftest_malloc_fail" {
