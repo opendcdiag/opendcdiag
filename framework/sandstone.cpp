@@ -1839,6 +1839,11 @@ static TestResult run_one_test_once(const struct test *test)
     }
 
     // print results and find out if the test failed
+    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
+    for (ChildExitStatus &result : children.results) {
+        if (result.endtime == MonotonicTimePoint())
+            result.endtime = now;
+    }
     TestResult testResult = logging_print_results(children.results, test);
     switch (testResult) {
     case TestResult::Passed:
