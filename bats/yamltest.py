@@ -42,23 +42,23 @@ def validate_message(name, message):
     return level == 'error'
 
 
-def validate_thread_id(id):
-    def validate_number(what, min, max = None):
-        if not what in id:
-            fail('{} not found in the thread identification'.format(what))
-        n = id[what]
-        if type(n) is not int:
-            fail('{} is not an integer in the thread identification'.format(what))
-        if n < min or (max is not None and n > max):
-            fail('{} is outside of range for thread identification ({})'.format(what, n))
+def validate_number(id, what, min, max = None):
+    if what not in id:
+        fail('{} not found in the thread identification'.format(what))
+    n = id[what]
+    if not isinstance(n, int):
+        fail('{} is not an integer in the thread identification'.format(what))
+    if n < min or (max is not None and n > max):
+        fail('{} is outside of range for thread identification ({})'.format(what, n))
 
 
-    validate_number('logical', -1)
-    validate_number('package', -1)
-    validate_number('numa_node', -1)
-    validate_number('module', -1)
-    validate_number('core', -1)
-    validate_number('thread', -1)
+def validate_thread_id_cpu(id):
+    validate_number(id, 'logical', -1)
+    validate_number(id, 'package', -1)
+    validate_number(id, 'numa_node', -1)
+    validate_number(id, 'module', -1)
+    validate_number(id, 'core', -1)
+    validate_number(id, 'thread', -1)
     try:
         core_type = id['core_type']
         if core_type not in ('e', 'p'):
@@ -67,18 +67,25 @@ def validate_thread_id(id):
         pass
 
     if platform.uname().machine == 'x86-64':
-        validate_number('family', -1, 0xffff)
-        validate_number('model', -1, 0xffff)
-        validate_number('stepping', -1, 0xffff)
+        validate_number(id, 'family', -1, 0xffff)
+        validate_number(id, 'model', -1, 0xffff)
+        validate_number(id, 'stepping', -1, 0xffff)
         if not id['microcode'] is None:
-            validate_number('microcode', -1)
+            validate_number(id, 'microcode', -1)
         id['ppin']
 
-def validate_thread(name, thr):
+def validate_thread_id_gpu(id):
+    # TODO
+    pass
+
+def validate_thread(device_type, name, thr):
     n = thr['thread']
 
     if type(n) is int:
-        validate_thread_id(thr['id'])
+        if (device_type == "GPU"):
+            validate_thread_id_gpu(thr['id'])
+        else:
+            validate_thread_id_cpu(thr['id'])
     elif not n.startswith('main'):
         fail('found unknown thread "{}" for test {}'.format(n, name))
 
@@ -110,8 +117,15 @@ with open(sys.argv[1]) as file:
     fatal_skips = '--fatal-skips' in log['command-line']
     exit_fail = False
     tests = []
-    for thread in log['cpu-info']:
-        validate_thread_id(thread)
+    if len(sys.argv) != 3:
+        fail('device type argument missing')
+        exit(1)
+    if sys.argv[2] == "GPU":
+        for thread in log['device-info']:
+            validate_thread_id_gpu(thread)
+    else:
+        for thread in log['cpu-info']:
+            validate_thread_id_cpu(thread)
     if 'tests' in log:
         tests = log['tests']
     for test in tests:
@@ -140,7 +154,7 @@ with open(sys.argv[1]) as file:
             continue
         any_failed = False
         for thr in test['threads']:
-            any_failed = validate_thread(name, thr) or any_failed
+            any_failed = validate_thread(sys.argv[2], name, thr) or any_failed
         if any_failed and result in ('pass', 'skip'):
             fail("found at least one failing thread for test {} but it was not a failure (was: {})".format(name, result))
         if any_failed and ignoring_timeouts and result == 'timed out':

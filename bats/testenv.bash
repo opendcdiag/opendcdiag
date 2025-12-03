@@ -9,8 +9,14 @@ is_debug=false
 is_windows=false
 declare outputfile=""
 
-MAX_PROC=`nproc`
-[[ $MAX_PROC -le 4 ]] || MAX_PROC=4
+: "${SANDSTONE_DEVICE_TYPE:=CPU}"
+
+if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
+    MAX_PROC=`nproc`
+    [[ $MAX_PROC -le 4 ]] || MAX_PROC=4
+else
+    MAX_PROC=1
+fi
 
 if [[ -z "$SANDSTONE_BIN" ]]; then
     SANDSTONE_BIN=$BATS_TEST_COMMONDIR/../opendcdiag
@@ -34,7 +40,7 @@ if [[ "$SANDSTONE_BIN" = *.exe ]]; then
         export WINEDEBUG=-all
     fi
 fi
-SANDSTONE="$SANDSTONE --on-crash=core --on-hang=kill"
+SANDSTONE="$SANDSTONE --on-crash=core --on-hang=kill --ignore-mce-errors"
 
 function setup()
 {
@@ -125,7 +131,7 @@ function run_sandstone_yaml()
         eval "yamldump=($structure)"
     fi
     if [[ "$VALIDATION" != 0 ]]; then
-        python3 $BATS_TEST_COMMONDIR/yamltest.py $outputfile
+        python3 $BATS_TEST_COMMONDIR/yamltest.py $outputfile $SANDSTONE_DEVICE_TYPE
     fi
     if type -p yq > /dev/null; then
         # detect which yq tool we have
