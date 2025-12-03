@@ -75,7 +75,7 @@ bool pin_to_logical_processors(DeviceRange range, const char *thread_name)
     // find the maximum CPU number
     int n = 0;
     for (int device = range.starting_device; device < range.starting_device + range.device_count; ++device)
-        n = std::max(n, cpu_info[device].cpu_number);
+        n = std::max(n, device_info[device].cpu_number);
 
     using Word = LogicalProcessorSetOps::Word;
     constexpr size_t ProcessorsPerWord = LogicalProcessorSetOps::ProcessorsPerWord;
@@ -85,7 +85,7 @@ bool pin_to_logical_processors(DeviceRange range, const char *thread_name)
     memset(cpu_set, 0, sizeof(cpu_set));
 
     for (int device = range.starting_device; device < range.starting_device + range.device_count; ++device) {
-        auto lp = LogicalProcessor(cpu_info[device].cpu_number);
+        auto lp = LogicalProcessor(device_info[device].cpu_number);
         LogicalProcessorSetOps::setInArray({ cpu_set, size }, lp);
     }
 
