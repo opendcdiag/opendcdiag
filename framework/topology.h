@@ -55,7 +55,7 @@ struct LogicalProcessorSetOps
 
     static Word constWordForInArray(std::span<const Word> array, LogicalProcessor n)
     {
-        int idx = int(n) / ProcessorsPerWord;
+        size_t idx = int(n) / ProcessorsPerWord;
         return idx < array.size() ? array[idx] : 0;
     }
 };
