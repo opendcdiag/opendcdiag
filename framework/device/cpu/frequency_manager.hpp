@@ -90,10 +90,10 @@ private:
 
         std::vector<int> tmp = tmp_frequency_levels;
 
-        while (tmp_frequency_levels.size() < total_frequency_levels)
+        while (int(tmp_frequency_levels.size()) < total_frequency_levels)
         {
             std::sort(tmp.begin(), tmp.end(), std::greater<int>());
-            for (int idx = 1; idx < tmp.size(); idx++)
+            for (size_t idx = 1; idx < tmp.size(); idx++)
                 tmp_frequency_levels.push_back((tmp[idx] + tmp[idx - 1]) / 2);
             tmp = tmp_frequency_levels;
         }
@@ -205,7 +205,7 @@ public:
             std::unordered_set<int> found_socket_ids;
             uint16_t total_sockets = 0;
 
-            for (size_t cpu = 0; cpu < num_cpus(); cpu++) {
+            for (int cpu = 0; cpu < num_cpus(); cpu++) {
                 int socket_id = cpu_info[cpu].package_id;
                 if (found_socket_ids.count(socket_id) == 0) {
                     total_sockets++;
