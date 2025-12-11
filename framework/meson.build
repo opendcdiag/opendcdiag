@@ -277,6 +277,7 @@ framework_a = static_library(
     'framework',
     framework_files,
     generated_files,
+    tests_set_common,
     build_by_default: false,
     include_directories: [
         framework_incdir,
