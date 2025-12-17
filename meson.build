@@ -285,7 +285,6 @@ unittests_deps += [
     pthread_dep,
 ]
 
-subdir('tests/common')
 subdir('framework')
 subdir('tests')
 
