@@ -34,7 +34,10 @@ jobs:
     - name: Run the git checks
       run: .github/scripts/check-git-history.sh ${{ github.base_ref }} ${GITHUB_SHA}
 
-
   build:
     needs: [ lint, git-sanity ]
     uses: opendcdiag/opendcdiag/.github/workflows/build.yaml@main
+
+  build-gpu:
+    needs: [ lint, git-sanity ]
+    uses: opendcdiag/opendcdiag/.github/workflows/build-gpu.yaml@main
