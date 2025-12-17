@@ -22,10 +22,6 @@ tests_common_incdirs = [
     framework_incdir,
 ]
 
-tests_set_base.add(
-    tests_set_common,
-)
-
 # fill with tests
 # tests_set_base.add(
 #     files(
