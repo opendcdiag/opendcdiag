@@ -64,7 +64,7 @@ int mce_check_run(struct test *test, int thread)
     }
 
     std::vector<uint32_t> differences(counts.size());
-    for (int i = 0; i < counts.size(); ++i)
+    for (size_t i = 0; i < counts.size(); ++i)
         differences[i] = counts[i] - mce_counts_start[i];
 
     // set up for the next iteration (in case there's one)
@@ -76,7 +76,7 @@ int mce_check_run(struct test *test, int thread)
     for (int i = 0; i < thread_count(); ++i) {
         // translate our thread number to the OS CPU number
         thread = cpu_info[i].cpu_number;
-        assert(thread < differences.size());
+        assert(thread < int(differences.size()));
 
         if (differences[thread] != 0) {
             log_message(i, SANDSTONE_LOG_ERROR "MCE detected (%u interrupts since start)",
