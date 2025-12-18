@@ -41,7 +41,7 @@ int smi_count_run(struct test *test, int thread)
 {
     (void) test;
 
-    if (smi_counts_start.size() > thread) {
+    if (int(smi_counts_start.size()) > thread) {
         int real_cpu_number = cpu_info[thread].cpu_number;
         auto initial_count = smi_counts_start[thread];
         auto current_count = InterruptMonitor::count_smi_events(real_cpu_number);
