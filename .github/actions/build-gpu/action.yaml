@@ -1,30 +1,31 @@
-name: Pull Request
+name: Build for GPU
 
-on:
-  workflow_dispatch:
-  workflow_call:
-  push:
-    branches: [ main ]
+inputs:
+  name:
+    description: Name of target
+    type: string
+    required: true
+  env:
+    description: Environment for the build
+    type: string
+    required: true
+  meson_args:
+    description: Meson arguments for the build
+    type: string
+    required: true
+  unittests:
+    description: Unittests
+    type: string
+    required: true
 
-env:
-  GIT_CONFIG_SYSTEM: /tmp/gitconfig
-
-permissions:
-  contents: read
-
-jobs:
-  Linux:
-    runs-on: ubuntu-24.04${{ matrix.archsuffix }}
-    container: debian:sid
-    strategy:
-      matrix:
-        include:
-        - { name: GCC, unittests: "unittests" }
-        - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
-    steps:
+runs:
+  using: composite
+  steps:
     - name: setup environment
-      run: printf '%s\n' ${{ matrix.env }} | tee -a ${GITHUB_ENV}
+      shell: bash
+      run: printf '%s\n' ${{ inputs.env }} | tee -a ${GITHUB_ENV}
     - name: Install distro packages
+      shell: bash
       run: |
         DEBIAN_FRONTEND=noninteractive apt-get -y update
         DEBIAN_FRONTEND=noninteractive apt-get -y install \
@@ -47,23 +48,28 @@ jobs:
             python3-yaml \
             yq \
             zlib1g-dev
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: meson setup
-      run: meson setup builddir -Ddevice_type=gpu -Dbuildtype=debugoptimized ${{ matrix.meson_args }}
+      shell: bash
+      run: meson setup builddir -Ddevice_type=gpu -Dbuildtype=debugoptimized ${{ inputs.meson_args }}
     - name: ninja build
+      shell: bash
       run: ninja -C builddir
     - uses: actions/upload-artifact@v4
       with:
-        name: linux-${{ matrix.name }}-binary
+        name: linux-${{ inputs.name }}-binary-gpu
         path: builddir/opendcdiag
         retention-days: 3
     - name: confirm opendcdiag runs
+      shell: bash
       run: |
         builddir/opendcdiag --version
     - name: ninja build unittests
-      if: ${{ matrix.unittests }}
+      if: ${{ inputs.unittests }}
+      shell: bash
       run: ninja -C builddir unittests
     - name: run unittests
-      if: ${{ matrix.unittests }}
+      if: ${{ inputs.unittests }}
+      shell: bash
       run: |
         ./builddir/unittests
