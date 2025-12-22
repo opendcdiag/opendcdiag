@@ -12,15 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout target branch (${{ github.base_ref }})
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
       with:
         ref: ${{ github.base_ref }}
-        fetch-depth: 1
     - name: Checkout PR
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
       with:
         ref: ${{ github.sha }}
-        fetch-depth: 1
     - name: Check if the PR adds tabs in source files
       run: .github/scripts/check-no-tabs.sh origin/${{ github.base_ref }} HEAD
 
@@ -28,16 +26,62 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout the PR merge point
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - name: Run the git checks
       run: .github/scripts/check-git-history.sh ${{ github.base_ref }} ${GITHUB_SHA}
 
-  build:
+  build-cpu:
+    name: Build binary for CPU (Linux)
     needs: [ lint, git-sanity ]
-    uses: opendcdiag/opendcdiag/.github/workflows/build.yaml@main
+    runs-on: ubuntu-24.04${{ matrix.archsuffix }}
+    container: debian:sid
+    strategy:
+      matrix:
+        include:
+        - { name: GCC, unittests: "unittests", selftests: "selftests" }
+        - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
+        - { name: Clang, unittests: "unittests", env: "CC=clang-19 CXX=clang++-19" }
+        - { archsuffix: "-arm", selftests: "selftests" }
+    steps:
+      - name: Checkout the PR merge point
+        uses: actions/checkout@v6
+      - name: Build for CPU (Linux)
+        uses: ./.github/actions/build-cpu
+        with:
+            name: ${{ matrix.name }}
+            env: ${{ matrix.env }}
+            meson_args: ${{ matrix.meson_args }}
+            unittests: ${{ matrix.unittests }}
+
+  build-cpu-win:
+    name: Build binary for CPU (Windows)
+    needs: [ lint, git-sanity ]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout the PR merge point
+        uses: actions/checkout@v6
+      - name: Build for CPU (Windows)
+        uses: ./.github/actions/build-cpu-win
 
   build-gpu:
+    name: Build binary for GPU
     needs: [ lint, git-sanity ]
-    uses: opendcdiag/opendcdiag/.github/workflows/build-gpu.yaml@main
+    runs-on: ubuntu-24.04${{ matrix.archsuffix }}
+    container: debian:sid
+    strategy:
+      matrix:
+        include:
+        - { name: GCC, unittests: "unittests" }
+        - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
+    steps:
+      - name: Checkout the PR merge point
+        uses: actions/checkout@v6
+      - name: Build for GPU
+        uses: ./.github/actions/build-gpu
+        with:
+            name: ${{ matrix.name }}
+            env: ${{ matrix.env }}
+            meson_args: ${{ matrix.meson_args }}
+            unittests: ${{ matrix.unittests }}

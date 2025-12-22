@@ -1,0 +1,71 @@
+name: Build for CPU (Windows)
+
+runs:
+  using: composite
+  steps:
+    - name: Install distro packages
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ucrt64
+        cache: true
+        release: false
+        install: >-
+            git
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-eigen3
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-hwloc
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-yaml
+            mingw-w64-ucrt-x86_64-zlib
+            mingw-w64-ucrt-x86_64-zstd
+    - uses: actions/checkout@v6
+    - name: install Bats
+      uses: actions/checkout@v6
+      with:
+        repository: bats-core/bats-core
+        ref: v1.11.1
+        path: bats-core
+    - name: meson setup
+      shell: msys2 {0}
+      run: |
+        meson setup builddir-windows \
+              -Dbuildtype=release \
+              -Ddependency_link=static
+    - name: ninja build
+      shell: msys2 {0}
+      run: ninja -C builddir-windows
+    - name: List DLL dependencies
+      shell: msys2 {0}
+      run: objdump -p builddir-windows/opendcdiag.exe | grep DLL\ Name
+    - uses: actions/upload-artifact@v4
+      with:
+        name: windows-binary
+        path: builddir-windows/opendcdiag.exe
+        retention-days: 3
+    - name: confirm OpenDCDiag runs
+      shell: msys2 {0}
+      run: |
+        builddir-windows/opendcdiag --version
+        builddir-windows/opendcdiag --dump-cpu-info
+    - name: run selftests
+      shell: msys2 {0}
+      run: SANDSTONE_BIN=builddir-windows/opendcdiag.exe bats-core/bin/bats -t bats/sanity-check
+    - name: run tests quickly
+      shell: msys2 {0}
+      run: |
+        nproc=`nproc`
+        nproc=$((nproc > 4 ? 4 : nproc))
+        builddir-windows/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
+    - name: upload test run logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-windows-logs
+        if-no-files-found: ignore
+        path: |
+          *.yaml
+        retention-days: 3

@@ -1,0 +1,104 @@
+name: Build for CPU (Linux)
+
+inputs:
+  name:
+    description: Name of target
+    type: string
+    required: true
+  env:
+    description: Environment for the build
+    type: string
+    required: true
+  meson_args:
+    description: Meson arguments for the build
+    type: string
+    required: true
+  unittests:
+    description: Unittests
+    type: string
+    required: true
+
+# https://github.com/orgs/community/discussions/18597
+# defaults:
+#   run:
+#     shell: bash
+
+runs:
+  using: composite
+  steps:
+    - name: setup environment
+      shell: bash
+      run: printf '%s\n' ${{ inputs.env }} | tee -a ${GITHUB_ENV}
+    - name: Install distro packages
+      shell: bash
+      run: |
+        DEBIAN_FRONTEND=noninteractive apt-get -y update
+        DEBIAN_FRONTEND=noninteractive apt-get -y install \
+            bats \
+            ca-certificates \
+            ${CC} \
+            elfutils \
+            file \
+            gawk \
+            git \
+            jq \
+            libboost-dev \
+            libeigen3-dev \
+            libgtest-dev \
+            libhwloc-dev \
+            libssl-dev \
+            libzstd-dev \
+            meson \
+            ninja-build \
+            python3-yaml \
+            yq \
+            zlib1g-dev
+    - uses: actions/checkout@v6
+    - name: meson setup
+      shell: bash
+      run: meson setup builddir -Dssl_link_type=dynamic -Dbuildtype=debugoptimized ${{ inputs.meson_args }}
+    - name: ninja build
+      shell: bash
+      run: ninja -C builddir
+    - uses: actions/upload-artifact@v4
+      with:
+        name: linux-${{ inputs.name }}-binary
+        path: builddir/opendcdiag
+        retention-days: 3
+    - name: confirm opendcdiag runs
+      shell: bash
+      run: |
+        builddir/opendcdiag --version
+        builddir/opendcdiag --dump-cpu-info
+    - name: ninja build unittests
+      if: ${{ inputs.unittests }}
+      shell: bash
+      run: ninja -C builddir unittests
+    - name: run unittests
+      if: ${{ inputs.unittests }}
+      shell: bash
+      run: |
+        ./builddir/unittests \
+          --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
+    - name: run selftests
+      if: ${{ inputs.selftests }}
+      shell: bash
+      run: |
+        ulimit -St 120
+        SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
+    - name: run tests quickly
+      shell: bash
+      run: |
+        ulimit -St 120
+        nproc=`nproc`
+        nproc=$((nproc > 4 ? 4 : nproc))
+        builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
+    - name: upload test run logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-linux-${{ inputs.name }}-logs
+        if-no-files-found: ignore
+        path: |
+          *.yaml
+        retention-days: 3
