@@ -248,6 +248,10 @@ std::vector<struct test_cfg_info> SandstoneTestSet::add_test_list(const char *fn
     }
 
     std::ifstream list_file(fname, std::ios_base::in);
+    if (!list_file) {
+        errors.push_back(strerror(errno));
+        return {};
+    }
     std::vector<struct test_cfg_info> entries = load_test_list(list_file, this, cfg.ignore_unknown_tests, errors);
     if (!errors.empty()) return {};
     if (test_set.empty()) {
