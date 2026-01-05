@@ -870,6 +870,14 @@ test_random() {
     selftest_pass --ignore-unknown-test --disable=$invalid_test "$@"
 }
 
+@test "--test-list-file non-existent" {
+    export LC_ALL=C.UTF-8   # We don't do setlocale(), but just in case
+    fname=/dev/this/does/not/exist.txt
+    run $SANDSTONE --test-list-file $fname
+    ((status == 64))
+    [[ "$output" = *"$fname:"*"No such file or directory" ]]
+}
+
 test_list_file_common() {
     declare -A yamldump
     local listcontents=$1
