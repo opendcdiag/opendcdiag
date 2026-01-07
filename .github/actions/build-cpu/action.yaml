@@ -28,7 +28,7 @@ inputs:
 #     shell: bash
 
 runs:
-  using: composite
+  # using: composite
   steps:
     - name: setup environment
       shell: bash
