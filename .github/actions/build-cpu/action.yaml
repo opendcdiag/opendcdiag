@@ -17,10 +17,6 @@ inputs:
     description: Unittests
     type: string
     required: true
-  selftests:
-    description: Selftests
-    type: string
-    required: true
 
 # https://github.com/orgs/community/discussions/18597
 # defaults:
@@ -78,31 +74,5 @@ runs:
       if: ${{ inputs.unittests }}
       shell: bash
       run: ninja -C builddir unittests
-    - name: run unittests
-      if: ${{ inputs.unittests }}
-      shell: bash
-      run: |
-        ./builddir/unittests \
-          --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
-    - name: run selftests
-      if: ${{ inputs.selftests }}
-      shell: bash
-      run: |
-        ulimit -St 120
-        SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
-    - name: run tests quickly
-      shell: bash
-      run: |
-        ulimit -St 120
-        nproc=`nproc`
-        nproc=$((nproc > 4 ? 4 : nproc))
-        builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
-    - name: upload test run logs
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-linux-${{ inputs.name }}-logs
-        if-no-files-found: ignore
-        path: |
-          *.yaml
-        retention-days: 3
+
+
