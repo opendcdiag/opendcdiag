@@ -68,8 +68,3 @@ runs:
       if: ${{ inputs.unittests }}
       shell: bash
       run: ninja -C builddir unittests
-    - name: run unittests
-      if: ${{ inputs.unittests }}
-      shell: bash
-      run: |
-        ./builddir/unittests

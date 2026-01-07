@@ -40,10 +40,10 @@ jobs:
     strategy:
       matrix:
         include:
-        - { name: GCC, unittests: "unittests", selftests: "selftests" }
-        - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
-        - { name: Clang, unittests: "unittests", env: "CC=clang-19 CXX=clang++-19" }
-        - { archsuffix: "-arm", selftests: "selftests" }
+        - { name: GCC-x86_64, unittests: "unittests", selftests: "selftests" }
+        - { name: GCC-x86_64-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
+        - { name: Clang-x86_64, unittests: "unittests", env: "CC=clang-19 CXX=clang++-19" }
+        - { name: GCC-arm64, archsuffix: "-arm", selftests: "selftests" }
     steps:
       - name: Checkout the PR merge point
         uses: actions/checkout@v6
@@ -54,7 +54,34 @@ jobs:
             env: ${{ matrix.env }}
             meson_args: ${{ matrix.meson_args }}
             unittests: ${{ matrix.unittests }}
-            selftests: ${{ matrix.selftests }}
+      - name: run unittests
+        if: ${{ matrix.unittests }}
+        shell: bash
+        run: |
+          ./builddir/unittests \
+            --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
+      - name: run selftests
+        if: ${{ matrix.selftests }}
+        shell: bash
+        run: |
+          ulimit -St 120
+          SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
+      - name: run tests quickly
+        shell: bash
+        run: |
+          ulimit -St 120
+          nproc=`nproc`
+          nproc=$((nproc > 4 ? 4 : nproc))
+          builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
+      - name: upload test run logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-linux-${{ matrix.name }}-logs
+          if-no-files-found: ignore
+          path: |
+            *.yaml
+          retention-days: 3
 
   build-cpu-win:
     name: Build binary for CPU (Windows)
@@ -65,6 +92,24 @@ jobs:
         uses: actions/checkout@v6
       - name: Build for CPU (Windows)
         uses: ./.github/actions/build-cpu-win
+      - name: run selftests
+        shell: msys2 {0}
+        run: SANDSTONE_BIN=builddir-windows/opendcdiag.exe bats-core/bin/bats -t bats/sanity-check
+      - name: run tests quickly
+        shell: msys2 {0}
+        run: |
+          nproc=`nproc`
+          nproc=$((nproc > 4 ? 4 : nproc))
+          builddir-windows/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
+      - name: upload test run logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-windows-logs
+          if-no-files-found: ignore
+          path: |
+            *.yaml
+          retention-days: 3
 
   build-gpu:
     name: Build binary for GPU
@@ -86,3 +131,8 @@ jobs:
             env: ${{ matrix.env }}
             meson_args: ${{ matrix.meson_args }}
             unittests: ${{ matrix.unittests }}
+      - name: run unittests
+        if: ${{ matrix.unittests }}
+        shell: bash
+        run: |
+          ./builddir/unittests

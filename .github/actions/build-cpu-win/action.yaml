@@ -51,21 +51,3 @@ runs:
       run: |
         builddir-windows/opendcdiag --version
         builddir-windows/opendcdiag --dump-cpu-info
-    - name: run selftests
-      shell: msys2 {0}
-      run: SANDSTONE_BIN=builddir-windows/opendcdiag.exe bats-core/bin/bats -t bats/sanity-check
-    - name: run tests quickly
-      shell: msys2 {0}
-      run: |
-        nproc=`nproc`
-        nproc=$((nproc > 4 ? 4 : nproc))
-        builddir-windows/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
-    - name: upload test run logs
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-windows-logs
-        if-no-files-found: ignore
-        path: |
-          *.yaml
-        retention-days: 3
