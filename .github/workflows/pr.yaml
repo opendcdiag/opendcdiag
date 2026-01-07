@@ -54,6 +54,7 @@ jobs:
             env: ${{ matrix.env }}
             meson_args: ${{ matrix.meson_args }}
             unittests: ${{ matrix.unittests }}
+            selftests: ${{ matrix.selftests }}
 
   build-cpu-win:
     name: Build binary for CPU (Windows)

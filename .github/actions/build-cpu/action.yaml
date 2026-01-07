@@ -17,6 +17,10 @@ inputs:
     description: Unittests
     type: string
     required: true
+  selftests:
+    description: Selftests
+    type: string
+    required: true
 
 # https://github.com/orgs/community/discussions/18597
 # defaults:
