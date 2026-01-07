@@ -28,6 +28,7 @@ runs:
       shell: bash
       run: |
         DEBIAN_FRONTEND=noninteractive apt-get -y update
+        echo "::group::Installing build dependencies"
         DEBIAN_FRONTEND=noninteractive apt-get -y install \
             bats \
             ca-certificates \
@@ -48,6 +49,7 @@ runs:
             python3-yaml \
             yq \
             zlib1g-dev
+        echo "::endgroup::"
     - uses: actions/checkout@v6
     - name: meson setup
       shell: bash
