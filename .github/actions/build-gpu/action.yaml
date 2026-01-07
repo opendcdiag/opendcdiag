@@ -48,7 +48,9 @@ runs:
             ninja-build \
             python3-yaml \
             yq \
-            zlib1g-dev
+            zlib1g-dev \
+            libze1 \
+            libze-dev
         echo "::endgroup::"
     - uses: actions/checkout@v6
     - name: meson setup
