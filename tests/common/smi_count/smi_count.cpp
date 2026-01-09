@@ -27,6 +27,7 @@ int initialize_smi_counts(struct test*)
 {
     std::optional<uint64_t> v = InterruptMonitor::count_smi_events(cpu_info[0].cpu_number);
     if (!v) {
+        log_skip(RuntimeSkipCategory, "Could not read msr");
         return EXIT_SKIP;
     }
     smi_counts_start.resize(thread_count());
@@ -60,10 +61,10 @@ int smi_count_run(struct test *test, int thread)
 
 DECLARE_TEST(smi_count, "Counts SMI events")
     .test_preinit = initialize_smi_counts,
-    .test_init = [](struct test *t) { return InterruptMonitor::InterruptMonitorWorks ? EXIT_SUCCESS : EXIT_SKIP; },
+    .test_init = [](struct test *t) { return EXIT_SUCCESS; },
     .test_run = smi_count_run,
     .test_cleanup = initialize_smi_counts,
     .desired_duration = -1,
     .fracture_loop_count = -1,
-    .quality_level = TEST_QUALITY_PROD,
+    .quality_level = InterruptMonitor::InterruptMonitorWorks ? TEST_QUALITY_PROD : TEST_QUALITY_SKIP,
 END_DECLARE_TEST
