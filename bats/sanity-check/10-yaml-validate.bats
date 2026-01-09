@@ -21,6 +21,6 @@ load ../testenv
             exit 1
         fi
 
-        python3 $BATS_TEST_COMMONDIR/yamltest.py output-${test}.yaml
+        python3 $BATS_TEST_COMMONDIR/yamltest.py output-${test}.yaml $SANDSTONE_DEVICE_TYPE
     done
 }

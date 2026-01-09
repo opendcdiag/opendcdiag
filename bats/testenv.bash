@@ -9,8 +9,17 @@ is_debug=false
 is_windows=false
 declare outputfile=""
 
-MAX_PROC=`nproc`
-[[ $MAX_PROC -le 4 ]] || MAX_PROC=4
+SANDSTONE_DEVICE_TYPE="${SANDSTONE_DEVICE_TYPE:=CPU}"
+SANDSTONE_DISABLED_TESTS="--disable=mce_check" # can be extended by other device types
+
+if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+    MAX_PROC=1
+    FAILMASK_SYGNATURE="dev-mask"
+else
+    MAX_PROC=`nproc`
+    [[ $MAX_PROC -le 4 ]] || MAX_PROC=4
+    FAILMASK_SYGNATURE="cpu-mask"
+fi
 
 if [[ -z "$SANDSTONE_BIN" ]]; then
     SANDSTONE_BIN=$BATS_TEST_COMMONDIR/../opendcdiag
@@ -125,7 +134,7 @@ function run_sandstone_yaml()
         eval "yamldump=($structure)"
     fi
     if [[ "$VALIDATION" != 0 ]]; then
-        python3 $BATS_TEST_COMMONDIR/yamltest.py $outputfile
+        python3 $BATS_TEST_COMMONDIR/yamltest.py $outputfile $SANDSTONE_DEVICE_TYPE
     fi
     if type -p yq > /dev/null; then
         # detect which yq tool we have
