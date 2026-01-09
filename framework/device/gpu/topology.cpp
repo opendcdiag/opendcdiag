@@ -4,6 +4,7 @@
  */
 
 #include "topology.h"
+#include "topology_gpu.h"
 #include "sandstone_p.h"
 
 struct gpu_info_t *cpu_info = nullptr;
@@ -41,14 +42,14 @@ void print_temperature_of_device()
 }
 
 template <>
-DeviceRange detect_devices<DeviceRange>()
+GpusSet detect_devices<GpusSet>()
 {
     sApp->thread_count = 1;
-    return DeviceRange{};
+    return GpusSet{};
 }
 
 template <>
-void setup_devices<DeviceRange>(const DeviceRange &enabled_devices)
+void setup_devices<GpusSet>(const GpusSet &enabled_devices)
 {
 
 }
