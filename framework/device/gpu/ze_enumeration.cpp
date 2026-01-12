@@ -4,11 +4,14 @@
  */
 
 #include "ze_enumeration.h"
-
-#include "device/gpu/multi_slice_gpu.h"
+#include "gpu_device.h"
+#include "multi_slice_gpu.h"
+#include "topology_gpu.h"
 
 #include "level_zero/ze_api.h"
 #include "level_zero/zes_api.h"
+
+#include <type_traits>
 
 /// ZE API allows for nested enumeration of devices and their subdevices,
 /// depending on the ZE_FLAT_DEVICE_HIERARCHY env var value.
@@ -82,4 +85,62 @@ int for_each_zes_device(std::function<int(zes_device_handle_t, ze_driver_handle_
         }
     }
     return EXIT_SUCCESS;
+}
+
+namespace {
+template <typename Map, typename Func>
+int find_and_call_func(gpu_info_t& info, ze_driver_handle_t ze_driver, const Map& map, Func func)
+{
+    MultiSliceGpu indices{
+        .gpu_number = info.gpu_number, .device_index = info.device_index, .subdevice_index = info.subdevice_index
+    };
+    auto it = map.find(indices);
+    if (it != map.cend()) {
+        func(it->second, ze_driver, indices);
+        return EXIT_SUCCESS;
+    }
+    return EXIT_FAILURE;
+}
+
+template <typename DeviceType>
+int for_each_device_within_topo_internal(std::function<int(DeviceType, ze_driver_handle_t, const MultiSliceGpu&)> func)
+{
+    // Collect all handles for easier lookup.
+    ze_driver_handle_t ze_driver;
+    std::unordered_map<MultiSliceGpu, DeviceType> dev_handles;
+    auto emplace_map = [&](DeviceType dev_handle, ze_driver_handle_t driver, const MultiSliceGpu& indices) {
+        ze_driver = driver;
+        dev_handles.emplace(indices, dev_handle);
+        return EXIT_SUCCESS;
+    };
+
+    int ret;
+    if constexpr (std::is_same_v<DeviceType, ze_device_handle_t>) {
+        ret = for_each_ze_device(emplace_map);
+    } else {
+        ret = for_each_zes_device(emplace_map);
+    }
+    if (ze_driver == nullptr || ret != EXIT_SUCCESS) {
+        return EXIT_FAILURE;
+    }
+
+    ret = for_each_topo_device([&](gpu_info_t& info) {
+        return find_and_call_func(info, ze_driver, dev_handles, func);
+    });
+    if (ret != EXIT_SUCCESS) {
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+} // end anonymous namespace
+
+int for_each_ze_device_within_topo(std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func)
+{
+    return for_each_device_within_topo_internal<ze_device_handle_t>(func);
+}
+
+int for_each_zes_device_within_topology(std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func)
+{
+    return for_each_device_within_topo_internal<zes_device_handle_t>(func);
 }
