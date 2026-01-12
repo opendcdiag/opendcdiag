@@ -6,6 +6,10 @@
 #ifndef INC_MULTI_SLICE_GPU_H
 #define INC_MULTI_SLICE_GPU_H
 
+#include <boost/functional/hash.hpp>
+
+#include <compare>
+
 /// Struct of indices allowing for full identification of a 'multi-socket' GPU.
 /// To avoid confusion, we'd use the term multi-slice GPU.
 struct MultiSliceGpu
@@ -15,27 +19,20 @@ struct MultiSliceGpu
                          // must be equal to gpu_number.
     int subdevice_index; // When subdevices present, represents an index within a multi-slice GPU.
                          // Otherwise set to -1. Also known as tile or slice.
+
+    friend constexpr std::strong_ordering operator<=>(const MultiSliceGpu& lhs, const MultiSliceGpu& rhs) noexcept = default;
 };
 
 template <>
 struct std::hash<MultiSliceGpu>
 {
     std::size_t operator()(const MultiSliceGpu& key) const {
-        // This should be enough, but we may think of hashing other indices as well.
-        return key.gpu_number;
+        std::size_t seed = 0;
+        boost::hash_combine(seed, key.gpu_number);
+        boost::hash_combine(seed, key.device_index);
+        boost::hash_combine(seed, key.subdevice_index);
+        return seed;
     }
 };
-
-inline bool operator<(const MultiSliceGpu& lhs, const MultiSliceGpu& rhs)
-{
-    return lhs.gpu_number < rhs.gpu_number;
-}
-
-inline bool operator==(const MultiSliceGpu& lhs, const MultiSliceGpu& rhs)
-{
-    return lhs.gpu_number == rhs.gpu_number &&
-           lhs.device_index == rhs.device_index &&
-           lhs.subdevice_index == rhs.subdevice_index;
-}
 
 #endif // INC_MULTI_SLICE_GPU_H
