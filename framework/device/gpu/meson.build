@@ -8,6 +8,8 @@ framework_files += files(
     'gpu_device.cpp',
     'topology.cpp',
     'logging_gpu.cpp',
+    'ze_enumeration.cpp',
+    'ze_utils.cpp',
 )
 
 unittests_sources += files(
