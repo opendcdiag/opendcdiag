@@ -6,8 +6,12 @@
 #include "topology.h"
 #include "topology_gpu.h"
 #include "sandstone_p.h"
+#include "ze_enumeration.h"
 
 #include <algorithm>
+#include <format>
+#include <fstream>
+#include <numeric>
 #include <set>
 #include <span>
 
@@ -223,17 +227,213 @@ void print_temperature_of_device()
 
 }
 
+/// Detect and return a set of all Intel devices present in the system.
 template <>
 GpusSet detect_devices<GpusSet>()
 {
-    sApp->thread_count = 1;
-    return GpusSet{};
+    GpusSet enabled_devices;
+    auto ret = for_each_ze_device([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu& indices) {
+        enabled_devices.emplace(indices, ZeDeviceCtx{ .driver = driver, .ze_handle = device_handle });
+        return EXIT_SUCCESS;
+    });
+    ret += for_each_zes_device([&](zes_device_handle_t device_handle, ze_driver_handle_t, const MultiSliceGpu& indices) {
+        if (!enabled_devices.count(indices)) {
+            return EXIT_FAILURE;
+        }
+        enabled_devices.at(indices).zes_handle = device_handle; // matching indices must mean the exact same device
+        return EXIT_SUCCESS;
+    });
+
+    if (ret != EXIT_SUCCESS) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: gpu enumeration failed!\n",
+                program_invocation_name);
+        return enabled_devices;
+    }
+    if (enabled_devices.empty()) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: gpu devices set appears to be empty!\n",
+                program_invocation_name);
+        return enabled_devices;
+    }
+
+    sApp->thread_count = enabled_devices.size();
+    sApp->user_thread_data.resize(sApp->thread_count);
+
+    return enabled_devices;
 }
 
+namespace {
+/// Processes 'sparse' LogicalProcessorSet and returns a vector of enabled logical cpus.
+std::vector<int> to_vector(const LogicalProcessorSet& set)
+{
+    std::vector<int> res;
+
+    int i = 0;
+    for (LogicalProcessor lp = set.next(); lp != LogicalProcessor::None; ++i) {
+        auto& next_cpu = res.emplace_back(std::to_underlying(lp));
+        lp = set.next(LogicalProcessor(next_cpu + 1));
+    }
+    assert(i == set.count());
+
+    return res;
+}
+
+/// Reads affinity for given PCI device and constructs a vector of all local logical cpus.
+std::vector<int> find_numa_local_cpus(const ze_pci_address_ext_t& bdf)
+{
+    std::vector<int> res;
+    auto address = std::format("{:04x}:{:02x}:{:02x}.{:01x}", bdf.domain, bdf.bus, bdf.device, bdf.function);
+    auto file = std::format("/sys/bus/pci/devices/{}/local_cpulist", address);
+
+    std::ifstream infile;
+    infile.open(file.data(), std::ios::binary);
+    if (!infile.is_open()) {
+        return res;
+    }
+
+    std::string contents;
+    infile >> contents;
+    infile.close();
+
+    struct Range { int start, stop; };
+    std::vector<Range> ranges;
+    char* ptr = contents.data();
+    char* endptr;
+    while (ptr != contents.data() + contents.size()) {
+        auto& range = ranges.emplace_back();
+        range.start = strtol(ptr, &endptr, 10);
+        if (*endptr == '-') {
+            // it's a range
+            range.stop = strtol(endptr + 1, &endptr, 10);
+        } else {
+            // it was a single number
+            range.stop = range.start;
+        }
+        if (*endptr == ',') {
+            ++endptr;   // there's more
+        }
+        ptr = endptr;
+    }
+
+    for (auto& range : ranges) {
+        if (range.start != range.stop) {
+            std::vector<int> tmp(range.stop - range.start + 1);
+            std::iota(tmp.begin(), tmp.end(), range.start);
+            res.insert(res.end(), tmp.begin(), tmp.end());
+        } else {
+            res.emplace_back(range.start);
+        }
+    }
+
+    return res;
+}
+
+/// Tries to find an intersection of enabled_cpus and NUMA local CPUs. If no such exists,
+/// assigns first cpu from enabled_cpus. Removes the assigned CPU from enabled_cpus
+/// to avoid duplicates.
+int try_assign_local_cpu(std::vector<int>& enabled_cpus, const ze_pci_address_ext_t& bdf)
+{
+    int res = -1;
+    auto local_cpus = find_numa_local_cpus(bdf);
+    if (!local_cpus.empty()) {
+        std::vector<int> available_cpus;
+        std::ranges::set_intersection(enabled_cpus, local_cpus, std::back_inserter(available_cpus));
+        if (!available_cpus.empty()) {
+            res = available_cpus[0];
+        } else {
+            res = enabled_cpus[0];
+        }
+    } else {
+        res = enabled_cpus[0];
+    }
+    enabled_cpus.erase(std::remove(enabled_cpus.begin(), enabled_cpus.end(), res), enabled_cpus.end());
+
+    return res;
+}
+
+#ifdef __linux // TODO: AFAIK we do not plan to support windows, so this ifdef may be redundant
+int16_t detect_package_id_via_os(int cpu)
+{
+    int16_t res = -1;
+    if (cpu < 0) { [[unlikely]]
+        return res;
+    }
+    auto file = std::format("/sys/devices/system/cpu/cpu{}/topology/physical_package_id", cpu);
+
+    std::ifstream infile;
+    infile.open(file.data());
+    if (!infile.is_open()) { [[unlikely]]
+        fprintf(stderr, "%s: internal error: unable to find physical_package_id file\n",
+                program_invocation_name);
+        return res;
+    }
+    infile >> res;
+    infile.close();
+
+    return res;
+}
+#endif
+
+#define CHECK_EXIT(...) \
+    do { \
+        auto result = (__VA_ARGS__); \
+        if (result != ZE_RESULT_SUCCESS) { \
+            fprintf(stderr, "%s: internal error: could not set gpu_info\n", \
+                program_invocation_name); \
+            exit(EX_USAGE); \
+        } \
+    } while (0)
+}
+
+/// Builds whole cpu_info array, then builds topology based on that.
 template <>
 void setup_devices<GpusSet>(const GpusSet &enabled_devices)
 {
+    cpu_info = sApp->shmem->device_info;
 
+    assert(enabled_devices.size() == thread_count());
+    gpu_info_t* info = cpu_info;
+    const gpu_info_t* cend = cpu_info + thread_count();
+
+    auto enabled_cpus = to_vector(ambient_logical_processor_set());
+    if (enabled_cpus.size() < enabled_devices.size()) {
+        fprintf(stderr, "%s: error: not enough CPUs available (%ld CPUs vs %ld GPUs)\n",
+                program_invocation_name, enabled_cpus.size(), enabled_devices.size());
+        exit(EX_USAGE);
+    }
+
+    for (auto &enabled_device : enabled_devices) {
+        info->gpu_number = enabled_device.first.gpu_number;
+        info->device_index = enabled_device.first.device_index;
+        info->subdevice_index = enabled_device.first.subdevice_index;
+
+        // We do not store them in gpu_info, only use them to get properties of interest.
+        auto ze_handle = enabled_device.second.ze_handle;
+        auto zes_handle = enabled_device.second.zes_handle;
+
+        ze_pci_ext_properties_t pci_prop = { .stype = ZE_STRUCTURE_TYPE_PCI_EXT_PROPERTIES };
+        CHECK_EXIT(zeDevicePciGetPropertiesExt(ze_handle, &pci_prop));
+        info->bdf = pci_prop.address; // TODO: consider storing as formatted string
+
+        info->cpu_number = try_assign_local_cpu(enabled_cpus, info->bdf);
+        info->package_id = detect_package_id_via_os(info->cpu_number);
+
+        zes_device_properties_t zes_device_prop = { .stype = ZES_STRUCTURE_TYPE_DEVICE_PROPERTIES };
+        CHECK_EXIT(zesDeviceGetProperties(zes_handle, &zes_device_prop));
+        info->num_subdevices = zes_device_prop.numSubdevices;
+
+        ze_device_properties_t device_prop = { .stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES };
+        CHECK_EXIT(zeDeviceGetProperties(ze_handle, &device_prop));
+        info->device_properties = device_prop;
+
+        ze_device_compute_properties_t compute_prop = { .stype = ZE_STRUCTURE_TYPE_DEVICE_COMPUTE_PROPERTIES };
+        CHECK_EXIT(zeDeviceGetComputeProperties(ze_handle, &compute_prop));
+        info->compute_properties = std::move(compute_prop);
+
+        info++;
+    }
+    assert(info == cend);
+
+    // cached_topology() = build_topology();
 }
 
 void restrict_topology(DeviceRange range)
