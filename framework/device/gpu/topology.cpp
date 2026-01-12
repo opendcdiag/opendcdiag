@@ -25,32 +25,6 @@ std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode)
     return nullptr;
 }
 
-namespace {
-bool gpu_compare(const gpu_info_t &gpu1, const gpu_info_t &gpu2)
-{
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#  error "This doesn't work on big endian systems! Please contribute a fix."
-#endif
-    // Confirm that the members are in the right order in a 16-byte block
-    static_assert(sizeof(gpu_info_t::package_id) == 2);
-    static_assert(offsetof(gpu_info_t, cpu_number) + 408 == offsetof(gpu_info_t, compute_properties));
-    static_assert(offsetof(gpu_info_t, cpu_number) + 40 == offsetof(gpu_info_t, device_properties));
-    static_assert(offsetof(gpu_info_t, cpu_number) + 36 == offsetof(gpu_info_t, num_subdevices));
-    static_assert(offsetof(gpu_info_t, cpu_number) + 20 == offsetof(gpu_info_t, bdf));
-    static_assert(offsetof(gpu_info_t, cpu_number) + 16 == offsetof(gpu_info_t, subdevice_index));
-    static_assert(offsetof(gpu_info_t, cpu_number) + 12 == offsetof(gpu_info_t, device_index));
-    static_assert(offsetof(gpu_info_t, cpu_number) + 8 == offsetof(gpu_info_t, gpu_number));
-
-    static auto gpu_tuple = [](const gpu_info_t &g) {
-        unsigned __int128 result;
-        memcpy(&result, &g.cpu_number, sizeof(result));
-        return result;
-    };
-
-    return gpu_tuple(gpu1) < gpu_tuple(gpu2);
-};
-}
-
 /// We support two modes:
 /// --deviceset=0,1,2            -> numa-local continuous cpus are auto attached (for example 0,1,2 or 0,32,1) (if present in the system)
 /// --deviceset=g0c2,g1c4,g2c10  -> manually specified cpus are attached (if present in the system)
@@ -109,7 +83,7 @@ void apply_deviceset_param(char *param)
             }
 
             if (add) {
-                auto it = std::lower_bound(new_gpu_info.begin(), new_gpu_info.end(), gpu, gpu_compare);
+                auto it = std::lower_bound(new_gpu_info.begin(), new_gpu_info.end(), gpu);
                 new_gpu_info.insert(it, gpu);
             } else {
                 auto it = std::find_if(new_gpu_info.begin(), new_gpu_info.end(), GpuNumberMatch{gpu.gpu_number} );
