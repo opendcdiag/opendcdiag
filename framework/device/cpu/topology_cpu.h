@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <barrier>
 #include <functional>
+#include <mutex>
 #include <span>
 
 using EnabledDevices = LogicalProcessorSet;
