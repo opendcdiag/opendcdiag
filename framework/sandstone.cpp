@@ -2590,18 +2590,24 @@ int main(int argc, char **argv)
         return exec_mode_run(argc - 2, argv + 2);
     }
 
+    bool any_device = false;
     {
         auto enabled_devices = detect_devices<EnabledDevices>();
-        init_shmem();
-        setup_devices(std::move(enabled_devices));
+        if (!enabled_devices.empty()) {
+            any_device = true;
+            init_shmem();
+            setup_devices(std::move(enabled_devices));
+        }
     }
 
     ProgramOptions opts;
     if (int ret = parse_cmdline(argc, argv, sApp, opts); ret != EXIT_SUCCESS) {
         return ret;
     }
-    // copy data from cfg that needs to be in shared memory
-    sApp->shmem->cfg = std::move(opts.shmem_cfg);
+    if (any_device) {
+        // copy data from cfg that needs to be in shared memory
+        sApp->shmem->cfg = std::move(opts.shmem_cfg);
+    }
 
     if (opts.test_tests) {
         sApp->enable_test_tests();
@@ -2611,12 +2617,21 @@ int main(int argc, char **argv)
         }
     }
 
-    if (!opts.deviceset.empty()) {
+    if (!opts.deviceset.empty() && any_device) {
         apply_deviceset_param(&opts.deviceset[0]);
     }
 
+    static auto check_and_exit_for_no_device = [&]() {
+        if (!any_device) {
+            fprintf(stderr, "%s: error: no devices found\n",
+                    program_invocation_name);
+            exit(EX_OSERR);
+        }
+    };
+
     switch (opts.action) {
     case Action::dump_cpu_info:
+        check_and_exit_for_no_device();
         dump_device_info();
         return EXIT_SUCCESS;
     case Action::list_tests:
@@ -2633,6 +2648,7 @@ int main(int argc, char **argv)
     case Action::exit:
         return EXIT_SUCCESS;
     case Action::run:
+        check_and_exit_for_no_device();
         break; // continue program
     }
     if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
