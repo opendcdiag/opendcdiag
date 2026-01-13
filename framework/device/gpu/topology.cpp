@@ -6,6 +6,9 @@
 #include "topology.h"
 #include "topology_gpu.h"
 #include "sandstone_p.h"
+#include "ze_enumeration.h"
+
+#include <algorithm>
 
 #include <algorithm>
 #include <set>
@@ -184,17 +187,111 @@ void print_temperature_of_device()
 
 }
 
+/// Detect and return a set of all Intel devices present in the system.
 template <>
 GpusSet detect_devices<GpusSet>()
 {
-    sApp->thread_count = 1;
-    return GpusSet{};
+    GpusSet enabled_devices;
+    auto ret = for_each_ze_device([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu& indices) {
+        enabled_devices.emplace(indices, ZeDeviceCtx{ .driver = driver, .ze_handle = device_handle });
+        return EXIT_SUCCESS;
+    });
+    ret += for_each_zes_device([&](zes_device_handle_t device_handle, ze_driver_handle_t, const MultiSliceGpu& indices) {
+        if (!enabled_devices.count(indices)) {
+            return EXIT_FAILURE;
+        }
+        enabled_devices.at(indices).zes_handle = device_handle; // matching indices must mean the exact same device
+        return EXIT_SUCCESS;
+    });
+
+    if (ret != EXIT_SUCCESS) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: gpu enumeration failed!\n",
+                program_invocation_name);
+        return enabled_devices;
+    }
+    if (enabled_devices.empty()) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: gpu devices set appears to be empty!\n",
+                program_invocation_name);
+        return enabled_devices;
+    }
+
+    sApp->thread_count = enabled_devices.size();
+    sApp->user_thread_data.resize(sApp->thread_count);
+
+    return enabled_devices;
 }
 
+namespace {
+/// Processes 'sparse' LogicalProcessorSet and returns a vector of enabled logical cpus
+/// that can be easily iterated over.
+std::vector<int> find_enabled_logical_cpus()
+{
+    std::vector<int> res;
+
+    auto enabled_cpus = ambient_logical_processor_set();
+    auto cpus_to_find = std::min(thread_count(), enabled_cpus.count());
+
+    auto next_cpu = 0;
+    while (cpus_to_find) {
+        while (!enabled_cpus.is_set(LogicalProcessor{next_cpu})) {
+            next_cpu++;
+        }
+        res.emplace_back(next_cpu++);
+        cpus_to_find--;
+    }
+
+    return res;
+}
+}
+
+/// Builds whole cpu_info array, then builds topology based on that.
 template <>
 void setup_devices<GpusSet>(const GpusSet &enabled_devices)
 {
+    cpu_info = sApp->shmem->device_info;
 
+    assert(enabled_devices.size() == thread_count());
+    gpu_info_t* info = cpu_info;
+    const gpu_info_t* cend = cpu_info + thread_count();
+
+    auto enabled_cpus = find_enabled_logical_cpus();
+    auto enabled_cpu_index = 0;
+
+    std::ranges::for_each(enabled_devices, [&](auto& enabled_device) {
+        // TODO: there is no info about numa-locality for Intel GPUs, nor L0 API calls to query it.
+        // For those reasons we assign CPUs in the order returned from ambient_logical_processor_set().
+        info->cpu_number = enabled_cpus[enabled_cpu_index++ % enabled_cpus.size()];
+
+        info->package_id = -1; // unknown and not needed
+        info->gpu_number = enabled_device.first.gpu_number;
+        info->device_index = enabled_device.first.device_index;
+        info->subdevice_index = enabled_device.first.subdevice_index;
+
+        // We do not store them in gpu_info, only use them to get properties of interest.
+        auto ze_handle = enabled_device.second.ze_handle;
+        auto zes_handle = enabled_device.second.zes_handle;
+
+        ze_pci_ext_properties_t pci_prop = { .stype = ZE_STRUCTURE_TYPE_PCI_EXT_PROPERTIES };
+        zeDevicePciGetPropertiesExt(ze_handle, &pci_prop);
+        info->bdf = pci_prop.address;
+
+        zes_device_properties_t zes_device_prop = { .stype = ZES_STRUCTURE_TYPE_DEVICE_PROPERTIES };
+        zesDeviceGetProperties(zes_handle, &zes_device_prop);
+        info->num_subdevices = zes_device_prop.numSubdevices;
+
+        ze_device_properties_t device_prop = { .stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES };
+        zeDeviceGetProperties(ze_handle, &device_prop);
+        info->device_properties = device_prop;
+
+        ze_device_compute_properties_t compute_prop = { .stype = ZE_STRUCTURE_TYPE_DEVICE_COMPUTE_PROPERTIES };
+        zeDeviceGetComputeProperties(ze_handle, &compute_prop);
+        info->compute_properties = std::move(compute_prop);
+
+        info++;
+    });
+    assert(info == cend);
+
+    // cached_topology() = build_topology();
 }
 
 void restrict_topology(DeviceRange range)
