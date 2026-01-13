@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <limits.h>     // for CHAR_BIT
+#include <stdint.h>
 
 #include "gettid.h"
 
