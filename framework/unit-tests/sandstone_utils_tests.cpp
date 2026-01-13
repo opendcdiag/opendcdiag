@@ -352,15 +352,6 @@ TEST(DataCompare, HFloat8)
 __attribute__((weak)) uint32_t random32() {
     return random();
 }
-uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
-    if (bitwidth > 64) {
-        assert(!"bitwidth > 64");
-    }
-    uint64_t r = random32();
-    r <<= 32;
-    r |= random32();
-    return r & MASK(bitwidth);
-}
 
 // test conversion f32 -> bf8 (s.eeeee.mm)
 TEST(FloatConversions, BF8fromFloat)
