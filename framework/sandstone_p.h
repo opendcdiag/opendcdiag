@@ -17,6 +17,7 @@
 
 #include <assert.h>
 #include <fcntl.h>
+#include <limits.h>
 
 #ifdef __cplusplus
 #include <span>
