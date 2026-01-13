@@ -546,6 +546,10 @@ static inline long double frandoml()
     return frandoml_scale(1.0L);
 }
 
+extern uint64_t get_random_bits31(uint32_t num_bits);
+extern uint64_t get_random_bits128(uint32_t num_bits);
+extern uint32_t get_random_value31(uint32_t range);
+
 /// Returns a 64 bit unsigned integer in which num_bits_to_set of the
 /// first bitwidth bits are randomly set.  For example,
 /// set_random_bits(2, 8) would return a uint64_t in which 2 of the
@@ -581,6 +585,24 @@ extern int8_t sandstone_verbosity_level() __attribute__((pure));
 }
 
 extern void log_thread_context(std::string_view msg);
+
+template<typename T>
+inline T get_random_bits(uint32_t num_bits) {
+    static_assert((std::is_unsigned<T>::value), "get_random_bits() only supports unsigned types");
+    static_assert(sizeof(T) <= sizeof(uint64_t), "get_random_bits() only supports types up to 64 bits");
+    assert((num_bits <= sizeof(T) * 8) && "Requested number of bits must fit the type");
+
+    // TODO optimize for AES (use get_random_bits128 when AES is selected)
+    return static_cast<T>(get_random_bits31(num_bits));
+}
+
+template<typename T>
+inline T get_random_value(T range) {
+    static_assert((std::is_unsigned<T>::value), "get_random_value() only supports unsigned types");
+    static_assert(sizeof(T) <= sizeof(uint32_t), "get_random_value() only supports types up to 32 bits");
+
+    return static_cast<T>(get_random_value31(range));
+}
 
 constexpr inline test_flags operator|(test_flag f1, test_flag f2)
 {
