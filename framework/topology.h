@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include <limits.h>     // for CHAR_BIT
+
 #include "gettid.h"
 
 class DeviceScheduler {
