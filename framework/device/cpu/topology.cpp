@@ -1831,7 +1831,7 @@ LogicalProcessorSet detect_devices<LogicalProcessorSet>()
     if (sApp->thread_count == 0) [[unlikely]] {
         fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
                 program_invocation_name);
-        exit(EX_OSERR);
+        return result;
     }
     sApp->user_thread_data.resize(sApp->thread_count);
 #ifdef M_ARENA_MAX
