@@ -25,6 +25,26 @@ std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode)
     return nullptr;
 }
 
+namespace {
+int parse_int(char* arg, const char* orig_arg) {
+    errno = 0;
+    char *endptr = arg;
+    long n = strtol(arg, &endptr, 0);
+    if (n == 0 && errno) {
+        fprintf(stderr, "%s: error: Invalid GPU set parameter: %s (%m)\n",
+                program_invocation_name, orig_arg);
+        exit(EX_USAGE);
+    }
+    if (n != int(n)) {
+        fprintf(stderr, "%s: error: Invalid GPU set parameter: %s (out of range)\n",
+                program_invocation_name, orig_arg);
+        exit(EX_USAGE);
+    }
+    arg = endptr;       // advance
+    return int(n);
+};
+}
+
 /// We support two modes:
 /// --deviceset=0,1,2            -> numa-local continuous cpus are auto attached (for example 0,1,2 or 0,32,1) (if present in the system)
 /// --deviceset=g0c2,g1c4,g2c10  -> manually specified cpus are attached (if present in the system)
@@ -57,48 +77,31 @@ void apply_deviceset_param(char *param)
         ++param;
     }
 
+    static const auto apply_to_set = [&](const gpu_info_t &gpu) {
+        if (result.contains(gpu.gpu_number)) { // we've got a duplicate
+            return;
+        }
+
+        if (add) {
+            auto it = std::lower_bound(new_gpu_info.begin(), new_gpu_info.end(), gpu);
+            new_gpu_info.insert(it, gpu);
+        } else {
+            auto it = std::find_if(new_gpu_info.begin(), new_gpu_info.end(), GpuNumberMatch{gpu.gpu_number} );
+            if (it == new_gpu_info.end())
+                return;
+            new_gpu_info.erase(it);
+        }
+        result.insert(gpu.gpu_number);
+        ++total_matches;
+    };
+
     std::string p = param;
     for (char *arg = strtok(p.data(), ","); arg; arg = strtok(nullptr, ",")) {
         const char *orig_arg = arg;
-        static const auto parse_int = [&arg, orig_arg]() {
-            errno = 0;
-            char *endptr = arg;
-            long n = strtol(arg, &endptr, 0);
-            if (n == 0 && errno) {
-                fprintf(stderr, "%s: error: Invalid GPU set parameter: %s (%m)\n",
-                        program_invocation_name, orig_arg);
-                exit(EX_USAGE);
-            }
-            if (n != int(n)) {
-                fprintf(stderr, "%s: error: Invalid GPU set parameter: %s (out of range)\n",
-                        program_invocation_name, orig_arg);
-                exit(EX_USAGE);
-            }
-            arg = endptr;       // advance
-            return int(n);
-        };
-        static const auto apply_to_set = [&](const gpu_info_t &gpu) {
-            if (result.contains(gpu.gpu_number)) { // we've got a duplicate
-                return;
-            }
-
-            if (add) {
-                auto it = std::lower_bound(new_gpu_info.begin(), new_gpu_info.end(), gpu);
-                new_gpu_info.insert(it, gpu);
-            } else {
-                auto it = std::find_if(new_gpu_info.begin(), new_gpu_info.end(), GpuNumberMatch{gpu.gpu_number} );
-                if (it == new_gpu_info.end())
-                    return;
-                new_gpu_info.erase(it);
-            }
-            result.insert(gpu.gpu_number);
-            ++total_matches;
-        };
-
         char c = *arg;
         if (c >= '0' && c <= '9') {
             // gpu number
-            int gpu_number = parse_int();
+            int gpu_number = parse_int(arg, orig_arg);
             if (*arg != '\0') {
                 fprintf(stderr, "%s: error: Invalid GPU set parameter: %s (could not parse)\n",
                         program_invocation_name, orig_arg);
@@ -114,7 +117,7 @@ void apply_deviceset_param(char *param)
             apply_to_set(*it);
         } else if (c == 'g') { //   "gXXcYY" format
             arg++;
-            int gpu_number = parse_int();
+            int gpu_number = parse_int(arg, orig_arg);
 
             if (*arg != 'c') {
                 fprintf(stderr, "%s: error: Invalid CPU format for GPU %u: %s (correct format is 'gXXcYY')\n",
@@ -129,7 +132,7 @@ void apply_deviceset_param(char *param)
             }
 
             arg++;
-            int cpu_number = parse_int();
+            int cpu_number = parse_int(arg, orig_arg);
 
             // check if cpu is enabled in the system
             LogicalProcessorSet enabled_cpus = ambient_logical_processor_set();
