@@ -1374,6 +1374,35 @@ function selftest_logerror_common() {
     fail_callback_common
 }
 
+@test "selftest_logerror_lots" {
+    declare -A yamldump
+    export SELFTEST_LOGERROR_LOTS_COUNT=4
+    sandstone_selftest --max-messages=4 -e selftest_logerror_lots
+    fail_common
+
+    # ensure that we see 4 error messages in each thread, in spite of --max-messages
+    for ((i = 0; i < ${yamldump[/tests/0/threads@len]}; ++i)); do
+        local cpu=${yamldump[/tests/0/threads/$i/thread]}
+        [[ "$cpu" = [0-9]* ]] || continue   # skip main thread
+
+        # below the limit: both info and error
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/level" info
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" ".*info message #0"
+        test_yaml_regexp "/tests/0/threads/$i/messages/1/level" error
+        test_yaml_regexp "/tests/0/threads/$i/messages/1/text" ".*error message #0"
+        test_yaml_regexp "/tests/0/threads/$i/messages/2/level" info
+        test_yaml_regexp "/tests/0/threads/$i/messages/2/text" ".*info message #1"
+        test_yaml_regexp "/tests/0/threads/$i/messages/3/level" error
+        test_yaml_regexp "/tests/0/threads/$i/messages/3/text" ".*error message #1"
+
+        # above the limit: only errors
+        test_yaml_regexp "/tests/0/threads/$i/messages/4/level" error
+        test_yaml_regexp "/tests/0/threads/$i/messages/4/text" ".*error message #2"
+        test_yaml_regexp "/tests/0/threads/$i/messages/5/level" error
+        test_yaml_regexp "/tests/0/threads/$i/messages/5/text" ".*error message #3"
+    done
+}
+
 @test "selftest_reportfail" {
     declare -A yamldump
     selftest_logerror_common selftest_reportfail 'Failed at .*selftest\.cpp:[0-9]+'
