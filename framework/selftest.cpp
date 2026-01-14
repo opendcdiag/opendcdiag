@@ -620,6 +620,20 @@ static int selftest_logerror_run(struct test *test, int thread)
     return EXIT_SUCCESS;
 }
 
+static int selftest_logerror_lots_run(struct test *test, int thread)
+{
+    // using environment because get_testspecific_knob_value_int() doesn't work
+    // in -fexec mode
+    int count = 10;
+    if (const char *env = getenv("SELFTEST_LOGERROR_LOTS_COUNT"))
+        count = strtol(env, nullptr, 0);
+    for (int i = 0; i < count; ++i) {
+        log_info("This is log info message #%d", i);
+        log_error("This is log error message #%d", i);
+    }
+    return EXIT_SUCCESS;
+}
+
 static int selftest_reportfail_run(struct test *test, int)
 {
     report_fail(test);
@@ -1931,6 +1945,14 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_init_installcallback,
     .test_run = selftest_logerror_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_logerror_lots",
+    .description = "Fails by calling log_error() [a lot of times]",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_logerror_lots_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },

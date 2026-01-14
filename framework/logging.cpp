@@ -658,7 +658,8 @@ void log_message_preformatted(int thread_num, int level, std::string_view msg)
         return;
 
     std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
-    if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
+    if (level != LOG_LEVEL_QUIET &&
+            messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
         return;
 
     if (msg[msg.size() - 1] == '\n')
