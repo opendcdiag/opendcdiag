@@ -8,6 +8,7 @@ framework_files += files(
     'splitlock_detect.c',
     'stacksize.cpp',
     'tmpfile.c',
+    'virt.cpp',
 )
 
 # same check as linux/meson.build
