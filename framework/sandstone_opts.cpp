@@ -874,9 +874,11 @@ struct ProgramOptionsParser {
             }
         }
 
-        if (auto value = string_opt_for(reschedule_option)) {
+        {
+            const char *value = string_opt_for(reschedule_option);
+            value = value ? value : "queue"; // If not specified, set default
             app_cfg->device_scheduler = make_rescheduler(value);
-            if (!app_cfg->device_scheduler) {
+            if (!app_cfg->device_scheduler && std::string_view{value} != "none") {
                 fprintf(ERR_STREAM, "%s: unknown reschedule option: %s\n", argv[0], value);
                 return EX_USAGE;
             }
