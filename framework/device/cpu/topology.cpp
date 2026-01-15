@@ -137,6 +137,7 @@ std::unique_ptr<DeviceScheduler> make_rescheduler(RescheduleMode mode)
     } else if (mode == RescheduleMode::random) {
         return std::make_unique<RandomDeviceScheduler>();
     }
+    reschedule_enabled = true;
     return nullptr;
 }
 
