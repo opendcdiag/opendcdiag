@@ -878,10 +878,10 @@ void test_loop_end() noexcept
     assembly_marker<TestLoop, End>(sApp->test_thread_data(thread_num)->inner_loop_count);
 }
 
-void reschedule()
+bool reschedule_enabled = false;
+void reschedule_internal()
 {
-    if (sApp->device_scheduler)
-        sApp->device_scheduler->reschedule_to_next_device();
+    sApp->device_scheduler->reschedule_to_next_device();
 }
 
 #ifndef _WIN32
