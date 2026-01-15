@@ -4,8 +4,22 @@
  */
 
 #include "sandstone.h"
+#ifdef SANDSTONE_UNITTESTS
+#include <random_mock.hpp>
+#endif
 
 namespace {
+
+#ifdef SANDSTONE_UNITTESTS
+template<>
+SandstoneRandomMocker<__uint128_t>* SandstoneRandomMocker<__uint128_t>::instance = nullptr;
+template<>
+SandstoneRandomMocker<uint64_t>* SandstoneRandomMocker<uint64_t>::instance = nullptr;
+template<>
+SandstoneRandomMocker<uint32_t>* SandstoneRandomMocker<uint32_t>::instance = nullptr;
+template<>
+SandstoneRandomMocker<int>* SandstoneRandomMocker<int>::instance = nullptr;
+#endif
 
 static constexpr uint32_t BITS_FROM_RANDOM = 31;
 
@@ -49,22 +63,23 @@ T get_random_bits(uint32_t bits) {
 
 template<typename T, auto G, uint32_t B>
 T get_random_value(T range) {
+    static_assert(B < 8 * sizeof(T), "Generator provides more bits than the type can hold");
+
     static std::mutex mutex{};
     static T random_val_value = 0;
     static T random_val_available = 0;
 
+    assert((range != 0) && "Range must be non-zero");
     if (range <= 1) {
         return 0;
     }
-    if constexpr (B < sizeof(T) * 8) {
-        // if the generator provides less bits than the type size,
-        // we cannot handle the full range
-        assert((range <= get_mask<T>(B)) && "Large values are not supported");
-    }
+    // if the generator provides less bits than the type size,
+    // we cannot handle the full range
+    assert((range <= get_mask<T>(B)) && "Large values are not handled properly");
 
     std::lock_guard<std::mutex> lock(mutex);
     // with out-of-available-range values rejection
-    if (random_val_available <= range) {
+    if (random_val_available < range) {
         random_val_value = G();
         random_val_available = get_mask<T>(B);
     }
@@ -82,7 +97,6 @@ uint64_t get_random_bits31(uint32_t num_bits) {
     return get_random_bits<uint64_t, random, BITS_FROM_RANDOM>(num_bits);
 }
 uint64_t get_random_bits128(uint32_t num_bits) {
-    // for AES it is far more efficient to use random128() instead of random()
     return get_random_bits<uint64_t, random128, 128>(num_bits);
 }
 
@@ -157,5 +171,77 @@ uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
     }
     return value;
 }
+
+#ifdef SANDSTONE_UNITTESTS
+
+// Random.cpp patterns, identical with LCG engine
+__uint128_t random128() {
+    if (SandstoneRandomMocker<__uint128_t>::get_instance()) {
+        return SandstoneRandomMocker<__uint128_t>::get_instance()->get_value();
+    }
+
+    union {
+        struct {
+            __uint128_t b1 : 24;
+            __uint128_t b2 : 24;
+            __uint128_t b3 : 16;
+            __uint128_t b4 : 24;
+            __uint128_t b5 : 24;
+            __uint128_t b6 : 16;
+        };
+        __uint128_t v;
+    } f;
+    static_assert(sizeof(f) == sizeof(__uint128_t), "Wrong size of the uint128_t union");
+    f.b1 = random();
+    f.b2 = random();
+    f.b3 = random();
+    f.b4 = random();
+    f.b5 = random();
+    f.b6 = random();
+    return f.v;
+}
+uint64_t random64() {
+    if (SandstoneRandomMocker<uint64_t>::get_instance()) {
+        return SandstoneRandomMocker<uint64_t>::get_instance()->get_value();
+    }
+    union {
+        struct {
+            uint64_t b1 : 24;
+            uint64_t b2 : 24;
+            uint64_t b3 : 16;
+        };
+        uint64_t v;
+    } f;
+    static_assert(sizeof(f) == sizeof(uint64_t), "Wrong size of the uint64_t union");
+    f.b1 = random();
+    f.b2 = random();
+    f.b3 = random();
+    return f.v;
+}
+uint32_t random32() {
+    if (SandstoneRandomMocker<uint32_t>::get_instance()) {
+        return SandstoneRandomMocker<uint32_t>::get_instance()->get_value();
+    }
+    union {
+        struct {
+            uint32_t b1 : 16;
+            uint32_t b2 : 16;
+        };
+        uint32_t v;
+    } f;
+    static_assert(sizeof(f) == sizeof(uint32_t), "Wrong size of the uint32_t union");
+    f.b1 = random();
+    f.b2 = random();
+    return f.v;
+}
+
+#undef random
+int random_mocked() {
+    if (SandstoneRandomMocker<int>::get_instance()) {
+        return SandstoneRandomMocker<int>::get_instance()->get_value();
+    }
+    return random();
+}
+#endif
 
 } // extern "C"
