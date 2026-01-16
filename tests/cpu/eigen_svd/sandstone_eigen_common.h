@@ -9,6 +9,11 @@
 #ifndef SANDSTONE_EIGEN_COMMON_H
 #define SANDSTONE_EIGEN_COMMON_H
 
+/* Disable deprecation warnings in case the library used is >= 3.5.x. Once
+ * majority of the distros move to 3.5 or higher,
+ * https://github.com/opendcdiag/opendcdiag/pull/941 should be adopted. */
+#define EIGEN_NO_DEPRECATED_WARNING
+
 #include <sandstone.h>
 
 #include <boost/type_traits/is_complex.hpp>
