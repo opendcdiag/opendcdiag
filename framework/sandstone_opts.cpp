@@ -670,7 +670,7 @@ struct ProgramOptionsParser {
         if (opts_map.contains('q')) {
             verbosity = 0;
         }
-        opts.shmem_cfg.verbosity = LOG_LEVEL_VERBOSE(verbosity);
+        opts.shmem_cfg.verbosity = LOG_LEVEL_VERBOSE(std::min(verbosity, int(LogLevelVerbosity::Max)));
 
         // quality (before tests listing)
         if (auto it = opts_map.find(quality_option); it != opts_map.end()) {
