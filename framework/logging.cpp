@@ -11,6 +11,8 @@
 #include "sandstone_p.h"
 #include "sandstone_iovec.h"
 #include "sandstone_utils.h"
+#include "sandstone_containers.h"
+
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
 #endif
@@ -2135,6 +2137,19 @@ void YamlLogger::print()
     logging_flush();
 }
 
+void YamlLogger::maybe_print_virt_state() {
+#if SANDSTONE_DEVICE_CPU
+    if (cpu_has_feature(cpu_feature_hypervisor)) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "virtualized: true\n");
+    }
+#endif
+    auto detected_container = detect_running_container();
+    if (detected_container.has_value()) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "container: %s\n",
+                detected_container.value().c_str());
+    }
+}
+
 void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout)
 {
     using ::format_duration;
@@ -2151,6 +2166,7 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                    format_duration(test_timeout, FormatDurationOptions::WithoutUnit).c_str());
 
     // print the device information
+    maybe_print_virt_state();
 #if SANDSTONE_DEVICE_CPU
     logging_printf(LOG_LEVEL_VERBOSE(1), "cpu-info:\n");
 #else

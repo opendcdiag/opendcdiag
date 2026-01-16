@@ -184,6 +184,7 @@ framework_files += files(
     'mmap_region.c',
     'random.cpp',
     'sandstone.cpp',
+    'sandstone_containers.cpp',
     'sandstone_chrono.cpp',
     'sandstone_context_dump.cpp',
     'sandstone_data.cpp',
