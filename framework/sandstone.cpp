@@ -949,7 +949,7 @@ static uintptr_t thread_runner(int thread_number)
 #endif
 
     if (sApp->shmem->cfg.verbosity >= 3)
-        log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %" PRIu64 "\n",
+        log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %u\n",
                     thread_number, this_thread->inner_loop_count);
 
 
