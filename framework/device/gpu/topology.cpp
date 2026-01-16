@@ -26,6 +26,42 @@ std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode)
 }
 
 namespace {
+Topology &cached_topology()
+{
+    static Topology cached_topology = Topology();
+    return cached_topology;
+}
+}
+
+const Topology &Topology::topology()
+{
+    return cached_topology();
+}
+
+int for_each_topo_device(std::function<int(gpu_info_t&)> func)
+{
+    const auto& topo = Topology::topology();
+    for (const auto& device : topo.devices) {
+        if (std::holds_alternative<Topology::RootDevice>(device)) {
+            auto tiles = std::get<Topology::RootDevice>(device);
+            for (const auto& dev : tiles) {
+                auto info = cpu_info[dev.gpu()];
+                auto ret = func(info);
+                if (ret != EXIT_SUCCESS)
+                    return ret;
+            }
+        } else {
+            auto dev = std::get<Topology::EndDevice>(device);
+            auto info = cpu_info[dev->gpu()];
+            auto ret = func(info);
+            if (ret != EXIT_SUCCESS)
+                return ret;
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+namespace {
 int parse_int(char* arg, const char* orig_arg) {
     errno = 0;
     char *endptr = arg;

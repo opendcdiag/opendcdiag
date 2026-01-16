@@ -13,6 +13,7 @@
 #include "level_zero/ze_api.h"
 #include "level_zero/zes_api.h"
 
+#include <functional>
 #include <map>
 #include <variant>
 #include <span>
@@ -44,8 +45,11 @@ public:
 
     std::vector<std::variant<RootDevice, EndDevice>> devices;
 
-    // static const Topology &topology();
+    static const Topology &topology();
 };
+
+/// Calls passed function for each 'end' device within topology.
+int for_each_topo_device(std::function<int(gpu_info_t&)> func);
 
 /// Struct should contain common info for all detected GPUs, such as brand, etc.
 struct HardwareInfo
