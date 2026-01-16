@@ -96,7 +96,7 @@ int AbstractLogger::real_stdout_fd = STDOUT_FILENO;
 int AbstractLogger::file_log_fd = -1;
 
 namespace {
-enum LogTypes {
+enum class LogTypes : uint8_t {
     UserMessages = 0,
     Preformatted = 1,
     UsedKnobValue = 2,
@@ -666,7 +666,7 @@ void log_message_preformatted(int thread_num, LogLevelVerbosity level, std::stri
     if (msg[msg.size() - 1] == '\n')
         msg.remove_suffix(1);           // remove trailing newline
 
-    log_message_for_thread(thread_num, UserMessages, level, msg);
+    log_message_for_thread(thread_num, LogTypes::UserMessages, level, msg);
 }
 
 static __attribute__((cold)) void log_message_to_syslog(const char *msg)
@@ -1027,7 +1027,7 @@ void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ..
     if (msg[msg.size() - 1] == '\n')
         msg.pop_back(); // remove trailing newline
 
-    log_message_for_thread(thread_num, SkipMessages, LOG_LEVEL_VERBOSE(1), msg);
+    log_message_for_thread(thread_num, LogTypes::SkipMessages, LOG_LEVEL_VERBOSE(1), msg);
 }
 
 #undef log_message
@@ -1147,7 +1147,7 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
     buffer += '\n';
 
     // data logging is informational (verbose level 2)
-    log_message_for_thread(thread_num, Preformatted, LOG_LEVEL_VERBOSE(2), buffer);
+    log_message_for_thread(thread_num, LogTypes::Preformatted, LOG_LEVEL_VERBOSE(2), buffer);
 }
 
 #undef log_data
@@ -1225,7 +1225,7 @@ static void logging_format_data(DataType type, std::string_view description, con
                   "remark:      'memcmp_offset() could not locate difference'";
     }
 
-    log_message_for_thread(thread_num, RawYaml, LOG_LEVEL_QUIET, buffer);
+    log_message_for_thread(thread_num, LogTypes::RawYaml, LOG_LEVEL_QUIET, buffer);
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
@@ -1305,7 +1305,7 @@ void log_yaml(char levelchar, const char *yaml)
     if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
         return;
 
-    log_message_for_thread(thread_num, RawYaml, level, '\n', yaml);
+    log_message_for_thread(thread_num, LogTypes::RawYaml, level, '\n', yaml);
     if (levelchar == 'E')
         logging_run_callback();
 }
@@ -1366,7 +1366,7 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
         }
     };
     std::string formatted = std::visit(Visitor{}, value);
-    log_message_for_thread(-1, UsedKnobValue, UsedKnobValueLoggingLevel,
+    log_message_for_thread(-1, LogTypes::UsedKnobValue, UsedKnobValueLoggingLevel,
                            key, ": ", formatted);
 }
 
@@ -1514,26 +1514,26 @@ AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Common *d
 
         std::string_view message(ptr, delim - ptr);
         switch (log_type_from_code(code)) {
-        case UserMessages:
+        case LogTypes::UserMessages:
             format_and_print_message(fd, message, true);
             break;
 
-        case RawYaml:
+        case LogTypes::RawYaml:
             format_and_print_raw_yaml(fd, message_level, message);
             break;
 
-        case Preformatted:
+        case LogTypes::Preformatted:
             IGNORE_RETVAL(write(fd, ptr, delim - ptr));
             break;
 
-        case SkipMessages:
+        case LogTypes::SkipMessages:
             if (!skipInMainThread) {
                 // Only print if the result line didn't already include this
                 format_and_print_message(fd, format_skip_message(message), true);
             }
             break;
 
-        case UsedKnobValue: {
+        case LogTypes::UsedKnobValue: {
             static bool warning_printed = false;
             if (!warning_printed) {
                 static const char msg[] = "# One or more tests used test options. Logging only in YAML.\n";
@@ -1860,7 +1860,7 @@ int YamlLogger::print_test_knobs(int fd, mmap_region r)
             break;          // shouldn't happen...
 
         uint8_t code = uint8_t(*ptr++);
-        if (log_type_from_code(code) != UsedKnobValue)
+        if (log_type_from_code(code) != LogTypes::UsedKnobValue)
             continue;
 
         if (print_count++ == 0)
@@ -1932,28 +1932,28 @@ inline LogLevelVerbosity YamlLogger::print_one_thread_messages(int fd, mmap_regi
             continue;       // shouldn't happen...
 
         switch (log_type_from_code(code)) {
-        case UserMessages:
+        case LogTypes::UserMessages:
             assert(size_t(message_level) < std::size(levels));
             format_and_print_message(fd, levels[size_t(message_level)], message);
             break;
 
-        case RawYaml:
+        case LogTypes::RawYaml:
             assert(size_t(message_level) < std::size(levels));
             format_and_print_raw_yaml(fd, message_level, message);
             break;
 
-        case Preformatted:
+        case LogTypes::Preformatted:
             IGNORE_RETVAL(write(fd, message.data(), message.size()));
             break;
 
-        case SkipMessages:
+        case LogTypes::SkipMessages:
             if (!skipInMainThread) {
                 // Only print if the result line didn't already include this
                 format_and_print_message(fd, "skip", format_skip_message(message));
             }
             break;
 
-        case UsedKnobValue:
+        case LogTypes::UsedKnobValue:
             assert(sApp->shmem->cfg.log_test_knobs);
             continue;       // not break
         }
