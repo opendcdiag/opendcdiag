@@ -318,12 +318,12 @@ const char *AbstractLogger::char_to_skip_category(int val)
 }
 
 template <typename... Args> static ssize_t
-log_message_for_thread(int thread_num, LogTypes logType,
+log_message_for_thread(PerThreadData::Common *thread, LogTypes logType,
                        LogLevelVerbosity level, Args &&... args)
 {
-    int fd = sApp->thread_data(thread_num)->log_fd;
+    int fd = thread->log_fd;
     uint8_t code = message_code(logType, level);
-    sApp->thread_data(thread_num)->messages_logged.fetch_add(1, std::memory_order_relaxed);
+    thread->messages_logged.fetch_add(1, std::memory_order_relaxed);
     return writevec(fd, code, std::forward<Args>(args)..., '\0');
 }
 
@@ -658,7 +658,8 @@ void log_message_preformatted(int thread_num, LogLevelVerbosity level, std::stri
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
 
-    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
+    PerThreadData::Common *thread = sApp->thread_data(thread_num);
+    std::atomic<int> &messages_logged = thread->messages_logged;
     if (level != LOG_LEVEL_QUIET &&
             messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
         return;
@@ -666,7 +667,7 @@ void log_message_preformatted(int thread_num, LogLevelVerbosity level, std::stri
     if (msg[msg.size() - 1] == '\n')
         msg.remove_suffix(1);           // remove trailing newline
 
-    log_message_for_thread(thread_num, LogTypes::UserMessages, level, msg);
+    log_message_for_thread(thread, LogTypes::UserMessages, level, msg);
 }
 
 static __attribute__((cold)) void log_message_to_syslog(const char *msg)
@@ -1027,7 +1028,8 @@ void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ..
     if (msg[msg.size() - 1] == '\n')
         msg.pop_back(); // remove trailing newline
 
-    log_message_for_thread(thread_num, LogTypes::SkipMessages, LOG_LEVEL_VERBOSE(1), msg);
+    PerThreadData::Common *thread = sApp->thread_data(thread_num);
+    log_message_for_thread(thread, LogTypes::SkipMessages, LOG_LEVEL_VERBOSE(1), msg);
 }
 
 #undef log_message
@@ -1147,7 +1149,8 @@ static void log_data_common(const char *message, const uint8_t *ptr, size_t size
     buffer += '\n';
 
     // data logging is informational (verbose level 2)
-    log_message_for_thread(thread_num, LogTypes::Preformatted, LOG_LEVEL_VERBOSE(2), buffer);
+    PerThreadData::Common *thread = sApp->thread_data(thread_num);
+    log_message_for_thread(thread, LogTypes::Preformatted, LOG_LEVEL_VERBOSE(2), buffer);
 }
 
 #undef log_data
@@ -1156,8 +1159,9 @@ void log_data(const char *message, const void *data, size_t size)
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;                 // short-circuit
 
-    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
-    std::atomic<unsigned> &data_bytes_logged = sApp->thread_data(thread_num)->data_bytes_logged;
+    PerThreadData::Common *thread = sApp->thread_data(thread_num);
+    std::atomic<int> &messages_logged = thread->messages_logged;
+    std::atomic<unsigned> &data_bytes_logged = thread->data_bytes_logged;
     if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
         return;
     if (data_bytes_logged.fetch_add(size, std::memory_order_relaxed) > sApp->shmem->cfg.max_logdata_per_thread)
@@ -1225,7 +1229,8 @@ static void logging_format_data(DataType type, std::string_view description, con
                   "remark:      'memcmp_offset() could not locate difference'";
     }
 
-    log_message_for_thread(thread_num, LogTypes::RawYaml, LOG_LEVEL_QUIET, buffer);
+    PerThreadData::Common *thread = sApp->thread_data(thread_num);
+    log_message_for_thread(thread, LogTypes::RawYaml, LOG_LEVEL_QUIET, buffer);
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
@@ -1301,11 +1306,12 @@ void log_yaml(char levelchar, const char *yaml)
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;             // short-circuit
 
-    std::atomic<int> &messages_logged = sApp->thread_data(thread_num)->messages_logged;
+    PerThreadData::Common *thread = sApp->thread_data(thread_num);
+    std::atomic<int> &messages_logged = thread->messages_logged;
     if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
         return;
 
-    log_message_for_thread(thread_num, LogTypes::RawYaml, level, '\n', yaml);
+    log_message_for_thread(thread, LogTypes::RawYaml, level, '\n', yaml);
     if (levelchar == 'E')
         logging_run_callback();
 }
@@ -1366,7 +1372,8 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
         }
     };
     std::string formatted = std::visit(Visitor{}, value);
-    log_message_for_thread(-1, LogTypes::UsedKnobValue, UsedKnobValueLoggingLevel,
+    PerThreadData::Common *thread = sApp->thread_data(thread_num);
+    log_message_for_thread(thread, LogTypes::UsedKnobValue, UsedKnobValueLoggingLevel,
                            key, ": ", formatted);
 }
 
