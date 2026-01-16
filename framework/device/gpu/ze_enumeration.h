@@ -25,6 +25,11 @@
 int for_each_ze_device(std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func);
 int for_each_zes_device(std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func);
 
+/// Same as above, but with additional topology lookup step. Calls passed function for each found Intel device being
+/// part of the current Topology.
+int for_each_ze_device_within_topo(std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func);
+int for_each_zes_device_within_topo(std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func);
+
 /// Template function for enumerating given resource type. Called inside for_each_* functions.
 template <typename DeviceType, typename ResourceType>
 ze_result_t enum_func(DeviceType, uint32_t&, ResourceType* = nullptr);
