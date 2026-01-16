@@ -7,7 +7,7 @@
 #include "test_data_gpu.h"
 
 #if !SANDSTONE_NO_LOGGING
-std::string AbstractLogger::thread_id_header_for_device(int cpu, int verbosity)
+std::string AbstractLogger::thread_id_header_for_device(int cpu, LogLevelVerbosity verbosity)
 {
     std::string line;
     return line;

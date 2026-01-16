@@ -2729,8 +2729,11 @@ int main(int argc, char **argv)
         }
     }
 
-    if (sApp->shmem->cfg.verbosity == -1)
-        sApp->shmem->cfg.verbosity = (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel) ? 1 : 0;
+    if (sApp->shmem->cfg.verbosity < LOG_LEVEL_QUIET) {
+        sApp->shmem->cfg.verbosity = LOG_LEVEL_QUIET;
+        if (sApp->requested_quality < SandstoneApplication::DefaultQualityLevel)
+            sApp->shmem->cfg.verbosity = LOG_LEVEL_VERBOSE(1);
+    }
 
     if (InterruptMonitor::InterruptMonitorWorks && test_set->contains(&mce_test)) {
         if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {

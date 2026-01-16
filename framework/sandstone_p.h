@@ -71,10 +71,6 @@ extern "C" {
 #define ROUND_UP_TO(value, n)       (((value) + (n) - 1) & (~((n) - 1)))
 #define ROUND_UP_TO_PAGE(value)     ROUND_UP_TO(value, 4096U)
 
-#define LOG_LEVEL_ERROR         -1
-#define LOG_LEVEL_QUIET         0
-#define LOG_LEVEL_VERBOSE(n)    (n)
-
 extern char *program_invocation_name;       // also in glibc's <errno.h>
 
 struct test;
@@ -110,6 +106,28 @@ int open_memfd(enum MemfdCloexecFlag);
 void dump_device_info();
 
 #ifdef __cplusplus
+}
+
+enum class LogLevelVerbosity : int
+{
+    Error = -1,
+    Quiet = 0,
+    Max = INT_MAX,
+};
+inline constexpr auto LOG_LEVEL_ERROR = LogLevelVerbosity::Error;
+inline constexpr auto LOG_LEVEL_QUIET = LogLevelVerbosity::Quiet;
+using LOG_LEVEL_VERBOSE = LogLevelVerbosity;
+inline auto operator<=>(LogLevelVerbosity a, LogLevelVerbosity b) noexcept
+{
+    return std::to_underlying(a) <=> std::to_underlying(b);
+}
+inline auto operator<=>(LogLevelVerbosity a, int b) noexcept
+{
+    return std::to_underlying(a) <=> b;
+}
+inline auto operator==(LogLevelVerbosity a, int b) noexcept
+{
+    return std::to_underlying(a) == b;
 }
 
 /*
@@ -229,7 +247,7 @@ struct TestConfig
     bool use_strict_runtime = false;
 
     // logging parameters
-    int verbosity = -1;
+    LogLevelVerbosity verbosity = LogLevelVerbosity::Error;
     int max_messages_per_thread = 5;
     unsigned max_logdata_per_thread = 128;
     OutputFormat output_format = DefaultOutputFormat;
@@ -570,14 +588,14 @@ extern "C" initfunc group_kvm_init(void) noexcept;
 #endif
 
 /* logging.cpp */
-void log_message_preformatted(int thread_num, int level, std::string_view msg);
+void log_message_preformatted(int thread_num, LogLevelVerbosity level, std::string_view msg);
 int logging_stdout_fd(void);
 void logging_init_global(void);
 void logging_init_global_child();
 int logging_close_global(int exitcode);
 void logging_print_log_file_name();
-void logging_restricted(int level, const char *fmt, ...);
-void logging_printf(int level, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
+void logging_restricted(LogLevelVerbosity level, const char *fmt, ...);
+void logging_printf(LogLevelVerbosity level, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
 void logging_mark_thread_failed(int thread_num) noexcept;
 void logging_mark_thread_skipped(int thread_num) noexcept;
 void logging_run_callback();

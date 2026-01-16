@@ -670,7 +670,7 @@ struct ProgramOptionsParser {
         if (opts_map.contains('q')) {
             verbosity = 0;
         }
-        opts.shmem_cfg.verbosity = verbosity;
+        opts.shmem_cfg.verbosity = LOG_LEVEL_VERBOSE(verbosity);
 
         // quality (before tests listing)
         if (auto it = opts_map.find(quality_option); it != opts_map.end()) {
@@ -923,7 +923,7 @@ struct ProgramOptionsParser {
                 } else if (SandstoneConfig::Debug && fmt == "none") {
                     // for testing only
                     opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::no_output;
-                    opts.shmem_cfg.verbosity = -1;
+                    opts.shmem_cfg.verbosity = LOG_LEVEL_ERROR;
                 } else {
                     fprintf(ERR_STREAM, "%s: unknown output format: %s\n", argv[0], value);
                     return EX_USAGE;
@@ -1121,7 +1121,7 @@ struct ProgramOptionsParser {
         if (SandstoneConfig::NoLogging) {
             opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::no_output;
         } else  {
-            opts.shmem_cfg.verbosity = 1;
+            opts.shmem_cfg.verbosity = LOG_LEVEL_VERBOSE(1);
         }
 
         app_cfg->delay_between_tests = 50ms;
