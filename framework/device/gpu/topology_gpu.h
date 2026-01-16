@@ -47,6 +47,10 @@ public:
     // static const Topology &topology();
 };
 
+/// Fills the topology (devices & their subdevices) based on cpu_info.
+/// Supports heterogenous topology (mixed kind of devices - End and Root).
+Topology build_topology();
+
 /// Struct should contain common info for all detected GPUs, such as brand, etc.
 struct HardwareInfo
 {
