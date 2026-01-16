@@ -37,7 +37,7 @@ runs:
         DEBIAN_FRONTEND=noninteractive apt-get -y install \
             bats \
             ca-certificates \
-            ${CC} \
+            ${CC-g++} \
             elfutils \
             file \
             gawk \
