@@ -95,6 +95,7 @@ void apply_deviceset_param(char *param)
         ++total_matches;
     };
 
+    LogicalProcessorSet enabled_cpus;
     std::string p = param;
     for (char *arg = strtok(p.data(), ","); arg; arg = strtok(nullptr, ",")) {
         const char *orig_arg = arg;
@@ -135,7 +136,9 @@ void apply_deviceset_param(char *param)
             int cpu_number = parse_int(arg, orig_arg);
 
             // check if cpu is enabled in the system
-            LogicalProcessorSet enabled_cpus = ambient_logical_processor_set();
+            if (enabled_cpus.size_bytes() == 0) {
+                enabled_cpus = ambient_logical_processor_set();
+            }
             if (!enabled_cpus.is_set(LogicalProcessor{cpu_number})) {
                 fprintf(stderr, "%s: error: Invalid CPU set parameter for GPU %u: %s (no such cpu)\n",
                         program_invocation_name, gpu_number, orig_arg);
