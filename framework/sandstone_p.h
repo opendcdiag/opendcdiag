@@ -108,11 +108,11 @@ void dump_device_info();
 #ifdef __cplusplus
 }
 
-enum class LogLevelVerbosity : int
+enum class LogLevelVerbosity : int8_t
 {
     Error = -1,
     Quiet = 0,
-    Max = INT_MAX,
+    Max = SCHAR_MAX,
 };
 inline constexpr auto LOG_LEVEL_ERROR = LogLevelVerbosity::Error;
 inline constexpr auto LOG_LEVEL_QUIET = LogLevelVerbosity::Quiet;
