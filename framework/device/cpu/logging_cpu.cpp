@@ -97,10 +97,10 @@ void KeyValuePairLogger::print_thread_header(int fd, int device, const char *pre
     PerThreadData::Test *thr = sApp->test_thread_data(device);
     if (std::string time = format_duration(thr->fail_time); time.size()) {
         dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, device, time.c_str());
-        dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, device,
+        dprintf(fd, "%s_thread_%d_loop_count = %u\n", prefix, device,
                 thr->inner_loop_count_at_fail);
     } else {
-        dprintf(fd, "%s_thread_%d_loop_count = %" PRIu64 "\n", prefix, device,
+        dprintf(fd, "%s_thread_%d_loop_count = %u\n", prefix, device,
                 thr->inner_loop_count);
     }
     dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, device, info->cpu_number);

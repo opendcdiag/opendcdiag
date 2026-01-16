@@ -74,8 +74,8 @@ struct alignas(64) Main : Common
 struct alignas(64) TestCommon : Common
 {
     /* Number of iterations of the inner loop (aka #times test_time_condition called) */
-    uint64_t inner_loop_count;
-    uint64_t inner_loop_count_at_fail;
+    uint32_t inner_loop_count;
+    uint32_t inner_loop_count_at_fail;
 
     /* Thread ID */
     std::atomic<tid_t> tid;
