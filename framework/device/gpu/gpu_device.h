@@ -10,6 +10,10 @@
 #ifndef INC_GPU_DEVICE_H
 #define INC_GPU_DEVICE_H
 
+#ifdef __cplusplus
+#   include <compare>
+#endif
+
 struct gpu_info_t
 {
     /// Logical OS processor number.
@@ -35,6 +39,11 @@ struct gpu_info_t
     ze_device_compute_properties_t compute_properties; // contains: maxSharedLocalMemory, numSubGroupSizes, etc.
 
 #ifdef __cplusplus
+    friend constexpr std::strong_ordering operator<=>(const gpu_info_t& lhs, const gpu_info_t& rhs) noexcept {
+        // no <=> operator for bdf, device_properties, compute_properties
+        return lhs.gpu_number <=> rhs.gpu_number;
+    }
+
     int gpu() const;        ///! Internal GPU number
 #endif
 };
