@@ -55,7 +55,7 @@ public:
     [[gnu::pure]] static const char *sysexit_reason(const ChildExitStatus &status);
 
     // device-specific interfaces
-    static std::string thread_id_header_for_device(int device, int verbosity);
+    static std::string thread_id_header_for_device(int device, LogLevelVerbosity verbosity);
     static void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
     static void print_fixed_for_device();
 
@@ -68,12 +68,12 @@ public:
     bool skipInMainThread = false;
 
 protected:
-    int loglevel() const;
+    LogLevelVerbosity loglevel() const;
     bool should_print_fail_info() const;
 
     // shared between the TAP and key-value loggers; YAML overrides
     static void format_and_print_message(int fd, std::string_view message, bool from_thread_message);
-    int print_one_thread_messages_tdata(int fd, PerThreadData::Common *data, struct mmap_region r, int level);
+    LogLevelVerbosity print_one_thread_messages_tdata(int fd, PerThreadData::Common *data, struct mmap_region r, LogLevelVerbosity level);
 };
 
 class YamlLogger : public AbstractLogger
@@ -105,17 +105,17 @@ private:
     inline void maybe_print_messages_header(int fd);
     void print_fixed();
     void print_thread_messages();
-    void print_thread_header(int fd, int device, int verbosity);
+    void print_thread_header(int fd, int device, LogLevelVerbosity verbosity);
     inline bool want_slice_resource_usage(int slice);
     void maybe_print_slice_resource_usage(int fd, int slice);
     inline int print_test_knobs(int fd, mmap_region r);
     static void format_and_print_skip_reason(int fd, std::string_view message);
-    int print_one_thread_messages(int fd, mmap_region r, int level);
+    LogLevelVerbosity print_one_thread_messages(int fd, mmap_region r, LogLevelVerbosity level);
     void print_result_line(int &init_skip_message_bytes);
 };
 
 #if SANDSTONE_NO_LOGGING
-inline std::string AbstractLogger::thread_id_header_for_device(int device, int verbosity)
+inline std::string AbstractLogger::thread_id_header_for_device(int device, LogLevelVerbosity verbosity)
 { __builtin_unreachable(); return {}; }
 inline void AbstractLogger::print_thread_header_for_device(int fd, PerThreadData::Test *thr)
 { __builtin_unreachable(); }

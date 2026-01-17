@@ -128,11 +128,11 @@ static const char *strnchr(const char *buffer, char c, size_t len)
     return static_cast<const char *>(memchr(buffer, c, len));
 }
 
-static uint8_t message_code(enum LogTypes logType, int level)
+static uint8_t message_code(enum LogTypes logType, LogLevelVerbosity level)
 {
     assert((int)logType < 0xf);
     unsigned code = ((unsigned)logType + 1) << 4;
-    code |= (level & 0xf);
+    code |= (unsigned(level) & 0xf);
     return (uint8_t)code;
 }
 
@@ -141,9 +141,9 @@ static enum LogTypes log_type_from_code(uint8_t code)
     return (enum LogTypes)((code >> 4) - 1);
 }
 
-static int level_from_code(uint8_t code)
+static auto level_from_code(uint8_t code)
 {
-    return code & 0xf;
+    return LogLevelVerbosity(code & 0xf);
 }
 
 static Iso8601Format operator|(Iso8601Format f1, Iso8601Format f2)
@@ -267,7 +267,7 @@ static void progress_bar_flush()
 }
 
 /* which level of "quiet" should this log print at */
-static uint8_t status_level(char letter)
+static LogLevelVerbosity status_level(char letter)
 {
     // note: the YAML logger requires that the message levels have a 1:1 mapping
     switch (letter) {
@@ -282,7 +282,7 @@ static uint8_t status_level(char letter)
     }
 
     log_warning("got improper status log message '%c'", letter);
-    return 2;
+    return LOG_LEVEL_VERBOSE(2);
 }
 
 const char *AbstractLogger::char_to_skip_category(int val)
@@ -318,7 +318,8 @@ const char *AbstractLogger::char_to_skip_category(int val)
 }
 
 template <typename... Args> static ssize_t
-log_message_for_thread(int thread_num, LogTypes logType, int level, Args &&... args)
+log_message_for_thread(int thread_num, LogTypes logType,
+                       LogLevelVerbosity level, Args &&... args)
 {
     int fd = sApp->thread_data(thread_num)->log_fd;
     uint8_t code = message_code(logType, level);
@@ -642,7 +643,7 @@ void logging_run_callback()
 
 static void log_message_preformatted(int thread_num, std::string_view msg)
 {
-    int level = status_level(msg[0]);
+    LogLevelVerbosity level = status_level(msg[0]);
     bool is_error = msg[0] == 'E';
     if (is_error)
         logging_mark_thread_failed(thread_num);
@@ -652,7 +653,7 @@ static void log_message_preformatted(int thread_num, std::string_view msg)
         logging_run_callback();
 }
 
-void log_message_preformatted(int thread_num, int level, std::string_view msg)
+void log_message_preformatted(int thread_num, LogLevelVerbosity level, std::string_view msg)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
@@ -686,7 +687,7 @@ static __attribute__((cold)) void log_message_to_syslog(const char *msg)
 #if SANDSTONE_NO_LOGGING
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
-void logging_restricted(int level, const char *fmt, ...)
+void logging_restricted(LogLevelVerbosity level, const char *fmt, ...)
 {
     va_list va;
     va_start(va, fmt);
@@ -711,7 +712,7 @@ void logging_restricted(int level, const char *fmt, ...)
 
 #else
 
-void logging_printf(int level, const char *fmt, ...)
+void logging_printf(LogLevelVerbosity level, const char *fmt, ...)
 {
     va_list va;
     va_start(va, fmt);
@@ -1292,7 +1293,7 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
 #undef log_yaml
 void log_yaml(char levelchar, const char *yaml)
 {
-    int level = status_level(levelchar);
+    LogLevelVerbosity level = status_level(levelchar);
     if (levelchar == 'E')
         logging_mark_thread_failed(thread_num);
     if (!SandstoneConfig::Debug && levelchar == 'd')
@@ -1418,7 +1419,7 @@ static std::string_view format_skip_message(std::string_view message)
     return message.substr(1);
 }
 
-static void format_and_print_raw_yaml(int fd, int message_level, std::string_view message)
+static void format_and_print_raw_yaml(int fd, LogLevelVerbosity message_level, std::string_view message)
 {
     assert(size_t(message_level) < std::size(levels));
     while (message.ends_with('\n'))
@@ -1430,7 +1431,7 @@ static void format_and_print_raw_yaml(int fd, int message_level, std::string_vie
 
     std::string buffer(indent, ' ');
     buffer += "- level: ";
-    buffer += levels[message_level];
+    buffer += levels[size_t(message_level)];
     buffer += '\n';
     indent += 2;
 
@@ -1495,16 +1496,18 @@ void AbstractLogger::format_and_print_message(int fd, std::string_view message, 
 
 /// Returns the lowest priority found
 /// (this function is shared between the TAP and key-value pair loggers)
-int AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Common *data, struct mmap_region r, int level)
+LogLevelVerbosity
+AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Common *data,
+                                                struct mmap_region r, LogLevelVerbosity level)
 {
-    int lowest_level = INT_MAX;
+    LogLevelVerbosity lowest_level = LogLevelVerbosity::Max;
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
     const char *delim;
 
     for ( ; ptr < end && (delim = strnchr(ptr, '\0', end - ptr)) != nullptr; ptr = delim + 1) {
         uint8_t code = (uint8_t)*ptr++;
-        int message_level = level_from_code(code);
+        LogLevelVerbosity message_level = level_from_code(code);
 
         if (message_level > level)
             continue;
@@ -1637,7 +1640,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
         testResult = TestResult::Skipped;       // all threads skipped
 }
 
-int AbstractLogger::loglevel() const
+LogLevelVerbosity AbstractLogger::loglevel() const
 {
     switch (testResult) {
     case TestResult::Skipped:
@@ -1763,7 +1766,7 @@ void YamlLogger::maybe_print_messages_header(int fd)
     }
 }
 
-void YamlLogger::print_thread_header(int fd, int device, int verbosity)
+void YamlLogger::print_thread_header(int fd, int device, LogLevelVerbosity verbosity)
 {
     maybe_print_messages_header(fd);
     if (device < 0) {
@@ -1906,9 +1909,9 @@ void YamlLogger::format_and_print_skip_reason(int fd, std::string_view message)
     }
 }
 
-inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int level)
+inline LogLevelVerbosity YamlLogger::print_one_thread_messages(int fd, mmap_region r, LogLevelVerbosity level)
 {
-    int lowest_level = INT_MAX;
+    LogLevelVerbosity lowest_level = LogLevelVerbosity::Max;
     auto ptr = static_cast<const char *>(r.base);
     const char *end = ptr + r.size;
     const char *delim;
@@ -1919,7 +1922,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
             break;          // shouldn't happen...
 
         uint8_t code = uint8_t(*ptr++);
-        int message_level = level_from_code(code);
+        LogLevelVerbosity message_level = level_from_code(code);
 
         if (message_level > level)
             continue;
@@ -1931,7 +1934,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
         switch (log_type_from_code(code)) {
         case UserMessages:
             assert(size_t(message_level) < std::size(levels));
-            format_and_print_message(fd, levels[message_level], message);
+            format_and_print_message(fd, levels[size_t(message_level)], message);
             break;
 
         case RawYaml:
@@ -1964,7 +1967,7 @@ inline int YamlLogger::print_one_thread_messages(int fd, mmap_region r, int leve
 
 void YamlLogger::print_result_line(int &init_skip_message_bytes)
 {
-    int loglevel = this->loglevel();
+    LogLevelVerbosity loglevel = this->loglevel();
     if (loglevel == LOG_LEVEL_QUIET && file_log_fd != real_stdout_fd && sApp->shmem->cfg.verbosity < 1) {
         // logging_init won't have printed "- test:" to stdout, so do it now
         progress_bar_flush();
@@ -2111,8 +2114,9 @@ void YamlLogger::print_thread_messages()
             return;             /* nothing to be printed, on any level */
         }
 
-        print_thread_header(file_log_fd, s_tid, INT_MAX);
-        int lowest_level = print_one_thread_messages(file_log_fd, r, INT_MAX);
+        print_thread_header(file_log_fd, s_tid, LogLevelVerbosity::Max);
+        LogLevelVerbosity lowest_level =
+                print_one_thread_messages(file_log_fd, r, LogLevelVerbosity::Max);
 
         if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, s_tid, sApp->shmem->cfg.verbosity);

@@ -45,7 +45,7 @@ private:
     static const char *quality_string(const struct test *test);
     void maybe_print_yaml_marker(int fd);
     void print_thread_messages();
-    void print_thread_header(int fd, int device, int verbosity);
+    void print_thread_header(int fd, int device, LogLevelVerbosity verbosity);
     void print_child_stderr();
     std::string format_status_code();
 };

@@ -127,7 +127,8 @@ void KeyValuePairLogger::print_thread_messages()
             return;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
-        int lowest_level = print_one_thread_messages_tdata(file_log_fd, data, r, INT_MAX);
+        LogLevelVerbosity lowest_level =
+                print_one_thread_messages_tdata(file_log_fd, data, r, LogLevelVerbosity::Max);
 
         if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, test->id);
@@ -271,7 +272,7 @@ void TapFormatLogger::maybe_print_yaml_marker(int fd)
         IGNORE_RETVAL(write(fd, fail_info.c_str(), fail_info.size()));
 }
 
-void TapFormatLogger::print_thread_header(int fd, int device, int verbosity)
+void TapFormatLogger::print_thread_header(int fd, int device, LogLevelVerbosity verbosity)
 {
     maybe_print_yaml_marker(fd);
     if (device < 0) {
@@ -326,8 +327,9 @@ void TapFormatLogger::print_thread_messages()
         if (r.size == 0 && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
             return;             /* nothing to be printed, on any level */
 
-        print_thread_header(file_log_fd, i, INT_MAX);
-        int lowest_level = print_one_thread_messages_tdata(file_log_fd, data, r, INT_MAX);
+        print_thread_header(file_log_fd, i, LogLevelVerbosity::Max);
+        LogLevelVerbosity lowest_level =
+                print_one_thread_messages_tdata(file_log_fd, data, r, LogLevelVerbosity::Max);
 
         if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
             print_thread_header(real_stdout_fd, i, sApp->shmem->cfg.verbosity);
@@ -380,7 +382,7 @@ auto thread_core_spacing()
 }
 } // end unnamed namespace
 
-std::string AbstractLogger::thread_id_header_for_device(int thread, int verbosity)
+std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerbosity verbosity)
 {
     cpu_info_t *info = cpu_info + thread;
     std::string line;
