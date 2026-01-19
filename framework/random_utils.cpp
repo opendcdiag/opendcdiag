@@ -260,8 +260,6 @@ uint8_t get_random_bits8(uint32_t range) {
     return get_random_bits<uint8_t, random32, 32>(range);
 }
 
-#else
-#warning definitions of random_xxx() for unit tests will be missing!
 #endif // SANDSTONE_UNITTESTS
 
 } // extern "C"
