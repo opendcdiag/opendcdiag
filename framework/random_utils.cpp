@@ -5,6 +5,24 @@
 
 #include "sandstone.h"
 
+#ifdef SANDSTONE_UNITTESTS
+
+#include <random_mocker.hpp>
+namespace RandomMocker {
+
+template<>
+Mock<__uint128_t>* Mock<__uint128_t>::instance = nullptr;
+template<>
+Mock<uint64_t>* Mock<uint64_t>::instance = nullptr;
+template<>
+Mock<uint32_t>* Mock<uint32_t>::instance = nullptr;
+template<>
+Mock<int>* Mock<int>::instance = nullptr;
+
+} // RandomMocker
+
+#endif // SANDSTONE_UNITTESTS
+
 namespace {
 
 static constexpr uint32_t BITS_FROM_RANDOM = 31;
@@ -41,6 +59,7 @@ T get_random_bits(uint32_t bits) {
         if (b < sizeof(T) * 8) {
             val <<= b;
         }
+
         val ^= T(random_bits_value & get_mask<T>(b));
         random_bits_available -= b;
         if (random_bits_available != 0) {
@@ -165,8 +184,14 @@ uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
 
 #ifdef SANDSTONE_UNITTESTS
 
-// Random.cpp patterns, identical with LCG engine
-__attribute__((weak)) __uint128_t random128() {
+// Random.cpp patterns, identical with LCG engine.
+// Do not allow to reimplement these for unit tests.
+
+__uint128_t random128() {
+    if (RandomMocker::Mock<__uint128_t>::get_instance()) {
+        return RandomMocker::Mock<__uint128_t>::get_instance()->get_value();
+    }
+
     union {
         struct {
             __uint128_t b1 : 24;
@@ -187,8 +212,10 @@ __attribute__((weak)) __uint128_t random128() {
     f.b6 = random();
     return f.v;
 }
-
-__attribute__((weak)) uint64_t random64() {
+uint64_t random64() {
+    if (RandomMocker::Mock<uint64_t>::get_instance()) {
+        return RandomMocker::Mock<uint64_t>::get_instance()->get_value();
+    }
     union {
         struct {
             uint64_t b1 : 24;
@@ -203,8 +230,10 @@ __attribute__((weak)) uint64_t random64() {
     f.b3 = random();
     return f.v;
 }
-
-__attribute__((weak)) uint32_t random32() {
+uint32_t random32() {
+    if (RandomMocker::Mock<uint32_t>::get_instance()) {
+        return RandomMocker::Mock<uint32_t>::get_instance()->get_value();
+    }
     union {
         struct {
             uint32_t b1 : 16;
@@ -217,6 +246,22 @@ __attribute__((weak)) uint32_t random32() {
     f.b2 = random();
     return f.v;
 }
+
+#undef random
+int random_mocked() {
+    if (RandomMocker::Mock<int>::get_instance()) {
+        return RandomMocker::Mock<int>::get_instance()->get_value();
+    }
+    return random();
+}
+
+// test-cases to check "UB" shifting. Not particularly useful elsewhere
+uint8_t get_random_bits8(uint32_t range) {
+    return get_random_bits<uint8_t, random32, 32>(range);
+}
+
+#else
+#warning definitions of random_xxx() for unit tests will be missing!
 #endif // SANDSTONE_UNITTESTS
 
 } // extern "C"

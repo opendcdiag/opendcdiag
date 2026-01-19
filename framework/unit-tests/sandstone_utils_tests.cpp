@@ -348,11 +348,6 @@ TEST(DataCompare, HFloat8)
     // no NaN values, these are treated as infinity
 }
 
-// dummy mocks to allow new_random_xxx() compilation
-__attribute__((weak)) uint32_t random32() {
-    return random();
-}
-
 // test conversion f32 -> bf8 (s.eeeee.mm)
 TEST(FloatConversions, BF8fromFloat)
 {
