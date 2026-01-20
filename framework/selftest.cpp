@@ -468,11 +468,20 @@ static int selftest_uses_too_much_mem_run(struct test *, int)
     return EXIT_SUCCESS;
 }
 
-static int selftest_noreturn_run(struct test *test, int)
+static int selftest_noreturn_run_inner(struct test *test, int)
 {
     struct timespec forever = { LLONG_MAX, 0 };
     nanosleep(&forever, NULL);
     return EXIT_FAILURE;
+}
+
+static int selftest_noreturn_run(struct test *test, int device)
+{
+    std::string ctxt = stdprintf("timeout: %d, device: %d",
+                                 sApp->timeout_to_kill.count(),     // may be wrong with -fexec
+                                 device);
+    log_thread_context(ctxt);
+    return selftest_noreturn_run_inner(test, device);
 }
 
 static int adjust_cpu_for_isolate_socket(int cpu)
@@ -2233,7 +2242,7 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .id = "selftest_freeze_fork",
     .description = "Freezes after forking",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
-    .test_run = selftest_fork_run<selftest_noreturn_run>,
+    .test_run = selftest_fork_run<selftest_noreturn_run_inner>,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
