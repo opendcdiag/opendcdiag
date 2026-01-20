@@ -2638,7 +2638,9 @@ int main(int argc, char **argv)
     }
 
     if (!opts.deviceset.empty() && any_device) {
-        apply_deviceset_param(&opts.deviceset[0]);
+        for (auto& d : opts.deviceset) {
+            apply_deviceset_param(d);
+        }
     }
 
     static auto check_and_exit_for_no_device = [&]() {

@@ -490,6 +490,57 @@ selftest_cpuset_negated() {
     selftest_cpuset_negated \!p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]} ${cpuinfo[0]}
 }
 
+# Test if multiple --cpuset accumulate properly
+# e.g. --cpuset=p0 --cpuset=c0 should be the same as --cpuset=p0c0
+function selftest_cpuset_accumulate() {
+    local separate=$1
+    local accumulated=$2
+    local expression=$3
+
+    local cpuset=`$SANDSTONE $separate --dump-cpu-info \
+                 | awk '/^[0-9]/ { printf "%d,", $1; }'`
+    cpuset=${cpuset%,}          # remove last comma
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info --cpuset=$accumulated \
+                     | awk '/^[0-9]/ && '"$expression"' { print $1; }'`)
+
+    selftest_cpuset_unsorted "$cpuset" "${cpuinfo[@]}"
+}
+
+@test "cpuset accumulate (p0 c0)" {
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1'
+
+    run $SANDSTONE --cpuset=p0c0,p1c1 --dump-cpu-info
+    if (( status != 0 )); then
+        skip "Test only works with Debug builds (to mock the topology) or package 0 with cores 0 and 1"
+    fi
+
+    selftest_cpuset_accumulate "--cpuset=p0 --cpuset=c0" "p0c0" "1"
+    selftest_cpuset_accumulate "--cpuset=c0 --cpuset=p0" "p0c0" "1"
+}
+
+@test "cpuset accumulate (p0 c0,c1)" {
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1'
+
+    run $SANDSTONE --cpuset=p0c0,p1c1 --dump-cpu-info
+    if (( status != 0 )); then
+        skip "Test only works with Debug builds (to mock the topology) or package 0 with cores 0 and 1"
+    fi
+
+    selftest_cpuset_accumulate "--cpuset=p0 --cpuset=c0,c1" "p0c0,p0c1" "1"
+}
+
+@test "cpuset accumulate (p0 !c0 / p0 !c1)" {
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1'
+
+    run $SANDSTONE --cpuset=p0c0,p1c1 --dump-cpu-info
+    if (( status != 0 )); then
+        skip "Test only works with Debug builds (to mock the topology) or package 0 with cores 0 and 1"
+    fi
+
+    selftest_cpuset_accumulate "--cpuset=p0 --cpuset=!c0" "p0" "\$3!=0"
+    selftest_cpuset_accumulate "--cpuset=p0 --cpuset=!c1" "p0" "\$3!=1"
+}
+
 @test "num_packages" {
     export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1 p1c0 p1c1'
 

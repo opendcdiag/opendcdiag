@@ -202,7 +202,7 @@ bool pin_to_logical_processor(LogicalProcessor, const char *thread_name = nullpt
 bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const char *thread_name = nullptr);
 bool pin_to_logical_processors(DeviceRange, const char *thread_name);
 
-void apply_deviceset_param(char *param);
+void apply_deviceset_param(const char *param);
 void slice_plan_init(int max_cores_per_slice);
 
 template <typename EnabledDevices>
