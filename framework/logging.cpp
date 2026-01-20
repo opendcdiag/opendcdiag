@@ -85,6 +85,9 @@ RtlGetVersion(
 #  include <gnu/libc-version.h>
 #endif
 
+using LogMessage = AbstractLogger::LogMessage;              // for convenience
+using LogMessagesFile = AbstractLogger::LogMessagesFile;    // for convenience
+
 static constexpr const char *levels[] = { "error", "warning", "info", "debug" };
 
 static int tty = -1;
@@ -128,24 +131,6 @@ static const char *strnchr(const char *buffer, char c, size_t len)
     // we do NOT handle an embedded NUL, but the code in this file doesn't do
     // that (crossing fingers, promise)
     return static_cast<const char *>(memchr(buffer, c, len));
-}
-
-static uint8_t message_code(LogTypes logType, LogLevelVerbosity level)
-{
-    assert((int)logType < 0xf);
-    unsigned code = ((unsigned)logType + 1) << 4;
-    code |= (unsigned(level) & 0xf);
-    return (uint8_t)code;
-}
-
-static LogTypes log_type_from_code(uint8_t code)
-{
-    return (LogTypes)((code >> 4) - 1);
-}
-
-static auto level_from_code(uint8_t code)
-{
-    return LogLevelVerbosity(code & 0xf);
 }
 
 static Iso8601Format operator|(Iso8601Format f1, Iso8601Format f2)
@@ -323,10 +308,18 @@ template <typename... Args> static ssize_t
 log_message_for_thread(PerThreadData::Common *thread, LogTypes logType,
                        LogLevelVerbosity level, Args &&... args)
 {
-    int fd = thread->log_fd;
-    uint8_t code = message_code(logType, level);
+    iovec vec[1 + sizeof...(args)] = { {}, IoVecMaker{}(args)... };
+    size_t size_bytes = 0;
+    for (const iovec &v : vec)
+        size_bytes += v.iov_len;
+
+    LogMessage msg = { .msglen = uint32_t(size_bytes), .type = logType, .verbosity = level, };
+    assert(msg.msglen == size_bytes && "too many bytes logged in a single message!");
     thread->messages_logged.fetch_add(1, std::memory_order_relaxed);
-    return writevec(fd, code, std::forward<Args>(args)..., '\0');
+
+    vec[0].iov_base = &msg;
+    vec[0].iov_len = sizeof(msg);
+    return writev(thread->log_fd, vec, std::size(vec));
 }
 
 int logging_stdout_fd(void)
@@ -349,18 +342,18 @@ static inline void truncate_log(int fd)
     IGNORE_RETVAL(ftruncate(fd, 0));
 }
 
-mmap_region AbstractLogger::maybe_mmap_log(const PerThreadData::Common *data)
+AbstractLogger::LogMessagesFile AbstractLogger::maybe_mmap_log(const PerThreadData::Common *data)
 {
     if (data->messages_logged.load(std::memory_order_relaxed) == 0)
         return {};
-    return mmap_file(data->log_fd);
+    return LogMessagesFile(data->log_fd);
 }
 
-void AbstractLogger::munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r)
+void AbstractLogger::munmap_and_truncate_log(PerThreadData::Common *data, LogMessagesFile &r)
 {
-    if (r.size == 0)
+    if (r.empty())
         return;
-    munmap_file(r);
+    r.unmap();
     truncate_log(data->log_fd);
     data->messages_logged.store(0, std::memory_order_relaxed);
 }
@@ -1405,19 +1398,13 @@ static void print_content_single_line(int fd, std::string_view before,
 std::string AbstractLogger::get_skip_message(int thread_num)
 {
     std::string skip_message;
-    struct mmap_region r = mmap_file(sApp->thread_data(thread_num)->log_fd);
-    auto ptr = static_cast<const char *>(r.base);
-    const char *end = ptr + r.size;
-    const char *delim;
-
-    for ( ; ptr < end && (delim = strnchr(ptr, '\0', end - ptr)) != nullptr; ptr = delim + 1) {
-        uint8_t code = (uint8_t)*ptr++;
-        if (log_type_from_code(code) == LogTypes::SkipMessages) {
-            skip_message.assign(ptr, delim);
+    LogMessagesFile msgs(sApp->thread_data(thread_num)->log_fd);
+    for (const LogMessage &msg : msgs) {
+        if (msg.type == LogTypes::SkipMessages) {
+            skip_message.assign(msg);
             break;
         }
     }
-    munmap_file(r);
     return skip_message;
 }
 
@@ -1507,22 +1494,16 @@ void AbstractLogger::format_and_print_message(int fd, std::string_view message, 
 /// (this function is shared between the TAP and key-value pair loggers)
 LogLevelVerbosity
 AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Common *data,
-                                                struct mmap_region r, LogLevelVerbosity level)
+                                                const LogMessagesFile &msgs, LogLevelVerbosity level)
 {
     LogLevelVerbosity lowest_level = LogLevelVerbosity::Max;
-    auto ptr = static_cast<const char *>(r.base);
-    const char *end = ptr + r.size;
-    const char *delim;
-
-    for ( ; ptr < end && (delim = strnchr(ptr, '\0', end - ptr)) != nullptr; ptr = delim + 1) {
-        uint8_t code = (uint8_t)*ptr++;
-        LogLevelVerbosity message_level = level_from_code(code);
-
+    for (const LogMessage &msg : msgs) {
+        LogLevelVerbosity message_level = msg.verbosity;
         if (message_level > level)
             continue;
 
-        std::string_view message(ptr, delim - ptr);
-        switch (log_type_from_code(code)) {
+        std::string_view message = msg;
+        switch (msg.type) {
         case LogTypes::UserMessages:
             format_and_print_message(fd, message, true);
             break;
@@ -1532,7 +1513,7 @@ AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Common *d
             break;
 
         case LogTypes::Preformatted:
-            IGNORE_RETVAL(write(fd, ptr, delim - ptr));
+            IGNORE_RETVAL(writevec(fd, message));
             break;
 
         case LogTypes::SkipMessages:
@@ -1855,27 +1836,18 @@ void YamlLogger::maybe_print_slice_resource_usage(int fd, int slice)
             );
 }
 
-int YamlLogger::print_test_knobs(int fd, mmap_region r)
+int YamlLogger::print_test_knobs(int fd, const LogMessagesFile &msgs)
 {
     std::unordered_set<std::string_view> seen_keys;
     int print_count = 0;
-    auto ptr = static_cast<const char *>(r.base);
-    const char *end = ptr + r.size;
-    const char *delim;
-
-    for ( ; ptr < end; ptr = delim + 1) {
-        delim = static_cast<const char *>(memchr(ptr, '\0', end - ptr));
-        if (!delim)
-            break;          // shouldn't happen...
-
-        uint8_t code = uint8_t(*ptr++);
-        if (log_type_from_code(code) != LogTypes::UsedKnobValue)
+    for (const LogMessage &msg : msgs) {
+        if (msg.type != LogTypes::UsedKnobValue)
             continue;
 
         if (print_count++ == 0)
             writeln(fd, indent_spaces(), "  test-options:");
 
-        std::string_view message(ptr, delim - ptr);
+        std::string_view message = msg;
         size_t colon = message.find(':');
         assert(colon != std::string_view::npos);
 
@@ -1918,29 +1890,20 @@ void YamlLogger::format_and_print_skip_reason(int fd, std::string_view message)
     }
 }
 
-inline LogLevelVerbosity YamlLogger::print_one_thread_messages(int fd, mmap_region r, LogLevelVerbosity level)
+inline LogLevelVerbosity
+YamlLogger::print_one_thread_messages(int fd, const LogMessagesFile &msgs, LogLevelVerbosity level)
 {
     LogLevelVerbosity lowest_level = LogLevelVerbosity::Max;
-    auto ptr = static_cast<const char *>(r.base);
-    const char *end = ptr + r.size;
-    const char *delim;
-
-    for ( ; ptr < end; ptr = delim + 1) {
-        delim = static_cast<const char *>(memchr(ptr, '\0', end - ptr));
-        if (!delim)
-            break;          // shouldn't happen...
-
-        uint8_t code = uint8_t(*ptr++);
-        LogLevelVerbosity message_level = level_from_code(code);
-
+    for (const LogMessage &msg : msgs) {
+        LogLevelVerbosity message_level = msg.verbosity;
         if (message_level > level)
             continue;
 
-        std::string_view message(ptr, delim - ptr);
+        std::string_view message = msg;
         if (message.empty())
             continue;       // shouldn't happen...
 
-        switch (log_type_from_code(code)) {
+        switch (msg.type) {
         case LogTypes::UserMessages:
             assert(size_t(message_level) < std::size(levels));
             format_and_print_message(fd, levels[size_t(message_level)], message);
@@ -2092,13 +2055,12 @@ void YamlLogger::print_fixed()
     print_fixed_for_device();
 
     if (sApp->shmem->cfg.log_test_knobs) {
-        struct mmap_region main_mmap = maybe_mmap_log(sApp->main_thread_data());
-        if (main_mmap.size) {
+        LogMessagesFile main_mmap = maybe_mmap_log(sApp->main_thread_data());
+        if (!main_mmap.empty()) {
             int count = print_test_knobs(file_log_fd, main_mmap);
             if (count && real_stdout_fd != file_log_fd
                     && sApp->shmem->cfg.verbosity >= UsedKnobValueLoggingLevel)
                 print_test_knobs(real_stdout_fd, main_mmap);
-            munmap_file(main_mmap);
         }
     }
 }
@@ -2107,7 +2069,7 @@ void YamlLogger::print_thread_messages()
 {
     // print the thread messages
     auto doprint = [this](PerThreadData::Common *data, int s_tid) {
-        struct mmap_region r = maybe_mmap_log(data);
+        LogMessagesFile r = maybe_mmap_log(data);
         bool want_print = data->has_failed() || sApp->shmem->cfg.verbosity >= 3;
         ssize_t min_size = 0;
 
@@ -2118,7 +2080,7 @@ void YamlLogger::print_thread_messages()
             min_size = init_skip_message_bytes;
             want_print = want_slice_resource_usage(~s_tid);
         }
-        if (r.size <= min_size && !want_print) {
+        if (r.size_bytes() <= min_size && !want_print) {
             munmap_and_truncate_log(data, r);
             return;             /* nothing to be printed, on any level */
         }

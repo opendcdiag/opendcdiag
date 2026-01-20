@@ -31,6 +31,56 @@ class AbstractLogger
 public:
     enum class LogTypes : uint8_t;
 
+    struct [[gnu::packed]] LogMessage {
+        uint32_t msglen;
+        LogTypes type;
+        LogLevelVerbosity verbosity;
+        char payload[];         // C99 Flexible Array Member
+
+        operator std::string_view() const noexcept
+        { return { payload, msglen }; }
+        operator std::span<const uint8_t>() const noexcept
+        { return { reinterpret_cast<const uint8_t *>(payload), msglen }; }
+    };
+
+    class LogMessagesFile {
+        mmap_region r;
+    public:
+        struct const_iterator {
+            const LogMessage *ptr;
+
+            // just enough iterator API to work for us
+            using value_type = LogMessage;
+            using iterator_category = std::forward_iterator_tag;
+
+            friend auto operator<=>(const_iterator, const_iterator) = default;
+            const LogMessage &operator*() const { return *ptr; }
+            const LogMessage *operator->() const { return ptr; }
+            const_iterator operator++(int) noexcept
+            { return { reinterpret_cast<const LogMessage *>(ptr->payload + ptr->msglen) }; }
+            const_iterator &operator++() noexcept
+            { return *this = (*this)++; }
+        };
+
+        LogMessagesFile() noexcept : r{} {}
+        explicit LogMessagesFile(mmap_region r) noexcept : r(r) {}
+        LogMessagesFile(int fd) : LogMessagesFile(mmap_file(fd)) {}
+        LogMessagesFile(const LogMessagesFile &) = delete;
+        LogMessagesFile(LogMessagesFile &&other) : r(std::exchange(other.r, {})) {}
+        ~LogMessagesFile() { unmap(); }
+        LogMessagesFile &operator=(const LogMessagesFile &) = delete;
+        LogMessagesFile &operator=(LogMessagesFile &&) = delete;
+
+        bool empty() const { return r.size == 0; }
+        const_iterator begin() const
+        { return { static_cast<const LogMessage *>(r.base) }; }
+        const_iterator end() const
+        { return { reinterpret_cast<const LogMessage *>(static_cast<const char *>(r.base) + r.size) }; }
+
+        size_t size_bytes() const { return r.size; }
+        void unmap() { if (r.size) munmap_file(r); r = {}; }
+    };
+
     AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state);
 
     static constexpr char program_version[] = SANDSTONE_EXECUTABLE_NAME "-" GIT_ID;
@@ -41,8 +91,8 @@ public:
     static std::string log_timestamp();
     static std::string get_skip_message(int thread_num);
     static const char *char_to_skip_category(int val);
-    static mmap_region maybe_mmap_log(const PerThreadData::Common *data);
-    static void munmap_and_truncate_log(PerThreadData::Common *data, mmap_region r);
+    static LogMessagesFile maybe_mmap_log(const PerThreadData::Common *data);
+    static void munmap_and_truncate_log(PerThreadData::Common *data, LogMessagesFile &r);
     static void print_child_stderr_common(std::function<void(int)> header);
     static std::string_view indent_spaces();
 
@@ -75,7 +125,8 @@ protected:
 
     // shared between the TAP and key-value loggers; YAML overrides
     static void format_and_print_message(int fd, std::string_view message, bool from_thread_message);
-    LogLevelVerbosity print_one_thread_messages_tdata(int fd, PerThreadData::Common *data, struct mmap_region r, LogLevelVerbosity level);
+    LogLevelVerbosity print_one_thread_messages_tdata(int fd, PerThreadData::Common *data,
+                                                      const LogMessagesFile &msgs, LogLevelVerbosity level);
 };
 
 class YamlLogger : public AbstractLogger
@@ -110,9 +161,9 @@ private:
     void print_thread_header(int fd, int device, LogLevelVerbosity verbosity);
     inline bool want_slice_resource_usage(int slice);
     void maybe_print_slice_resource_usage(int fd, int slice);
-    inline int print_test_knobs(int fd, mmap_region r);
+    inline int print_test_knobs(int fd, const LogMessagesFile &msgs);
     static void format_and_print_skip_reason(int fd, std::string_view message);
-    LogLevelVerbosity print_one_thread_messages(int fd, mmap_region r, LogLevelVerbosity level);
+    LogLevelVerbosity print_one_thread_messages(int fd, const LogMessagesFile &msgs, LogLevelVerbosity level);
     void print_result_line(int &init_skip_message_bytes);
 
     static void maybe_print_virt_state();
