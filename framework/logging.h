@@ -29,6 +29,8 @@ enum class Iso8601Format : unsigned {
 class AbstractLogger
 {
 public:
+    enum class LogTypes : uint8_t;
+
     AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state);
 
     static constexpr char program_version[] = SANDSTONE_EXECUTABLE_NAME "-" GIT_ID;
