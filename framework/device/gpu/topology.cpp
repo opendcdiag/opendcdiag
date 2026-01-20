@@ -51,7 +51,7 @@ int parse_int(char* arg, const char* orig_arg) {
 /// By "present in the system" we can mean constrained set of cpus enabled by 'taskset'.
 /// TODO: should we allow to specify concrete GPUs/sockets/tiles/whatever (multi-socket GPU)?
 /// TODO: specify concrete physical card, not just the index from the drver (which may change like Gaudi's)
-void apply_deviceset_param(char *param)
+void apply_deviceset_param(const char *param)
 {
     if (SandstoneConfig::RestrictedCommandLine)
         return;

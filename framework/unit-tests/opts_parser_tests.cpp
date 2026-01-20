@@ -876,3 +876,28 @@ TEST(ProgramOptionsParser, out_of_range_exits__max_cores_per_slice)
         sb.check_eq(EMPTY_STR); // no messages printed
     }
 }
+
+
+TEST(ProgramOptionsParser, repeated_opt_accumulates__cpuset_deviceset)
+{
+    {
+        StreamBuffer sb;
+        ProgramOptions opts;
+        SandstoneApplicationConfig cfg{};
+        char* argv[] = {
+            (char*)"foo-bar", // binary name
+            (char*)"--cpuset=1",
+            (char*)"--cpuset=2",
+            (char*)"--deviceset=3",
+        };
+
+        auto ret = opts.parse(4, argv, &cfg);
+        EXPECT_FALSE(opts.deviceset.empty());
+        EXPECT_STREQ(opts.deviceset.at(0), "1");
+        EXPECT_STREQ(opts.deviceset.at(1), "2");
+        EXPECT_STREQ(opts.deviceset.at(2), "3");
+
+        EXPECT_EQ(ret, EXIT_SUCCESS);
+        sb.check_eq(EMPTY_STR); // no messages printed
+    }
+}

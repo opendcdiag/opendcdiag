@@ -4,6 +4,7 @@
  */
 
 #include "sandstone_p.h"
+#include "topology.h"
 #include "sandstone_opts.hpp"
 
 #include <string>
@@ -457,7 +458,7 @@ struct ProgramOptionsParser {
                 break;
 
             case deviceset_option:
-                opts_map.insert_or_assign(deviceset_option, optarg);
+                add_to_map_as_vec(deviceset_option, optarg);
                 break;
 
             // boolean options
@@ -696,7 +697,12 @@ struct ProgramOptionsParser {
         }
 
         // deviceset (before dump_cpu_info)
-        opts.deviceset = string_opt_for<std::string>(deviceset_option);
+        if (opts_map.contains(deviceset_option)) {
+            opts.deviceset =
+                std::get<std::vector<const char*>>(
+                        opts_map.at(deviceset_option)
+                );
+        }
 
         // selftest (before test listing)
 #ifndef NO_SELF_TESTS
