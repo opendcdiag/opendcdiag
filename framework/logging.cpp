@@ -107,6 +107,7 @@ enum class AbstractLogger::LogTypes : uint8_t
     UsedKnobValue = 2,
     SkipMessages = 3,
     RawYaml = 4,
+    ThreadContext = 5,
 };
 using LogTypes = AbstractLogger::LogTypes;
 
@@ -1290,6 +1291,30 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     logging_run_callback();
 }
 
+void log_thread_context(const char *fmt, ...)
+{
+    log_thread_context(va_start_and_stdprintf(fmt));
+}
+
+void log_thread_context(std::string_view ctx)
+{
+    PerThreadData::Common *thread = sApp->thread_data(thread_num);
+    [[maybe_unused]] auto log_thread_context_is_first_message = [&] {
+        int fd = thread->log_fd;
+        return lseek(fd, 0, SEEK_CUR) == 0;
+    };
+    assert(log_thread_context_is_first_message());
+    assert(thread_num >= 0 && "log_thread_context() can only be used in a test thread");
+
+    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+        return;             // short-circuit
+
+    // thread context messages don't count towards the --max-messages limit,
+    // but we must increment anyway
+
+    log_message_for_thread(thread, LogTypes::ThreadContext, LOG_LEVEL_VERBOSE(1), ctx);
+}
+
 #undef log_yaml
 void log_yaml(char levelchar, const char *yaml)
 {
@@ -1522,6 +1547,10 @@ AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Common *d
                 format_and_print_message(fd, format_skip_message(message), true);
             }
             break;
+
+        case LogTypes::ThreadContext:
+            writevec(fd, "  - context: { ", message, " }\n");
+            continue;      // not break
 
         case LogTypes::UsedKnobValue: {
             static bool warning_printed = false;
@@ -1785,7 +1814,6 @@ void YamlLogger::print_thread_header(int fd, int device, LogLevelVerbosity verbo
             print_thread_header_for_device(fd, thr);
         }
     }
-    writeln(fd, indent_spaces(), "    messages:");
 }
 
 bool YamlLogger::want_slice_resource_usage(int slice)
@@ -1893,8 +1921,18 @@ void YamlLogger::format_and_print_skip_reason(int fd, std::string_view message)
 inline LogLevelVerbosity
 YamlLogger::print_one_thread_messages(int fd, const LogMessagesFile &msgs, LogLevelVerbosity level)
 {
+    auto it = msgs.begin();
+    const auto end = msgs.end();
+    if (it != end && it->type == LogTypes::ThreadContext) {
+        writevec(fd, indent_spaces(), "    context: { ", std::string_view(*it), " }\n");
+        ++it;
+    }
+
+    if (it != end)
+        writeln(fd, indent_spaces(), "    messages:");
     LogLevelVerbosity lowest_level = LogLevelVerbosity::Max;
-    for (const LogMessage &msg : msgs) {
+    for ( ; it != end; ++it) {
+        const LogMessage &msg = *it;
         LogLevelVerbosity message_level = msg.verbosity;
         if (message_level > level)
             continue;
@@ -1924,6 +1962,10 @@ YamlLogger::print_one_thread_messages(int fd, const LogMessagesFile &msgs, LogLe
                 format_and_print_message(fd, "skip", format_skip_message(message));
             }
             break;
+
+        case LogTypes::ThreadContext:
+            // already handled above
+            continue;      // not break
 
         case LogTypes::UsedKnobValue:
             assert(sApp->shmem->cfg.log_test_knobs);

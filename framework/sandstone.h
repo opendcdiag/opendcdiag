@@ -451,6 +451,11 @@ extern void log_message_skip(int thread_num, SkipCategory c, const char *msg, ..
 /// The message parameter provides a description of the data which
 /// precedes it in the log file.  The data is output in hexadecimal.
 extern void log_data(const char *message, const void *data, size_t size);
+/// Logs the thread's context information (e.g., device this thread is assigned
+/// to test). This must be the first logged message in the thread, ahead of
+/// log_skip() if any.
+/// @a msg must be a single line of properly-formatted YAML.
+extern void log_thread_context(const char *msg, ...) ATTRIBUTE_PRINTF(1, 2);
 /// Logs pre-formatted YAML to the logs.
 extern void log_yaml(char levelchar, const char *yaml);
 #define log_yaml(level, yaml)       log_yaml(level[0], yaml)
@@ -571,6 +576,8 @@ int num_packages() __attribute__((pure));
 
 #ifdef __cplusplus
 }
+
+extern void log_thread_context(std::string_view msg);
 
 constexpr inline test_flags operator|(test_flag f1, test_flag f2)
 {
