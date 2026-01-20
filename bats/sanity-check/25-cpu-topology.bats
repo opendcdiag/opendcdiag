@@ -292,6 +292,8 @@ selftest_freeze_socket1_common() {
     for (( ; i <= yamldump[/tests/0/threads@len]; ++i)); do
         if [[ "${yamldump[/tests/0/threads/$i/id/package]}" = 1 ]]; then
             test_yaml_regexp "/tests/0/threads/$i/state" failed
+            test_yaml_numeric "/tests/0/threads/$i/context/device" 'value >= 0'
+            test_yaml_numeric "/tests/0/threads/$i/context/timeout" 'value != 0'
             n=$((-1 + yamldump[/tests/0/threads/$i/messages@len]))
             test_yaml_regexp "/tests/0/threads/$i/messages/$n/text" '.*Thread is stuck'
         else
