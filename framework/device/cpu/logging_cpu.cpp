@@ -121,9 +121,9 @@ void KeyValuePairLogger::print_thread_header(int fd, int device, const char *pre
 void KeyValuePairLogger::print_thread_messages()
 {
     auto doprint = [this](PerThreadData::Common *data, int i) {
-        struct mmap_region r = maybe_mmap_log(data);
+        LogMessagesFile r = maybe_mmap_log(data);
 
-        if (r.size == 0 && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
+        if (r.empty() && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
             return;           /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
@@ -322,9 +322,9 @@ void TapFormatLogger::print_thread_header(int fd, int device, LogLevelVerbosity 
 void TapFormatLogger::print_thread_messages()
 {
     auto doprint = [this](PerThreadData::Common *data, int i) {
-        struct mmap_region r = maybe_mmap_log(data);
+        LogMessagesFile r = maybe_mmap_log(data);
 
-        if (r.size == 0 && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
+        if (r.empty() && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
             return;             /* nothing to be printed, on any level */
 
         print_thread_header(file_log_fd, i, LogLevelVerbosity::Max);
