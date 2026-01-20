@@ -95,15 +95,15 @@ static constexpr auto UsedKnobValueLoggingLevel = LOG_LEVEL_VERBOSE(1);
 int AbstractLogger::real_stdout_fd = STDOUT_FILENO;
 int AbstractLogger::file_log_fd = -1;
 
-namespace {
-enum class LogTypes : uint8_t {
+enum class AbstractLogger::LogTypes : uint8_t
+{
     UserMessages = 0,
     Preformatted = 1,
     UsedKnobValue = 2,
     SkipMessages = 3,
     RawYaml = 4,
 };
-} // unnamed namespace
+using LogTypes = AbstractLogger::LogTypes;
 
 static SandstoneApplication::OutputFormat current_output_format()
 {
@@ -128,7 +128,7 @@ static const char *strnchr(const char *buffer, char c, size_t len)
     return static_cast<const char *>(memchr(buffer, c, len));
 }
 
-static uint8_t message_code(enum LogTypes logType, LogLevelVerbosity level)
+static uint8_t message_code(LogTypes logType, LogLevelVerbosity level)
 {
     assert((int)logType < 0xf);
     unsigned code = ((unsigned)logType + 1) << 4;
@@ -136,9 +136,9 @@ static uint8_t message_code(enum LogTypes logType, LogLevelVerbosity level)
     return (uint8_t)code;
 }
 
-static enum LogTypes log_type_from_code(uint8_t code)
+static LogTypes log_type_from_code(uint8_t code)
 {
-    return (enum LogTypes)((code >> 4) - 1);
+    return (LogTypes)((code >> 4) - 1);
 }
 
 static auto level_from_code(uint8_t code)
