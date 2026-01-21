@@ -16,7 +16,9 @@
     do { \
         auto result = (__VA_ARGS__); \
         if (result != ZE_RESULT_SUCCESS) { \
-            if (thread_num >= 0) { \
+            if (!sApp->shmem) { \
+                fprintf(stderr, "L0 API call failed with status %s\n", to_string(result)); \
+            } else if (thread_num >= 0) { \
                 log_debug("L0 API call failed with status %s", to_string(result)); \
             } else { \
                 logging_printf(LOG_LEVEL_VERBOSE(1), "L0 API call failed with status %s\n", to_string(result)); \
