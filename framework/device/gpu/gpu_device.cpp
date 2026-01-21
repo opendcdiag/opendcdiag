@@ -24,6 +24,9 @@ TestResult prepare_test_for_device(struct test *test)
     return TestResult::Passed;
 }
 
+void finish_test_for_device(struct test *test)
+{}
+
 std::vector<struct test*> special_tests_for_device()
 {
     return {};

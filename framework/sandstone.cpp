@@ -1505,6 +1505,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
             }
         }
 
+        finish_test_for_device(test);
         sApp->test_tests_finish(test);
     } while (false);
 
