@@ -11,6 +11,8 @@
 
 #include "level_zero/ze_api.h"
 
+extern bool logging_in_test;
+
 /// Check return value of an L0 API call. Log the return status and return EXIT_FAILURE if check against "success" status fails.
 #define ZE_CHECK(...) \
     do { \
@@ -18,7 +20,7 @@
         if (result != ZE_RESULT_SUCCESS) { \
             if (!sApp->shmem) { \
                 fprintf(stderr, "L0 API call failed with status %s\n", to_string(result)); \
-            } else if (thread_num >= 0) { \
+            } else if (logging_in_test) { \
                 log_debug("L0 API call failed with status %s", to_string(result)); \
             } else { \
                 logging_printf(LOG_LEVEL_VERBOSE(1), "L0 API call failed with status %s\n", to_string(result)); \
