@@ -2672,9 +2672,6 @@ int main(int argc, char **argv)
         restrict_topology({ 0, opts.thread_count });
     slice_plan_init(opts.max_cores_per_slice);
     commit_shmem();
-    if (thread_count() < 2 && sApp->device_scheduler) {
-        logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 threads\n");
-    }
 
 
     signals_init_global();
@@ -2760,6 +2757,9 @@ int main(int argc, char **argv)
             test_set->remove(&mce_test);
         }
     }
+
+    if (thread_count() < 2 && sApp->device_scheduler)
+        logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 threads\n");
 
 #if SANDSTONE_FREQUENCY_MANAGER
     if (sApp->vary_frequency_mode || sApp->vary_uncore_frequency_mode)
