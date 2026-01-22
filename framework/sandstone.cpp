@@ -2676,17 +2676,12 @@ int main(int argc, char **argv)
         logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 threads\n");
     }
 
-
     signals_init_global();
     resource_init_global();
-    debug_init_global(opts.on_hang_arg, opts.on_crash_arg);
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
-
-    print_application_banner();
-    logging_init_global();
-    device_specific_init();
     random_init_global(opts.seed);
+    debug_init_global(opts.on_hang_arg, opts.on_crash_arg);
     background_scan_init();
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
 
     if (opts.enabled_tests.size() || opts.builtin_test_list_name || opts.test_list_file_path) {
         /* if anything other than the "all tests" has been specified, start with
@@ -2773,6 +2768,10 @@ int main(int argc, char **argv)
     if (sApp->vary_uncore_frequency_mode)
         sApp->frequency_manager->initial_uncore_frequency_setup();
 #endif
+
+    print_application_banner();
+    logging_init_global();
+    device_specific_init();
 
 #ifndef __OPTIMIZE__
     logging_printf(LOG_LEVEL_VERBOSE(1), "THIS IS AN UNOPTIMIZED BUILD: DON'T TRUST TEST TIMING!\n");
