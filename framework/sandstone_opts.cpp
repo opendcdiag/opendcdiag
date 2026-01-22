@@ -875,11 +875,7 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(reschedule_option)) {
-            app_cfg->device_scheduler = make_rescheduler(value);
-            if (!app_cfg->device_scheduler) {
-                fprintf(ERR_STREAM, "%s: unknown reschedule option: %s\n", argv[0], value);
-                return EX_USAGE;
-            }
+            opts.shmem_cfg.reschedule_mode = value;
         }
 
         if (auto it = opts_map.find('O'); it != opts_map.end()) {
