@@ -29,6 +29,7 @@
 #  include <poll.h>
 #endif
 #include <pthread.h>
+#include <sched.h>
 #include <stdint.h>
 #if __has_include(<sys/auxv.h>)         // FreeBSD and Linux
 #  include <sys/auxv.h>

@@ -11,6 +11,13 @@ properties:
     type: string
   runtime:
     type: string
+  virtualization-state:
+    type: object
+    properties:
+      container:
+        type: string
+      vm:
+        type: string
   openssl:
     type: object
     properties:
@@ -73,6 +80,36 @@ required:
   - exit
 
 $defs:
+  context:
+    idxd:
+      description: An accelerator using Linux's idxd.ko
+      type: object
+      properties:
+        type:
+          oneOf:
+            - const: dsa
+            - const: iax
+        bdf:
+          type: string
+        numa_node:
+          type: number
+          minimum: 0
+        device:
+          type: string
+        group:
+          type: string
+        engine:
+          type: string
+        wq:
+          type: string
+      required:
+        - type
+        - bdf
+        - numa_node
+        - device
+        - group
+        - wq
+
   cpu-info:
     type: object
     properties:
@@ -191,6 +228,9 @@ $defs:
                   pattern: '^main'
             id:
               $ref: '#/$defs/cpu-info'
+            context:
+              oneOf:
+                - '$ref' : '#/$defs/context/idxd'
             loop-count:
               type: integer
               minimum: 0
@@ -352,4 +392,3 @@ $defs:
     required:
       - elapsed
       - now
-
