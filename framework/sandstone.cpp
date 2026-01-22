@@ -2622,6 +2622,14 @@ int main(int argc, char **argv)
         apply_deviceset_param(&opts.deviceset[0]);
     }
 
+    if (sApp->shmem->cfg.reschedule_mode) {
+        sApp->device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
+        if (!sApp->device_scheduler) {
+            fprintf(stderr, "%s: unknown reschedule option: %s\n", program_invocation_name, sApp->shmem->cfg.reschedule_mode);
+            return EX_USAGE;
+        }
+    }
+
     static auto check_and_exit_for_no_device = [&]() {
         if (!any_device) {
             fprintf(stderr, "%s: error: no devices found\n",
