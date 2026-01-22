@@ -11,6 +11,13 @@ properties:
     type: string
   runtime:
     type: string
+  virtualization-state:
+    type: object
+    properties:
+      container:
+        type: string
+      vm:
+        type: string
   openssl:
     type: object
     properties:
@@ -191,6 +198,8 @@ $defs:
                   pattern: '^main'
             id:
               $ref: '#/$defs/cpu-info'
+            context:
+              type: object
             loop-count:
               type: integer
               minimum: 0
