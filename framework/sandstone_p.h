@@ -245,7 +245,7 @@ struct TestConfig
     bool selftest = false;
     bool ud_on_failure = false;
     bool use_strict_runtime = false;
-    const char* reschedule_mode = nullptr;
+    const char* reschedule_mode = "queue";
 
     // logging parameters
     LogLevelVerbosity verbosity = LogLevelVerbosity::Error;

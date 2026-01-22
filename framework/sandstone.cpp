@@ -2622,14 +2622,6 @@ int main(int argc, char **argv)
         apply_deviceset_param(&opts.deviceset[0]);
     }
 
-    if (sApp->shmem->cfg.reschedule_mode) {
-        sApp->device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
-        if (!sApp->device_scheduler) {
-            fprintf(stderr, "%s: unknown reschedule option: %s\n", program_invocation_name, sApp->shmem->cfg.reschedule_mode);
-            return EX_USAGE;
-        }
-    }
-
     static auto check_and_exit_for_no_device = [&]() {
         if (!any_device) {
             fprintf(stderr, "%s: error: no devices found\n",
@@ -2667,14 +2659,21 @@ int main(int argc, char **argv)
             return EX_USAGE;
         }
         if (sApp->device_scheduler) {
-            fprintf(stderr, "%s: error: --reschedule is not supported in this configuration\n",
-                    program_invocation_name);
-            return EX_USAGE;
+            sApp->device_scheduler = nullptr;
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# WARNING: --reschedule is not supported in this configuration\n");
         }
     }
 
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
+
+    if (sApp->shmem->cfg.reschedule_mode) {
+        sApp->device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
+        if (!sApp->device_scheduler && std::string_view{sApp->shmem->cfg.reschedule_mode} != "none") {
+            fprintf(stderr, "%s: unknown reschedule option: %s\n", program_invocation_name, sApp->shmem->cfg.reschedule_mode);
+            return EX_USAGE;
+        }
+    }
 
     if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
         restrict_topology({ 0, opts.thread_count });
