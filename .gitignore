@@ -1,6 +1,7 @@
 *~
 /opendcdiag-*.log
 /opendcdiag-*.yaml
+/total_log_output.yaml
 # typical names for meson build directories
 /build*/
 # ctags
