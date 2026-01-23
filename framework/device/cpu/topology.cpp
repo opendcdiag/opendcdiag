@@ -1530,18 +1530,17 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
 
         std::fill(std::begin(info->cache), std::end(info->cache), cache_info_t{-1, -1});
     }
+    // replicate cpu_info[0] over the entire range
     std::fill_n(&cpu_info[1], count - 1, cpu_info[0]);
 
-    for (int i = 0, curr_cpu = 0; i < count; ++i, ++curr_cpu) {
-        auto lp = LogicalProcessor(curr_cpu);
-        while (!enabled_cpus.is_set(lp)) {
-            lp = LogicalProcessor(++curr_cpu);
-        }
-
+    int i = 0;
+    for (LogicalProcessor lp = enabled_cpus.next(); lp != LogicalProcessor::None; ++i) {
         // set the OS cpu id
         auto info = cpu_info + i;
-        info->cpu_number = curr_cpu;
+        info->cpu_number = int(lp);
+        lp = enabled_cpus.next(LogicalProcessor(int(lp) + 1));
     }
+    assert(i == count);
 
     if (SandstoneConfig::Debug) {
         if (create_mock_topology(getenv("SANDSTONE_MOCK_TOPOLOGY")))
