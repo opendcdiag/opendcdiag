@@ -35,3 +35,5 @@ option('coverage', type : 'boolean', value : false,
     description : 'Enable code coverage (default false)')
 option('device_type', type: 'combo', choices : ['cpu', 'gpu'], value: 'cpu',
     description : 'Device type for the build (default cpu).')
+option('target_device', type : 'string', value: 'bmg',
+    description : 'Type of the device to be used for the build. Run `ocloc compile --help` for a full list of available device types. Defaults to "bmg". For SPIR-V intermediate format use "spirv".')
