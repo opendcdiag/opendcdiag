@@ -7,11 +7,11 @@
 #define INC_TOPOLOGY_H
 
 #include <memory>
+#include <limits>
 #include <span>
 #include <string>
 #include <vector>
 
-#include <limits.h>     // for CHAR_BIT
 #include <stdint.h>
 
 #include "gettid.h"
@@ -39,7 +39,7 @@ enum class LogicalProcessor : int {};
 struct LogicalProcessorSetOps
 {
     using Word = unsigned long long;
-    static constexpr int ProcessorsPerWord = CHAR_BIT * sizeof(Word);
+    static constexpr int ProcessorsPerWord = std::numeric_limits<Word>::digits;
 
     static constexpr Word bitFor(LogicalProcessor n)
     {
