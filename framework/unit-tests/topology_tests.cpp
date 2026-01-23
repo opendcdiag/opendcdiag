@@ -15,16 +15,38 @@ static LogicalProcessorSet make_set(std::initializer_list<LogicalProcessorSet::W
     return result;
 }
 
+std::ostream &operator<<(std::ostream &o, LogicalProcessor lp)
+{
+    return o << "LogicalProcessor(" << std::to_underlying(lp) << ')';
+}
+
 TEST(LogicalProcessorSet, BasicOperations)
 {
-    auto lastProcessor = LogicalProcessor(LogicalProcessorSet::MinSize - 1);
+    constexpr auto lastProcessor = LogicalProcessor(LogicalProcessorSet::MinSize - 1);
+
     LogicalProcessorSet set;
     EXPECT_EQ(set.size_bytes(), 0);
     EXPECT_EQ(set.count(), 0);
     EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
     EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
     EXPECT_FALSE(set.is_set(lastProcessor));
+    EXPECT_FALSE(set.is_set(LogicalProcessor::None));
+    EXPECT_EQ(set.next(), LogicalProcessor::None);
+    EXPECT_EQ(set.next(LogicalProcessor(1)), LogicalProcessor::None);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord)), LogicalProcessor::None);
+    EXPECT_EQ(set.next(lastProcessor), LogicalProcessor::None);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::MinSize)), LogicalProcessor::None);
+    EXPECT_EQ(set.next(LogicalProcessor::None), LogicalProcessor::None);
+
+    set.clear();    // idempotent here
     EXPECT_EQ(set.size_bytes(), 0);
+    EXPECT_EQ(set.count(), 0);
+    EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
+    EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
+    EXPECT_FALSE(set.is_set(lastProcessor));
+    EXPECT_EQ(set.next(), LogicalProcessor::None);
+    EXPECT_EQ(set.next(LogicalProcessor(1)), LogicalProcessor::None);
+    EXPECT_EQ(set.next(lastProcessor), LogicalProcessor::None);
 
     set.set(LogicalProcessor(0));
     EXPECT_NE(set.size_bytes(), 0);
@@ -32,21 +54,78 @@ TEST(LogicalProcessorSet, BasicOperations)
     EXPECT_TRUE(set.is_set(LogicalProcessor(0)));
     EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
     EXPECT_FALSE(set.is_set(lastProcessor));
+    EXPECT_EQ(set.next(), LogicalProcessor(0));
+    EXPECT_EQ(set.next(LogicalProcessor(1)), LogicalProcessor::None);
+    EXPECT_EQ(set.next(lastProcessor), LogicalProcessor::None);
 
     set.unset(LogicalProcessor(0));
     EXPECT_EQ(set.count(), 0);
     EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
     EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
     EXPECT_FALSE(set.is_set(lastProcessor));
+    EXPECT_EQ(set.next(), LogicalProcessor::None);
+    EXPECT_EQ(set.next(LogicalProcessor(1)), LogicalProcessor::None);
+    EXPECT_EQ(set.next(lastProcessor), LogicalProcessor::None);
 
     set.set(lastProcessor);
     EXPECT_EQ(set.count(), 1);
     EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
     EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
     EXPECT_TRUE(set.is_set(lastProcessor));
+    EXPECT_EQ(set.next(), lastProcessor);
+    EXPECT_EQ(set.next(LogicalProcessor(1)), lastProcessor);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord)), lastProcessor);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::MinSize / 2)), lastProcessor);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::MinSize - 2)), lastProcessor);
+    EXPECT_EQ(set.next(lastProcessor), lastProcessor);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::MinSize)), LogicalProcessor::None);
+    EXPECT_EQ(set.next(LogicalProcessor::None), LogicalProcessor::None);
 
+    // fill the entire set
     std::fill(set.array.begin(), set.array.end(), -1);
     EXPECT_EQ(set.count(), set.array.size() * LogicalProcessorSet::ProcessorsPerWord);
+    EXPECT_EQ(set.next(), LogicalProcessor(0));
+    EXPECT_EQ(set.next(LogicalProcessor(1)), LogicalProcessor(1));
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord - 1)),
+              LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord - 1));
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord)), LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord));
+    EXPECT_EQ(set.next(lastProcessor), lastProcessor);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::MinSize)), LogicalProcessor::None);
+
+    set.unset(LogicalProcessor(0));
+    EXPECT_EQ(set.next(), LogicalProcessor(1));
+    EXPECT_EQ(set.next(LogicalProcessor(1)), LogicalProcessor(1));
+    EXPECT_EQ(set.count(), set.array.size() * LogicalProcessorSet::ProcessorsPerWord - 1);
+
+    // unset the entire first Word
+    *set.array.begin() = 0;
+    LogicalProcessor lp = LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord);
+    EXPECT_EQ(set.next(), lp);
+    EXPECT_EQ(set.next(LogicalProcessor(1)), lp);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord - 1)), lp);
+    EXPECT_EQ(set.next(lp), lp);
+    EXPECT_EQ(set.count(), (set.array.size() - 1) * LogicalProcessorSet::ProcessorsPerWord);
+
+    set.clear();
+    EXPECT_EQ(set.count(), 0);
+    EXPECT_FALSE(set.is_set(LogicalProcessor(0)));
+    EXPECT_FALSE(set.is_set(LogicalProcessor(1)));
+    EXPECT_FALSE(set.is_set(lastProcessor));
+    EXPECT_EQ(set.next(), LogicalProcessor::None);
+    EXPECT_EQ(set.next(LogicalProcessor(1)), LogicalProcessor::None);
+    EXPECT_EQ(set.next(lastProcessor), LogicalProcessor::None);
+
+    // set the entire last Word
+    set.set(lastProcessor);
+    set.array.end()[-1] = -1;
+    lp = LogicalProcessor(LogicalProcessorSet::MinSize - LogicalProcessorSet::ProcessorsPerWord);
+    EXPECT_EQ(set.count(), LogicalProcessorSet::ProcessorsPerWord);
+    EXPECT_EQ(set.next(), lp);
+    EXPECT_EQ(set.next(LogicalProcessor(1)), lp);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::ProcessorsPerWord - 1)), lp);
+    EXPECT_EQ(set.next(LogicalProcessor(LogicalProcessorSet::MinSize - LogicalProcessorSet::ProcessorsPerWord - 1)), lp);
+    EXPECT_EQ(set.next(lp), lp);
+    EXPECT_EQ(set.next(lastProcessor), lastProcessor);
 }
 
 TEST(LogicalProcessorSet, LargeSet)

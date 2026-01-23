@@ -6,12 +6,14 @@
 #ifndef INC_TOPOLOGY_H
 #define INC_TOPOLOGY_H
 
+#include <bit>
 #include <memory>
 #include <limits>
 #include <span>
 #include <string>
 #include <vector>
 
+#include <assert.h>
 #include <stdint.h>
 
 #include "gettid.h"
@@ -34,7 +36,7 @@ struct DeviceRange
     int device_count;
 };
 
-enum class LogicalProcessor : int {};
+enum class LogicalProcessor : int { None = -1 };
 
 struct LogicalProcessorSetOps
 {
@@ -101,6 +103,31 @@ public:
     bool is_set(LogicalProcessor n) const
     {
         return wordFor(n) & bitFor(n);
+    }
+
+    // Returns the number of the next processor set in this set, -1 if none.
+    // The @a from parameter indicates which one to start from
+    LogicalProcessor next(LogicalProcessor from = {}) const
+    {
+        size_t i = size_t(from) / ProcessorsPerWord;
+        if (i >= array.size())
+            return LogicalProcessor(-1);
+
+        if (unsigned n = size_t(from) % ProcessorsPerWord) {
+            // is any bit set in this Word higher than or equal to from's?
+            if (Word word = array[i] & (Word(-1) << n))
+                return LogicalProcessor(i * ProcessorsPerWord + std::countr_zero(word));
+            ++i;
+        }
+
+        // find Word with a bit set
+        for ( ; i < array.size(); ++i) {
+            if (array[i] == 0)
+                continue;
+
+            return LogicalProcessor(i * ProcessorsPerWord + std::countr_zero(array[i]));
+        }
+        return LogicalProcessor(-1);
     }
 
     int count() const
