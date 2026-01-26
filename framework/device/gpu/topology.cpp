@@ -83,6 +83,20 @@ int parse_int(char* arg, const char* orig_arg) {
     arg = endptr;       // advance
     return int(n);
 };
+
+/// Updates cpu_info and topology based on new_gpu_info.
+void update_topology(std::span<const gpu_info_t> new_gpu_info)
+{
+    gpu_info_t* end = std::copy(new_gpu_info.begin(), new_gpu_info.end(), cpu_info);
+    int new_thread_count = new_gpu_info.size();
+    if (int excess = sApp->thread_count - new_thread_count; excess > 0) {
+        // reset excess entries
+        std::fill_n(end, excess, gpu_info_t{});
+    }
+
+    sApp->thread_count = new_thread_count;
+    cached_topology() = build_topology();
+}
 }
 
 /// We support two modes:
@@ -209,7 +223,7 @@ void apply_deviceset_param(char *param)
     else
         assert(total_matches == old_gpu_info.size() - new_gpu_info.size());
 
-    // update_topology(new_gpu_info);
+    update_topology(new_gpu_info);
 }
 
 std::string build_failure_mask_for_topology(const struct test* test)
@@ -433,12 +447,22 @@ void setup_devices<GpusSet>(const GpusSet &enabled_devices)
     }
     assert(info == cend);
 
-    // cached_topology() = build_topology();
+    cached_topology() = build_topology();
 }
 
+/// Called after apply_deviceset_param(). Means we have smaller thread_count and a new range of devices.
+/// Changes pointer of cpu_info, as sApp->shmem has moved. Must also rebuild topology (built upon cpu_info).
+/// TODO: It's very similar to the CPU version. Should we abstract build_topology(), rather than restrict_topology()?
 void restrict_topology(DeviceRange range)
 {
+    assert(range.starting_device + range.device_count <= sApp->thread_count);
+    auto old_gpu_info = std::exchange(cpu_info, sApp->shmem->device_info + range.starting_device);
+    int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
 
+    Topology &topo = cached_topology();
+    if (old_gpu_info != cpu_info || old_thread_count != sApp->thread_count /*|| topo.devices.size() == 0  TODO: why would we check that? */) {
+        topo = build_topology();
+    }
 }
 
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
