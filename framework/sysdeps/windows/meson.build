@@ -16,6 +16,7 @@ framework_files += \
         'splitlock_detect.c',
         'tmpfile.c',
         'unistd.c',
+        'virt.cpp',
         'win32_perror.cpp',
         '../generic/kvm.c',
         '../generic/memfpt.c',

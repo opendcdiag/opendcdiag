@@ -114,6 +114,8 @@ private:
     static void format_and_print_skip_reason(int fd, std::string_view message);
     LogLevelVerbosity print_one_thread_messages(int fd, mmap_region r, LogLevelVerbosity level);
     void print_result_line(int &init_skip_message_bytes);
+
+    static void maybe_print_virt_state();
 };
 
 #if SANDSTONE_NO_LOGGING
