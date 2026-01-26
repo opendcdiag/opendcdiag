@@ -875,7 +875,19 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(reschedule_option)) {
-            opts.shmem_cfg.reschedule_mode = value;
+            std::string_view str_value(value);
+            if (str_value == "queue") {
+                opts.shmem_cfg.reschedule_mode = RescheduleMode::queue;
+            } else if (str_value == "barrier") {
+                opts.shmem_cfg.reschedule_mode = RescheduleMode::barrier;
+            } else if (str_value == "random") {
+                opts.shmem_cfg.reschedule_mode = RescheduleMode::random;
+            } else if (str_value == "none") {
+                opts.shmem_cfg.reschedule_mode = RescheduleMode::none;
+            } else {
+                fprintf(ERR_STREAM, "%s: unknown reschedule mode: %s\n", argv[0], value);
+                return EX_USAGE;
+            }
         }
 
         if (auto it = opts_map.find('O'); it != opts_map.end()) {

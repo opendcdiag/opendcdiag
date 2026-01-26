@@ -2652,6 +2652,9 @@ int main(int argc, char **argv)
         check_and_exit_for_no_device();
         break; // continue program
     }
+
+    sApp->device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
+
     if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
         if (sApp->shmem->cfg.log_test_knobs) {
             fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",
@@ -2666,14 +2669,6 @@ int main(int argc, char **argv)
 
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
-
-    if (sApp->shmem->cfg.reschedule_mode) {
-        sApp->device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
-        if (!sApp->device_scheduler && std::string_view{sApp->shmem->cfg.reschedule_mode} != "none") {
-            fprintf(stderr, "%s: unknown reschedule option: %s\n", program_invocation_name, sApp->shmem->cfg.reschedule_mode);
-            return EX_USAGE;
-        }
-    }
 
     if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
         restrict_topology({ 0, opts.thread_count });
