@@ -15,10 +15,11 @@ static std::string popen_and_readline(const char* cmd) {
         return "";
     }
 
-    std::string line;
-    line.resize_and_overwrite(max_line_len, [&](char* buf, size_t len) {
-        return fgets(buf, len, fp) ? strlen(buf) : 0;
-    });
+    std::string line(max_line_len, '\0');
+    if (fgets(line.data(), line.size(), fp))
+        line.resize(strlen(line.data()));
+    else
+        line.clear();
 
     pclose(fp);
 
