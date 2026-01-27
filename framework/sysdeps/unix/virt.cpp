@@ -23,7 +23,7 @@ static std::string popen_and_readline(const char* cmd) {
 
     pclose(fp);
 
-    if(line.back() == '\n') {
+    if (line.size() && line.back() == '\n') {
         line.pop_back(); // remove the newline character read
                          // from stdout of systemd-detect-virt
     }
