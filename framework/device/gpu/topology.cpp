@@ -226,9 +226,31 @@ void apply_deviceset_param(char *param)
     update_topology(new_gpu_info);
 }
 
+/// Builds mask based on the topology type in a following fashion:
+///     ..X..X      for 6 EndDevices
+///     ..:X.:.X    for 3 RootDevices (2 EndDevices each)
 std::string build_failure_mask_for_topology(const struct test* test)
 {
-    return {};
+    std::string mask;
+    int totalfailcount = 0;
+    for_each_topo_device([&](gpu_info_t& info) {
+        if (info.subdevice_index == 0 && !mask.empty()) {
+            // is RootDevice, and first of the root - prepend with ':'
+            mask += ':';
+        }
+        if (sApp->thread_data(info.gpu())->has_failed()) {
+            totalfailcount++;
+            mask += 'X';
+        } else {
+            mask += '.';
+        }
+        return EXIT_SUCCESS;
+    });
+
+    if (totalfailcount == 0) {
+        return {};
+    }
+    return mask;
 }
 
 uint32_t mixin_from_device_info(int thread_num)
