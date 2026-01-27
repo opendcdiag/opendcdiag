@@ -2,66 +2,44 @@
  * Copyright 2026 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 #include "sandstone_virt.h"
+#include "sandstone_utils.h"
+
 #include <unistd.h>
 #include <cstring>
 
-static std::string popen_and_readline(const char* cmd) {
+static std::string readfile(const char *filename)
+{
     static constexpr size_t max_line_len = 256;
-
-    FILE* fp = popen(cmd, "r");
+    AutoClosingFile fp = { fopen(filename, "r") };
 
     if (fp == NULL) {
-        return "";
+        return {};
     }
 
     std::string line(max_line_len, '\0');
-    if (fgets(line.data(), line.size(), fp))
-        line.resize(strlen(line.data()));
-    else
-        line.clear();
+    if (!fgets(line.data(), line.size(), fp))
+        return {};
 
-    pclose(fp);
+    line.resize(strlen(line.data()));
 
     if (line.size() && line.back() == '\n') {
         line.pop_back(); // remove the newline character read
-                         // from stdout of systemd-detect-virt
     }
 
     return line;
 }
 
-static constexpr const char* detect_virt_container_cmd =
-    "systemd-detect-virt --container";
-
-static constexpr const char* detect_virt_vm_cmd =
-    "systemd-detect-virt --vm";
-
-std::string detect_running_container() {
-    std::string detected =
-        popen_and_readline(detect_virt_container_cmd);
-
-    if (detected.compare("none") == 0) {
-        return "";
-    } else if (!detected.empty()) {
-        return detected;
-    }
-
-    /* either failed to detect or not
-     * running inside of a container */
-    return "";
+std::string detect_running_container()
+{
+    return readfile("/run/host/container-manager");
 }
 
-std::string detect_running_vm() {
-    std::string detected =
-        popen_and_readline(detect_virt_vm_cmd);
-
-    if (detected.compare("none") == 0) {
-        return "";
-    } else if (!detected.empty()) {
-        return detected;
-    }
-
+std::string detect_running_vm()
+{
+    if (std::string vm = readfile("/sys/hypervisor/type"); vm.size())
+        return vm;
 #if SANDSTONE_DEVICE_CPU
     // failed to detect the vm with systemd-detect-virt
     // but hypervisor is present so we report it as 'unknown'?
@@ -70,5 +48,5 @@ std::string detect_running_vm() {
     }
 #endif
 
-    return "";
+    return {};
 }

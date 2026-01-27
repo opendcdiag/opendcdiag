@@ -223,6 +223,13 @@ tap_negative_check() {
     test_yaml_numeric "/timing/duration" 'value == 1234'
     test_yaml_numeric "/timing/timeout" 'value == 12345'
 
+    if vm=`cat /sys/hypervisor/type 2>/dev/null`; then
+        test_yaml_expr "/virtualization-state/vm" = "$vm"
+    fi
+    if container=`cat /run/host/container-manager 2>/dev/null`; then
+        test_yaml_expr "/virtualization-state/container" = "$container"
+    fi
+
     if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
         # just verify these exist
         local machine=`uname -m`
