@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <sched.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -606,6 +607,7 @@ void logging_mark_thread_failed(int thread_num) noexcept
     if (thread_num >= 0) {
         auto tthr = static_cast<PerThreadData::Test *>(thr);
         tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
+        tthr->failing_cpu = LogicalProcessor(sched_getcpu());
     }
 }
 
@@ -1756,6 +1758,33 @@ void YamlLogger::maybe_print_messages_header(int fd)
     }
 }
 
+static std::string failing_cpu_info(PerThreadData::Test *thr, int device, LogLevelVerbosity verbosity)
+{
+    int failing_cpu = int(thr->failing_cpu);
+    if (failing_cpu < 0)
+        return {};      // no information
+
+#ifdef SANDSTONE_DEVICE_CPU
+    if (failing_cpu == cpu_info[device].cpu_number)
+        return {};      // same as `id` field printed above
+
+    // see if we can find the full information about this CPU
+    for (int i = 0; i < sApp->thread_count; ++i) {
+        if (cpu_info[i].cpu_number == failing_cpu)
+            return AbstractLogger::thread_id_header_for_device(i, verbosity);
+    }
+#endif
+
+    // either CPU not found for full ID or not testing CPUs
+#ifdef _WIN32
+    return stdprintf("{ logical-group: %2u, logical: %2u }",
+                     // see win32/cpu_affinity.cpp
+                     failing_cpu / 64u, failing_cpu % 64u);
+#else
+    return stdprintf("{ logical: %d }", failing_cpu);
+#endif
+}
+
 void YamlLogger::print_thread_header(int fd, int device, LogLevelVerbosity verbosity)
 {
     maybe_print_messages_header(fd);
@@ -1774,6 +1803,9 @@ void YamlLogger::print_thread_header(int fd, int device, LogLevelVerbosity verbo
             PerThreadData::Test *thr = sApp->test_thread_data(device);
             auto opts = FormatDurationOptions::WithoutUnit;
             if (std::string time = format_duration(thr->fail_time, opts); time.size()) {
+                std::string failed_cpu = failing_cpu_info(thr, device, verbosity);
+                if (failed_cpu.size())
+                    writeln(fd, indent_spaces(), "    failing-cpu: ", failed_cpu);
                 writeln(fd, indent_spaces(), "    state: failed");
                 writeln(fd, indent_spaces(), "    time-to-fail: ", time);
                 writeln(fd, indent_spaces(), "    loop-count: ",

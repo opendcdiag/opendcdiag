@@ -86,6 +86,7 @@ struct alignas(64) TestCommon : Common
     /* Number of iterations of the inner loop (aka #times test_time_condition called) */
     uint32_t inner_loop_count;
     uint32_t inner_loop_count_at_fail;
+    LogicalProcessor failing_cpu;
 
     /* Thread ID */
     std::atomic<tid_t> tid;
@@ -94,6 +95,7 @@ struct alignas(64) TestCommon : Common
     {
         Common::init();
         inner_loop_count = inner_loop_count_at_fail = 0;
+        failing_cpu = LogicalProcessor::None;
     }
 };
 } // namespace PerThreadData
