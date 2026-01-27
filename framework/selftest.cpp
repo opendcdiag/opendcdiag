@@ -7,6 +7,7 @@
 
 #include <inttypes.h>
 #include <limits.h>
+#include <sched.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
@@ -213,27 +214,9 @@ static int selftest_logs_options_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int get_cpu()
-{
-    int cpu_number = -1;
-#if defined(_WIN32)
-    PROCESSOR_NUMBER number;
-    GetCurrentProcessorNumberEx(&number);
-    // see win32/cpu_affinity.cpp
-    cpu_number = number.Group * 64 + number.Number;
-#elif defined(__linux__) || defined(__FreeBSD__)
-    cpu_number = sched_getcpu();
-#else
-    errno = ENOSYS;
-    log_skip(OSResourceIssueSkipCategory, "OS failed: %m");
-    return -1;
-#endif
-    return cpu_number;
-}
-
 static int selftest_logs_getcpu_run(struct test *test, int)
 {
-    int cpu_number = get_cpu();
+    int cpu_number = sched_getcpu();
     log_info("%d", cpu_number);
     return EXIT_SUCCESS;
 }
@@ -256,7 +239,7 @@ static int selftest_logs_reschedule_init(struct test *test)
 static int selftest_logs_reschedule_run(struct test *test, int thread)
 {
     sem_t *semaphores = (sem_t *) test->data;
-    int cpu_number = get_cpu();
+    int cpu_number = sched_getcpu();
     log_info("%d", cpu_number);
 
     // Let's wait unit previous CPU has finished
@@ -271,7 +254,7 @@ static int selftest_logs_reschedule_run(struct test *test, int thread)
     if (thread < thread_count()-1)
         sem_post(&semaphores[thread]);
 
-    cpu_number = get_cpu();
+    cpu_number = sched_getcpu();
     log_info("%d", cpu_number);
 
     return EXIT_SUCCESS;
