@@ -131,7 +131,7 @@ template <typename DeviceType, typename ResourceType, typename LambdaType> requi
 inline int for_each_handle(DeviceType device_handle, LambdaType func)
 {
     uint32_t count{};
-    ZE_CHECK(get_ze_handles(device_handle, count, nullptr));
+    ZE_CHECK(get_ze_handles(device_handle, count, static_cast<ResourceType*>(nullptr)));
     std::vector<ResourceType> res_handles(count);
     ZE_CHECK(get_ze_handles(device_handle, count, res_handles.data()));
     for (auto& res_handle : res_handles) {
