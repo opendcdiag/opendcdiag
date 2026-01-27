@@ -258,9 +258,31 @@ uint32_t mixin_from_device_info(int thread_num)
     return thread_num;
 }
 
+/// Get temperatures of all sensors inside all GPUs.
 void print_temperature_of_device()
 {
+    if (sApp->thermal_throttle_temp < 0)
+        return;     // temperature threshold disabled, do not check
 
+    std::string temp_string;
+    for_each_zes_device_within_topo([&](zes_device_handle_t zes_handle, ze_driver_handle_t, const MultiSliceGpu& indices){
+        std::vector<double> temps;
+        auto ret = for_each_handle<zes_temp_handle_t>(zes_handle, [&](zes_temp_handle_t res_handle) {
+            ZE_CHECK(zesTemperatureGetState(res_handle, &temps.emplace_back()));
+            return EXIT_SUCCESS;
+        });
+        if (ret != EXIT_SUCCESS) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# Could not read temperatures of GPU:%u (%x)\n", indices.gpu_number, ret); // print and continue
+        } else {
+            temp_string += "#";
+            for (auto i = 0; i < temps.size(); i++) {
+                temp_string += std::format(" G{}S{}: {:.1f}oC", indices.gpu_number, i, temps[i]);
+            }
+        }
+        temp_string += "\n";
+        return EXIT_SUCCESS;
+    });
+    logging_printf(LOG_LEVEL_VERBOSE(1), "# GPU temperatures: \n%s", temp_string.c_str());
 }
 
 /// Detect and return a set of all Intel devices present in the system.
