@@ -140,7 +140,7 @@ int for_each_ze_device_within_topo(std::function<int(ze_device_handle_t, ze_driv
     return for_each_device_within_topo_internal<ze_device_handle_t>(func);
 }
 
-int for_each_zes_device_within_topology(std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func)
+int for_each_zes_device_within_topo(std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func)
 {
     return for_each_device_within_topo_internal<zes_device_handle_t>(func);
 }
