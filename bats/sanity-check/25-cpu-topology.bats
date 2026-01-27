@@ -542,7 +542,13 @@ selftest_cpuset_negated() {
 # Confirm we are rescheduling properly
 @test "thread queue reschedule" {
     PLATFORM=$(uname -m)
-    [[ "${PLATFORM}" != "x86_64" || ${is_windows} ]] && skip "Not supported"
+    if [[ "${PLATFORM}" != "x86_64" ]]; then
+        skip "Not supported"
+    fi
+
+    if $is_windows; then
+       skip "Reschedule isn't supported "
+    fi
 
     run $SANDSTONE --selftests -e selftest_logs_reschedule --reschedule=queue
     [[ $status == 64 ]] && false
