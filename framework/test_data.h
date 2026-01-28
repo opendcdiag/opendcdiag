@@ -10,6 +10,15 @@
 
 #include <atomic>
 
+struct DeviceRange
+{
+    // a contiguous range
+    int starting_device;
+    int device_count;
+};
+
+enum class LogicalProcessor : int { None = -1 };
+
 enum ThreadState : int {
     thread_not_started = 0,
     thread_running = 1,
