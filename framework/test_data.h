@@ -9,6 +9,7 @@
 #include "sandstone_chrono.h"
 
 #include <atomic>
+#include "gettid.h"
 
 enum ThreadState : int {
     thread_not_started = 0,
