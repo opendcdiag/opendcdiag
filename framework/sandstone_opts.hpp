@@ -26,7 +26,7 @@ struct ProgramOptions {
     bool fatal_errors = false;
     const char* on_hang_arg = nullptr;
     const char* on_crash_arg = nullptr;
-    std::string deviceset; // not sure about those strings...
+    std::vector<const char*> deviceset;
 
     std::string list_group_name; // for list_group
     bool list_tests_include_descriptions = false; // for list_tests
