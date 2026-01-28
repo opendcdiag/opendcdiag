@@ -18,8 +18,6 @@
 #include <assert.h>
 #include <stdint.h>
 
-#include "gettid.h"
-
 class DeviceScheduler {
 public:
     virtual ~DeviceScheduler() = default;
