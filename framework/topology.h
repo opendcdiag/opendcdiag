@@ -6,6 +6,8 @@
 #ifndef INC_TOPOLOGY_H
 #define INC_TOPOLOGY_H
 
+#include "test_data.h"
+
 #include <bit>
 #include <memory>
 #include <limits>
@@ -35,15 +37,6 @@ public:
 std::unique_ptr<DeviceScheduler> make_rescheduler(RescheduleMode mode);
 
 using PerThreadFailures = std::vector<__uint128_t>;
-
-struct DeviceRange
-{
-    // a contiguous range
-    int starting_device;
-    int device_count;
-};
-
-enum class LogicalProcessor : int { None = -1 };
 
 struct LogicalProcessorSetOps
 {
