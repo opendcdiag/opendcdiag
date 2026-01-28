@@ -18,8 +18,6 @@
 #include <assert.h>
 #include <stdint.h>
 
-#include "gettid.h"
-
 enum class RescheduleMode : int8_t {
     unset = -1,
     none  =  0,
