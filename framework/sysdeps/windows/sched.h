@@ -8,16 +8,7 @@
 #ifndef WIN32_SCHED_H
 #define WIN32_SCHED_H
 
-#include <x86intrin.h>
-
-static inline int sched_getcpu(void)
-{
-    // On Windows, we can use rdtscp from user mode (introduced on HSW)
-    unsigned tscaux = -1;
-
-    __rdtscp(&tscaux);  // TSC_AUX
-
-    return (int)tscaux;
-}
+// implemened in cpu_affinity.cpp
+int sched_getcpu(void);
 
 #endif /* WIN32_SCHED_H */

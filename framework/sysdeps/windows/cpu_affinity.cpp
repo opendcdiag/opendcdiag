@@ -18,6 +18,13 @@ static constexpr LogicalProcessor from_processor_number(PROCESSOR_NUMBER n)
     return LogicalProcessor(n.Group * MaxLogicalProcessorsPerGroup + n.Number);
 }
 
+int sched_getcpu()
+{
+    PROCESSOR_NUMBER number;
+    GetCurrentProcessorNumberEx(&number);
+    return number.Group * MaxLogicalProcessorsPerGroup + number.Number;
+}
+
 LogicalProcessorSet ambient_logical_processor_set()
 {
     LogicalProcessorSet result = {};        // memsets to zero
