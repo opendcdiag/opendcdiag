@@ -18,6 +18,13 @@
 
 #include "gettid.h"
 
+enum class RescheduleMode : int8_t {
+    none    = 0,
+    queue,
+    barrier,
+    random,
+};
+
 class DeviceScheduler {
 public:
     virtual ~DeviceScheduler() = default;
@@ -25,7 +32,7 @@ public:
     virtual void finish_reschedule() = 0;
 };
 
-std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode);
+std::unique_ptr<DeviceScheduler> make_rescheduler(RescheduleMode mode);
 
 using PerThreadFailures = std::vector<__uint128_t>;
 
