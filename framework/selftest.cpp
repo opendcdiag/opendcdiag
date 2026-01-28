@@ -378,14 +378,14 @@ static int selftest_logerror_cleanup(struct test *test)
 
 template <int PackageId> static int selftest_log_skip_socket_init(struct test *test)
 {
-    if (num_packages() == 1 && cpu_info[0].package_id == PackageId)
+    if (num_packages() == 1 && device_info[0].package_id == PackageId)
         return selftest_log_skip_init(test);
     return EXIT_SUCCESS;
 }
 
 template <int PackageId> static int selftest_log_skip_socket_run(struct test *test, int thread)
 {
-    if (num_packages() == 1 && cpu_info[0].package_id == PackageId)
+    if (num_packages() == 1 && device_info[0].package_id == PackageId)
         return selftest_skip_run(test, thread);
     return EXIT_SUCCESS;
 }
@@ -462,7 +462,7 @@ static int adjust_cpu_for_isolate_socket(int cpu)
 {
     // pretend we're running in test_schedule_isolate_socket
     for (int cpu0 = cpu - 1; cpu0 >= 0; --cpu0) {
-        if (cpu_info[cpu0].package_id == cpu_info[cpu].package_id)
+        if (device_info[cpu0].package_id == device_info[cpu].package_id)
             continue;
         return cpu - cpu0 - 1;
     }
@@ -472,14 +472,14 @@ static int adjust_cpu_for_isolate_socket(int cpu)
 
 template <auto F> static int selftest_if_socket1_initcleanup(struct test *test)
 {
-    if (cpu_info[0].package_id == 1)
+    if (device_info[0].package_id == 1)
         return F(test);
     return EXIT_SUCCESS;
 }
 
 template <auto F> static int selftest_if_socket1_run(struct test *test, int thread)
 {
-    if (cpu_info[thread].package_id == 1)
+    if (device_info[thread].package_id == 1)
         return F(test, adjust_cpu_for_isolate_socket(thread));
     return EXIT_SUCCESS;
 }

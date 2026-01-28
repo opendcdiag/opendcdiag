@@ -75,7 +75,7 @@ int mce_check_run(struct test *test, int thread)
     // check the CPUs we were running tests on
     for (int i = 0; i < thread_count(); ++i) {
         // translate our thread number to the OS CPU number
-        thread = cpu_info[i].cpu_number;
+        thread = device_info[i].cpu_number;
         assert(thread < int(differences.size()));
 
         if (differences[thread] != 0) {

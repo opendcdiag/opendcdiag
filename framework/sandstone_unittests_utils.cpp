@@ -8,7 +8,7 @@
 #define UNITTESTS_THREAD_COUNT 16
 
 /* Define dummy setup struct that can be used by unittests when needed */
-device_info_t *cpu_info = nullptr;
+device_info_t *device_info = nullptr;
 
 /* Define dummy number of dummy threads */
 int thread_count() { return UNITTESTS_THREAD_COUNT; }

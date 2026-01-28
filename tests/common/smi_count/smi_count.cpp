@@ -25,7 +25,7 @@ std::vector<uint64_t> smi_counts_start;
 
 int initialize_smi_counts(struct test*)
 {
-    std::optional<uint64_t> v = InterruptMonitor::count_smi_events(cpu_info[0].cpu_number);
+    std::optional<uint64_t> v = InterruptMonitor::count_smi_events(device_info[0].cpu_number);
     if (!v) {
         log_skip(RuntimeSkipCategory, "Could not read msr");
         return EXIT_SKIP;
@@ -33,7 +33,7 @@ int initialize_smi_counts(struct test*)
     smi_counts_start.resize(thread_count());
     smi_counts_start[0] = *v;
     for (int i = 1; i < thread_count(); i++) {
-        smi_counts_start[i] = InterruptMonitor::count_smi_events(cpu_info[i].cpu_number).value_or(0);
+        smi_counts_start[i] = InterruptMonitor::count_smi_events(device_info[i].cpu_number).value_or(0);
     }
     return EXIT_SUCCESS;
 }
@@ -43,7 +43,7 @@ int smi_count_run(struct test *test, int thread)
     (void) test;
 
     if (int(smi_counts_start.size()) > thread) {
-        int real_cpu_number = cpu_info[thread].cpu_number;
+        int real_cpu_number = device_info[thread].cpu_number;
         auto initial_count = smi_counts_start[thread];
         auto current_count = InterruptMonitor::count_smi_events(real_cpu_number);
         if (current_count) {
