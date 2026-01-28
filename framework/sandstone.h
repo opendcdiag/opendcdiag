@@ -310,6 +310,9 @@ typedef enum test_flag {
     /// Indicates that test will be run entirely in parent, regardless of mode selected
     /// from the command line.
     test_in_parent                  = 0x20000,
+
+    /// Indicates that test will require to use L0 Sysman API apart from Core L0.
+    test_requires_sysman            = 0x40000,
 } test_flags;
 
 struct test_data_per_thread
