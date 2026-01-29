@@ -128,14 +128,14 @@ int num_packages()
     return Topology::topology().packages.size();
 }
 
-std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode)
+std::unique_ptr<DeviceScheduler> make_rescheduler(RescheduleMode mode)
 {
     std::unique_ptr<DeviceScheduler> res;
-    if (mode == "barrier") {
+    if (mode == RescheduleMode::barrier) {
         res = std::make_unique<BarrierDeviceScheduler>();
-    } else if (mode == "queue") {
+    } else if (mode == RescheduleMode::queue) {
         res = std::make_unique<QueueDeviceScheduler>();
-    } else if (mode == "random") {
+    } else if (mode == RescheduleMode::random) {
         res = std::make_unique<RandomDeviceScheduler>();
     }
     return res;
