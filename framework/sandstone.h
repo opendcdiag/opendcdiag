@@ -569,6 +569,8 @@ int thread_count() __attribute__((pure));
 /// test.
 int num_packages() __attribute__((pure));
 
+extern int8_t sandstone_verbosity_level() __attribute__((pure));
+
 #ifdef __cplusplus
 }
 

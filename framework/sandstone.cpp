@@ -2471,6 +2471,11 @@ int thread_count()
     return sApp->thread_count;
 }
 
+int8_t sandstone_verbosity_level()
+{
+    return std::to_underlying(sApp->shmem->cfg.verbosity);
+}
+
 static void background_scan_update_load_threshold(MonotonicTimePoint now)
 {
     using namespace SandstoneBackgroundScanConstants;
