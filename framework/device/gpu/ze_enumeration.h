@@ -125,7 +125,7 @@ using return_type_of_t =
 /// Function containing boilerplate code for enumerating resources. It is a common pattern of level-zero API
 /// to first get number of resources, and then enumerate them, using the same enumerating function for both tasks.
 /// Calls func for each found resource handle.
-template <typename DeviceType, typename ResourceType, typename LambdaType> requires
+template <typename ResourceType, typename DeviceType, typename LambdaType> requires
     std::is_same_v<return_type_of_t<LambdaType>, int> &&
     std::is_invocable_v<LambdaType, ResourceType>
 inline int for_each_handle(DeviceType device_handle, LambdaType func)
