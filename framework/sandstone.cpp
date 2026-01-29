@@ -2661,9 +2661,8 @@ int main(int argc, char **argv)
             return EX_USAGE;
         }
         if (sApp->device_scheduler) {
-            fprintf(stderr, "%s: error: --reschedule is not supported in this configuration\n",
-                    program_invocation_name);
-            return EX_USAGE;
+            sApp->device_scheduler = nullptr;
+            logging_printf(LOG_LEVEL_VERBOSE(1), "# WARNING: --reschedule is not supported in this configuration\n");
         }
     }
 
