@@ -34,6 +34,12 @@ tests_common_cpp_args = [
     default_cpp_flags,
 ]
 
+if target_device == 'spirv'
+    tests_common_cpp_args += [
+        '-DSPIRV_KERNELS_FORMAT',
+    ]
+endif
+
 tests_common_incdirs = [
     framework_incdir,
 ]
