@@ -2652,6 +2652,8 @@ int main(int argc, char **argv)
         check_and_exit_for_no_device();
         break; // continue program
     }
+    sApp->device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
+
     if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
         if (sApp->shmem->cfg.log_test_knobs) {
             fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",

@@ -245,6 +245,7 @@ struct TestConfig
     bool selftest = false;
     bool ud_on_failure = false;
     bool use_strict_runtime = false;
+    RescheduleMode reschedule_mode = RescheduleMode::none;
 
     // logging parameters
     LogLevelVerbosity verbosity = LogLevelVerbosity::Error;

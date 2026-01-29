@@ -130,15 +130,14 @@ int num_packages()
 
 std::unique_ptr<DeviceScheduler> make_rescheduler(RescheduleMode mode)
 {
-    std::unique_ptr<DeviceScheduler> res;
     if (mode == RescheduleMode::barrier) {
-        res = std::make_unique<BarrierDeviceScheduler>();
+        return std::make_unique<BarrierDeviceScheduler>();
     } else if (mode == RescheduleMode::queue) {
-        res = std::make_unique<QueueDeviceScheduler>();
+        return std::make_unique<QueueDeviceScheduler>();
     } else if (mode == RescheduleMode::random) {
-        res = std::make_unique<RandomDeviceScheduler>();
+        return std::make_unique<RandomDeviceScheduler>();
     }
-    return res;
+    return nullptr;
 }
 
 namespace {
