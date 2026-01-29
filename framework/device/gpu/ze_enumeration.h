@@ -118,17 +118,11 @@ inline ze_result_t get_ze_properties(zes_temp_handle_t handle, zes_temp_properti
     return zesTemperatureGetProperties(handle, props);
 }
 
-template<typename Callable>
-using return_type_of_t =
-    typename decltype(std::function{std::declval<Callable>()})::result_type;
-
 /// Function containing boilerplate code for enumerating resources. It is a common pattern of level-zero API
 /// to first get number of resources, and then enumerate them, using the same enumerating function for both tasks.
 /// Calls func for each found resource handle.
-template <typename DeviceType, typename ResourceType, typename LambdaType> requires
-    std::is_same_v<return_type_of_t<LambdaType>, int> &&
-    std::is_invocable_v<LambdaType, ResourceType>
-inline int for_each_handle(DeviceType device_handle, LambdaType func)
+template <typename ResourceType, typename DeviceType>
+inline int for_each_handle(DeviceType device_handle, std::function<int(ResourceType)> func)
 {
     uint32_t count{};
     ZE_CHECK(get_ze_handles(device_handle, count, static_cast<ResourceType*>(nullptr)));
