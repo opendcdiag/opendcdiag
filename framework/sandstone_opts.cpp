@@ -875,9 +875,17 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(reschedule_option)) {
-            app_cfg->device_scheduler = make_rescheduler(value);
-            if (!app_cfg->device_scheduler) {
-                fprintf(ERR_STREAM, "%s: unknown reschedule option: %s\n", argv[0], value);
+            std::string_view str_value(value);
+            if (str_value == "queue") {
+                app_cfg->device_scheduler = make_rescheduler(RescheduleMode::queue);
+            } else if (str_value == "barrier") {
+                app_cfg->device_scheduler = make_rescheduler(RescheduleMode::barrier);
+            } else if (str_value == "random") {
+                app_cfg->device_scheduler = make_rescheduler(RescheduleMode::random);
+            } else if (str_value == "none") {
+                app_cfg->device_scheduler = make_rescheduler(RescheduleMode::none);
+            } else {
+                fprintf(ERR_STREAM, "%s: unknown reschedule mode: %s\n", argv[0], value);
                 return EX_USAGE;
             }
         }

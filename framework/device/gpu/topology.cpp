@@ -24,7 +24,7 @@ int num_packages()
     return 1;
 }
 
-std::unique_ptr<DeviceScheduler> make_rescheduler(std::string_view mode)
+std::unique_ptr<DeviceScheduler> make_rescheduler(RescheduleMode mode)
 {
     return nullptr;
 }
