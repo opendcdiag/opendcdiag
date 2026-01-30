@@ -166,6 +166,7 @@ typedef enum TestQuality {
 
 #define END_DECLARE_TEST   };
 
+#ifndef OVERLOAD
 /// Variadic macros to count the number of arguments passed to other macro.
 /// @see OVERLOAD()
 #define NARGN(\
@@ -202,8 +203,9 @@ static_assert(NARGS(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
  * or with two arguments (e.g. where number might be expressed as rational number)
  * All possible expressions must be defined, otherwise the code won't compile.
  */
-#define OVERLOAD_(name,num) name##num
-#define OVERLOAD(name,num) OVERLOAD_(name,num)
+#define OVERLOAD_(name,nargs) name##nargs
+#define OVERLOAD(name,nargs) OVERLOAD_(name,nargs)
+#endif
 
 /**
  * Variadic macro to suppress warnings on unused arguments/variables
@@ -540,6 +542,10 @@ static inline long double frandoml()
     return frandoml_scale(1.0L);
 }
 
+extern uint64_t get_random_bits31(uint32_t num_bits);
+extern uint64_t get_random_bits128(uint32_t num_bits);
+extern uint32_t get_random_value31(uint32_t range);
+
 /// Returns a 64 bit unsigned integer in which num_bits_to_set of the
 /// first bitwidth bits are randomly set.  For example,
 /// set_random_bits(2, 8) would return a uint64_t in which 2 of the
@@ -570,6 +576,35 @@ int thread_count() __attribute__((pure));
 int num_packages() __attribute__((pure));
 
 #ifdef __cplusplus
+}
+
+template<typename T>
+inline T get_random_bits(uint32_t num_bits) {
+    // TODO optimize for AES
+    if constexpr (std::is_same<T, uint8_t>::value) {
+        assert((num_bits <= 8) && "Requested number of bits must fit the type");
+        return static_cast<uint8_t>(get_random_bits31(num_bits));
+    } else if constexpr (std::is_same<T, uint16_t>::value) {
+        assert((num_bits <= 16) && "Requested number of bits must fit the type");
+        return static_cast<uint16_t>(get_random_bits31(num_bits));
+    } else if constexpr (std::is_same<T, uint32_t>::value) {
+        assert((num_bits <= 32) && "Requested number of bits must fit the type");
+        return static_cast<uint32_t>(get_random_bits31(num_bits));
+    } else if constexpr (std::is_same<T, uint64_t>::value) {
+        assert((num_bits <= 64) && "Requested number of bits must fit the type");
+        return get_random_bits31(num_bits);
+    } else {
+        static_assert(NotImplementedFor<T>::value, "Unsupported type for get_random_bits()");
+    }
+}
+
+template<typename T>
+inline T get_random_value(T range) {
+    if constexpr (std::is_same<T, uint32_t>::value) {
+        return get_random_value31(range);
+    } else {
+        static_assert(NotImplementedFor<T>::value, "Unsupported type for get_random_value()");
+    }
 }
 
 constexpr inline test_flags operator|(test_flag f1, test_flag f2)
