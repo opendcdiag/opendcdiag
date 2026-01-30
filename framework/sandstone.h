@@ -324,6 +324,8 @@ struct kvm_config;
 typedef struct kvm_config kvm_config_t;
 typedef const kvm_config_t *(*kvmconfigfunc)(void);
 
+typedef const char* xcmp_tag_t;
+
 struct test {
     /* metadata */
     /// filled in by the DECLARE_TEST macro
@@ -390,12 +392,19 @@ struct test {
     /// free them in the test_cleanup function.
     void *data;
     struct test_data_per_thread *per_thread;
+    void *xcmp_data;
 };
 
 /* internal functions; see C macro and C++ templates at the end of this file */
 extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);
 extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, enum DataType, const char *fmt, ...)
     ATTRIBUTE_PRINTF(5, 6) __attribute__((cold, noreturn));
+
+typedef int (*memcmp_func_t)(void *actual, void *expected, size_t size);
+extern int _default_memcmp(void *actual, void *expected, size_t size);
+
+extern int cross_compare_internal(struct test *test, xcmp_tag_t tag, void *actual, size_t count, memcmp_func_t memcmp_func);
+extern void *cross_compare_get_expected(struct test *test, xcmp_tag_t tag);
 
 /// Installs @p cb and will call it (with @p token as a parameter) the first
 /// time this thread logs an error (with memcmp_or_fail(), log_error(),
@@ -632,6 +641,28 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 {
     return memcmp_or_fail(actual, expected, count, nullptr);
 }
+
+/// Works similarly to memcmp_or_fail, but the first time it's called it
+/// copies the expected value from the 'actual'. Then in subsequent calls
+/// the function compares it to other values passed in 'actual'. The data being
+/// compared is identified by a string 'tag'.
+template <typename T> static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
+cross_compare(struct test* test, xcmp_tag_t tag, T *actual, size_t count, memcmp_func_t memcmp_func = _default_memcmp) {
+    return static_cast<T>(cross_compare_internal(test, tag, actual, sizeof(T) * count, memcmp_func));
+}
+
+/// just like above, but instead of returning the result of the 'memcmp_func',
+/// reports fail if comparison failed.
+template <typename T, typename... FmtArgs> static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
+cross_compare_or_fail(struct test *test, xcmp_tag_t tag, T *actual, size_t count, const char *fmt, FmtArgs &&... args)
+{
+    assert(_memcmp_or_fail_check_fmt_nonewline(fmt, std::forward<FmtArgs>(args)...)
+           && "Data descriptions should not include a newline");
+
+    if(cross_compare<T>(test, tag, actual, count) != 0)
+        memcmp_fail_report(actual, cross_compare_get_expected(test, tag), count, fmt, std::forward<FmtArgs>(args)...);
+}
+
 #pragma GCC diagnostic pop
 
 #else
@@ -659,6 +690,23 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
     })
 #define memcmp_or_fail(actual, expected, size, ...) \
     _memcmp_or_fail(actual, expected, size, "" __VA_ARGS__)
+
+#define _cross_compare_or_fail(test, tag, actual, count, fmt, ...)  \
+    __extension__ ({                                                \
+        __auto_type _actual = (actual);                             \
+        size_t _size = sizeof(*_actual) * (count);                  \
+        if (cross_compare_internal((test), (tag), _actual, _size, _default_memcmp) != 0) \
+            memcmp_fail_report(_actual, cross_compare_get_expected((test), (tag)), (count), fmt, ##__VA_ARGS__); \
+    })
+#define cross_compare_or_fail(test, tag, actual, count, ...) \
+    _cross_compare_or_fail(test, tag, actual, count, "" __VA_ARGS__)
+
+#define cross_compare(test, tag, actual, count, memcmp_func) \
+    __extension__ ({                                                \
+        __auto_type _actual = (actual);                             \
+        size_t _size = sizeof(*_actual) * (count);                  \
+        cross_compare_internal(test, tag, _actual, _size, memcmp_func); \
+    })
 
 #endif
 
