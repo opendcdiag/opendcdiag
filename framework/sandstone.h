@@ -324,6 +324,8 @@ struct kvm_config;
 typedef struct kvm_config kvm_config_t;
 typedef const kvm_config_t *(*kvmconfigfunc)(void);
 
+typedef const char* xcmp_tag_t;
+
 struct test {
     /* metadata */
     /// filled in by the DECLARE_TEST macro
@@ -396,6 +398,9 @@ struct test {
 extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);
 extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, enum DataType, const char *fmt, ...)
     ATTRIBUTE_PRINTF(5, 6) __attribute__((cold, noreturn));
+
+extern int cross_compare_internal(xcmp_tag_t tag, void *actual, size_t count);
+extern void *cross_compare_get_expected(xcmp_tag_t tag);
 
 /// Installs @p cb and will call it (with @p token as a parameter) the first
 /// time this thread logs an error (with memcmp_or_fail(), log_error(),
@@ -632,6 +637,21 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 {
     return memcmp_or_fail(actual, expected, count, nullptr);
 }
+
+/// Works similarly to memcmp_or_fail, but the first time it's called it
+/// copies the expected value from the 'actual'. Then in subsequent calls
+/// the function compares it to other values passed in 'actual'. The data being
+/// compared is identified by a string 'tag'.
+template <typename T, typename... FmtArgs> static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
+cross_compare_or_fail(xcmp_tag_t tag, T *actual, size_t count, const char *fmt, FmtArgs &&... args)
+{
+    assert(_memcmp_or_fail_check_fmt_nonewline(fmt, std::forward<FmtArgs>(args)...)
+           && "Data descriptions should not include a newline");
+
+    if(cross_compare_internal(tag, actual, sizeof(T) * count) != 0)
+        memcmp_fail_report(actual, cross_compare_get_expected(tag), count, fmt, std::forward<FmtArgs>(args)...);
+}
+
 #pragma GCC diagnostic pop
 
 #else
@@ -659,6 +679,16 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
     })
 #define memcmp_or_fail(actual, expected, size, ...) \
     _memcmp_or_fail(actual, expected, size, "" __VA_ARGS__)
+
+#define _cross_compare_or_fail(tag, actual, count, fmt, ...)  \
+    __extension__ ({                                                \
+        __auto_type _actual = (actual);                             \
+        size_t _size = sizeof(*_actual) * (count);                  \
+        if (cross_compare_internal((tag), _actual, _size) != 0) \
+            memcmp_fail_report(_actual, cross_compare_get_expected((tag)), (count), fmt, ##__VA_ARGS__); \
+    })
+#define cross_compare_or_fail(tag, actual, count, ...) \
+    _cross_compare_or_fail(tag, actual, count, "" __VA_ARGS__)
 
 #endif
 

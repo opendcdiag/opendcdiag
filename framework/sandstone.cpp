@@ -12,8 +12,8 @@
 
 #include <chrono>
 #include <new>
-#include <map>
 #include <vector>
+#include <memory>
 
 #include <assert.h>
 #include <errno.h>
@@ -363,6 +363,45 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
             return i;
     }
     return -1;
+}
+
+int cross_compare_internal(xcmp_tag_t tag,
+        void* actual, size_t size)
+{
+    if (!sApp->xcmp_thread_data.at(thread_num)) {
+        sApp->xcmp_thread_data.at(thread_num) =
+            std::make_unique<xcmp_thread_data_t>();
+    }
+
+    auto map = sApp->xcmp_thread_data.at(thread_num).get();
+
+    if (map->find(tag) != map->end()) {
+        return __builtin_memcmp(actual, map->at(tag), size);
+    } else {
+        void* p = malloc(size);
+        memcpy(p, actual, size);
+        map->insert({std::string(tag), p});
+    }
+
+    return 0;
+}
+
+void *cross_compare_get_expected(xcmp_tag_t tag) {
+    if (!sApp->xcmp_thread_data.at(thread_num)) {
+        return NULL;
+    }
+
+    auto map = sApp->xcmp_thread_data.at(thread_num).get();
+
+    if (map->find(tag) != map->end()) {
+        return map->at(tag);
+    }
+
+    return NULL;
+}
+
+static void cross_compare_cleanup_internal() {
+    sApp->xcmp_thread_data.clear();
 }
 
 #ifndef NDEBUG
@@ -784,6 +823,7 @@ static void init_per_thread_data()
 
 static void cleanup_internal(const struct test *test)
 {
+    cross_compare_cleanup_internal();
     logging_finish();
 }
 
@@ -897,6 +937,8 @@ static uintptr_t thread_runner(int thread_number)
     PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
     random_init_thread(thread_number);
     int ret = EXIT_FAILURE;
+
+    sApp->xcmp_thread_data.resize(sApp->thread_count);
 
     auto cleanup = scopeExit([&] {
         // let SIGQUIT handler know we're done
