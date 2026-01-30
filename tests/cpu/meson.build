@@ -80,6 +80,7 @@ tests_set_base.add(
         'eigen_svd_jacobi/svd_cdouble.cpp',
         'eigen_svd_jacobi/svd_double.cpp',
         'eigen_svd_jacobi/svd_fvectors.cpp',
+        'cross_compare_demo/cross_compare_demo.c'
     )
 )
 

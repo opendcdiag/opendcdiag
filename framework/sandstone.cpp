@@ -365,6 +365,63 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
     return -1;
 }
 
+struct xcmp_data_element
+{
+    std::atomic<void*> ptr;
+    size_t size;
+};
+
+typedef struct xcmp_data_element xcmp_data_element_t;
+
+struct xcmp_data
+{
+    std::unique_ptr<xcmp_data_element_t[]> data;
+    size_t tags_count;
+};
+
+typedef struct xcmp_data xcmp_data_t;
+
+void cross_compare_init(struct test* test, size_t tags_count) {
+    auto xcmp = new xcmp_data_t {
+        std::make_unique<xcmp_data_element[]>(tags_count),
+        tags_count
+    };
+
+    for (size_t tag = 0; tag < tags_count; ++tag) {
+        xcmp->data[tag].ptr.store(nullptr);
+        xcmp->data[tag].size = 0;
+    }
+
+    test->xcmp = xcmp;
+}
+
+extern void cross_compare_set_size(struct test* test, xcmp_tag_t tag, size_t size) {
+    auto xcmp = static_cast<xcmp_data_t*>(test->xcmp);
+    if (tag < xcmp->tags_count) {
+        xcmp->data[tag].size = size;
+    }
+}
+
+void cross_compare_or_fail(struct test* test, xcmp_tag_t tag, void* actual) {
+    auto xcmp = static_cast<xcmp_data_t*>(test->xcmp);
+    if (tag < xcmp->tags_count) {
+        auto data = &xcmp->data[tag];
+        if(data->ptr.load() == nullptr) {
+            // FIXME: free this memory, so we avoid leaks
+            // TODO: probably should use some locks
+            void* p = malloc(data->size);
+            memcpy(p, actual, data->size);
+            data->ptr.store(p);
+        } else {
+            memcmp_or_fail(actual, data->ptr.load(), data->size);
+        }
+    }
+}
+
+void cross_compare_cleanup(struct test* test) {
+    delete static_cast<xcmp_data*>(test->xcmp);
+}
+
 #ifndef NDEBUG
 bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...)
 {
