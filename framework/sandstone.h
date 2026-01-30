@@ -324,6 +324,8 @@ struct kvm_config;
 typedef struct kvm_config kvm_config_t;
 typedef const kvm_config_t *(*kvmconfigfunc)(void);
 
+typedef const char* xcmp_tag_t;
+
 struct test {
     /* metadata */
     /// filled in by the DECLARE_TEST macro
@@ -390,7 +392,13 @@ struct test {
     /// free them in the test_cleanup function.
     void *data;
     struct test_data_per_thread *per_thread;
+    void *xcmp_data;
 };
+
+typedef int (*memcmp_func_t)(void *actual, void *expected, size_t size);
+
+extern void cross_compare_or_fail(struct test *test, xcmp_tag_t tag, void *actual, size_t size);
+extern int cross_compare(struct test* test, xcmp_tag_t tag, void* actual, size_t size, memcmp_func_t memcmp_func);
 
 /* internal functions; see C macro and C++ templates at the end of this file */
 extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);

@@ -13,6 +13,7 @@
 #include <chrono>
 #include <new>
 #include <map>
+#include <semaphore>
 #include <vector>
 
 #include <assert.h>
@@ -363,6 +364,63 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
             return i;
     }
     return -1;
+}
+
+typedef struct
+{
+    std::map<std::string, void*> map;
+    std::binary_semaphore sem;
+} xcmp_data_t;
+
+static int cross_compare_internal(struct test* test, xcmp_tag_t tag,
+        void* actual, size_t size, memcmp_func_t memcmp_func) {
+    if (!test->xcmp_data) {
+        test->xcmp_data = new xcmp_data_t { .sem{1} };
+    }
+
+    auto xcmp = static_cast<xcmp_data_t*>(test->xcmp_data);
+
+    xcmp->sem.acquire();
+    if (xcmp->map.contains(tag)) {
+        // since we know the tag is there,
+        // so should be the data and we can release the lock
+        //xcmp->sem.release();
+
+        xcmp->sem.release();
+        return memcmp_func(actual, xcmp->map.at(tag), size);
+    } else {
+        void* p = malloc(size);
+        memcpy(p, actual, size);
+        xcmp->map.insert({std::string(tag), p});
+    }
+    xcmp->sem.release();
+
+    return 0;
+}
+
+int cross_compare(struct test* test, xcmp_tag_t tag, void* actual, size_t size, memcmp_func_t memcmp_func) {
+    return cross_compare_internal(test, tag, actual, size, memcmp_func);
+}
+
+void cross_compare_or_fail(struct test* test, xcmp_tag_t tag, void* actual, size_t size) {
+    IGNORE_RETVAL(cross_compare_internal(test, tag, actual, size,
+            [](void* actual, void* expected, size_t size) {
+                memcmp_or_fail(actual, expected, size);
+                return 0;
+            }
+    ));
+}
+
+static void cross_compare_cleanup_internal(const struct test* test) {
+    if (test->xcmp_data) {
+        auto xcmp = static_cast<xcmp_data_t*>(test->xcmp_data);
+        for (const auto& [tag, ptr] : xcmp->map) {
+            if(ptr) {
+                free(ptr);
+            }
+        }
+        delete xcmp;
+    }
 }
 
 #ifndef NDEBUG
@@ -784,6 +842,7 @@ static void init_per_thread_data()
 
 static void cleanup_internal(const struct test *test)
 {
+    cross_compare_cleanup_internal(test);
     logging_finish();
 }
 
