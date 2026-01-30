@@ -1510,22 +1510,32 @@ function selftest_datacompare_nodifference_common() {
     fail_callback_common
 }
 
-@test "selftest_freeze" {
-    declare -A yamldump
-    sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze --timeout=1s
-    [[ "$status" -eq 2 ]]
-    test_yaml_regexp "/exit" invalid
-    test_yaml_regexp "/tests/0/result" 'timed out'
-    test_yaml_numeric "/tests/0/test-runtime" 'value >= 1000'
-    test_yaml_numeric "/tests/0/threads/0/runtime" 'value >= 1000'
-    if ! $is_windows; then
-        test_yaml_regexp "/tests/0/threads/0/resource-usage" '\{.*\}'
-    fi
+selftest_freeze_msgs_common() {
     for ((i = 1; i <= MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/state" failed
+        test_yaml_numeric "/tests/0/threads/$i/context/device" "value == $i - 1"
+        test_yaml_numeric "/tests/0/threads/$i/context/timeout" 'value != 0'
         n=$((-1 + yamldump[/tests/0/threads/$i/messages@len]))
         test_yaml_regexp "/tests/0/threads/$i/messages/$n/text" '.*Thread is stuck'
     done
+}
+
+selftest_freeze_common() {
+    [[ "$status" -eq 2 ]]
+    test_yaml_regexp "/exit" invalid
+    test_yaml_regexp "/tests/0/result" 'timed out'
+    test_yaml_numeric "/tests/0/test-runtime" 'value >= 500'
+    test_yaml_numeric "/tests/0/threads/0/runtime" 'value >= 500'
+    if ! $is_windows; then
+        test_yaml_regexp "/tests/0/threads/0/resource-usage" '\{.*\}'
+    fi
+    selftest_freeze_msgs_common
+}
+
+@test "selftest_freeze" {
+    declare -A yamldump
+    sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze --timeout=1s
+    selftest_freeze_common
 }
 
 @test "ps on selftest_freeze" {
@@ -1537,9 +1547,7 @@ function selftest_datacompare_nodifference_common() {
     local newline=$'\n'
     declare -A yamldump
     sandstone_selftest -vvv --on-crash=kill --on-hang=ps -e selftest_freeze --timeout=500
-    [[ "$status" -eq 2 ]]
-    test_yaml_regexp "/exit" invalid
-    test_yaml_regexp "/tests/0/result" 'timed out'
+    selftest_freeze_common
     test_yaml_regexp "/tests/0/threads/0/messages/0/level" 'info'
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" ".*\bPID\b.*\bCOMMAND\b.*${newline}.*\bcontrol\b.*"
 }
@@ -1550,9 +1558,7 @@ function selftest_datacompare_nodifference_common() {
     fi
     declare -A yamldump
     sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_exit_on_termination --timeout=500
-    [[ "$status" -eq 2 ]]
-    test_yaml_regexp "/exit" invalid
-    test_yaml_regexp "/tests/0/result" 'timed out'
+    selftest_freeze_common
 }
 
 @test "selftest_freeze_ignore_termination" {
@@ -1561,9 +1567,7 @@ function selftest_datacompare_nodifference_common() {
     fi
     declare -A yamldump
     sandstone_selftest -vvv --on-crash=kill --on-hang=kill -e selftest_freeze_ignore_termination --timeout=500
-    [[ "$status" -eq 2 ]]
-    test_yaml_regexp "/exit" invalid
-    test_yaml_regexp "/tests/0/result" 'timed out'
+    selftest_freeze_common
 }
 
 @test "selftest_freeze_fork" {
@@ -1603,6 +1607,7 @@ function selftest_datacompare_nodifference_common() {
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" 'timed out'
+    selftest_freeze_msgs_common
 }
 
 selftest_crash_common() {
