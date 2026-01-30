@@ -880,6 +880,7 @@ struct ProgramOptionsParser {
                 fprintf(ERR_STREAM, "%s: unknown reschedule option: %s\n", argv[0], value);
                 return EX_USAGE;
             }
+            reschedule_enabled = true;
         }
 
         if (auto it = opts_map.find('O'); it != opts_map.end()) {
