@@ -2084,20 +2084,8 @@ std::string build_failure_mask_for_topology(const struct test* test)
 
 uint32_t mixin_from_device_info(int thread_num)
 {
-    // Create a pattern based exclusively on the topology that we'll use
-    // to seed the thread's generator. Algorithm very loosely inspired by
-    // https://en.wikipedia.org/wiki/MurmurHash version 3.
     auto& info = device_info[thread_num];
-    auto scramble = [](uint32_t k) {
-        k *= 0xcc9e2d51;
-        k = (k << 15) | (k >> 17);              // rotl(mixin, 15);
-        k *= 0x1b873593;
-        return k;
-    };
-    uint32_t mixin = scramble(info.core_id);
-    mixin = (mixin << 13) | (mixin >> 19);      // rotl(mixin, 13);
-    mixin = mixin * 5 + 0xe6546b64;
-    mixin ^= scramble(info.package_id);
+    auto mixin = scramble(static_cast<uint32_t>(info.core_id), static_cast<uint32_t>(info.package_id));
     mixin ^= [=](){
         switch (info.thread_id & 3) {
         case 0:     return 0x00000000U; // 0b00

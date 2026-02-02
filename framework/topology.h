@@ -217,6 +217,23 @@ std::string build_failure_mask_for_topology(const struct test* test);
 
 void print_temperature_of_device();
 
+template <typename... Args> constexpr uint32_t scramble(Args ...args)
+{
+    // Create a pattern based exclusively on the topology that we'll use
+    // to seed the thread's generator. Algorithm very loosely inspired by
+    // https://en.wikipedia.org/wiki/MurmurHash version 3.
+    uint32_t r = 0;
+    auto scramble = [](uint32_t &r, uint32_t k) {
+        k *= 0xcc9e2d51;
+        k = std::rotl(k, 15);
+        k *= 0x1b873593;
+        k = r ^= k;
+        r = std::rotl(r, 13);
+        r = r * 5 + 0xe6546b64;
+        return k;
+    };
+    return (scramble(r, args), ...);
+}
 uint32_t mixin_from_device_info(int thread_num);
 
 #endif /* INC_TOPOLOGY_H */
