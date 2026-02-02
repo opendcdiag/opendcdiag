@@ -734,7 +734,7 @@ bool TopologyDetector::detect_topology_via_os(Topology::Thread *info, int cpufd)
         if (n == info->cpu_number)
             break;
         ++info->thread_id;
-        fgetc(f);
+        IGNORE_RETVAL(fgetc(f));
 
         assert(info->thread_id < MAX_HWTHREADS_PER_CORE);
     }
