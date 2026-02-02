@@ -556,7 +556,8 @@ bool TopologyDetector::detect_cache_via_os(Topology::Thread *info, int cpufd)
         IGNORE_RETVAL(fscanf(f, "%d", &level));
         fclose(f);
 
-        if (level <= int(sizeof(info->cache) / sizeof(info->cache[0]))) {
+        static const int cache_size = std::size(info->cache);
+        if (level <= cache_size && level > 0) {
             int size;
             char suffix = '\0';
             f = fopenat(cachefd, "size");
