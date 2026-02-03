@@ -511,7 +511,72 @@ void restrict_topology(DeviceRange range)
 
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
 {
+    bool all_devs_failed_once = true;
+    bool all_devs_failed_equally = true;
+    int n_failed_devs = 0;
+    PerThreadFailures::value_type last_pattern = 0;
+    logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
 
+    for (const auto& device : Topology::topology().devices) {
+        if (std::holds_alternative<Topology::RootDevice>(device)) {
+            bool all_subdevs_failed_once = true;
+            bool all_subdevs_failed_equally = true;
+            int n_failed_subdevs = 0;
+            PerThreadFailures::value_type last_subpattern = 0;
+
+            for (const auto& subdevice : std::get<Topology::RootDevice>(device)) {
+                const auto& thr_pattern = per_thread_failures[subdevice.gpu()];
+                if (thr_pattern == 0) {
+                    all_subdevs_failed_once = false;
+                    all_devs_failed_once = false;
+                } else {
+                    n_failed_subdevs++;
+                    if (last_subpattern && thr_pattern != last_subpattern) {
+                        all_subdevs_failed_equally = false;
+                        all_devs_failed_equally = false;
+                    }
+                    last_subpattern = thr_pattern;
+                }
+            }
+
+            if (n_failed_subdevs == 0) {
+                continue;
+            } else if (n_failed_subdevs == 1) {
+                logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Only one tile\n"); // TODO: can we report 'who' is the root?
+            } else if (all_subdevs_failed_equally) {
+                n_failed_devs++; // mark entire root device as failed
+                logging_printf(LOG_LEVEL_VERBOSE(1), "#   - All tiles failed exactly the same way\n");
+            } else if (all_subdevs_failed_once) {
+                n_failed_devs++; // mark entire root device as failed
+                logging_printf(LOG_LEVEL_VERBOSE(1), "#   - All tiles failed at least once\n");
+            } else {
+                logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Some tiles failed but some others succeeded\n");
+            }
+        } else {
+            const auto& thr_pattern = per_thread_failures[std::get<Topology::EndDevice>(device)->gpu()];
+            if (thr_pattern == 0) {
+                all_devs_failed_once = false;
+            } else {
+                n_failed_devs++;
+                if (last_pattern && thr_pattern != last_pattern) {
+                    all_devs_failed_equally = false;
+                }
+                last_pattern = thr_pattern;
+            }
+        }
+    }
+
+    if (n_failed_devs == 0) {
+        return;
+    } if (n_failed_devs == 1) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# - Only one GPU\n");
+    } else if (all_devs_failed_equally) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# - All GPUs failed exactly the same way\n");
+    } else if (all_devs_failed_once) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# - All GPUs failed at least once\n");
+    } else {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# - Some GPUs failed but some others succeeded\n");
+    }
 }
 
 void slice_plan_init(int max_cores_per_slice)
