@@ -54,7 +54,7 @@ public:
 
         ASSERT_EQ(got_strs.size(), expected.size());
         for (auto i = 0; i < got_strs.size(); i++) {
-            if (find_unittests_keyword) {
+            if (find_unittests_keyword && expected[i].starts_with("unittests:")) {
                 check_eq_substr(got_strs[i], expected[i]);
             } else {
                 EXPECT_EQ(got_strs[i], expected[i]);
@@ -874,5 +874,44 @@ TEST(ProgramOptionsParser, out_of_range_exits__max_cores_per_slice)
         EXPECT_EQ(ret, EXIT_SUCCESS);
         EXPECT_EQ(opts.max_cores_per_slice, -1);
         sb.check_eq(EMPTY_STR); // no messages printed
+    }
+}
+
+TEST(ProgramOptionsParser, any_option_without_a_dash_fails)
+{
+    { // before any valid opt
+        StreamBuffer sb;
+        ProgramOptions opts;
+        SandstoneApplicationConfig cfg{};
+        char* argv[] = {
+            (char*)"foo-bar", // binary name
+            (char*)"version",
+            (char*)"--version",
+        };
+
+        auto ret = opts.parse(3, argv, &cfg);
+        EXPECT_EQ(ret, EX_USAGE);
+        sb.check_eqs({
+            "unittests: 'version' is not a valid option.",
+            "Try 'foo-bar --help' for more information."
+        });
+    }
+
+    { // after valid opts
+        StreamBuffer sb;
+        ProgramOptions opts;
+        SandstoneApplicationConfig cfg{};
+        char* argv[] = {
+            (char*)"foo-bar", // binary name
+            (char*)"--dump-device-info",
+            (char*)"dummy",
+        };
+
+        auto ret = opts.parse(3, argv, &cfg);
+        EXPECT_EQ(ret, EX_USAGE);
+        sb.check_eqs({
+            "unittests: 'dummy' is not a valid option.",
+            "Try 'foo-bar --help' for more information."
+        });
     }
 }

@@ -441,6 +441,15 @@ struct ProgramOptionsParser {
         int coptind = -1;
         optind = 1; // reset before starting scanning
 
+        // scan manually for non-arguments, as getopt_long will just ignore them
+        for (auto i = 1; i < argc; i++) {
+            if (argv[i][0] != '-') {
+                fprintf(ERR_STREAM, "%s: '%s' is not a valid option.\n", program_invocation_name, argv[i]);
+                suggest_help(argv);
+                return EX_USAGE;
+            }
+        }
+
         while ((opt = simple_getopt(argc, argv, long_options, &coptind)) != -1) {
             switch (opt) {
             case disable_option:
