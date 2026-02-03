@@ -899,16 +899,17 @@ void test_loop_end() noexcept
     assembly_marker<TestLoop, End>(sApp->test_thread_data(thread_num)->inner_loop_count);
 }
 
-bool reschedule_enabled = false;
-void reschedule_internal()
-{
-    sApp->device_scheduler->reschedule_to_next_device();
-}
-
 #ifndef _WIN32
 #  pragma GCC visibility pop
 #endif
 } // extern "C"
+
+bool reschedule_enabled = false;
+void reschedule_internal()
+{
+    assert(thread_num >= 0 && "reschedule() can only be called from test threads!");
+    sApp->device_scheduler->reschedule_to_next_device();
+}
 
 static uintptr_t thread_runner(int thread_number)
 {
