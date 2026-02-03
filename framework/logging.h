@@ -158,7 +158,7 @@ private:
     inline void maybe_print_messages_header(int fd);
     void print_fixed();
     void print_thread_messages();
-    void print_thread_header(int fd, int device, LogLevelVerbosity verbosity);
+    void print_thread_header(int fd, PerThreadData::Common *data, int device, LogLevelVerbosity verbosity);
     inline bool want_slice_resource_usage(int slice);
     void maybe_print_slice_resource_usage(int fd, int slice);
     inline int print_test_knobs(int fd, const LogMessagesFile &msgs);

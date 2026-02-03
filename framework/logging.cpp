@@ -1756,7 +1756,7 @@ void YamlLogger::maybe_print_messages_header(int fd)
     }
 }
 
-void YamlLogger::print_thread_header(int fd, int device, LogLevelVerbosity verbosity)
+void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int device, LogLevelVerbosity verbosity)
 {
     maybe_print_messages_header(fd);
     if (device < 0) {
@@ -1767,11 +1767,11 @@ void YamlLogger::print_thread_header(int fd, int device, LogLevelVerbosity verbo
             writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(device));
         maybe_print_slice_resource_usage(fd, device);
     } else {
+        auto thr = static_cast<PerThreadData::Test *>(data);
         dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), device);
         dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header_for_device(device, verbosity).c_str());
 
         if (verbosity > 1) {
-            PerThreadData::Test *thr = sApp->test_thread_data(device);
             auto opts = FormatDurationOptions::WithoutUnit;
             if (std::string time = format_duration(thr->fail_time, opts); time.size()) {
                 writeln(fd, indent_spaces(), "    state: failed");
@@ -2085,12 +2085,12 @@ void YamlLogger::print_thread_messages()
             return;             /* nothing to be printed, on any level */
         }
 
-        print_thread_header(file_log_fd, s_tid, LogLevelVerbosity::Max);
+        print_thread_header(file_log_fd, data, s_tid, LogLevelVerbosity::Max);
         LogLevelVerbosity lowest_level =
                 print_one_thread_messages(file_log_fd, r, LogLevelVerbosity::Max);
 
         if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, s_tid, sApp->shmem->cfg.verbosity);
+            print_thread_header(real_stdout_fd, data, s_tid, sApp->shmem->cfg.verbosity);
             print_one_thread_messages(real_stdout_fd, r, sApp->shmem->cfg.verbosity);
         }
 
