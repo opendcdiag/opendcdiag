@@ -236,23 +236,28 @@ static int selftest_logs_reschedule_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_logs_reschedule_run(struct test *test, int thread)
+static void deterministic_reschedule(struct test *test, int thread)
 {
     sem_t *semaphores = (sem_t *) test->data;
-    int cpu_number = sched_getcpu();
-    log_info("%d", cpu_number);
 
     // Let's wait unit previous CPU has finished
     if (thread > 0)
         sem_wait(&semaphores[thread-1]);
 
-    if (sApp->device_scheduler)
-        sApp->device_scheduler->reschedule_to_next_device();
+    reschedule();
 
     // When we finish, instruct next thread it can proceed
     // unless we are the last one
     if (thread < thread_count()-1)
         sem_post(&semaphores[thread]);
+}
+
+static int selftest_logs_reschedule_run(struct test *test, int thread)
+{
+    int cpu_number = sched_getcpu();
+    log_info("%d", cpu_number);
+
+    deterministic_reschedule(test, thread);
 
     cpu_number = sched_getcpu();
     log_info("%d", cpu_number);
