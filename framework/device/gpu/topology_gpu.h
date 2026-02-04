@@ -53,7 +53,7 @@ public:
 Topology build_topology();
 
 /// Calls passed function for each 'end' device within topology.
-int for_each_topo_device(std::function<int(gpu_info_t&)> func);
+int for_each_topo_device(std::function<int(const gpu_info_t&)> func);
 
 /// Struct should contain common info for all detected GPUs, such as brand, etc.
 struct HardwareInfo

@@ -89,7 +89,7 @@ int for_each_zes_device(std::function<int(zes_device_handle_t, ze_driver_handle_
 
 namespace {
 template <typename Map, typename Func>
-int find_and_call_func(gpu_info_t& info, ze_driver_handle_t ze_driver, const Map& map, Func func)
+int find_and_call_func(const gpu_info_t& info, ze_driver_handle_t ze_driver, const Map& map, Func func)
 {
     MultiSliceGpu indices{
         .gpu_number = info.gpu_number, .device_index = info.device_index, .subdevice_index = info.subdevice_index
@@ -124,7 +124,7 @@ int for_each_device_within_topo_internal(std::function<int(DeviceType, ze_driver
         return EXIT_FAILURE;
     }
 
-    ret = for_each_topo_device([&](gpu_info_t& info) {
+    ret = for_each_topo_device([&](const gpu_info_t& info) {
         return find_and_call_func(info, ze_driver, dev_handles, func);
     });
     if (ret != EXIT_SUCCESS) {

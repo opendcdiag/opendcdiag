@@ -19,7 +19,7 @@ std::string device_features_to_string(device_features_t f)
 }
 
 namespace {
-void dump_single_gpu(gpu_info_t* info)
+void dump_single_gpu(const gpu_info_t* info)
 {
     std::print("{}\t", info->gpu_number);
     if (info->subdevice_index != -1) {
@@ -44,7 +44,7 @@ void dump_single_gpu(gpu_info_t* info)
 void dump_device_info()
 {
     printf("#GPU\t#Topo\tPCI-addr\tUUID\t\t\t\t\tModel\n");
-    for_each_topo_device([&](gpu_info_t& info) {
+    for_each_topo_device([&](const gpu_info_t& info) {
         dump_single_gpu(&info);
         return EXIT_SUCCESS;
     });
