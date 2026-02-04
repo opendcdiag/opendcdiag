@@ -115,7 +115,7 @@ using ZeFencePtr = std::unique_ptr<_ze_fence_handle_t, ZeFenceDeleter>;
 using ZeContextPtr = std::unique_ptr<_ze_context_handle_t, ZeContextDeleter>;
 
 /// Factory functions.
-ZeHostDataPtr ze_alloc_host(ze_context_handle_t context, size_t size,
+inline ZeHostDataPtr ze_alloc_host(ze_context_handle_t context, size_t size,
         const ze_host_mem_alloc_desc_t& desc = { .stype = ZE_STRUCTURE_TYPE_HOST_MEM_ALLOC_DESC },
         size_t alignment = 1)
 {
@@ -125,19 +125,19 @@ ZeHostDataPtr ze_alloc_host(ze_context_handle_t context, size_t size,
     return {data, deleter};
 }
 
-ZeDeviceDataPtr ze_alloc_device(ze_context_handle_t context, size_t size, ze_device_handle_t device,
+inline ZeDeviceDataPtr ze_alloc_device(ze_context_handle_t context, size_t size, ze_device_handle_t device,
         const ze_device_mem_alloc_desc_t& desc = { .stype = ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC  },
         size_t alignment = 1)
 {
     return {context, size, device, desc, alignment};
 }
 
-ZeCmdListPtr ze_create_cmd_list(ze_context_handle_t context, ze_device_handle_t device, const ze_command_list_desc_t& desc)
+inline ZeCmdListPtr ze_create_cmd_list(ze_context_handle_t context, ze_device_handle_t device, const ze_command_list_desc_t& desc)
 {
     return {context, device, desc};
 }
 
-ZeCmdQueuePtr ze_create_cmd_queue(ze_context_handle_t context, ze_device_handle_t device, const ze_command_queue_desc_t& desc)
+inline ZeCmdQueuePtr ze_create_cmd_queue(ze_context_handle_t context, ze_device_handle_t device, const ze_command_queue_desc_t& desc)
 {
     ZeCmdQueueDeleter deleter{};
     ze_command_queue_handle_t cmd_queue;
@@ -145,7 +145,7 @@ ZeCmdQueuePtr ze_create_cmd_queue(ze_context_handle_t context, ze_device_handle_
     return {cmd_queue, deleter};
 }
 
-ZeFencePtr ze_create_fence(ze_command_queue_handle_t cmd_queue, const ze_fence_desc_t& desc)
+inline ZeFencePtr ze_create_fence(ze_command_queue_handle_t cmd_queue, const ze_fence_desc_t& desc)
 {
     ZeFenceDeleter deleter{};
     ze_fence_handle_t fence;
@@ -153,7 +153,7 @@ ZeFencePtr ze_create_fence(ze_command_queue_handle_t cmd_queue, const ze_fence_d
     return {fence, deleter};
 }
 
-ZeContextPtr ze_create_context(ze_driver_handle_t driver, const ze_context_desc_t& desc = { .stype = ZE_STRUCTURE_TYPE_CONTEXT_DESC })
+inline ZeContextPtr ze_create_context(ze_driver_handle_t driver, const ze_context_desc_t& desc = { .stype = ZE_STRUCTURE_TYPE_CONTEXT_DESC })
 {
     ZeContextDeleter deleter{};
     ze_context_handle_t context{};
