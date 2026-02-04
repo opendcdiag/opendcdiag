@@ -8,6 +8,7 @@
 
 #include "sandstone_chrono.h"
 
+#include <assert.h>
 #include <atomic>
 #include "gettid.h"
 
@@ -56,9 +57,11 @@ struct Common
         return flags & unsigned(f2);
     }
 
+    LogicalProcessor failing_cpu;
     MonotonicTimePoint fail_time;
     bool has_failed() const
     {
+        assert((fail_time > MonotonicTimePoint{}) == (int(failing_cpu) >= 0));
         return fail_time > MonotonicTimePoint{};
     }
     bool has_skipped() const
@@ -71,6 +74,7 @@ struct Common
         thread_state.store(thread_not_started, std::memory_order_relaxed);
         messages_logged.store(0, std::memory_order_relaxed);
         data_bytes_logged.store(0, std::memory_order_relaxed);
+        failing_cpu = LogicalProcessor::None;
         fail_time = MonotonicTimePoint{};
         thread_flags = {};
     }
@@ -86,6 +90,7 @@ struct alignas(64) TestCommon : Common
     /* Number of iterations of the inner loop (aka #times test_time_condition called) */
     uint32_t inner_loop_count;
     uint32_t inner_loop_count_at_fail;
+    LogicalProcessor previous_cpu;  // used by reschedule
 
     /* Thread ID */
     std::atomic<tid_t> tid;
@@ -94,6 +99,7 @@ struct alignas(64) TestCommon : Common
     {
         Common::init();
         inner_loop_count = inner_loop_count_at_fail = 0;
+        previous_cpu = LogicalProcessor::None;
     }
 };
 } // namespace PerThreadData

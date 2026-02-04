@@ -211,12 +211,7 @@
         }
       },
       "required": [
-        "logical",
-        "package",
-        "numa_node",
-        "module",
-        "core",
-        "thread"
+        "logical"
       ]
     },
     "test-plan-entry": {

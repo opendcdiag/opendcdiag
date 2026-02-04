@@ -147,11 +147,6 @@ $defs:
           - 'null'
     required:
       - logical
-      - package
-      - numa_node
-      - module
-      - core
-      - thread
 
   test-plan-entry:
     type: array
@@ -227,6 +222,8 @@ $defs:
                 - type: string
                   pattern: '^main'
             id:
+              $ref: '#/$defs/cpu-info'
+            previous-cpu:
               $ref: '#/$defs/cpu-info'
             context:
               oneOf:

@@ -39,6 +39,7 @@
 #  include <poll.h>
 #endif
 #include <pthread.h>
+#include <sched.h>
 #include <stdint.h>
 #if __has_include(<sys/auxv.h>)         // FreeBSD and Linux
 #  include <sys/auxv.h>
@@ -652,6 +653,7 @@ DeviceScheduler *device_scheduler = nullptr;
 void reschedule_internal(DeviceScheduler *scheduler)
 {
     assert(thread_num >= 0 && "reschedule() can only be called from test threads!");
+    sApp->test_thread_data(thread_num)->previous_cpu = LogicalProcessor(sched_getcpu());
     scheduler->reschedule_to_next_device();
 }
 

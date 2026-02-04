@@ -113,6 +113,10 @@ public:
     static void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
     static void print_fixed_for_device();
 
+#ifdef SANDSTONE_DEVICE_CPU
+    static std::string thread_id_header_for_cpu(LogicalProcessor lp, int thread, LogLevelVerbosity verbosity);
+#endif
+
     const struct test *test;
     MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
     std::span<const ChildExitStatus> slices;
@@ -178,6 +182,11 @@ inline void AbstractLogger::print_thread_header_for_device(int fd, PerThreadData
 { __builtin_unreachable(); }
 inline void AbstractLogger::print_fixed_for_device()
 { __builtin_unreachable(); }
+
+#  ifdef SANDSTONE_DEVICE_CPU
+inline std::string AbstractLogger::thread_id_header_for_cpu(LogicalProcessor, int, LogLevelVerbosity)
+{ __builtin_unreachable(); return {}; }
+#  endif
 #endif
 
 #endif /* INC_LOGGING_H */
