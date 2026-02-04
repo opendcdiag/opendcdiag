@@ -42,22 +42,20 @@ const Topology &Topology::topology()
     return cached_topology();
 }
 
-int for_each_topo_device(std::function<int(gpu_info_t&)> func)
+int for_each_topo_device(std::function<int(const gpu_info_t&)> func)
 {
     const auto& topo = Topology::topology();
     for (const auto& device : topo.devices) {
         if (std::holds_alternative<Topology::RootDevice>(device)) {
             auto tiles = std::get<Topology::RootDevice>(device);
-            for (const auto& dev : tiles) {
-                auto info = device_info[dev.gpu()];
+            for (const auto& info : tiles) {
                 auto ret = func(info);
                 if (ret != EXIT_SUCCESS)
                     return ret;
             }
         } else {
-            auto dev = std::get<Topology::EndDevice>(device);
-            auto info = device_info[dev->gpu()];
-            auto ret = func(info);
+            auto info = std::get<Topology::EndDevice>(device);
+            auto ret = func(*info);
             if (ret != EXIT_SUCCESS)
                 return ret;
         }
@@ -233,7 +231,7 @@ std::string build_failure_mask_for_topology(const struct test* test)
 {
     std::string mask;
     int totalfailcount = 0;
-    for_each_topo_device([&](gpu_info_t& info) {
+    for_each_topo_device([&](const gpu_info_t& info) {
         if (info.subdevice_index == 0 && !mask.empty()) {
             // is RootDevice, and first of the root - prepend with ':'
             mask += ':';
