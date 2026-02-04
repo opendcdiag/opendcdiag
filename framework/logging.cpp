@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <sched.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -606,6 +607,7 @@ void logging_mark_thread_failed(int thread_num) noexcept
     if (thread_num >= 0) {
         auto tthr = static_cast<PerThreadData::Test *>(thr);
         tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
+        tthr->failing_cpu = LogicalProcessor(sched_getcpu());
     }
 }
 
@@ -1766,24 +1768,60 @@ void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int de
         else
             writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(device));
         maybe_print_slice_resource_usage(fd, device);
-    } else {
-        auto thr = static_cast<PerThreadData::Test *>(data);
-        dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), device);
-        dprintf(fd, "%s    id: %s\n", indent_spaces().data(), thread_id_header_for_device(device, verbosity).c_str());
+        return;
+    }
 
-        if (verbosity > 1) {
-            auto opts = FormatDurationOptions::WithoutUnit;
-            if (std::string time = format_duration(thr->fail_time, opts); time.size()) {
-                writeln(fd, indent_spaces(), "    state: failed");
-                writeln(fd, indent_spaces(), "    time-to-fail: ", time);
-                writeln(fd, indent_spaces(), "    loop-count: ",
-                        std::to_string(thr->inner_loop_count_at_fail));
-            } else if (verbosity > 2) {
-                writeln(fd, indent_spaces(), "    loop-count: ",
-                        std::to_string(thr->inner_loop_count));
-            }
-            print_thread_header_for_device(fd, thr);
+#ifdef SANDSTONE_DEVICE_CPU
+    constexpr bool DeviceIsCpu = true;
+    auto format_logical_processor = [=](LogicalProcessor lp) {
+        return thread_id_header_for_cpu(lp, device, verbosity);
+    };
+#else
+    constexpr bool DeviceIsCpu = false;
+    auto format_logical_processor = [=](LogicalProcessor lp) {
+#  if defined(_WIN32)
+        return stdprintf("{ logical-group: %2u, logical: %2u }",
+                         // see win32/cpu_affinity.cpp
+                         unsigned(lp) / 64u, unsigned(lp) % 64u);
+#  else
+        return stdprintf("{ logical: %d }", lp);
+#  endif
+    };
+#endif
+    dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), device);
+
+    auto thr = static_cast<PerThreadData::Test *>(data);
+    bool has_failed = int(thr->failing_cpu) >= 0;
+    assert(has_failed == thr->has_failed());
+
+    const char *failing_cpu_label = "detecting-cpu";
+    if (DeviceIsCpu && has_failed) {
+        // if we're testing CPUs, reporting the failing CPU as the 'id'
+        failing_cpu_label = "id";
+    } else {
+        dprintf(fd, "%s    id: %s\n", indent_spaces().data(),
+                thread_id_header_for_device(device, verbosity).c_str());
+    }
+    if (has_failed) {
+        dprintf(fd, "%s    %s: %s\n", indent_spaces().data(), failing_cpu_label,
+                format_logical_processor(thr->failing_cpu).c_str());
+        if (int(thr->previous_cpu) >= 0 && thr->previous_cpu != thr->failing_cpu)
+            dprintf(fd, "%s    previous-cpu: %s\n", indent_spaces().data(),
+                    format_logical_processor(thr->previous_cpu).c_str());
+    }
+
+    if (verbosity > 1) {
+        auto opts = FormatDurationOptions::WithoutUnit;
+        if (has_failed) {
+            writeln(fd, indent_spaces(), "    state: failed");
+            writeln(fd, indent_spaces(), "    time-to-fail: ", format_duration(thr->fail_time, opts));
+            writeln(fd, indent_spaces(), "    loop-count: ",
+                    std::to_string(thr->inner_loop_count_at_fail));
+        } else if (verbosity > 2) {
+            writeln(fd, indent_spaces(), "    loop-count: ",
+                    std::to_string(thr->inner_loop_count));
         }
+        print_thread_header_for_device(fd, thr);
     }
     writeln(fd, indent_spaces(), "    messages:");
 }

@@ -638,6 +638,26 @@ static int selftest_reportfailmsg_run(struct test *test, int thread)
     return EXIT_SUCCESS;
 }
 
+static int selftest_fail_after_reschedule_run(struct test *test, int thread)
+{
+    deterministic_reschedule(test, thread);
+    report_fail_msg("Failed after reschedule(), on cpu %d", sched_getcpu());
+    return EXIT_SUCCESS;
+}
+
+static int selftest_fail_after_reschedule_lowest_cpu_run(struct test *test, int thread)
+{
+    int n = thread_count();
+    n *= n;
+    while (n--) {
+        reschedule();
+        if (sched_getcpu() == device_info[0].cpu_number)
+            report_fail_msg("Failed after reschedule(), from thread %d", thread);
+        test_loop_condition(1);     // count loops
+    }
+    return EXIT_SUCCESS;
+}
+
 template <typename T> static T make_datacompare_value();
 #define MAKE_DATA_VALUE(Type, Value)    \
     template<> Type make_datacompare_value() { return Value; }
@@ -1987,6 +2007,24 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_init_installcallback,
     .test_run = selftest_reportfailmsg_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_fail_after_reschedule",
+    .description = "Fails by calling report_fail_msg() after reschedule()",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logs_reschedule_init,
+    .test_run = selftest_fail_after_reschedule_run,
+    .test_cleanup = selftest_logs_reschedule_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_fail_after_reschedule_lowest_cpu",
+    .description = "Fails by calling report_fail_msg() after reschedule(), but only on the lowest numbered CPU",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_fail_after_reschedule_lowest_cpu_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },

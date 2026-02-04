@@ -900,8 +900,10 @@ void test_loop_end() noexcept
 void reschedule()
 {
     assert(thread_num >= 0 && "reschedule() can only be called from test threads!");
-    if (sApp->device_scheduler)
+    if (sApp->device_scheduler) {
+        sApp->test_thread_data(thread_num)->previous_cpu = LogicalProcessor(sched_getcpu());
         sApp->device_scheduler->reschedule_to_next_device();
+    }
 }
 
 static uintptr_t thread_runner(int thread_number)
