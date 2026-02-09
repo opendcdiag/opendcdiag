@@ -734,7 +734,11 @@ function selftest_log_skip_init_common() {
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 421843888 386376794 2046232626 184745881"
 
-    if [[ "`uname -m`" = x86_64 ]]; then
+    run $SANDSTONE -s list
+    [[ "$status" -eq 0 ]]
+    [[ "$output" = *'  Constant:'* ]]
+    [[ "$output" = *'  LCG:'* ]]
+    if [[ "$output" = *'  AES:'* ]]; then
         sandstone_selftest -e selftest_logs_random_init -s AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
         [[ "$status" -eq 0 ]]
         test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1242137224 1378217084 1525375882 474233533"
@@ -802,11 +806,12 @@ test_random() {
 }
 
 @test "selftest_logs_random_aes" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
-        if [[ "`uname -m`" != x86_64 ]]; then
-            skip "AES engine is only present on x86-64"
-        fi
+    run $SANDSTONE -s list
+    if ! [[ "$output" = *'  AES:'* ]]; then
+        skip "AES engine is not present in this build"
+    fi
 
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
         local -r SEED=AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
         local -Ar random_results=(
             [p0c0t0]="1442152966 848034066 1178242204 1152613460"

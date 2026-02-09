@@ -411,6 +411,12 @@ static const char *engineNameFromType(EngineType t)
     return nullptr;
 }
 
+static void listEngines(FILE *stream)
+{
+    for (EngineType t : engine_types)
+        fprintf(stream, "  %s\n", engineNameFromType(t));
+}
+
 static EngineType engineFromName(const char *argument)
 {
     auto starts_with = [=](const char *name) {
@@ -419,14 +425,16 @@ static EngineType engineFromName(const char *argument)
     for (EngineType type : engine_types) {
         if (starts_with(engineNameFromType(type))) {
             if (type == AESSequence && !haveAes()) {
-                fprintf(stderr, "%s: engine type '%s' not available on this system.\n",
+                fprintf(stderr, "%s: engine type '%s' not available on this system. Available engines are:\n",
                         program_invocation_name, engineNameFromType(type));
+                listEngines(stderr);
                 exit(EX_USAGE);
             }
             return type;
         }
     }
-    fprintf(stderr, "%s: invalid random engine seed '%s'\n", program_invocation_name, argument);
+    fprintf(stderr, "%s: invalid random engine seed '%s'. Available engines are:\n", program_invocation_name, argument);
+    listEngines(stderr);
     exit(EX_USAGE);
 }
 
@@ -464,6 +472,11 @@ void random_init_global(const char *seed_from_user)
     };
     assert(thread_count() > 0);
     assert(thread_num == -1);
+
+    if (seed_from_user && (strcmp(seed_from_user, "help") == 0 || strcmp(seed_from_user, "list") == 0)) {
+        listEngines(stdout);
+        exit(0);
+    }
 
     // treat the argument as if it were a file, see if it works
     int fd = open_random_file(seed_from_user);
