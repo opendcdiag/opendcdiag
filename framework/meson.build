@@ -183,7 +183,6 @@ framework_files += files(
     'logging.cpp',
     'mmap_region.c',
     'random.cpp',
-    'random_utils.cpp',
     'sandstone.cpp',
     'sandstone_chrono.cpp',
     'sandstone_context_dump.cpp',
