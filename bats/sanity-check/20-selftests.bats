@@ -732,16 +732,34 @@ function selftest_log_skip_init_common() {
 
     sandstone_selftest -e selftest_logs_random_init -s LCG:1348219713
     [[ "$status" -eq 0 ]]
+    test_yaml_expr "/tests/0/state/seed" = "LCG:1348219713"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 421843888 386376794 2046232626 184745881"
+
+    sandstone_selftest -e selftest_logs_random_init -s LCG:
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/state/seed" "LCG:[0-9]+"
+
+    sandstone_selftest -e selftest_logs_random_init -s LCG
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/state/seed" "LCG:[0-9]+"
 
     run $SANDSTONE -s list
     [[ "$status" -eq 0 ]]
-    [[ "$output" = *'  Constant:'* ]]
-    [[ "$output" = *'  LCG:'* ]]
-    if [[ "$output" = *'  AES:'* ]]; then
+    [[ "$output" = *'  Constant'* ]]
+    [[ "$output" = *'  LCG'* ]]
+    if [[ "$output" = *'  AES'* ]]; then
         sandstone_selftest -e selftest_logs_random_init -s AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
         [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/tests/0/state/seed" "AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308"
         test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1242137224 1378217084 1525375882 474233533"
+
+        sandstone_selftest -e selftest_logs_random_init -s AES:
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/tests/0/state/seed" "AES:[0-9a-f]+"
+
+        sandstone_selftest -e selftest_logs_random_init -s AES
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/tests/0/state/seed" "AES:[0-9a-f]+"
     fi
 }
 
@@ -807,7 +825,7 @@ test_random() {
 
 @test "selftest_logs_random_aes" {
     run $SANDSTONE -s list
-    if ! [[ "$output" = *'  AES:'* ]]; then
+    if ! [[ "$output" = *'  AES'* ]]; then
         skip "AES engine is not present in this build"
     fi
 
