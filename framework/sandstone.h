@@ -31,6 +31,7 @@
 #ifdef __cplusplus
 #include <atomic>
 #include <memory>
+#include <type_traits>
 using std::atomic_int;
 extern "C" {
 #else
@@ -521,6 +522,11 @@ extern uint32_t random32(void);
 extern uint64_t random64(void);
 /// Returns a random unsigned 128 bit integer.
 extern __uint128_t random128(void);
+/// Returns requested number of random bits
+extern uint64_t get_random_bits(uint32_t bits);
+/// Returns a random unsigned integer in the range [0, range)
+extern uint32_t get_random_value(uint32_t range);
+
 /// Sets each byte in the buffer pointed to by dest to a random value.
 /// The size of the buffer in bytes is provided by the n parameter.
 extern void *memset_random(void *dest, size_t n);
@@ -551,9 +557,6 @@ static inline long double frandoml()
 {
     return frandoml_scale(1.0L);
 }
-
-extern uint64_t get_random_bits(uint32_t num_bits);
-extern uint32_t get_random_value(uint32_t range);
 
 /// Returns a 64 bit unsigned integer in which num_bits_to_set of the
 /// first bitwidth bits are randomly set.  For example,
@@ -591,6 +594,8 @@ extern int8_t sandstone_verbosity_level() __attribute__((pure));
 
 extern void log_thread_context(std::string_view msg);
 
+/// Template version of get_random_bits() that returns the value of the specified type
+/// (the type must be unsigned and up to 64 bits).
 template<typename T>
 inline T get_random_bits(uint32_t num_bits) {
     static_assert((std::is_unsigned<T>::value), "get_random_bits() only supports unsigned integral types");
@@ -600,6 +605,8 @@ inline T get_random_bits(uint32_t num_bits) {
     return static_cast<T>(get_random_bits(num_bits));
 }
 
+/// Template version of get_random_value() that accepts any integral type for the range and returns
+/// the value in the specified type (both must be integral types and up to 32 bits).
 template<typename T, typename R = T>
 inline T get_random_value(R range) {
     static_assert((std::is_integral<T>::value), "get_random_value() only supports integral types");
@@ -611,6 +618,7 @@ inline T get_random_value(R range) {
         assert((range <= std::numeric_limits<uint32_t>::max()) && "Only 32-bit range is supported");
     }
 
+    // "original" get_random_value() only accepts uint32_t
     return static_cast<T>(get_random_value(static_cast<uint32_t>(range)));
 }
 
