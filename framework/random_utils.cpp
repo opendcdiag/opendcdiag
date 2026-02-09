@@ -20,8 +20,8 @@ constexpr T get_mask(uint32_t bits) {
 
 template<typename T, auto G, uint32_t B>
 T get_random_bits(uint32_t bits) {
-    decltype(G()) random_bits_value = 0;
-    uint32_t random_bits_available = 0;
+    static thread_local decltype(G()) random_bits_value = 0;
+    static thread_local uint32_t random_bits_available = 0;
 
     static_assert(B <= 8 * sizeof(random_bits_value),
         "Generator cannot provide more bits than the generated type can hold");
