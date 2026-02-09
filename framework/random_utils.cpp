@@ -44,7 +44,7 @@ T get_random_bits(uint32_t bits) {
     return val;
 }
 
-template<typename T, auto G, uint32_t B>
+template<typename T, auto G, uint32_t B, int MAX_REJECTION_LOOPS = 7>
 T get_random_value(T range) {
     assert((range > 0) && "Range must be a positive non-zero value");
 
@@ -53,13 +53,20 @@ T get_random_value(T range) {
         return 0;
     }
 
-    decltype(G()) random_bits_value = G();
-    static_assert(B <= 8 * sizeof(random_bits_value),
-        "Generator cannot provide more bits than the generated type can hold");
-    assert((range <= get_mask<T>(B)) && "Range must be less than the number of possible values from the generator");
-
-    // the simplest way to get a random value.. to be replaced with algo with rejections and optimized RNG usage
-    return random_bits_value % range;
+    // Compute the number of bits needed to represent values in [0, range - 1].
+    uint32_t bits = sizeof(T) * 8 - std::countl_zero(range - 1);
+    // to avoid biased results, try a few times with value rejection to get value in range
+    // if not caught any "successful" value, just do biased modulo operation to avoid infinite loops
+    // (especially with scenarios where RNG provides all-1s all the time, e.g. Constant:ffffffff)
+    // it will be always hit for ranges of power of two, but a bit more than 50% for worst cases
+    // (e.g. range=65). Having 7 tries should result in uniformity better than 1%
+    for (int loop = 0; loop < MAX_REJECTION_LOOPS; loop++) {
+        T val = get_random_bits<T, G, B>(bits);
+        if (val < range) {
+            return val;
+        }
+    }
+    return get_random_bits<T, G, B>(bits) % range;
 }
 
 } // anonymous namespace
