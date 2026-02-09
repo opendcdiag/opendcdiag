@@ -509,6 +509,10 @@ extern uint32_t random32(void);
 extern uint64_t random64(void);
 /// Returns a random unsigned 128 bit integer.
 extern __uint128_t random128(void);
+/// Return requested number of random bits
+extern uint64_t get_random_bits(uint32_t bits);
+extern uint32_t get_random_value(uint32_t range);
+
 /// Sets each byte in the buffer pointed to by dest to a random value.
 /// The size of the buffer in bytes is provided by the n parameter.
 extern void *memset_random(void *dest, size_t n);
@@ -539,10 +543,6 @@ static inline long double frandoml()
 {
     return frandoml_scale(1.0L);
 }
-
-extern uint64_t get_random_bits31(uint32_t num_bits);
-extern uint64_t get_random_bits128(uint32_t num_bits);
-extern uint32_t get_random_value31(uint32_t range);
 
 /// Returns a 64 bit unsigned integer in which num_bits_to_set of the
 /// first bitwidth bits are randomly set.  For example,
@@ -578,20 +578,20 @@ int num_packages() __attribute__((pure));
 
 template<typename T>
 inline T get_random_bits(uint32_t num_bits) {
-    static_assert((std::is_unsigned<T>::value), "get_random_bits() only supports unsigned types");
+    static_assert((std::is_unsigned<T>::value), "get_random_bits() only supports unsigned integral types");
     static_assert(sizeof(T) <= sizeof(uint64_t), "get_random_bits() only supports types up to 64 bits");
     assert((num_bits <= sizeof(T) * 8) && "Requested number of bits must fit the type");
 
     // TODO optimize for AES (use get_random_bits128 when AES is selected)
-    return static_cast<T>(get_random_bits31(num_bits));
+    return static_cast<T>(get_random_bits(num_bits));
 }
 
 template<typename T>
 inline T get_random_value(T range) {
-    static_assert((std::is_unsigned<T>::value), "get_random_value() only supports unsigned types");
+    static_assert((std::is_integral<T>::value), "get_random_value() only supports integral types");
     static_assert(sizeof(T) <= sizeof(uint32_t), "get_random_value() only supports types up to 32 bits");
 
-    return static_cast<T>(get_random_value31(range));
+    return static_cast<T>(get_random_value(range));
 }
 
 constexpr inline test_flags operator|(test_flag f1, test_flag f2)

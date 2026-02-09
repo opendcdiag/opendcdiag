@@ -110,6 +110,7 @@ struct RandomEngineWrapper
     virtual uint64_t generate64(thread_rng *thread_buffer) = 0;
     virtual int generateInt(thread_rng *thread_buffer) = 0;
     virtual __uint128_t generate128(thread_rng *thread_buffer) = 0;
+    virtual uint64_t get_random_bits(thread_rng* ctx, uint32_t bits) = 0;
 };
 RandomEngineWrapper::~RandomEngineWrapper() {}
 
@@ -119,6 +120,7 @@ void RandomEngineDeleter::operator()(RandomEngineWrapper *ptr) const
 }
 
 namespace {
+
 static thread_rng *rng_for_thread(int thread_num)
 {
     assert(thread_num < thread_count());
@@ -205,6 +207,8 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
         return generate64(thread_buffer) | (__uint128_t(generate64(thread_buffer)) << 64);
     }
 
+    uint64_t get_random_bits(thread_rng* ctx, uint32_t bits) override;
+
 protected:
     static E &engine(thread_rng *generator)
     {
@@ -214,6 +218,72 @@ protected:
     static E &globalEngine()
     {
         return engine(rng_for_thread(-1));
+    }
+
+    template<typename T>
+    constexpr T get_mask(uint32_t bits) {
+        return (bits < sizeof(T) * 8) ? ((T(1) << bits) - 1) : ~T(0);
+    }
+    template<typename T, auto F, uint32_t B, typename C>
+    T get_random_bits(thread_rng* ctx, uint32_t bits) {
+        assert((bits <= sizeof(T) * 8) && "Requested number of bits must fit the return type");
+
+        // it is not allowed to use this function in the context of different cache sizes (as the
+        // number of available bits might be bigger than the actual per-type cache holds).
+        // AES uses first 256 bits of CTX for the seed/IV, therefore we must fit cache state in the remaining.
+        static_assert(sizeof(C) + sizeof(uint32_t) <= sizeof(*ctx) / 2, "Cache and bits availability must fit withing second CTX half");
+        C& cache = *reinterpret_cast<C*>(&ctx->u8[sizeof(*ctx) / 2]);
+        uint32_t& available = *reinterpret_cast<uint32_t*>(&ctx->u8[sizeof(*ctx)-sizeof(uint32_t)]);
+
+        T val;
+        if (bits <= B) {
+            if constexpr (B * 2 <= sizeof(C) * 8) {
+                // the cache is able to hold at least two generated values.
+                while (available < bits) {
+                    assert((available <= sizeof(C) * 8 - B) && "generated value must fit remaining space in the cache");
+                    cache |= C((this->*F)(ctx)) << available;
+                    available += B;
+                }
+                val = static_cast<T>(cache) & get_mask<T>(bits);
+                available -= bits;
+                cache >>= bits;
+            } else  {
+                // the cache is able to hold only one generated value, we need to use additional value
+                // if too few bits are "cached".
+                static_assert(sizeof(T) <= sizeof(C), "cache type must be able to hold requested value");
+                if (available < bits) {
+                    C gen = C((this->*F)(ctx));
+                    cache |= gen << available;
+                    val = static_cast<T>(cache) & get_mask<T>(bits);
+                    // we know that the number of generated bits is bigger than requested (no underflow possible)
+                    available += B - bits;
+                    cache = gen >> (bits - available);
+                } else {
+                    val = static_cast<T>(cache) & get_mask<T>(bits);
+                    available -= bits;
+                    cache >>= bits;
+                }
+            }
+        } else {
+            // if requested number of bits is bigger than number of bits fetched at once,
+            // we need to iterate to get all the bits
+            val = 0;
+            uint32_t act = 0;
+            while (bits != act) {
+                if (available == 0) {
+                    cache = C((this->*F)(ctx));
+                    available = B;
+                }
+                uint32_t b = (bits <= available) ? bits : available;
+                assert((act < sizeof(T) * 8) && "requested bits must fit into the return type");
+                val |= (static_cast<T>(cache) & get_mask<T>(b)) << act;
+                act += b;
+
+                available -= b;
+                cache >>= b;
+            }
+        }
+        return val;
     }
 };
 
@@ -247,6 +317,11 @@ struct constant_value_engine
     }
 };
 template struct EngineWrapper<constant_value_engine>;
+
+template<>
+uint64_t EngineWrapper<constant_value_engine>::get_random_bits(thread_rng* ctx, uint32_t bits) {
+    return get_random_bits<uint64_t, &EngineWrapper<constant_value_engine>::generate32, 32, uint64_t>(ctx, bits);
+}
 
 // -- linear congruential engine (minimum standard) --
 
@@ -293,6 +368,12 @@ int EngineWrapper<std::minstd_rand>::generateInt(thread_rng *generator)
 {
     // need a single sample to make positive int
     return engine(generator)();
+}
+
+template<>
+uint64_t EngineWrapper<std::minstd_rand>::get_random_bits(thread_rng* ctx, uint32_t bits) {
+    // two Int values fit single 64b cache entry
+    return get_random_bits<uint64_t, &EngineWrapper<std::minstd_rand>::generateInt, 31, uint64_t>(ctx, bits);
 }
 
 template struct EngineWrapper<std::minstd_rand>;
@@ -384,6 +465,13 @@ __uint128_t EngineWrapper<aes_engine>::generate128(thread_rng *generator)
     return l | (__uint128_t(h) << 64);
 }
 #pragma GCC pop_options
+
+template<>
+uint64_t EngineWrapper<aes_engine>::get_random_bits(thread_rng* ctx, uint32_t bits) {
+    // for AES engine fetching 64 bits is the fastest option, lets not struggle with cache handling
+    return generate64(ctx) & get_mask<uint64_t>(bits);
+}
+
 
 template struct EngineWrapper<aes_engine>;
 #else
@@ -588,6 +676,11 @@ template <typename FP> static inline FP random_template(FP scale)
 [[gnu::noinline]] __uint128_t random128()
 {
     return sApp->random_engine->generate128(thread_local_rng());
+}
+
+[[gnu::noinline]] uint64_t get_random_bits(uint32_t bits)
+{
+    return sApp->random_engine->get_random_bits(thread_local_rng(), bits);
 }
 
 [[gnu::noinline]] float frandomf_scale(float scale)

@@ -8,53 +8,9 @@
 
 namespace {
 
-static constexpr uint32_t BITS_FROM_RANDOM = 31;
+static constexpr uint32_t BITS_FROM_RANDOM = 31; // std::minstd_rand provides 31 bits of randomness
 
-template<typename T>
-constexpr T get_mask(uint32_t bits) {
-    if (bits >= sizeof(T) * 8) {
-        return T(~0);
-    }
-    return (static_cast<T>(1) << bits) - 1;
-}
-
-template<typename T, auto G, uint32_t B>
-T get_random_bits(uint32_t bits) {
-    decltype(G()) random_bits_value = 0;
-    uint32_t random_bits_available = 0;
-
-    static_assert(B <= 8 * sizeof(random_bits_value),
-        "Generator cannot provide more bits than the generated type can hold");
-
-    T val = 0;
-    while (bits != 0) {
-        if (random_bits_available == 0) {
-            random_bits_value = G();
-            random_bits_available = B;
-        }
-        uint32_t b = (bits <= random_bits_available) ? bits : random_bits_available;
-        // shift by 8*sizeof(T) or more is undefined behavior! Number of available bits
-        // might apply to all bits, while very first shift is never required.
-        // Lets address "undefined behaviour" if wrong number of bits is requested
-        // (either way, such cases should be prevented by assertions outside)
-        // 1-step operations (e.g. 64b for uint64_t with 128b generator) works correctly.
-        if (b < sizeof(T) * 8) {
-            val <<= b;
-        }
-
-        // as random data is random.. no need to keep endianness in mind, we can just
-        // store bits in any particular order
-        val ^= T(random_bits_value & get_mask<T>(b));
-        random_bits_available -= b;
-        if (random_bits_available != 0) {
-            random_bits_value >>= b;
-        }
-        bits -= b;
-    }
-    return val;
-}
-
-template<typename T, auto G, uint32_t B>
+template<typename T, uint32_t MAX_REJECTION_LOOPS>
 T get_random_value(T range) {
     assert((range > 0) && "Range must be a positive non-zero value");
 
@@ -65,34 +21,28 @@ T get_random_value(T range) {
 
     // Compute the number of bits needed to represent values in [0, range - 1].
     uint32_t bits = sizeof(T) * 8 - std::countl_zero(range - 1);
-    // to avoid biased results, try a few times with value rejection to get value in range
-    // if not caught any "successful" value, just do biased modulo operation to avoid infinite loops
-    // (especially with scenarios where RNG provides all-1s all the time, e.g. Constant:ffffffff)
-    // it will be always hit for ranges of power of two, but a bit more than 50% for worst cases
-    // (e.g. range=65). Having 7 tries should give uniformity better than 1%
-    static constexpr int MAX_REJECTION_LOOPS = 7;
-    for (int loop = 0; loop < MAX_REJECTION_LOOPS; loop++) {
-        T val = get_random_bits<T, G, B>(bits);
-        if (val < range) {
-            return val;
+    if constexpr (MAX_REJECTION_LOOPS > 0) {
+        for (int loop = MAX_REJECTION_LOOPS; loop--; ) {
+            T val = get_random_bits(bits);
+            if (val < range) {
+                return val;
+            }
         }
     }
-    return get_random_bits<T, G, B>(bits) % range;
+    return get_random_bits(bits) % range;
 }
 
 } // anonymous namespace
 
 extern "C" {
 
-uint64_t get_random_bits31(uint32_t num_bits) {
-    return get_random_bits<uint64_t, random, BITS_FROM_RANDOM>(num_bits);
-}
-uint64_t get_random_bits128(uint32_t num_bits) {
-    return get_random_bits<uint64_t, random128, 128>(num_bits);
-}
-
-uint32_t get_random_value31(uint32_t range) {
-    return get_random_value<uint32_t, random, BITS_FROM_RANDOM>(range);
+uint32_t get_random_value(uint32_t range) {
+    // to avoid biased results, try a few times with value rejection to get value in range
+    // if not caught any "successful" value, just do biased modulo operation to avoid infinite loops
+    // (especially with scenarios where RNG provides all-1s all the time, e.g. Constant:ffffffff)
+    // it will be always hit for ranges of power of two, but a bit more than 50% for worst cases
+    // (e.g. for range=64+1). Having 7 tries should give uniformity better than 1%
+    return get_random_value<uint32_t, 7>(range);
 }
 
 void *memset_random(void *buf, size_t n)
@@ -165,7 +115,6 @@ uint64_t set_random_bits(unsigned num_bits_to_set, uint32_t bitwidth) {
 
 #ifdef SANDSTONE_UNITTESTS
 // Random.cpp patterns for unit tests, identical with LCG engine.
-// Do not allow to reimplement these for unit tests.
 __attribute__((weak)) __uint128_t random128() {
     union {
         struct {
