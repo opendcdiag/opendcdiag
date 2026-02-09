@@ -476,25 +476,6 @@ static int read_random_file(int fd, void *where, size_t count)
 
 void random_init_global(const char *seed_from_user)
 {
-    auto make_engine = [](EngineType engine_type) {
-        switch (engine_type) {
-        case Constant:
-            sApp->random_engine.reset(new EngineWrapper<constant_value_engine>(engine_type));
-            return;
-        case AESSequence:
-#ifdef RANDOM_HAS_AES
-            sApp->random_engine.reset(new EngineWrapper<aes_engine>(engine_type));
-            return;
-#else
-            assert("Impossible condition: shouldn't have reached here");
-            __builtin_unreachable();
-#endif
-        case LCG:
-            sApp->random_engine.reset(new EngineWrapper<std::minstd_rand>(engine_type));
-            return;
-        }
-        __builtin_unreachable();
-    };
     assert(thread_count() > 0);
     assert(thread_num == -1);
 
@@ -532,7 +513,23 @@ void random_init_global(const char *seed_from_user)
             engine_type = AESSequence;
     }
 
-    make_engine(engine_type);
+    switch (engine_type) {
+    case Constant:
+        sApp->random_engine.reset(new EngineWrapper<constant_value_engine>(engine_type));
+        break;
+    case AESSequence:
+#ifdef RANDOM_HAS_AES
+        sApp->random_engine.reset(new EngineWrapper<aes_engine>(engine_type));
+#else
+        assert("Impossible condition: shouldn't have reached here");
+        __builtin_unreachable();
+#endif
+        break;
+    case LCG:
+        sApp->random_engine.reset(new EngineWrapper<std::minstd_rand>(engine_type));
+        break;
+    }
+
     if (seed_from_user && *seed_from_user) {
         // use the seed state provided in the command-line
         sApp->random_engine->reloadGlobalState(seed_from_user);
