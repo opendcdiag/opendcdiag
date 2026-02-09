@@ -12,6 +12,7 @@
 #include <random>
 #include <span>
 #include <sstream>
+#include <bit>
 
 #include <assert.h>
 #include <fcntl.h>
@@ -51,6 +52,7 @@ DECLSPEC_IMPORT BOOLEAN WINAPI SystemFunction036(PVOID RandomBuffer, ULONG Rando
 #endif
 
 namespace {
+
 union alignas(64) thread_rng {
     uint8_t u8[64];
     uint32_t u32[sizeof(u8) / sizeof(uint32_t)];
@@ -64,19 +66,10 @@ union alignas(64) thread_rng {
 // std::seed_seq does too much. This class simply copies the buffer as the seed.
 using SeedSequence = std::array<uint32_t, 4>;
 
-// -- the global (not per thread) state --
-
 enum EngineType {
     Constant = 0,
     LCG = 1,
     AESSequence = 3
-};
-static constexpr std::initializer_list<EngineType> engine_types = {
-    Constant,
-    LCG,
-#ifdef RANDOM_HAS_AES
-    AESSequence,
-#endif
 };
 
 } // unnamed namespace
@@ -86,8 +79,9 @@ struct RandomEngineWrapper
     std::vector<thread_rng> per_thread;
     EngineType engine_type;
 
-    RandomEngineWrapper(EngineType type)
-        : per_thread(thread_count() + 1), engine_type(type)
+    RandomEngineWrapper(EngineType type, size_t rng_count):
+        per_thread(rng_count),
+        engine_type(type)
     {}
 
     virtual ~RandomEngineWrapper();
@@ -101,6 +95,7 @@ struct RandomEngineWrapper
     virtual uint64_t generate64(thread_rng *thread_buffer) = 0;
     virtual long int generateInt(thread_rng *thread_buffer) = 0;
     virtual __uint128_t generate128(thread_rng *thread_buffer) = 0;
+    virtual uint64_t get_random_bits(thread_rng* rng, uint32_t bits) = 0;
 };
 RandomEngineWrapper::~RandomEngineWrapper() {}
 
@@ -110,13 +105,24 @@ void RandomEngineDeleter::operator()(RandomEngineWrapper *ptr) const
 }
 
 namespace {
+
+#ifndef SANDSTONE_UNITTESTS
+
+static void set_random_engine(RandomEngineWrapper* engine) {
+    sApp->random_engine.reset(engine);
+}
+
+static RandomEngineWrapper* random_engine(void) {
+    return sApp->random_engine.get();
+}
+
 static thread_rng *rng_for_thread(int thread_num)
 {
     assert(thread_num < thread_count());
     assert(thread_num >= -1);
 
     auto &rngs = sApp->random_engine->per_thread;
-    assert(rngs.size());
+    assert((thread_num < static_cast<int>(rngs.size()) - 1) && "RNG context for the thread is not allocated");
     return &rngs[thread_num + 1];
 }
 
@@ -125,19 +131,44 @@ static thread_rng *thread_local_rng()
     return rng_for_thread(thread_num);
 }
 
+#else
+
+enum class RandomBitsAlgo: uint8_t {
+    Cached = 1,
+    ExtendCache = 2,
+    Temporary = 3,
+    Assemble = 4,
+};
+
+// the engine with mocking capabilities for unit tests
+static void set_random_engine(RandomEngineWrapper* engine);
+static RandomEngineWrapper* random_engine(void);
+static thread_rng* rng_for_thread(int);
+
+static thread_rng* thread_local_rng() {
+    return rng_for_thread(0);
+}
+
+#endif
+
 template <typename E> struct EngineWrapper : public RandomEngineWrapper
 {
     using engine_type = E;
+    static_assert(sizeof(engine_type) <= sizeof(thread_rng), "engine is too big");
+    static_assert(std::is_trivially_copyable_v<engine_type>,
+            "engine is not trivially copyable on this platform");
+    static_assert(std::is_trivially_destructible_v<engine_type>,
+            "engine is not trivially destructible on this platform");
 
-    EngineWrapper(EngineType type) : RandomEngineWrapper(type)
+    EngineWrapper(EngineType type, size_t thread_num):
+        RandomEngineWrapper(type, thread_num)
     {
-        static_assert(sizeof(engine_type) <= sizeof(thread_rng), "engine is too big");
-        static_assert(std::is_trivially_copyable_v<engine_type>,
-                "engine is not trivially copyable on this platform");
-        static_assert(std::is_trivially_destructible_v<engine_type>,
-                "engine is not trivially destructible on this platform");
         staticAssertions();
     }
+    EngineWrapper(EngineType type):
+        EngineWrapper(type, thread_count() + 1)
+    {}
+
     void staticAssertions() {}      // specialiseable
 
     size_t stateSize() override
@@ -160,6 +191,7 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
 
     void seedGlobalEngine(SeedSequence &sseq) override
     {
+        memset(rng_for_thread(-1), 0, sizeof(thread_rng));
         new (rng_for_thread(-1)->u8) engine_type(*sseq.data());
     }
 
@@ -167,7 +199,8 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
     {
         // generic version: just XOR the mixin to the global engine's current state
         thread_rng *global = rng_for_thread(-1);
-        for (size_t i = 0; i < std::size(buffer->u32); ++i)
+        memset(buffer, 0, sizeof(thread_rng));
+        for (size_t i = 0; i < stateSize() / sizeof(uint32_t); ++i)
             buffer->u32[i] = global->u32[i] ^ mixin;
     }
 
@@ -196,6 +229,8 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
         return generate64(thread_buffer) | (__uint128_t(generate64(thread_buffer)) << 64);
     }
 
+    uint64_t get_random_bits(thread_rng* rng, uint32_t bits) override;
+
 protected:
     static E &engine(thread_rng *generator)
     {
@@ -206,7 +241,153 @@ protected:
     {
         return engine(rng_for_thread(-1));
     }
+
+    template<typename T>
+    constexpr T get_mask(uint32_t bits) {
+        return (bits < sizeof(T) * 8) ? ((T(1) << bits) - 1) : ~T(0);
+    }
+
+    struct rng_context {
+        engine_type engine;
+        alignas(sizeof(thread_rng) / 2) __uint128_t cache;
+        uint32_t available;
+        #ifdef SANDSTONE_UNITTESTS
+        RandomBitsAlgo algo;
+        #endif
+    };
+    static_assert(sizeof(rng_context) <= sizeof(thread_rng), "RNG context must fit in the thread_rng buffer");
+
+    template<typename C>
+    C* get_random_bits_cache(thread_rng* rng) {
+        static_assert(sizeof(C) <= sizeof(rng_context::cache), "Actual cache must fit in the field in the context");
+        return reinterpret_cast<C*>(&reinterpret_cast<rng_context*>(rng)->cache);
+    }
+    uint32_t* get_random_bits_available(thread_rng* rng) {
+        return &reinterpret_cast<rng_context*>(rng)->available;
+    }
+    #ifdef SANDSTONE_UNITTESTS
+    RandomBitsAlgo* get_random_bits_algo(thread_rng* rng) {
+        return &reinterpret_cast<rng_context*>(rng)->algo;
+    }
+    #endif
+
+    template<typename T, auto F, uint32_t B, typename C>
+    T get_random_bits(thread_rng* rng, uint32_t bits) {
+        // it is not allowed to use this function in the context of different cache sizes (as the
+        // number of available bits might be bigger than the actual per-type cache holds).
+        assert((bits <= sizeof(T) * 8) && "Requested number of bits must fit the return type");
+
+        // aliases for per thread context
+        C& cache = *get_random_bits_cache<C>(rng);
+        uint32_t& available = *get_random_bits_available(rng);
+        #ifdef SANDSTONE_UNITTESTS
+        RandomBitsAlgo& algo_used = *get_random_bits_algo(rng);
+        #endif
+
+        assert((available < B) && "Not expected to have more bits cached than the number of bits generated at once");
+        static_assert(B <= sizeof(C) * 8, "Generated value must fit into the cache");
+
+        // it is not possible to use cache with different number of bits generated (except
+        // unit tests), therefore we don't need to check/assert on this condition.
+        if (bits <= available) {
+            #ifdef SANDSTONE_UNITTESTS
+            algo_used = RandomBitsAlgo::Cached;
+            #endif
+            T val = static_cast<T>(cache) & get_mask<T>(bits);
+            available -= bits;
+            // conditional jump is far more expensive than a shift, therefore we always shift the cache (including
+            // the cases when all bits are consumed and the cache is "empty"). The cache cannot be full (the number
+            // of available bits is guaranteed to be less than number of bits in the cache), no need to mask
+            // the shift amount to avoid UB#.
+            cache >>= bits;
+            return val;
+        }
+
+        if constexpr (2 * B <= sizeof(C) * 8) {
+            // there is enough space in the cache to hold sufficient number of generated values
+            // we can fetch only `((bits(C) - available) / B)` samples (rounded down to not overflow
+            // the cache), each fetched chunk is B bits.
+            if (bits <= available + B * ((sizeof(C) * 8 - available) / B)) {
+                #ifdef SANDSTONE_UNITTESTS
+                algo_used = RandomBitsAlgo::ExtendCache;
+                #endif
+                do {
+                    assert((available + B <= sizeof(C) * 8) && "generated value must fit remaining space in the cache");
+                    // store new bits to more-significant part of the cache. Previous "junk" bits must
+                    // be discarded here to avoid spilling them to the output value
+                    cache &= get_mask<C>(available);
+                    cache |= C((this->*F)(rng)) << available;
+                    available += B;
+                } while (available < bits); // [[unlikely]] for "regular" cases, will loop only when B < bits(C) / 2
+                T val = static_cast<T>(cache) & get_mask<T>(bits);
+                available -= bits;
+                // Conditional jumps are very expensive. To avoid conditional shift, do shifting for all cases.
+                // As shifting by number of bits(C) is UB#, therefore we need to mask the shift amount to avoid it.
+                // ("junk" result of the shift will be discarded by masking with available bits anyway)
+                cache >>= (bits & ((sizeof(C) * 8) - 1));
+                return val;
+            }
+        } else if constexpr (B <= sizeof(C) * 8) {
+            // the cache is able to hold only one generated value, we need to use additional value
+            // when too few bits are "cached"
+            if (bits <= available + B) {
+                #ifdef SANDSTONE_UNITTESTS
+                algo_used = RandomBitsAlgo::Temporary;
+                #endif
+                C gen = C((this->*F)(rng));
+                T val = static_cast<T>((cache & get_mask<T>(available)) | ((gen & get_mask<C>(bits - available)) << available));
+                // we know that the number of requested bits is bigger than available (no underflow possible)
+                cache = gen >> ((bits - available) & ((sizeof(C) * 8) - 1));
+                available += B - bits;
+                return val;
+            }
+        }
+
+        // the cache is not big enough to hold a single generated value, we need to assemble the value
+        // using multiple pieces (this is the slowest method and should be used only as a last resort)
+        #ifdef SANDSTONE_UNITTESTS
+        algo_used = RandomBitsAlgo::Assemble;
+        #endif
+        T val = 0;
+        uint32_t act = 0;
+        while (bits != 0) {
+            if (available == 0) {
+                cache = C((this->*F)(rng));
+                available = B;
+            }
+            uint32_t b = (bits <= available) ? bits : available;
+            assert((act < sizeof(T) * 8) && "requested bits must fit into the return type");
+            val |= (static_cast<T>(cache) & get_mask<T>(b)) << act;
+            available -= b;
+            cache >>= (b  & ((sizeof(C) * 8) - 1));
+            bits -= b;
+            act += b;
+        }
+        return val;
+    }
 };
+
+template<typename T, typename R, int MAX_REJECTION_LOOPS>
+T get_random_value(R range) {
+    assert((range > 0) && "Range must be a positive non-zero value");
+
+    // never fetch any random bits for ranges <= 1
+    if (range <= 1) {
+        return 0;
+    }
+
+    // Compute the number of bits needed to represent values in [0, range - 1].
+    uint32_t bits = sizeof(R) * 8 - std::countl_zero(range - 1);
+    if constexpr (MAX_REJECTION_LOOPS > 0) {
+        for (int loop = 0; loop < MAX_REJECTION_LOOPS; loop++) {
+            T val = get_random_bits(bits);
+            if (val < range) {
+                return val;
+            }
+        }
+    }
+    return get_random_bits(bits) % range;
+}
 
 // -- constant return engine --
 // NOT random!!
@@ -238,6 +419,11 @@ struct constant_value_engine
 };
 template struct EngineWrapper<constant_value_engine>;
 
+template<>
+uint64_t EngineWrapper<constant_value_engine>::get_random_bits(thread_rng* rng, uint32_t bits) {
+    return generate64(rng) & get_mask<uint64_t>(bits);
+}
+
 // -- linear congruential engine (minimum standard) --
 
 template <> void EngineWrapper<std::minstd_rand>::staticAssertions()
@@ -251,6 +437,7 @@ void EngineWrapper<std::minstd_rand>::seedThread(thread_rng *generator, uint32_t
 {
     mixin &= engine_type::max();
     std::minstd_rand global = globalEngine();   // copies, so we don't modify the global
+    memset(generator, 0, sizeof(thread_rng));
     new (&engine(generator)) std::minstd_rand(global() ^ mixin);
 }
 
@@ -285,6 +472,47 @@ long int EngineWrapper<std::minstd_rand>::generateInt(thread_rng *generator)
     return engine(generator)();
 }
 
+template<uint32_t B>
+static constexpr uint64_t get_random_bits_lcg(EngineWrapper<std::minstd_rand>* thiz, thread_rng* rng) {
+    uint64_t r;
+    if constexpr (B == 0) {
+        r = 0;
+    } else if constexpr (B <= 31) {
+        r = uint64_t(thiz->generateInt(rng));
+    } else if constexpr (B <= 62) {
+        r = uint64_t(thiz->generateInt(rng)) | (uint64_t(thiz->generateInt(rng)) << 31);
+    } else {
+        r = uint64_t(thiz->generateInt(rng)) | (uint64_t(thiz->generateInt(rng)) << 31) | (uint64_t(thiz->generateInt(rng)) << 62);
+    }
+    if constexpr ((B % 31 != 0) && (B < 64)) {
+        r &= ((1ULL << B) - 1);
+    }
+    return r;
+}
+
+template<>
+uint64_t EngineWrapper<std::minstd_rand>::get_random_bits(thread_rng* rng, uint32_t bits) {
+    using random_fn = uint64_t(*)(EngineWrapper<std::minstd_rand>*, thread_rng*);
+    static constexpr const random_fn fns[] = {
+        get_random_bits_lcg<0>, get_random_bits_lcg<1>, get_random_bits_lcg<2>, get_random_bits_lcg<3>, get_random_bits_lcg<4>,
+        get_random_bits_lcg<5>, get_random_bits_lcg<6>, get_random_bits_lcg<7>, get_random_bits_lcg<8>, get_random_bits_lcg<9>,
+        get_random_bits_lcg<10>, get_random_bits_lcg<11>, get_random_bits_lcg<12>, get_random_bits_lcg<13>, get_random_bits_lcg<14>,
+        get_random_bits_lcg<15>, get_random_bits_lcg<16>, get_random_bits_lcg<17>, get_random_bits_lcg<18>, get_random_bits_lcg<19>,
+        get_random_bits_lcg<20>, get_random_bits_lcg<21>, get_random_bits_lcg<22>, get_random_bits_lcg<23>, get_random_bits_lcg<24>,
+        get_random_bits_lcg<25>, get_random_bits_lcg<26>, get_random_bits_lcg<27>, get_random_bits_lcg<28>, get_random_bits_lcg<29>,
+        get_random_bits_lcg<30>, get_random_bits_lcg<31>, get_random_bits_lcg<32>, get_random_bits_lcg<33>, get_random_bits_lcg<34>,
+        get_random_bits_lcg<35>, get_random_bits_lcg<36>, get_random_bits_lcg<37>, get_random_bits_lcg<38>, get_random_bits_lcg<39>,
+        get_random_bits_lcg<40>, get_random_bits_lcg<41>, get_random_bits_lcg<42>, get_random_bits_lcg<43>, get_random_bits_lcg<44>,
+        get_random_bits_lcg<45>, get_random_bits_lcg<46>, get_random_bits_lcg<47>, get_random_bits_lcg<48>, get_random_bits_lcg<49>,
+        get_random_bits_lcg<50>, get_random_bits_lcg<51>, get_random_bits_lcg<52>, get_random_bits_lcg<53>, get_random_bits_lcg<54>,
+        get_random_bits_lcg<55>, get_random_bits_lcg<56>, get_random_bits_lcg<57>, get_random_bits_lcg<58>, get_random_bits_lcg<59>,
+        get_random_bits_lcg<60>, get_random_bits_lcg<61>, get_random_bits_lcg<62>, get_random_bits_lcg<63>, get_random_bits_lcg<64>,
+    };
+    static_assert(std::size(fns) == 8 * sizeof(uint64_t) + 1, "fns array must have a function for each possible bits value");
+    assert((bits < std::size(fns)) && "more bits requested than the returned value can hold");
+    return (fns[bits])(this, rng);
+}
+
 template struct EngineWrapper<std::minstd_rand>;
 
 #ifdef RANDOM_HAS_AES
@@ -300,11 +528,11 @@ static bool haveAes()
 #endif
 }
 
-#pragma GCC push_options
-#pragma GCC target("aes")
 struct aes_engine
 {
     __m128i state[2];
+
+    __attribute__((target("aes")))
     aes_engine(const uint32_t &sseq)
     {
         __m128i pattern = _mm_loadu_si128(reinterpret_cast<const __m128i *>(&sseq));
@@ -313,6 +541,7 @@ struct aes_engine
         _mm_store_si128(state + 1, pattern);
     }
 
+    __attribute__((target("aes")))
     __m128i generateM128()
     {
         __m128i v1 = _mm_aesenc_si128(state[0], state[1]);
@@ -373,7 +602,45 @@ __uint128_t EngineWrapper<aes_engine>::generate128(thread_rng *generator)
     uint64_t h = _mm_extract_epi64(r, 1);
     return l | (__uint128_t(h) << 64);
 }
-#pragma GCC pop_options
+
+template<uint32_t B>
+static constexpr uint64_t get_random_bits_aes(EngineWrapper<aes_engine>* thiz, thread_rng* rng) {
+    static_assert(B <= 64, "cannot return more bits than the return type can hold");
+    uint64_t r;
+    if constexpr (B != 0) {
+        r = thiz->generate64(rng);
+        if constexpr (B < 8 * sizeof(r)) {
+            r &= ((1ULL << B) - 1);
+        }
+    } else {
+        r = 0;
+    }
+    return r;
+}
+
+template<>
+uint64_t EngineWrapper<aes_engine>::get_random_bits(thread_rng* rng, uint32_t bits) {
+    using random_fn = uint64_t(*)(EngineWrapper<aes_engine>*, thread_rng*);
+    static constexpr const random_fn fns[] = {
+        get_random_bits_aes<0>, get_random_bits_aes<1>, get_random_bits_aes<2>, get_random_bits_aes<3>, get_random_bits_aes<4>,
+        get_random_bits_aes<5>, get_random_bits_aes<6>, get_random_bits_aes<7>, get_random_bits_aes<8>, get_random_bits_aes<9>,
+        get_random_bits_aes<10>, get_random_bits_aes<11>, get_random_bits_aes<12>, get_random_bits_aes<13>, get_random_bits_aes<14>,
+        get_random_bits_aes<15>, get_random_bits_aes<16>, get_random_bits_aes<17>, get_random_bits_aes<18>, get_random_bits_aes<19>,
+        get_random_bits_aes<20>, get_random_bits_aes<21>, get_random_bits_aes<22>, get_random_bits_aes<23>, get_random_bits_aes<24>,
+        get_random_bits_aes<25>, get_random_bits_aes<26>, get_random_bits_aes<27>, get_random_bits_aes<28>, get_random_bits_aes<29>,
+        get_random_bits_aes<30>, get_random_bits_aes<31>, get_random_bits_aes<32>, get_random_bits_aes<33>, get_random_bits_aes<34>,
+        get_random_bits_aes<35>, get_random_bits_aes<36>, get_random_bits_aes<37>, get_random_bits_aes<38>, get_random_bits_aes<39>,
+        get_random_bits_aes<40>, get_random_bits_aes<41>, get_random_bits_aes<42>, get_random_bits_aes<43>, get_random_bits_aes<44>,
+        get_random_bits_aes<45>, get_random_bits_aes<46>, get_random_bits_aes<47>, get_random_bits_aes<48>, get_random_bits_aes<49>,
+        get_random_bits_aes<50>, get_random_bits_aes<51>, get_random_bits_aes<52>, get_random_bits_aes<53>, get_random_bits_aes<54>,
+        get_random_bits_aes<55>, get_random_bits_aes<56>, get_random_bits_aes<57>, get_random_bits_aes<58>, get_random_bits_aes<59>,
+        get_random_bits_aes<60>, get_random_bits_aes<61>, get_random_bits_aes<62>, get_random_bits_aes<63>, get_random_bits_aes<64>,
+    };
+    static_assert(std::size(fns) == 64 + 1, "fns array must have a function for each possible bits value");
+    assert((bits < std::size(fns)) && "more bits requested than the returned value can hold");
+    return (fns[bits])(this, rng);
+}
+
 
 template struct EngineWrapper<aes_engine>;
 #else
@@ -400,6 +667,14 @@ static const char *engineNameFromType(EngineType t)
     __builtin_unreachable();
     return nullptr;
 }
+
+static constexpr std::initializer_list<EngineType> engine_types = {
+    Constant,
+    LCG,
+#ifdef RANDOM_HAS_AES
+    AESSequence,
+#endif
+};
 
 static void listEngines(FILE *stream)
 {
@@ -476,8 +751,12 @@ static int read_random_file(int fd, void *where, size_t count)
 
 void random_init_global(const char *seed_from_user)
 {
+    #ifdef SANDSTONE_UNITTESTS
+    assert(false && "Unit tests are not expected to initialize the global engine");
+    #else
     assert(thread_count() > 0);
     assert(thread_num == -1);
+    #endif
 
     if (seed_from_user && (strcmp(seed_from_user, "help") == 0 || strcmp(seed_from_user, "list") == 0)) {
         listEngines(stdout);
@@ -515,37 +794,37 @@ void random_init_global(const char *seed_from_user)
 
     switch (engine_type) {
     case Constant:
-        sApp->random_engine.reset(new EngineWrapper<constant_value_engine>(engine_type));
-        break;
-    case AESSequence:
-#ifdef RANDOM_HAS_AES
-        sApp->random_engine.reset(new EngineWrapper<aes_engine>(engine_type));
-#else
-        assert("Impossible condition: shouldn't have reached here");
-        __builtin_unreachable();
-#endif
+        set_random_engine(new EngineWrapper<constant_value_engine>(engine_type));
         break;
     case LCG:
-        sApp->random_engine.reset(new EngineWrapper<std::minstd_rand>(engine_type));
+        set_random_engine(new EngineWrapper<std::minstd_rand>(engine_type));
         break;
+    case AESSequence:
+        #ifdef RANDOM_HAS_AES
+        set_random_engine(new EngineWrapper<aes_engine>(engine_type));
+        break;
+        #else
+        assert(false && "AES engine is not available");
+        __builtin_unreachable();
+        #endif
     }
 
     if (seed_from_user && *seed_from_user) {
         // use the seed state provided in the command-line
-        sApp->random_engine->reloadGlobalState(seed_from_user);
+        random_engine()->reloadGlobalState(seed_from_user);
     } else {
         // use a random-generated seed
         SeedSequence sseq;
         read_from_seed(sseq);
-        sApp->random_engine->seedGlobalEngine(sseq);
+        random_engine()->seedGlobalEngine(sseq);
     }
 }
 
 std::string random_format_seed()
 {
-    std::string result = engineNameFromType(sApp->random_engine->engine_type);
+    std::string result = engineNameFromType(random_engine()->engine_type);
     result += ':';
-    result += sApp->random_engine->globalState();
+    result += random_engine()->globalState();
     return result;
 }
 
@@ -556,8 +835,10 @@ void random_advance_seed()
 
 void random_init_thread(int thread_num)
 {
+    #ifndef SANDSTONE_UNITTESTS
     // nothing should be modifying the global engine now
-    sApp->random_engine->seedThread(rng_for_thread(thread_num), mixin_from_device_info(thread_num));
+    random_engine()->seedThread(rng_for_thread(thread_num), mixin_from_device_info(thread_num));
+    #endif
 }
 
 template <typename FP> static inline FP random_template(FP scale)
@@ -572,26 +853,40 @@ template <typename FP> static inline FP random_template(FP scale)
 
     uint64_t mantissa;
     if (std::numeric_limits<FP>::digits > 32)
-        mantissa = sApp->random_engine->generate64(thread_local_rng());
+        mantissa = random_engine()->generate64(thread_local_rng());
     else
-        mantissa = sApp->random_engine->generate32(thread_local_rng());
+        mantissa = random_engine()->generate32(thread_local_rng());
     mantissa &= mantissa_mask;
     return mantissa / max_integral * scale;
 }
 
 [[gnu::noinline]] uint32_t random32()
 {
-    return sApp->random_engine->generate32(thread_local_rng());
+    return random_engine()->generate32(thread_local_rng());
 }
 
 [[gnu::noinline]] uint64_t random64()
 {
-    return sApp->random_engine->generate64(thread_local_rng());
+    return random_engine()->generate64(thread_local_rng());
 }
 
 [[gnu::noinline]] __uint128_t random128()
 {
-    return sApp->random_engine->generate128(thread_local_rng());
+    return random_engine()->generate128(thread_local_rng());
+}
+
+[[gnu::noinline]] uint64_t get_random_bits(uint32_t bits)
+{
+    return random_engine()->get_random_bits(thread_local_rng(), bits);
+}
+
+[[gnu::noinline]] uint32_t get_random_value(uint32_t range) {
+    // to avoid biased results, try a few times with value rejection to get value in range
+    // if not caught any "successful" value, just do biased modulo operation to avoid infinite loops
+    // (especially with scenarios where RNG provides all-1s all the time, e.g. Constant:ffffffff)
+    // it will be always hit for ranges of power of two, but a bit more than 50% for worst cases
+    // (e.g. range=65). Having 7 tries should result in uniformity better than 1%
+    return get_random_value<uint32_t, uint32_t, 7>(range);
 }
 
 [[gnu::noinline]] float frandomf_scale(float scale)
@@ -729,7 +1024,7 @@ int rand_r(unsigned int *)
 // POSIX-defined to return in the interval [0, 2^31).
 long int random()
 {
-    return sApp->random_engine->generateInt(thread_local_rng());
+    return random_engine()->generateInt(thread_local_rng());
 }
 
 // POSIX-defined to return in the interval [0.0, 1.0)
