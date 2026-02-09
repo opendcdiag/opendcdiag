@@ -127,13 +127,35 @@ TEST(RandomUtils, get_random_value) {
         { 250, 25 },//116+8
                     // 124, no dangling bits
     };
-    // prepare random()) values according experiment definition above
+
+    // prepare random() values according experiment definition above
     std::vector<int> mocked_values{};
-    for (const auto& v: values) {
-        if ((v.first > 1) && (v.final || (v.first > v.second))) {
-            mocked_values.push_back(v.second);
+    static constexpr uint32_t BITS_PER_RANDOM = 31;
+    uint64_t value = 0;
+    uint32_t bits_used = 0;
+    for (auto v: values) {
+        if (v.first > 1) {
+            auto num_bits = [](uint32_t v) {
+                return sizeof(uint32_t) * 8 - std::countl_zero(v);
+            };
+            // number of bits required to represent the result might be
+            // smaller for ranges that are a power of two
+            uint32_t bits = num_bits(v.first - 1);
+            // verify the "test data"
+            ASSERT_GT(bits, 0);
+            ASSERT_GE(bits, num_bits(v.second));
+
+            value |= v.second << bits_used;
+            bits_used += bits;
+
+            if (bits_used >= BITS_PER_RANDOM) {
+                bits_used -= BITS_PER_RANDOM;
+                mocked_values.push_back(value & 0x7fffffff);
+                value >>= BITS_PER_RANDOM;
+            }
         }
     }
+    ASSERT_EQ(bits_used, 0);
 
     // and check all mocked random() values
     RandomMocker::Mock<int> mock_random{ mocked_values };
@@ -149,4 +171,66 @@ TEST(RandomUtils, get_random_value) {
 
     // no more values available, the mock is empty too
     EXPECT_DEATH(get_random_value(2), "");
+}
+
+TEST(RandomUtils, get_random_value_uniformity) {
+    std::vector<std::vector<uint64_t>> counts{};
+    counts.push_back(std::vector<uint64_t>(2)); // 0 rejections
+    counts.push_back(std::vector<uint64_t>(3)); // 1/4
+    counts.push_back(std::vector<uint64_t>(5)); // 3/8
+    counts.push_back(std::vector<uint64_t>(7)); // 1/8
+    counts.push_back(std::vector<uint64_t>(11)); // 5/16
+    counts.push_back(std::vector<uint64_t>(13)); // 3/16
+    counts.push_back(std::vector<uint64_t>(23)); // 9/32
+    counts.push_back(std::vector<uint64_t>(64)); // 0
+    // average bits per value: 1 + 2 + 3 + 3 + 4 + 4 + 5 + 6 = 28 / 8 = 3.5 bits
+    // each loop consumes 3 bits for selecting random counts (8 entries)
+    // average rejection rate is (49/32)/8 = ~19%
+
+    static constexpr size_t NUM_VALUES = 1'000'000ULL;
+    static constexpr uint32_t BITS_PER_RANDOM = 31;
+    static constexpr size_t NUM_RANDOM_CALLS = (6.5 * NUM_VALUES) / BITS_PER_RANDOM;
+
+
+    std::vector<uint64_t> ranges(counts.size());
+
+    srandom(std::chrono::system_clock::now().time_since_epoch().count());
+    struct urng {
+        using result_type = int32_t;
+        static constexpr result_type min() { return 0; };
+        static constexpr result_type max() { return INT32_MAX; };
+        result_type operator()() { return random(); };
+    };
+    std::shuffle(counts.begin(), counts.end(), urng{});
+
+    // lets expect no fail is caught
+    RandomMocker::Counting mock_random{};
+    for (uint64_t loop = 0; loop < NUM_VALUES; loop++) {
+        uint32_t index = get_random_value(counts.size());
+        ASSERT_LT(index, counts.size());
+        ranges[index]++;
+        uint32_t range = counts[index].size();
+        uint32_t r = get_random_value(range);
+        ASSERT_LT(r, range);
+        counts[index][r]++;
+    }
+    // expected is ~200k random() calls. Allow 20% for rejectsions and 1% for distribution variance
+    EXPECT_GT(mock_random.get_count(), (NUM_RANDOM_CALLS / 1.01));
+    EXPECT_LT(mock_random.get_count(), (NUM_RANDOM_CALLS * (1.20 * 1.01)));
+
+    for (uint32_t index = 0; index < counts.size(); index++) {
+        ASSERT_NE(ranges[index], 0);
+        EXPECT_GT(ranges[index], (NUM_VALUES / counts.size()) / 1.01);
+        EXPECT_LT(ranges[index], (NUM_VALUES / counts.size()) * 1.01);
+
+        //#define OUTPUT_THE_DISTRIBUTION_STATS
+        #ifdef OUTPUT_THE_DISTRIBUTION_STATS
+        printf("range %d:", static_cast<int>(counts[index].size()));
+        for (auto v : counts[index]) {
+            double v_ratio = counts[index].size() * static_cast<double>(v) / ranges[index] - 1.0;
+            printf(" %g", v_ratio);
+        }
+        printf(" (%ld values)\n", ranges[index]);
+        #endif
+    }
 }
