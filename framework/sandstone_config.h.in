@@ -53,9 +53,9 @@ static constexpr bool ChildBacktrace = SANDSTONE_CHILD_BACKTRACE;
 static constexpr bool ChildDebug = SANDSTONE_CHILD_DEBUG;
 static constexpr bool ChildDebugCrashes = SANDSTONE_CHILD_DEBUG_CRASHES;
 static constexpr bool ChildDebugHangs = SANDSTONE_CHILD_DEBUG_HANGS;
+static constexpr bool HasBuiltinTestList = SANDSTONE_BUILTIN_TEST_LIST;
 static constexpr bool NoLogging = SANDSTONE_NO_LOGGING;
 static constexpr bool RestrictedCommandLine = SANDSTONE_RESTRICTED_CMDLINE;
-static constexpr bool HasBuiltinTestList = SANDSTONE_BUILTIN_TEST_LIST;
 } // namespace SandstoneConfig
 
 #endif /* __cplusplus */

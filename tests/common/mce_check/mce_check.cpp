@@ -125,8 +125,11 @@ bool InterruptMonitor::observed_mce_events()
 static_assert(!InterruptMonitor::InterruptMonitorWorks);
 #endif
 
+#define CONCAT(x, y)    CONCAT2(x, y)
+#define CONCAT2(x, y)    x ## y
 struct test mce_test = {
-#ifdef TEST_ID_mce_check
+        .shortid = CONCAT(0x, TEST_ID_mce_check),
+#if 0
         .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
         .description = nullptr,
 #else

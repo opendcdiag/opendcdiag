@@ -32,6 +32,15 @@ if cpp.get_linker_id() != 'ld.bfd' or cc.get_linker_id() != 'ld.bfd'
     )
 endif
 
+generated_short_ids = configure_file(
+    input: 'scripts/generate-short-ids.pl',
+    output: 'sandstone_short_ids.h',
+    command: [
+        perl, files('scripts/generate-short-ids.pl'),
+        '@OUTPUT@', 'tests',
+    ]
+)
+
 device_type = get_option('device_type')
 
 march_generic_flags = []
