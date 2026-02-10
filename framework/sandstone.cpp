@@ -445,10 +445,12 @@ static void list_tests(const ProgramOptions& opts)
     for (const auto &ti : *test_set) {
         struct test *test = ti.test;
         if (test->quality_level >= sApp->requested_quality) {
-            if (opts.list_tests_include_tests) {
-                if (opts.list_tests_include_descriptions) {
-                    printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
-                } else if (sApp->shmem->cfg.verbosity > 0) {
+            switch (opts.list_test_mode) {
+            case ProgramOptions::ListMode::WithDescription:
+                printf("%i %-20s \"%s\"\n", ++i, test->id, test->description);
+                break;
+            case ProgramOptions::ListMode::RawTests:
+                if (sApp->shmem->cfg.verbosity > 0) {
                     // don't report the FW minimum CPU features
                     device_features_t feats = test->compiler_minimum_device & ~device_compiler_features;
                     feats |= test->minimum_cpu;
@@ -456,24 +458,29 @@ static void list_tests(const ProgramOptions& opts)
                 } else {
                     puts(test->id);
                 }
+                break;
+            case ProgramOptions::ListMode::RawGroups:
+                break;      // nothing
             }
         }
     }
 
-    if (opts.list_tests_include_groups && !groups.empty()) {
-        if (opts.list_tests_include_descriptions)
-            printf("\nGroups:\n");
-        for (const auto &pair : groups) {
-            const auto &g = pair.second;
-            if (opts.list_tests_include_descriptions) {
-                printf("@%-21s \"%s\"\n", g.definition->id, g.definition->description);
-                for (auto test : g.entries)
-                    if (test->quality_level >= sApp->requested_quality)
-                        printf("  %s\n", test->id);
-            } else {
-                // just the group name
-                printf("@%s\n", g.definition->id);
-            }
+    if (opts.list_test_mode == ProgramOptions::ListMode::WithDescription)
+        printf("\nGroups:\n");
+
+    for (const auto &pair : groups) {
+        const auto &g = pair.second;
+        switch (opts.list_test_mode) {
+        case ProgramOptions::ListMode::WithDescription:
+            printf("@%-21s \"%s\"\n", g.definition->id, g.definition->description);
+            for (auto test : g.entries)
+                if (test->quality_level >= sApp->requested_quality)
+                    printf("  %s\n", test->id);
+            break;
+        case ProgramOptions::ListMode::RawGroups:
+            printf("@%s\n", g.definition->id);
+        case ProgramOptions::ListMode::RawTests:
+            break;      // nothing
         }
     }
 }
