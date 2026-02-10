@@ -143,7 +143,11 @@ framework_config.set(
     'SANDSTONE_DEFAULT_LOGGING',
     'TestConfig::OutputFormat::' + get_option('logging_format'),
 )
-
+framework_config.set10(
+    'SANDSTONE_NO_TEST_NAMES',
+    get_option('framework_options').contains('no-test-names') or
+    get_option('logging_format') == 'no_output'
+)
 framework_config.set10(
     'SANDSTONE_RESTRICTED_CMDLINE',
     get_option('framework_options').contains('restricted-cmdline'),

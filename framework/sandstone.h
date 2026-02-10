@@ -164,8 +164,12 @@ typedef enum TestQuality {
 #define DECLARE_TEST_INNER(test_id, test_short_id, test_description)    \
     DECLARE_TEST_INNER2(test_id, test_short_id, test_description)
 
-#ifndef DECLARE_TEST
-#  define DECLARE_TEST(test_id, test_description)       DECLARE_TEST_INNER(test_id, TEST_ID_ ## test_id, test_description)
+#if SANDSTONE_NO_TEST_NAMES
+#  define DECLARE_TEST(test_id, test_description)                       \
+    DECLARE_TEST_INNER(TEST_ID_ ## test_id, TEST_ID_ ## test_id, NULL)
+#else
+#  define DECLARE_TEST(test_id, test_description)                       \
+    DECLARE_TEST_INNER(test_id, TEST_ID_ ## test_id, test_description)
 #endif
 
 #define DECLARE_TEST_GROUPS(...)                                      \

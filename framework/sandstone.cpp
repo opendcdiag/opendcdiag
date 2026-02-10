@@ -555,8 +555,10 @@ get_next_test(SandstoneTestSet::EnabledTestList::iterator next_test)
         }
     }
 
+#if !SANDSTONE_NO_TEST_NAMES
     assert(next_test->test->id);
     assert(strlen(next_test->test->id));
+#endif
     assert(SandstoneConfig::NoLogging || next_test->test->description);
     return next_test;
 }

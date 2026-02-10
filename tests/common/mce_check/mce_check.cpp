@@ -129,13 +129,13 @@ static_assert(!InterruptMonitor::InterruptMonitorWorks);
 #define CONCAT2(x, y)    x ## y
 struct test mce_test = {
         .shortid = CONCAT(0x, TEST_ID_mce_check),
-#if 0
+#if SANDSTONE_NO_TEST_NAMES
         .id = SANDSTONE_STRINGIFY(TEST_ID_mce_check),
         .description = nullptr,
 #else
         .id = "mce_check",
         .description = "Machine Check Exceptions/Events count",
-#endif // TEST_ID_mce_check
+#endif // SANDSTONE_NO_TEST_NAMES
 
 #if defined(__linux__) && defined(__x86_64__)
         .test_preinit = mce_check_preinit,
