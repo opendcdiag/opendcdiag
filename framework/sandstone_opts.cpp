@@ -729,17 +729,15 @@ struct ProgramOptionsParser {
                 opts.action = Action::exit;
                 return EXIT_SUCCESS;
             case 'l':
-                opts.list_tests_include_descriptions = true;
-                opts.list_tests_include_tests = true;
-                opts.list_tests_include_groups = true;
+                opts.list_test_mode = ProgramOptions::ListMode::WithDescription;
                 opts.action = Action::list_tests;
                 return EXIT_SUCCESS;
             case raw_list_tests:
-                opts.list_tests_include_tests = true;
+                opts.list_test_mode = ProgramOptions::ListMode::RawTests;
                 opts.action = Action::list_tests;
                 return EXIT_SUCCESS;
             case raw_list_groups:
-                opts.list_tests_include_groups = true;
+                opts.list_test_mode = ProgramOptions::ListMode::RawGroups;
                 opts.action = Action::list_tests;
                 return EXIT_SUCCESS;
             case raw_list_group_members: {

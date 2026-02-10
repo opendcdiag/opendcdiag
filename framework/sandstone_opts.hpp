@@ -24,14 +24,17 @@ struct ProgramOptions {
     int max_cores_per_slice = 0;
     int device_count = -1;
     bool fatal_errors = false;
+    enum class ListMode : uint8_t {
+        // action must be list_tests for these
+        WithDescription,
+        RawTests,
+        RawGroups,
+    } list_test_mode = {};
     const char* on_hang_arg = nullptr;
     const char* on_crash_arg = nullptr;
     std::vector<const char*> deviceset;
 
     std::string list_group_name; // for list_group
-    bool list_tests_include_descriptions = false; // for list_tests
-    bool list_tests_include_tests = false; // for list_tests
-    bool list_tests_include_groups = false; // for list_tests
 
     // test selection
     std::vector<std::string> enabled_tests;
