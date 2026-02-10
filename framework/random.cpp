@@ -62,16 +62,7 @@ union alignas(64) thread_rng {
 };
 
 // std::seed_seq does too much. This class simply copies the buffer as the seed.
-struct SeedSequence
-{
-    using result_type = uint32_t;
-    const uint32_t *seed;
-    SeedSequence(const uint32_t *s) : seed(s) {}
-    void generate(uint32_t *begin, uint32_t *end)
-    {
-        std::copy_n(seed, end - begin, begin);
-    }
-};
+using SeedSequence = std::array<uint32_t, 4>;
 
 // -- the global (not per thread) state --
 
@@ -169,7 +160,7 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
 
     void seedGlobalEngine(SeedSequence &sseq) override
     {
-        new (rng_for_thread(-1)->u8) engine_type(sseq);
+        new (rng_for_thread(-1)->u8) engine_type(*sseq.data());
     }
 
     void seedThread(thread_rng *buffer, uint32_t mixin) override
@@ -225,7 +216,6 @@ struct constant_value_engine
     using result_type = uint32_t;
     result_type value;
     constant_value_engine(result_type v) : value(v) {}
-    constant_value_engine(const SeedSequence &sseq) : value(*sseq.seed) {}
     result_type operator()() { return value;}
     constexpr static result_type min() { return 0; }
     constexpr static result_type max() { return std::numeric_limits<result_type>::max(); }
@@ -315,9 +305,9 @@ static bool haveAes()
 struct aes_engine
 {
     __m128i state[2];
-    aes_engine(const SeedSequence &sseq)
+    aes_engine(const uint32_t &sseq)
     {
-        __m128i pattern = _mm_loadu_si128(reinterpret_cast<const __m128i *>(sseq.seed));
+        __m128i pattern = _mm_loadu_si128(reinterpret_cast<const __m128i *>(&sseq));
         _mm_store_si128(state + 0, pattern);
         pattern = _mm_xor_si128(pattern, _mm_set1_epi32(-1));
         _mm_store_si128(state + 1, pattern);
@@ -503,7 +493,8 @@ void random_init_global(const char *seed_from_user)
 
         uintptr_t randomdata = uintptr_t(&randomdataptr);
 #  endif
-        SeedSequence sseq(randomdataptr);
+        SeedSequence sseq;
+        std::copy_n(randomdataptr, sseq.size(), sseq.begin());
 
         // create the engine from the seed
         EngineType engine_type = LCG;
@@ -541,12 +532,11 @@ void random_init_global(const char *seed_from_user)
         }
         make_engine(engine_type);
 
-        thread_rng buffer;
-        read_from_seed(buffer);
+        SeedSequence sseq;
+        read_from_seed(sseq);
         close(fd);
 
         // create the engine from the seed
-        SeedSequence sseq(buffer.u32);
         sApp->random_engine->seedGlobalEngine(sseq);
     }
 }
