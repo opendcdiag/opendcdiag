@@ -68,6 +68,7 @@ enum {
     output_format_option,
     quality_option,
     quick_run_option,
+    raw_list_test_ids,
     raw_list_tests,
     raw_list_group_members,
     raw_list_groups,
@@ -134,6 +135,7 @@ static struct option long_options[]  = {
     { "inject-idle", required_argument, nullptr, inject_idle_option },
     { "include-optional", no_argument, nullptr, include_optional_option },
     { "list", no_argument, nullptr, 'l' },
+    { "list-test-ids", no_argument, nullptr, raw_list_test_ids },
     { "list-tests", no_argument, nullptr, raw_list_tests },
     { "list-group-members", required_argument, nullptr, raw_list_group_members },
     { "list-groups", no_argument, nullptr, raw_list_groups },
@@ -548,6 +550,7 @@ struct ProgramOptionsParser {
                 break;
 
             case 'l':
+            case raw_list_test_ids:
             case raw_list_tests:
             case raw_list_groups:
             case dump_cpu_info_option:
@@ -730,6 +733,10 @@ struct ProgramOptionsParser {
                 return EXIT_SUCCESS;
             case 'l':
                 opts.list_test_mode = ProgramOptions::ListMode::WithDescription;
+                opts.action = Action::list_tests;
+                return EXIT_SUCCESS;
+            case raw_list_test_ids:
+                opts.list_test_mode = ProgramOptions::ListMode::RawTestIds;
                 opts.action = Action::list_tests;
                 return EXIT_SUCCESS;
             case raw_list_tests:

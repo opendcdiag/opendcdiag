@@ -27,6 +27,7 @@ struct ProgramOptions {
     enum class ListMode : uint8_t {
         // action must be list_tests for these
         WithDescription,
+        RawTestIds,
         RawTests,
         RawGroups,
     } list_test_mode = {};
