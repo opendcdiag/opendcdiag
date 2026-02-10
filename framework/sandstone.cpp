@@ -459,6 +459,9 @@ static void list_tests(const ProgramOptions& opts)
                     puts(test->id);
                 }
                 break;
+            case ProgramOptions::ListMode::RawTestIds:
+                printf("%-40s %06x\n", test->id, test->shortid);
+                break;
             case ProgramOptions::ListMode::RawGroups:
                 break;      // nothing
             }
@@ -480,6 +483,7 @@ static void list_tests(const ProgramOptions& opts)
         case ProgramOptions::ListMode::RawGroups:
             printf("@%s\n", g.definition->id);
         case ProgramOptions::ListMode::RawTests:
+        case ProgramOptions::ListMode::RawTestIds:
             break;      // nothing
         }
     }
