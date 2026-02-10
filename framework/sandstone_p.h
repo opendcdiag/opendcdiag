@@ -350,7 +350,9 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
     int current_test_count;
     ShortDuration current_test_duration;
-    MonotonicTimePoint current_test_starttime;
+    MonotonicTimePoint current_test_starttime;         // at entering run_one_test_once()
+    MonotonicTimePoint current_test_starttime_at_run;  // at entering run()
+    MonotonicTimePoint current_test_starttime_at_run_first_loop; // at first entering TEST_LOOP inside run()
     int threshold_time_remaining = 30000;
 
     struct {
