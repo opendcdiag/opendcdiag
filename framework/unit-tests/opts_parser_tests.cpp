@@ -901,3 +901,61 @@ TEST(ProgramOptionsParser, repeated_opt_accumulates__cpuset_deviceset)
         sb.check_eq(EMPTY_STR); // no messages printed
     }
 }
+
+TEST(ProgramOptionsParser, positional_args__parsed_as_test_names_after_double_dash)
+{
+    {
+        StreamBuffer sb;
+        ProgramOptions opts;
+        SandstoneApplicationConfig cfg{};
+        char* argv[] = {
+            (char*)"foo-bar", // binary name
+            (char*)"-etest1",
+            (char*)"--enable=test2",
+            (char*)"--",
+            (char*)"test3",
+            (char*)"test4",
+            (char*)"test5",
+        };
+
+        auto ret = opts.parse(7, argv, &cfg);
+        EXPECT_EQ(opts.enabled_tests.size(), 5);
+        EXPECT_STREQ(opts.enabled_tests.at(0), "test1");
+        EXPECT_STREQ(opts.enabled_tests.at(1), "test2");
+        EXPECT_STREQ(opts.enabled_tests.at(2), "test3");
+        EXPECT_STREQ(opts.enabled_tests.at(3), "test4");
+        EXPECT_STREQ(opts.enabled_tests.at(4), "test5");
+
+        EXPECT_EQ(ret, EXIT_SUCCESS);
+        sb.check_eq(EMPTY_STR); // no messages printed
+    }
+}
+
+TEST(ProgramOptionsParser, positional_args__not_parsed_as_test_names_without_double_dash)
+{
+    {
+        StreamBuffer sb;
+        ProgramOptions opts;
+        SandstoneApplicationConfig cfg{};
+        char* argv[] = {
+            (char*)"foo-bar", // binary name
+            (char*)"-etest1",
+            (char*)"test2",
+            (char*)"--enable=test3",
+            (char*)"test4",
+            (char*)"test5",
+        };
+
+        auto ret = opts.parse(6, argv, &cfg);
+        EXPECT_EQ(opts.enabled_tests.size(), 2);
+        EXPECT_STREQ(opts.enabled_tests.at(0), "test1");
+        EXPECT_STREQ(opts.enabled_tests.at(1), "test3");
+
+        EXPECT_EQ(ret, EXIT_SUCCESS);
+        sb.check_eqs({
+            "unittests: option 'test2' is ignored - positional arguments should be put after --",
+            "unittests: option 'test4' is ignored - positional arguments should be put after --",
+            "unittests: option 'test5' is ignored - positional arguments should be put after --"
+        });
+    }
+}
