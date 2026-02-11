@@ -94,10 +94,6 @@
 #  define S_IRWXU       0700
 #endif
 
-#if !defined(__GLIBC__) && !defined(fileno_unlocked)
-#  define fileno_unlocked   fileno
-#endif
-
 using namespace std;
 using namespace std::chrono;
 
