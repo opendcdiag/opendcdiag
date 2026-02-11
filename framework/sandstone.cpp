@@ -491,96 +491,98 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
     if (has_failed)
         return;                     // no point in reporting timing of failed tests
 
-    // check the overall time
-    if (sApp->shmem->current_test_endtime != MonotonicTimePoint::max() && the_test->desired_duration >= 0) {
-        Duration expected_runtime = sApp->shmem->current_test_endtime - sApp->current_test_starttime;
-        Duration min_expected_runtime = expected_runtime - expected_runtime / 4;
-        Duration max_expected_runtime = expected_runtime + expected_runtime / 4;
-        Duration actual_runtime = now - sApp->current_test_starttime;
-        Duration difference = abs(expected_runtime - actual_runtime);
+    if (sApp->shmem->current_test_endtime == MonotonicTimePoint::max() || the_test->desired_duration < 0) {
+        return;
+    }
 
-        if ((actual_runtime > min_expected_runtime && actual_runtime < max_expected_runtime)
-                || difference < OverallTestTimeIgnore) {
-            // Acceptable timing
-            log_info("Overall time: %s", format_duration(actual_runtime).c_str());
-        } else if (actual_runtime > max_expected_runtime) {
-            maybe_log_error(test_flag_ignore_test_overtime,
-                            "Test ran for longer than expected: %s (desired %s, max %s)",
-                            format_duration(actual_runtime).c_str(), format_duration(expected_runtime).c_str(),
-                            format_duration(max_expected_runtime).c_str());
-        } else  {
-            maybe_log_error(test_flag_ignore_test_undertime,
-                            "Test ran shorter than expected: %s (desired %s, min %s)",
-                            format_duration(actual_runtime).c_str(), format_duration(expected_runtime).c_str(),
-                            format_duration(min_expected_runtime).c_str());
+    // check the overall time
+    Duration expected_runtime = sApp->shmem->current_test_endtime - sApp->current_test_starttime;
+    Duration min_expected_runtime = expected_runtime - expected_runtime / 4;
+    Duration max_expected_runtime = expected_runtime + expected_runtime / 4;
+    Duration actual_runtime = now - sApp->current_test_starttime;
+    Duration difference = abs(expected_runtime - actual_runtime);
+
+    if ((actual_runtime > min_expected_runtime && actual_runtime < max_expected_runtime)
+            || difference < OverallTestTimeIgnore) {
+        // Acceptable timing
+        log_info("Overall time: %s", format_duration(actual_runtime).c_str());
+    } else if (actual_runtime > max_expected_runtime) {
+        maybe_log_error(test_flag_ignore_test_overtime,
+                        "Test ran for longer than expected: %s (desired %s, max %s)",
+                        format_duration(actual_runtime).c_str(), format_duration(expected_runtime).c_str(),
+                        format_duration(max_expected_runtime).c_str());
+    } else  {
+        maybe_log_error(test_flag_ignore_test_undertime,
+                        "Test ran shorter than expected: %s (desired %s, min %s)",
+                        format_duration(actual_runtime).c_str(), format_duration(expected_runtime).c_str(),
+                        format_duration(min_expected_runtime).c_str());
+    }
+
+    // check the timings in each thread
+    Duration average = {};
+    int average_counts = 0;
+    int while_loops = 0;
+    for (int t = 0; t < thread_count(); ++t) {
+        PerThread &thr = per_thread[t];
+        if (thr.iteration_times[0].time_since_epoch().count() == 0)
+            continue;
+
+        std::array<Duration, DesiredIterations> iteration_times = {};
+        iteration_times[0] = thr.iteration_times[0] - sApp->current_test_starttime;
+        int n = 0;
+        for (int i = 1; i < DesiredIterations; ++i) {
+            if (thr.iteration_times[i].time_since_epoch().count() == 0)
+                break;
+            ++n;
+            iteration_times[n] = thr.iteration_times[i] - thr.iteration_times[i - 1];
         }
 
-        // check the timings in each thread
-        Duration average = {};
-        int average_counts = 0;
-        int while_loops = 0;
-        for (int t = 0; t < thread_count(); ++t) {
+        if (n) {
+            Duration this_average = (thr.iteration_times[n] - thr.iteration_times[0]) / n;
+            average += this_average;
+            if (iteration_times[0] < 1ms && iteration_times[0] * 4 < this_average)
+                ++while_loops;
+        } else {
+            average += iteration_times[0];
+        }
+        ++average_counts;
+
+        log_message(t, SANDSTONE_LOG_DEBUG "Sampled iteration timings: %s, %s, %s, %s",
+                    format_duration(iteration_times[0]).c_str(),
+                    format_duration(iteration_times[1]).c_str(),
+                    format_duration(iteration_times[2]).c_str(),
+                    format_duration(iteration_times[3]).c_str());
+    }
+
+    if (average_counts == 0) {
+        log_error("run() function did not call test_time_condition() in any thread");
+    } else {
+        if (while_loops)
+            maybe_log_error(test_flag_ignore_do_while,
+                            "run() function appears to use while (test_time_condition()) instead of do {} while");
+
+        // find the threads where test_time_condition() wasn't called
+        for (int t = 0; average_counts != thread_count() && t < thread_count(); ++t) {
             PerThread &thr = per_thread[t];
             if (thr.iteration_times[0].time_since_epoch().count() == 0)
-                continue;
-
-            std::array<Duration, DesiredIterations> iteration_times = {};
-            iteration_times[0] = thr.iteration_times[0] - sApp->current_test_starttime;
-            int n = 0;
-            for (int i = 1; i < DesiredIterations; ++i) {
-                if (thr.iteration_times[i].time_since_epoch().count() == 0)
-                    break;
-                ++n;
-                iteration_times[n] = thr.iteration_times[i] - thr.iteration_times[i - 1];
-            }
-
-            if (n) {
-                Duration this_average = (thr.iteration_times[n] - thr.iteration_times[0]) / n;
-                average += this_average;
-                if (iteration_times[0] < 1ms && iteration_times[0] * 4 < this_average)
-                    ++while_loops;
-            } else {
-                average += iteration_times[0];
-            }
-            ++average_counts;
-
-            log_message(t, SANDSTONE_LOG_DEBUG "Sampled iteration timings: %s, %s, %s, %s",
-                        format_duration(iteration_times[0]).c_str(),
-                        format_duration(iteration_times[1]).c_str(),
-                        format_duration(iteration_times[2]).c_str(),
-                        format_duration(iteration_times[3]).c_str());
+                log_message(t, SANDSTONE_LOG_WARNING "run() function did not call test_time_condition() in this thread");
         }
 
-        if (average_counts == 0) {
-            log_error("run() function did not call test_time_condition() in any thread");
+        average /= average_counts;
+        if (average < 1us) {
+            // avoid division by zero
+            maybe_log_error(test_flag_ignore_loop_timing,
+                            "Inner loop is FAR too short, couldn't even get accurate timings");
+        } else if (average < MinimumLoopDuration) {
+            maybe_log_error(test_flag_ignore_loop_timing,
+                            "Inner loop is too short (average %s) -- suggest making the test %" PRId64 "x longer",
+                            format_duration(average).c_str(), TargetLoopDuration.count() / average.count());
+        } else if (average > MaximumLoopDuration) {
+            maybe_log_error(test_flag_ignore_loop_timing,
+                            "Inner loop is too long (average %s) -- suggest making the test %" PRId64 "x shorter",
+                            format_duration(average).c_str(), average.count() / TargetLoopDuration.count());
         } else {
-            if (while_loops)
-                maybe_log_error(test_flag_ignore_do_while,
-                                "run() function appears to use while (test_time_condition()) instead of do {} while");
-
-            // find the threads where test_time_condition() wasn't called
-            for (int t = 0; average_counts != thread_count() && t < thread_count(); ++t) {
-                PerThread &thr = per_thread[t];
-                if (thr.iteration_times[0].time_since_epoch().count() == 0)
-                    log_message(t, SANDSTONE_LOG_WARNING "run() function did not call test_time_condition() in this thread");
-            }
-
-            average /= average_counts;
-            if (average < 1us) {
-                // avoid division by zero
-                maybe_log_error(test_flag_ignore_loop_timing,
-                                "Inner loop is FAR too short, couldn't even get accurate timings");
-            } else if (average < MinimumLoopDuration) {
-                maybe_log_error(test_flag_ignore_loop_timing,
-                                "Inner loop is too short (average %s) -- suggest making the test %" PRId64 "x longer",
-                                format_duration(average).c_str(), TargetLoopDuration.count() / average.count());
-            } else if (average > MaximumLoopDuration) {
-                maybe_log_error(test_flag_ignore_loop_timing,
-                                "Inner loop is too long (average %s) -- suggest making the test %" PRId64 "x shorter",
-                                format_duration(average).c_str(), average.count() / TargetLoopDuration.count());
-            } else {
-                log_info("Inner loop average duration: %s", format_duration(average).c_str());
-            }
+            log_info("Inner loop average duration: %s", format_duration(average).c_str());
         }
     }
 
