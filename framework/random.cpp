@@ -108,7 +108,7 @@ struct RandomEngineWrapper
     virtual uint32_t generate32(thread_rng *thread_buffer) = 0;
     virtual uint64_t generate48(thread_rng *thread_buffer) = 0;
     virtual uint64_t generate64(thread_rng *thread_buffer) = 0;
-    virtual int generateInt(thread_rng *thread_buffer) = 0;
+    virtual long int generateInt(thread_rng *thread_buffer) = 0;
     virtual __uint128_t generate128(thread_rng *thread_buffer) = 0;
 };
 RandomEngineWrapper::~RandomEngineWrapper() {}
@@ -195,7 +195,7 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
         return generate32(thread_buffer) | (uint64_t(generate32(thread_buffer)) << 32);
     }
 
-    int generateInt(thread_rng *thread_buffer) override
+    long int generateInt(thread_rng *thread_buffer) override
     {
         return generate32(thread_buffer) & 0x7fffffff;
     }
@@ -289,7 +289,7 @@ uint64_t EngineWrapper<std::minstd_rand>::generate64(thread_rng *generator)
 }
 
 template <>
-int EngineWrapper<std::minstd_rand>::generateInt(thread_rng *generator)
+long int EngineWrapper<std::minstd_rand>::generateInt(thread_rng *generator)
 {
     // need a single sample to make positive int
     return engine(generator)();
