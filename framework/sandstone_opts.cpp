@@ -645,6 +645,20 @@ struct ProgramOptionsParser {
                 return EX_USAGE;
             }
         }
+
+        // attempt to treat positional arguments as test names
+        if (optind < argc) {
+            bool should_parse_positional_args = strcmp(argv[optind - 1], "--") == 0;
+            for (auto i = optind; i < argc; i++) {
+                if (should_parse_positional_args) {
+                    add_to_map_as_vec('e', argv[i]);
+                } else {
+                    fprintf(ERR_STREAM, "%s: option '%s' is ignored - positional arguments should be put after --\n",
+                        program_invocation_name, argv[i]);
+                }
+            }
+        }
+
         return EXIT_SUCCESS;
     }
 
