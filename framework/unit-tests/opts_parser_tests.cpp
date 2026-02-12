@@ -54,7 +54,7 @@ public:
 
         ASSERT_EQ(got_strs.size(), expected.size());
         for (auto i = 0; i < got_strs.size(); i++) {
-            if (find_unittests_keyword) {
+            if (find_unittests_keyword && expected[i].starts_with("unittests:")) {
                 check_eq_substr(got_strs[i], expected[i]);
             } else {
                 EXPECT_EQ(got_strs[i], expected[i]);
@@ -880,24 +880,42 @@ TEST(ProgramOptionsParser, out_of_range_exits__max_cores_per_slice)
 
 TEST(ProgramOptionsParser, repeated_opt_accumulates__cpuset_deviceset)
 {
-    {
-        StreamBuffer sb;
-        ProgramOptions opts;
-        SandstoneApplicationConfig cfg{};
-        char* argv[] = {
-            (char*)"foo-bar", // binary name
-            (char*)"--cpuset=1",
-            (char*)"--cpuset=2",
-            (char*)"--deviceset=3",
-        };
+    StreamBuffer sb;
+    ProgramOptions opts;
+    SandstoneApplicationConfig cfg{};
+    char* argv[] = {
+        (char*)"foo-bar", // binary name
+        (char*)"--cpuset=1",
+        (char*)"--cpuset=2",
+        (char*)"--deviceset=3",
+    };
 
-        auto ret = opts.parse(4, argv, &cfg);
-        EXPECT_FALSE(opts.deviceset.empty());
-        EXPECT_STREQ(opts.deviceset.at(0), "1");
-        EXPECT_STREQ(opts.deviceset.at(1), "2");
-        EXPECT_STREQ(opts.deviceset.at(2), "3");
+    auto ret = opts.parse(4, argv, &cfg);
+    EXPECT_FALSE(opts.deviceset.empty());
+    EXPECT_STREQ(opts.deviceset.at(0), "1");
+    EXPECT_STREQ(opts.deviceset.at(1), "2");
+    EXPECT_STREQ(opts.deviceset.at(2), "3");
 
-        EXPECT_EQ(ret, EXIT_SUCCESS);
-        sb.check_eq(EMPTY_STR); // no messages printed
-    }
+    EXPECT_EQ(ret, EXIT_SUCCESS);
+    sb.check_eq(EMPTY_STR); // no messages printed
+}
+
+TEST(ProgramOptionsParser, positional_arguments_return_help)
+{
+    StreamBuffer sb;
+    ProgramOptions opts;
+    SandstoneApplicationConfig cfg{};
+    char* argv[] = {
+        (char*)"foo-bar", // binary name
+        (char*)"--enable=test123",
+        (char*)"positional1",
+        (char*)"positional2",
+    };
+
+    auto ret = opts.parse(4, argv, &cfg);
+    EXPECT_EQ(ret, EX_USAGE);
+    sb.check_eqs({
+        "unittests: positional arguments are not supported",
+        "Try 'foo-bar --help' for more information."
+    });
 }
