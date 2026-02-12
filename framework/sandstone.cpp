@@ -98,9 +98,7 @@
 #  define fileno_unlocked   fileno
 #endif
 
-using namespace std;
 using namespace std::chrono;
-
 using namespace std::chrono_literals;
 
 #ifndef __GLIBC__
