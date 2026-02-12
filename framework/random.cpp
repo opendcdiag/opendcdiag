@@ -714,15 +714,16 @@ void srand48(long)
 
 // override the libc random functions with ours
 // ISO C-defined to return from 0 to RAND_MAX
+#if RAND_MAX == INT_MAX
+__attribute__((alias("random"))) int rand();
+#else
 [[gnu::noinline]] int rand()
 {
     int result = random();
-    if (RAND_MAX != std::numeric_limits<int>::max()) {
-        static_assert(__builtin_popcount(unsigned(RAND_MAX) + 1) == 1);
-        result &= RAND_MAX;
-    }
-    return result;
+    static_assert(__builtin_popcount(unsigned(RAND_MAX) + 1) == 1);
+    return result & RAND_MAX;
 }
+#endif
 
 #ifdef _WIN32
 int rand_r(unsigned int *)
