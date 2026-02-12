@@ -382,43 +382,70 @@ auto thread_core_spacing()
 }
 } // end unnamed namespace
 
-std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerbosity verbosity)
+static std::string full_cpu_info(LogicalProcessor lp, LogLevelVerbosity verbosity, cpu_info_t *info)
 {
-    cpu_info_t *info = device_info + thread;
+    assert(lp != LogicalProcessor::None);
     std::string line;
 #ifdef _WIN32
-    line = stdprintf("{ logical-group: %2u, logical: %2u, ",
+    line = stdprintf("{ logical-group: %2u, logical: %2u",
                      // see win32/cpu_affinity.cpp
-                     info->cpu_number / 64u, info->cpu_number % 64u);
+                     unsigned(lp) / 64u, unsigned(lp) % 64u);
 #else
-    line = stdprintf("{ logical: %*d, ", thread_core_spacing().logical, info->cpu_number);
+    line = stdprintf("{ logical: %*d", thread_core_spacing().logical, int(lp));
 #endif
-    line += stdprintf("package: %d, numa_node: %d, module: %*d, core: %*d, thread: %d",
-                      info->package_id, info->numa_id, thread_core_spacing().core, info->module_id,
-                      thread_core_spacing().core, info->core_id, info->thread_id);
-    if (const char *type = native_device_type(info))
-        line += stdprintf(", core_type: %s", type);
-    if (verbosity > 1) {
-        auto add_value_or_null = [&line](const char *fmt, uint64_t value) {
-            if (value)
-                line += stdprintf(fmt, value);
-            else
-                line += "null";
-        };
-        const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
+
+    if (info) {
+        line += stdprintf(", package: %d, numa_node: %d, module: %*d, core: %*d, thread: %d",
+                          info->package_id, info->numa_id, thread_core_spacing().core, info->module_id,
+                          thread_core_spacing().core, info->core_id, info->thread_id);
+        if (const char *type = native_device_type(info))
+            line += stdprintf(", core_type: %s", type);
+        if (verbosity > 1) {
+            auto add_value_or_null = [&line](const char *fmt, uint64_t value) {
+                if (value)
+                    line += stdprintf(fmt, value);
+                else
+                    line += "null";
+            };
+            const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
 #ifdef __x86_64__
-        line += stdprintf(", family: %d, model: %#02x, stepping: %d, microcode: ",
-                          sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
-        add_value_or_null("%#" PRIx64, info->microcode);
-        line += ", ppin: ";
-        add_value_or_null("\"%016" PRIx64 "\"", pkg ? pkg->ppin : 0);   // string to prevent loss of precision
+            line += stdprintf(", family: %d, model: %#02x, stepping: %d, microcode: ",
+                              sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
+            add_value_or_null("%#" PRIx64, info->microcode);
+            line += ", ppin: ";
+            add_value_or_null("\"%016" PRIx64 "\"", pkg ? pkg->ppin : 0);   // string to prevent loss of precision
 #else
-        (void) pkg;
-        (void) add_value_or_null;
+            (void) pkg;
+            (void) add_value_or_null;
 #endif
+        }
     }
     line += " }";
     return line;
+}
+
+std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerbosity verbosity)
+{
+    cpu_info_t *info = device_info + thread;
+    return full_cpu_info(LogicalProcessor(info->cpu_number), verbosity, info);
+}
+
+std::string AbstractLogger::thread_id_header_for_cpu(LogicalProcessor lp, int thread, LogLevelVerbosity verbosity)
+{
+    cpu_info_t *info = nullptr;
+
+    // is this the correct info?
+    if (cpu_info[thread].cpu_number == int(lp)) {
+        info = cpu_info + thread;
+    } else {
+        // see if we can find the full information about this CPU
+        for (int i = 0; !info && i < sApp->thread_count; ++i) {
+            if (cpu_info[i].cpu_number == int(lp))
+                info = cpu_info + i;
+        }
+    }
+
+    return full_cpu_info(lp, verbosity, info);
 }
 
 void AbstractLogger::print_thread_header_for_device(int fd, PerThreadData::Test *thr)
