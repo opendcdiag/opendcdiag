@@ -645,6 +645,13 @@ struct ProgramOptionsParser {
                 return EX_USAGE;
             }
         }
+
+        if (optind < argc) {
+            fprintf(ERR_STREAM, "%s: positional arguments are not supported\n", program_invocation_name);
+            suggest_help(argv);
+            return EX_USAGE;
+        }
+
         return EXIT_SUCCESS;
     }
 
