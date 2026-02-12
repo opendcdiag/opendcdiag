@@ -94,9 +94,7 @@
 #  define S_IRWXU       0700
 #endif
 
-using namespace std;
 using namespace std::chrono;
-
 using namespace std::chrono_literals;
 
 #ifndef __GLIBC__
