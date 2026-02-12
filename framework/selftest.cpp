@@ -117,6 +117,15 @@ static int selftest_timedpass_noloop_run(struct test *test, int)
     return EXIT_SUCCESS;
 }
 
+template <auto Generator, int LoopCount>
+static int selftest_busywait_random_generation_run(struct test *test, int)
+{
+    TEST_LOOP(test, LoopCount) {
+        Generator();
+    }
+    return EXIT_SUCCESS;
+}
+
 static int selftest_preinit_preinit(struct test *test)
 {
     check_is_main_process();
@@ -1618,6 +1627,27 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
     .test_run = selftest_uses_too_much_mem_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_busywait_random_generation",
+    .description = "Calls the random() function in a loop",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_busywait_random_generation_run<random, 1000*1000>,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_busywait_random32_generation",
+    .description = "Calls the random32() function in a loop",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_busywait_random_generation_run<random32, 1000*1000>,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_busywait_random128_generation",
+    .description = "Calls the random128() function in a loop",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_busywait_random_generation_run<random128, 1000*1000>,
     .quality_level = TEST_QUALITY_PROD,
 },
 {
