@@ -521,7 +521,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
     log_info("Sampled init timing: %s", format_duration(sApp->current_test_starttime_at_run - sApp->current_test_starttime).c_str());
     for (int t = 0; t < thread_count(); ++t) {
         PerThread &thr = per_thread[t];
-        if (thr.iteration_times[0].time_since_epoch().count() == 0)
+        if (thr.iteration_times[0].time_since_epoch() == 0s)
             continue;
 
         std::array<Duration, DesiredIterations> iteration_times = {};
@@ -534,7 +534,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
         }
         int n = 0;
         for (int i = 1; i < DesiredIterations; ++i) {
-            if (thr.iteration_times[i].time_since_epoch().count() == 0)
+            if (thr.iteration_times[i].time_since_epoch() == 0s)
                 break;
             ++n;
             iteration_times[n] = thr.iteration_times[i] - thr.iteration_times[i - 1];
@@ -567,7 +567,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
         // find the threads where test_time_condition() wasn't called
         for (int t = 0; average_counts != thread_count() && t < thread_count(); ++t) {
             PerThread &thr = per_thread[t];
-            if (thr.iteration_times[0].time_since_epoch().count() == 0)
+            if (thr.iteration_times[0].time_since_epoch() == 0s)
                 log_message(t, SANDSTONE_LOG_WARNING "run() function did not call test_time_condition() in this thread");
         }
 
