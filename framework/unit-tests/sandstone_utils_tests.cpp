@@ -22,10 +22,8 @@
 #  error "Please compile with F16C support"
 #endif
 
-using namespace std;
-
 TEST(SimpleStringUtils, GivenEmptyString_WhenConvertedToMilisecs_ThenReturnZero) {
-    vector<pair<string, int>> test_vectors = {
+    std::vector<std::pair<std::string, int>> test_vectors = {
             {"",    0},
             {"1",   1},
             {"1s",  1000},

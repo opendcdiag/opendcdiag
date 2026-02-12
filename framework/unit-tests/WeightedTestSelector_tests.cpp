@@ -19,8 +19,6 @@ extern "C" unsigned int  random32(){ return random(); }  // Mocked
 #include "WeightedRepeatingSelector.h"
 #include "WeightedNonRepeatingSelector.h"
 
-using namespace std;
-
 struct test mce_test = {
     .id = "mce_check",
     .description = "mce_check"
@@ -28,8 +26,8 @@ struct test mce_test = {
 
 class WeightedTestSelectorFixture : public ::testing::Test {
 protected:
-    unordered_map<string, int> counts;
-    unordered_map<string, int> expected_counts;
+    std::unordered_map<std::string, int> counts;
+    std::unordered_map<std::string, int> expected_counts;
 
     struct test the_tests[4] = {
         {.id="test0_id", .description="test0_name", .desired_duration=500, .quality_level=TEST_QUALITY_PROD},

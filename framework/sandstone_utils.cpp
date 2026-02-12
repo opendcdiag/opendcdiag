@@ -18,8 +18,6 @@
 #include <time.h>
 #include <unistd.h>
 
-using namespace std;
-
 template <typename T, size_t Size = sizeof(T)> static void format_fp(std::string &buffer, const void *data)
 {
     T v;
@@ -109,10 +107,10 @@ template void check_type_assumptions<__float128>();
 template void check_type_assumptions<Float128>();
 #endif
 
-string format_single_type(DataType type, int typeSize, const uint8_t *data, bool detailed)
+std::string format_single_type(DataType type, int typeSize, const uint8_t *data, bool detailed)
 {
     // add an hex dump of the entry
-    string result(typeSize * 2, '\0');
+    std::string result(typeSize * 2, '\0');
     for (int i = 0; i < typeSize; ++i) {
         // x86 is little-endian
         uint8_t v = data[typeSize - 1 - i];
