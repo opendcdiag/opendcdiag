@@ -14,6 +14,9 @@
 #include "sandstone_tests.h"
 #include "sandstone_chrono.h"
 
+using namespace std::chrono;
+using namespace std::chrono_literals;
+
 void SandstoneTestSet::load_all_tests()
 {
     std::span<struct test> known_tests = cfg.is_selftest ? selftests : regular_tests;
@@ -279,4 +282,60 @@ std::vector<struct test_cfg_info> SandstoneTestSet::add_builtin_test_list(const 
         test_set.push_back(t);
     }
     return res;
+}
+
+ShortDuration test_duration()
+{
+    /* global (-t) option overrides this all */
+    if (sApp->test_time > 0s)
+        return sApp->test_time;
+    return SandstoneApplication::DefaultTestDuration;
+}
+
+ShortDuration test_duration_(const test_cfg_info &test_cfg)
+{
+    const struct test *test = test_cfg.test;
+
+    /* Start with the test prefered default time */
+    ShortDuration target_duration(test->desired_duration);
+    ShortDuration min_duration(test->minimum_duration);
+    ShortDuration max_duration(test->maximum_duration);
+
+    /* apply the global (-t) override */
+    if (sApp->test_time.count())
+        target_duration = sApp->test_time;
+
+    /* apply the per-test time from the test list (overrides global -t) */
+    if (test_cfg.duration.count())
+        target_duration = test_cfg.duration;
+
+    /* fallback to the default if test preference is zero */
+    if (target_duration <= 0s)
+        target_duration = SandstoneApplication::DefaultTestDuration;
+
+    /* if --force-test-time specified, ignore the test-specified time limits */
+    if (sApp->force_test_time)
+        return target_duration;
+
+    /* clip to the maximum duration */
+    if (max_duration != 0s && target_duration > max_duration)
+        target_duration = max_duration;
+    /* and clip to the minimum duration */
+    if (target_duration < min_duration)
+        target_duration = min_duration;
+
+    return target_duration;
+}
+
+ShortDuration test_timeout(ShortDuration regular_duration)
+{
+    // use the override value if there is one
+    if (sApp->max_test_time != Duration::zero())
+        return sApp->max_test_time;
+
+    ShortDuration result = regular_duration * 5 + 30s;
+    if (result < 300s)
+        result = 300s;
+
+    return result;
 }
