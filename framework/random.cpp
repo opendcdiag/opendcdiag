@@ -62,16 +62,7 @@ union alignas(64) thread_rng {
 };
 
 // std::seed_seq does too much. This class simply copies the buffer as the seed.
-struct SeedSequence
-{
-    using result_type = uint32_t;
-    const uint32_t *seed;
-    SeedSequence(const uint32_t *s) : seed(s) {}
-    void generate(uint32_t *begin, uint32_t *end)
-    {
-        std::copy_n(seed, end - begin, begin);
-    }
-};
+using SeedSequence = std::array<uint32_t, 4>;
 
 // -- the global (not per thread) state --
 
@@ -169,7 +160,7 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
 
     void seedGlobalEngine(SeedSequence &sseq) override
     {
-        new (rng_for_thread(-1)->u8) engine_type(sseq);
+        new (rng_for_thread(-1)->u8) engine_type(*sseq.data());
     }
 
     void seedThread(thread_rng *buffer, uint32_t mixin) override
@@ -225,7 +216,6 @@ struct constant_value_engine
     using result_type = uint32_t;
     result_type value;
     constant_value_engine(result_type v) : value(v) {}
-    constant_value_engine(const SeedSequence &sseq) : value(*sseq.seed) {}
     result_type operator()() { return value;}
     constexpr static result_type min() { return 0; }
     constexpr static result_type max() { return std::numeric_limits<result_type>::max(); }
@@ -315,9 +305,9 @@ static bool haveAes()
 struct aes_engine
 {
     __m128i state[2];
-    aes_engine(const SeedSequence &sseq)
+    aes_engine(const uint32_t &sseq)
     {
-        __m128i pattern = _mm_loadu_si128(reinterpret_cast<const __m128i *>(sseq.seed));
+        __m128i pattern = _mm_loadu_si128(reinterpret_cast<const __m128i *>(&sseq));
         _mm_store_si128(state + 0, pattern);
         pattern = _mm_xor_si128(pattern, _mm_set1_epi32(-1));
         _mm_store_si128(state + 1, pattern);
@@ -449,27 +439,41 @@ static inline int open_random_file(const char *filename)
     return open(filename, O_RDONLY | O_CLOEXEC);
 }
 
+static int read_random_file(int fd, void *where, size_t count)
+{
+    if (fd >= 0)
+        return read(fd, where, count);
+
+    // no file
+    constexpr size_t RandomDataSize = 16;
+
+#ifdef AT_RANDOM
+    // On Linux, AT_RANDOM was added on kernel 2.6.29, so we rely on it always
+    // being present. We'll crash if it is not, but I guess you deserve it.
+    // AT_RANDOM provides us with 128 bits of random data, which is sufficient to
+    // either the LCG or AES generators.
+    unsigned long randomdata = getauxval(AT_RANDOM);
+    auto randomdataptr = reinterpret_cast<const void *>(randomdata);
+#elif defined(_WIN32)
+    // On Windows, /dev/urandom won't exist, so let's use RtlGenRandom to
+    // generate 128 bits of random data.
+    auto RtlGenRandom = SystemFunction036;
+    uint32_t randomdataptr[RandomDataSize / sizeof(uint32_t)];
+    if (!RtlGenRandom(randomdataptr, sizeof(randomdataptr))) {
+        // RtlGenRandom failed, fall back to rand_s
+        for (unsigned &u : randomdataptr)
+            IGNORE_RETVAL(rand_s(&u));
+    }
+#else
+    return 0;
+#endif
+    count = std::min(RandomDataSize, count);
+    memcpy(where, randomdataptr, count);
+    return count;
+}
+
 void random_init_global(const char *seed_from_user)
 {
-    auto make_engine = [](EngineType engine_type) {
-        switch (engine_type) {
-        case Constant:
-            sApp->random_engine.reset(new EngineWrapper<constant_value_engine>(engine_type));
-            return;
-        case AESSequence:
-#ifdef RANDOM_HAS_AES
-            sApp->random_engine.reset(new EngineWrapper<aes_engine>(engine_type));
-            return;
-#else
-            assert("Impossible condition: shouldn't have reached here");
-            __builtin_unreachable();
-#endif
-        case LCG:
-            sApp->random_engine.reset(new EngineWrapper<std::minstd_rand>(engine_type));
-            return;
-        }
-        __builtin_unreachable();
-    };
     assert(thread_count() > 0);
     assert(thread_num == -1);
 
@@ -479,74 +483,56 @@ void random_init_global(const char *seed_from_user)
     }
 
     // treat the argument as if it were a file, see if it works
-    int fd = open_random_file(seed_from_user);
-    if (fd == -1 && !seed_from_user) {
-        // misconfigured system without /dev/urandom!! Or Windows.
-#if defined(AT_RANDOM) || defined(_WIN32)
-#   ifdef AT_RANDOM
-        // On Linux, AT_RANDOM was added on kernel 2.6.29, so we rely on it always
-        // being present. We'll crash if it is not, but I guess you deserve it.
-        // AT_RANDOM provides us with 128 bits of random data, which is sufficient to
-        // either the LCG or AES generators.
-        unsigned long randomdata = getauxval(AT_RANDOM);
-        auto randomdataptr = reinterpret_cast<const uint32_t *>(randomdata);
-#  else // _WIN32
-        // On Windows, /dev/urandom won't exist, so let's use RtlGenRandom to
-        // generate 128 bits of random data.
-        auto RtlGenRandom = SystemFunction036;
-        uint32_t randomdataptr[16 / sizeof(uint32_t)];
-        if (!RtlGenRandom(randomdataptr, sizeof(randomdataptr))) {
-            // RtlGenRandom failed, fall back to rand_s
-            for (unsigned &u : randomdataptr)
-                IGNORE_RETVAL(rand_s(&u));
+    auto_fd fd = { open_random_file(seed_from_user) };
+    auto read_from_seed = [&](auto &where) {
+        int n = read_random_file(fd, &where, sizeof(where));
+        if (n != sizeof(where)) [[unlikely]] {
+            if (seed_from_user)
+                fprintf(stderr, "%s: could not read from %s: %s\n", program_invocation_name,
+                        seed_from_user, n < 0 ? strerror(errno) : "File too short");
+            exit(EX_IOERR);
         }
+        return true;
+    };
 
-        uintptr_t randomdata = uintptr_t(&randomdataptr);
-#  endif
-        SeedSequence sseq(randomdataptr);
-
-        // create the engine from the seed
-        EngineType engine_type = LCG;
-        if (haveAes() && randomdata & 0x80)
-            engine_type = AESSequence;
-        make_engine(engine_type);
-        sApp->random_engine->seedGlobalEngine(sseq);
-#else
-        exit(EX_OSFILE);
-#endif
-    } else if (fd == -1) {
+    EngineType engine_type;
+    if (fd == -1 && seed_from_user) {
         // not a file (or does not exist), attempt to parse
-        EngineType engine_type = engineFromName(seed_from_user);
-        make_engine(engine_type);
-
-        const char *ptr = strchr(seed_from_user, ':') + 1;
-        sApp->random_engine->reloadGlobalState(ptr);
+        engine_type = engineFromName(seed_from_user);
+        seed_from_user = strchr(seed_from_user, ':') + 1;
     } else {
-        // it was a file, read our seed from there
-        auto read_from_seed = [&](auto &where) {
-            off_t n = read(fd, &where, sizeof(where));
-            if (n != sizeof(where)) {
-                if (seed_from_user)
-                    fprintf(stderr, "%s: could not read from %s: %s\n", program_invocation_name,
-                            seed_from_user, n < 0 ? strerror(errno) : "File too short");
-                exit(EX_IOERR);
-            }
-            return true;
-        };
+        // no engine provided, choose one randomly
+        uint8_t type;
+        seed_from_user = nullptr;
+        engine_type = LCG;
+        if (haveAes() && read_from_seed(type) && (type & 2))
+            engine_type = AESSequence;
+    }
 
-        EngineType engine_type = LCG;
-        if (haveAes()) {
-            if (uint8_t type; read_from_seed(type) && (type & 2))
-                engine_type = AESSequence;
-        }
-        make_engine(engine_type);
+    switch (engine_type) {
+    case Constant:
+        sApp->random_engine.reset(new EngineWrapper<constant_value_engine>(engine_type));
+        break;
+    case AESSequence:
+#ifdef RANDOM_HAS_AES
+        sApp->random_engine.reset(new EngineWrapper<aes_engine>(engine_type));
+#else
+        assert("Impossible condition: shouldn't have reached here");
+        __builtin_unreachable();
+#endif
+        break;
+    case LCG:
+        sApp->random_engine.reset(new EngineWrapper<std::minstd_rand>(engine_type));
+        break;
+    }
 
-        thread_rng buffer;
-        read_from_seed(buffer);
-        close(fd);
-
-        // create the engine from the seed
-        SeedSequence sseq(buffer.u32);
+    if (seed_from_user && *seed_from_user) {
+        // use the seed state provided in the command-line
+        sApp->random_engine->reloadGlobalState(seed_from_user);
+    } else {
+        // use a random-generated seed
+        SeedSequence sseq;
+        read_from_seed(sseq);
         sApp->random_engine->seedGlobalEngine(sseq);
     }
 }
