@@ -131,10 +131,13 @@ int num_packages()
 std::unique_ptr<DeviceScheduler> make_rescheduler(RescheduleMode mode)
 {
     if (mode == RescheduleMode::barrier) {
+        reschedule_enabled = true;
         return std::make_unique<BarrierDeviceScheduler>();
     } else if (mode == RescheduleMode::queue) {
+        reschedule_enabled = true;
         return std::make_unique<QueueDeviceScheduler>();
     } else if (mode == RescheduleMode::random) {
+        reschedule_enabled = true;
         return std::make_unique<RandomDeviceScheduler>();
     }
     return nullptr;
