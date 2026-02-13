@@ -619,9 +619,13 @@ void random_init_global(const char *argument);
 void random_advance_seed();
 std::string random_format_seed();
 void random_init_thread(int thread_num);
+int test_result_to_exit_code(TestResult result);
 
-/* sandstone.cpp */
+/* sandstone_run.cpp */
 TestResult run_one_test(int *tc, const struct test *test, PerThreadFailures &per_thread_fails);
+int cleanup_global(int exit_code, PerThreadFailures per_thread_failures);
+bool wallclock_deadline_has_expired(MonotonicTimePoint deadline);
+
 TestResult prepare_test_for_device(struct test* test);
 void finish_test_for_device(struct test* test);
 

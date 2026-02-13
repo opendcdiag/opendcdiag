@@ -192,6 +192,7 @@ framework_files += files(
     'sandstone_tests.cpp',
     'sandstone_thread.cpp',
     'sandstone_utils.cpp',
+    'sandstone_run.cpp',
     'static_vectors.c',
     'test_knobs.cpp',
 )

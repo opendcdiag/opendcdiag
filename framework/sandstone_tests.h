@@ -138,6 +138,10 @@ private:
     void load_all_tests();
 };
 
+ShortDuration test_duration();
+ShortDuration test_duration_(const test_cfg_info &test_cfg);
+ShortDuration test_timeout(ShortDuration regular_duration);
+
 }
 #endif
 
