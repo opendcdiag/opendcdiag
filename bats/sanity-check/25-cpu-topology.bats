@@ -631,6 +631,51 @@ function selftest_cpuset_accumulate() {
     test_yaml_regexp "/tests/0/threads/3/messages/1/text" "I> ${cpuset[3]}\$"
 }
 
+@test "selftest_fail_after_reschedule" {
+    run $SANDSTONE --selftests -e selftest_pass --reschedule=queue
+    if [[ $status == 64 ]] || [[ "`uname -m`" != "x86_64" ]]; then
+        skip "Not supported"
+    fi
+
+    local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
+    nproc=${#cpuset[@]}
+
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_after_reschedule -n4 -s LCG:232155056 --reschedule=queue
+
+    # Same seed will always give us the same combination for rescheduling
+    test_yaml_numeric "/tests/0/threads/0/id/logical" "value == ${cpuset[1]}"
+    test_yaml_numeric "/tests/0/threads/1/id/logical" "value == ${cpuset[2]}"
+    test_yaml_numeric "/tests/0/threads/2/id/logical" "value == ${cpuset[0]}"
+    test_yaml_numeric "/tests/0/threads/3/id/logical" "value == ${cpuset[3]}"
+
+    test_yaml_numeric "/tests/0/threads/0/previous-cpu/logical" "value == ${cpuset[0]}"
+    test_yaml_numeric "/tests/0/threads/1/previous-cpu/logical" "value == ${cpuset[1]}"
+    test_yaml_numeric "/tests/0/threads/2/previous-cpu/logical" "value == ${cpuset[2]}"
+    test_yaml_absent "/tests/0/threads/3/previous-cpu"   # it's the same, so not printed
+}
+
+@test "selftest_fail_after_reschedule_lowest_cpu" {
+    run $SANDSTONE --selftests -e selftest_pass --reschedule=queue
+    if [[ $status == 64 ]] || [[ "`uname -m`" != "x86_64" ]]; then
+        skip "Not supported"
+    fi
+
+    local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
+    nproc=${#cpuset[@]}
+
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_after_reschedule_lowest_cpu --reschedule=queue
+    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+        # The failing CPU is always the lowest
+        test_yaml_numeric "/tests/0/threads/$i/id/logical" "value == ${cpuset[0]}"
+
+        # The previous CPU can't be the same
+        test_yaml_numeric "/tests/0/threads/$i/previous-cpu/logical" \
+                "value != ${yamldump[/tests/0/threads/$i/id/logical]}"
+    done
+}
+
 @test "selftest test smt skip" {
     declare -A yamldump
     # if all thread ids are 0(--cpuset=t0) skip the test

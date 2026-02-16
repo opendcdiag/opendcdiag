@@ -9,6 +9,16 @@
 #include "sandstone_chrono.h"
 
 #include <atomic>
+#include "gettid.h"
+
+struct DeviceRange
+{
+    // a contiguous range
+    int starting_device;
+    int device_count;
+};
+
+enum class LogicalProcessor : int { None = -1 };
 
 enum ThreadState : int {
     thread_not_started = 0,
@@ -76,6 +86,8 @@ struct alignas(64) TestCommon : Common
     /* Number of iterations of the inner loop (aka #times test_time_condition called) */
     uint32_t inner_loop_count;
     uint32_t inner_loop_count_at_fail;
+    LogicalProcessor previous_cpu;  // used by reschedule
+    LogicalProcessor failing_cpu;
 
     /* Thread ID */
     std::atomic<tid_t> tid;
@@ -84,6 +96,7 @@ struct alignas(64) TestCommon : Common
     {
         Common::init();
         inner_loop_count = inner_loop_count_at_fail = 0;
+        previous_cpu = failing_cpu = LogicalProcessor::None;
     }
 };
 } // namespace PerThreadData

@@ -236,23 +236,28 @@ static int selftest_logs_reschedule_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-static int selftest_logs_reschedule_run(struct test *test, int thread)
+static void deterministic_reschedule(struct test *test, int thread)
 {
     sem_t *semaphores = (sem_t *) test->data;
-    int cpu_number = sched_getcpu();
-    log_info("%d", cpu_number);
 
     // Let's wait unit previous CPU has finished
     if (thread > 0)
         sem_wait(&semaphores[thread-1]);
 
-    if (sApp->device_scheduler)
-        sApp->device_scheduler->reschedule_to_next_device();
+    reschedule();
 
     // When we finish, instruct next thread it can proceed
     // unless we are the last one
     if (thread < thread_count()-1)
         sem_post(&semaphores[thread]);
+}
+
+static int selftest_logs_reschedule_run(struct test *test, int thread)
+{
+    int cpu_number = sched_getcpu();
+    log_info("%d", cpu_number);
+
+    deterministic_reschedule(test, thread);
 
     cpu_number = sched_getcpu();
     log_info("%d", cpu_number);
@@ -639,6 +644,26 @@ static int selftest_reportfailmsg_run(struct test *test, int thread)
     report_fail_msg("Failure message from thread %d", thread);
     log_error("We should not reach here");
     abort();
+    return EXIT_SUCCESS;
+}
+
+static int selftest_fail_after_reschedule_run(struct test *test, int thread)
+{
+    deterministic_reschedule(test, thread);
+    report_fail_msg("Failed after reschedule(), on cpu %d", sched_getcpu());
+    return EXIT_SUCCESS;
+}
+
+static int selftest_fail_after_reschedule_lowest_cpu_run(struct test *test, int thread)
+{
+    int n = thread_count();
+    n *= n;
+    while (n--) {
+        reschedule();
+        if (sched_getcpu() == device_info[0].cpu_number)
+            report_fail_msg("Failed after reschedule(), from thread %d", thread);
+        test_loop_condition(1);     // count loops
+    }
     return EXIT_SUCCESS;
 }
 
@@ -1991,6 +2016,24 @@ static struct test selftests_array[] = {
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_init_installcallback,
     .test_run = selftest_reportfailmsg_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_fail_after_reschedule",
+    .description = "Fails by calling report_fail_msg() after reschedule()",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_logs_reschedule_init,
+    .test_run = selftest_fail_after_reschedule_run,
+    .test_cleanup = selftest_logs_reschedule_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_fail_after_reschedule_lowest_cpu",
+    .description = "Fails by calling report_fail_msg() after reschedule(), but only on the lowest numbered CPU",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_fail_after_reschedule_lowest_cpu_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
