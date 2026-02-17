@@ -893,8 +893,10 @@ struct ProgramOptionsParser {
                 opts.shmem_cfg.reschedule_mode = RescheduleMode::queue;
             } else if (str_value == "barrier") {
                 opts.shmem_cfg.reschedule_mode = RescheduleMode::barrier;
+                fprintf(OUT_STREAM, "# WARNING: --reschedule=barrier is an experimental feature and may not work as expected\n");
             } else if (str_value == "random") {
                 opts.shmem_cfg.reschedule_mode = RescheduleMode::random;
+                fprintf(OUT_STREAM, "# WARNING: --reschedule=random is an experimental feature and may not work as expected\n");
             } else if (str_value == "none") {
                 opts.shmem_cfg.reschedule_mode = RescheduleMode::none;
             } else {
