@@ -10,7 +10,7 @@ target_device = get_option('target_device')
 
 level_zero_kernels_generator_script = find_program(
     'compile-embed-ze-kernel.py',
-    dirs : [ meson.project_source_root() / 'framework' / 'device' / 'gpu' / 'scripts', ],
+    dirs : [ meson.current_source_dir() / '..' / '..' / 'framework' / 'device' / 'gpu' / 'scripts', ],
 )
 
 level_zero_kernels_generator = generator(
