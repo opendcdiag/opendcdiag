@@ -391,11 +391,11 @@ static const char *engineNameFromType(EngineType t)
 {
     switch (t) {
     case Constant:
-        return "Constant:";
+        return "Constant";
     case LCG:
-        return "LCG:";
+        return "LCG";
     case AESSequence:
-        return "AES:";
+        return "AES";
     }
     __builtin_unreachable();
     return nullptr;
@@ -407,23 +407,25 @@ static void listEngines(FILE *stream)
         fprintf(stream, "  %s\n", engineNameFromType(t));
 }
 
-static EngineType engineFromName(const char *argument)
+static EngineType engineFromName(std::string_view argument)
 {
-    auto starts_with = [=](const char *name) {
-        return strncmp(argument, name, strlen(name)) == 0;
-    };
     for (EngineType type : engine_types) {
-        if (starts_with(engineNameFromType(type))) {
-            if (type == AESSequence && !haveAes()) {
-                fprintf(stderr, "%s: engine type '%s' not available on this system. Available engines are:\n",
-                        program_invocation_name, engineNameFromType(type));
-                listEngines(stderr);
-                exit(EX_USAGE);
-            }
-            return type;
+        std::string_view name = engineNameFromType(type);
+        if (!argument.starts_with(name))
+            continue;
+        if (argument[name.size()] != ':')
+            continue;
+
+        if (type == AESSequence && !haveAes()) {
+            fprintf(stderr, "%s: engine type '%s' not available on this system. Available engines are:\n",
+                    program_invocation_name, name.data());
+            listEngines(stderr);
+            exit(EX_USAGE);
         }
+        return type;
     }
-    fprintf(stderr, "%s: invalid random engine seed '%s'. Available engines are:\n", program_invocation_name, argument);
+    fprintf(stderr, "%s: invalid random engine seed '%s'. Available engines are:\n",
+            program_invocation_name, argument.data());
     listEngines(stderr);
     exit(EX_USAGE);
 }
@@ -544,6 +546,7 @@ void random_init_global(const char *seed_from_user)
 std::string random_format_seed()
 {
     std::string result = engineNameFromType(sApp->random_engine->engine_type);
+    result += ':';
     result += sApp->random_engine->globalState();
     return result;
 }
