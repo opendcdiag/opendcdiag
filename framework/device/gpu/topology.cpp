@@ -64,7 +64,7 @@ int for_each_topo_device(std::function<int(const gpu_info_t&)> func)
 }
 
 namespace {
-int parse_int(char* arg, const char* orig_arg) {
+int parse_int(char*& arg, const char* orig_arg) {
     errno = 0;
     char *endptr = arg;
     long n = strtol(arg, &endptr, 0);
