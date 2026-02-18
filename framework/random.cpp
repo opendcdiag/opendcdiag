@@ -706,7 +706,10 @@ void srand48(long)
 // override the libc random functions with ours
 // ISO C-defined to return from 0 to RAND_MAX
 #if RAND_MAX == INT_MAX
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wattribute-alias"    // mismatched return type
 __attribute__((alias("random"))) int rand();
+#  pragma GCC diagnostic pop
 #else
 [[gnu::noinline]] int rand()
 {
