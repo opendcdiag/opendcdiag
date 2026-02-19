@@ -780,7 +780,7 @@ static void postcleanup_tests()
             [[maybe_unused]] auto ret = test->test_postcleanup(test);
 
             assert(ret == EXIT_SUCCESS && "Internal error: test_postcleanup must return EXIT_SUCCESS");
-            PerThreadData::Main *main = sApp->main_thread_data();
+            [[maybe_unused]] PerThreadData::Main *main = sApp->main_thread_data();
             assert(!main->has_skipped() && !main->has_failed() && "Internal error: test_postcleanup must not cause test skip or fail");
         }
     }
