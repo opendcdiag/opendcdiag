@@ -212,6 +212,7 @@ template <typename EnabledDevices>
 void setup_devices(const EnabledDevices& enabled_devices);
 
 void restrict_topology(DeviceRange range);
+void rebuild_topology();
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures);
 std::string build_failure_mask_for_topology(const struct test* test);
 
