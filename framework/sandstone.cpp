@@ -2247,6 +2247,7 @@ static int exec_mode_run(int argc, char **argv)
     attach_shmem(parse_int(argv[2]));
     device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
+    rebuild_topology();
     sApp->user_thread_data.resize(sApp->thread_count);
 
     test_set = new SandstoneTestSet({ .is_selftest = sApp->shmem->cfg.selftest, }, SandstoneTestSet::enable_all_tests);

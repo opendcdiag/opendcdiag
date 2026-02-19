@@ -1864,6 +1864,11 @@ void restrict_topology(DeviceRange range)
         topo = build_topology();
 }
 
+void rebuild_topology()
+{
+    // implement once it's needed
+}
+
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
 {
     Topology topology  = Topology::topology();

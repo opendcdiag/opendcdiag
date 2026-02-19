@@ -511,6 +511,12 @@ void restrict_topology(DeviceRange range)
     }
 }
 
+void rebuild_topology()
+{
+    assert(device_info && sApp->thread_count && "device_info must be filled at this point");
+    cached_topology() = build_topology();
+}
+
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
 {
     bool all_devs_failed_once = true;
