@@ -356,7 +356,7 @@ std::vector<int> find_numa_local_cpus(const ze_pci_address_ext_t& bdf)
 
     struct Range { int start, stop; };
     std::vector<Range> ranges;
-    char* ptr = contents.data();
+    const char* ptr = contents.data();
     char* endptr;
     while (ptr != contents.data() + contents.size()) {
         auto& range = ranges.emplace_back();

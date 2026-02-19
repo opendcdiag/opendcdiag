@@ -43,7 +43,7 @@ std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerb
         assert(info->device_index == info->gpu_number);
         line = std::format("{{ gpu_number: {:{}}, ", info->gpu_number, calc_spacing().gpu);
     }
-    line += std::format("logical_cpu: {:{}}, ", calc_spacing().cpu, info->cpu_number);
+    line += std::format("logical_cpu: {:{}}, ", info->cpu_number, calc_spacing().cpu);
     const auto& uuid = info->device_properties.uuid.id;
     line += std::format(
         "uuid: {:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}, ",
