@@ -327,7 +327,7 @@ std::vector<int> to_vector(const LogicalProcessorSet& set)
 {
     std::vector<int> res;
 
-    int i = 0;
+    [[maybe_unused]] int i = 0;
     for (LogicalProcessor lp = set.next(); lp != LogicalProcessor::None; ++i) {
         auto& next_cpu = res.emplace_back(std::to_underlying(lp));
         lp = set.next(LogicalProcessor(next_cpu + 1));
@@ -452,7 +452,7 @@ void setup_devices<GpusSet>(const GpusSet &enabled_devices)
 
     assert(enabled_devices.size() == thread_count());
     gpu_info_t* info = device_info;
-    const gpu_info_t* cend = device_info + thread_count();
+    [[maybe_unused]] const gpu_info_t* cend = device_info + thread_count();
 
     auto enabled_cpus = to_vector(ambient_logical_processor_set());
     if (enabled_cpus.size() < enabled_devices.size()) {

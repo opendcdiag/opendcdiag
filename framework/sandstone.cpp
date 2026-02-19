@@ -777,7 +777,7 @@ static void postcleanup_tests()
     for (test_cfg_info &cfg : *test_set) {
         struct test *test = cfg.test;
         if (test->test_postcleanup) {
-            auto ret = test->test_postcleanup(test);
+            [[maybe_unused]] auto ret = test->test_postcleanup(test);
 
             assert(ret == EXIT_SUCCESS && "Internal error: test_postcleanup must return EXIT_SUCCESS");
             PerThreadData::Main *main = sApp->main_thread_data();
