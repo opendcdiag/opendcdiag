@@ -13,7 +13,7 @@ import os
 # both arrays by hand and at least maintain format coherency <ChangeMyMind>
 def compile_spirv(source_file):
     with tempfile.NamedTemporaryFile(suffix='.bc') as fp:
-        compile_args = ['clang++', '-c', '-target', 'spir64', '-O0', '-emit-llvm', '-o', fp.name, source_file]
+        compile_args = ['clang++', '-c', '-target', 'spir64', '-O0', '-emit-llvm', '-DSPIRV_KERNELS_FORMAT', '-o', fp.name, source_file]
         compile_proc = subprocess.Popen(compile_args, stdout=subprocess.PIPE)
         stdout = compile_proc.communicate()[0]
         if compile_proc.returncode != 0:
