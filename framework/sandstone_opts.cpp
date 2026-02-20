@@ -7,6 +7,7 @@
 #include "topology.h"
 #include "sandstone_opts.hpp"
 
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -761,11 +762,28 @@ struct ProgramOptionsParser {
         }
 
         // test selection
+        auto assign_maybe_split = [&](auto&& vec) {
+            std::vector<std::string> res;
+            res.reserve(vec.size());
+            std::ranges::for_each(vec, [&](const char* elem) {
+                auto tests = std::string_view{elem}
+                    | std::views::split(',')
+                    | std::views::transform([](const auto& word) {
+                        return std::string(std::string_view(word.begin(), word.end()));
+                    })
+                    | std::views::filter([](const auto& str) {
+                        return !str.empty();
+                    });
+
+                std::ranges::copy(tests, std::back_inserter(res));
+            });
+            return res;
+        };
         if (auto it = opts_map.find('e'); it != opts_map.end()) {
-            opts.enabled_tests = std::move(std::get<std::vector<const char*>>(it->second));
+            opts.enabled_tests = assign_maybe_split(std::move(std::get<std::vector<const char*>>(it->second)));
         }
         if (auto it = opts_map.find(disable_option); it != opts_map.end()) {
-            opts.disabled_tests = std::move(std::get<std::vector<const char*>>(it->second));
+            opts.disabled_tests = assign_maybe_split(std::move(std::get<std::vector<const char*>>(it->second)));
         }
 
         // times
