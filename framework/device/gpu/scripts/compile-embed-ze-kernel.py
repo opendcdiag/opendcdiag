@@ -29,9 +29,11 @@ def compile_spirv(source_file):
         return 0, binary_contents
 
 
-def compile_bin(source_file, device):
+def compile_bin(source_file, device, language):
     # TODO what does -gen_file option actually do? What is .gen file? Could it be useful in our code?
     ocloc_args = ['ocloc', '-file', source_file, '-device', device, '-output_no_suffix']
+    if language == 'CMC':
+        ocloc_args += ['-options', '-cmc']
     ocloc_proc = subprocess.Popen(ocloc_args, stdout=subprocess.PIPE)
     stdout = ocloc_proc.communicate()[0]
     if ocloc_proc.returncode != 0:
@@ -62,13 +64,14 @@ if __name__ == '__main__':
     p.add_argument('array_name', help='Name of the C byte array')
     p.add_argument('source', help='Path to OpenCL source file')
     p.add_argument('device', help='Device type (bmg/spirv/...)')
+    p.add_argument('language', help='Language type (OpenCL/CMC)')
 
     args = p.parse_args()
 
     if (args.device == "spirv"):
         ret, out = compile_spirv(args.source)
     else:
-        ret, out = compile_bin(args.source, args.device)
+        ret, out = compile_bin(args.source, args.device, args.language)
 
     if (ret == 0):
         embed(args.array_name, out)

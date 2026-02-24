@@ -16,7 +16,7 @@ level_zero_kernels_generator_script = find_program(
 level_zero_kernels_generator = generator(
     level_zero_kernels_generator_script,
     arguments : [
-        '@BASENAME@', '@INPUT@', target_device
+        '@BASENAME@', '@INPUT@', target_device, 'OpenCL'
     ],
     capture : true,
     output : '@BASENAME@_source.h',
