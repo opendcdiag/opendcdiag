@@ -178,11 +178,13 @@ struct test_group
 
 template <bool IsDebug> struct test_the_test_data
 {
-    bool test_tests_enabled() const             { return false; }
-    void enable_test_tests()                    {}
+    bool test_tests_enabled() const { return false; }
+    void enable_test_tests()                       {}
     void prepare_test_tests(const struct test *)   {}
-    void test_tests_iteration(const struct test *)  {}
-    void test_tests_finish(const struct test *) {}
+    void at_run_threads_start(const struct test *) {}
+    void at_loop_start(const struct test *)        {}
+    void test_tests_iteration(const struct test *) {}
+    void test_tests_finish(const struct test *)    {}
 };
 
 template <> struct test_the_test_data<true>
@@ -195,9 +197,11 @@ template <> struct test_the_test_data<true>
     static constexpr int DesiredIterations = 4;
     struct PerThread {
         std::array<MonotonicTimePoint, DesiredIterations> iteration_times;
+        MonotonicTimePoint time_at_loop_start;
     };
 
     std::vector<PerThread> per_thread;
+    MonotonicTimePoint time_at_run_threads_start;
     size_t hwm_at_start;
     bool test_tests = false;
 
@@ -205,6 +209,8 @@ template <> struct test_the_test_data<true>
     void enable_test_tests()        { test_tests = true; }
 
     void prepare_test_tests(const struct test *);
+    void at_run_threads_start(const struct test *);
+    void at_loop_start(const struct test *);
     void test_tests_iteration(const struct test *);
     void test_tests_finish(const struct test *);
 };
@@ -351,8 +357,6 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     int current_test_count;
     ShortDuration current_test_duration;
     MonotonicTimePoint current_test_starttime;         // at entering run_one_test_once()
-    MonotonicTimePoint current_test_starttime_at_run;  // at entering run()
-    MonotonicTimePoint current_test_starttime_at_run_first_loop; // at first entering TEST_LOOP inside run()
     int threshold_time_remaining = 30000;
 
     struct {

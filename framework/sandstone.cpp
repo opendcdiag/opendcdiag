@@ -428,6 +428,21 @@ inline void test_the_test_data<true>::prepare_test_tests(const struct test *the_
     std::fill_n(per_thread.begin(), thread_count(), PerThread{});
 }
 
+
+inline void test_the_test_data<true>::at_run_threads_start(const struct test *the_test)
+{
+    if (!shouldTestTheTest(the_test))
+        return;
+    time_at_run_threads_start = MonotonicTimePoint::clock::now();
+}
+
+inline void test_the_test_data<true>::at_loop_start(const struct test *the_test)
+{
+    if (!shouldTestTheTest(the_test))
+        return;
+    per_thread[thread_num].time_at_loop_start = MonotonicTimePoint::clock::now();
+}
+
 inline void test_the_test_data<true>::test_tests_iteration(const struct test *the_test)
 {
     if (!shouldTestTheTest(the_test))
@@ -516,19 +531,19 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
     Duration average = {};
     int average_counts = 0;
     int while_loops = 0;
-    log_info("Sampled init timing: %s", format_duration(sApp->current_test_starttime_at_run - sApp->current_test_starttime).c_str());
+    log_info("Sampled init timing: %s", format_duration(time_at_run_threads_start - sApp->current_test_starttime).c_str());
     for (int t = 0; t < thread_count(); ++t) {
         PerThread &thr = per_thread[t];
         if (thr.iteration_times[0].time_since_epoch() == 0s)
             continue;
 
         std::array<Duration, DesiredIterations> iteration_times = {};
-        if (sApp->current_test_starttime_at_run_first_loop.time_since_epoch() > 0s) {
-            iteration_times[0] = thr.iteration_times[0] - sApp->current_test_starttime_at_run_first_loop;
+        if (thr.time_at_loop_start.time_since_epoch() > 0s) {
+            iteration_times[0] = thr.iteration_times[0] - thr.time_at_loop_start;
             log_message(t, SANDSTONE_LOG_DEBUG "Sampled full 1st iteration timing: %s",
-                format_duration(thr.iteration_times[0] - sApp->current_test_starttime_at_run).c_str());
+                format_duration(thr.iteration_times[0] - time_at_run_threads_start).c_str());
         } else { // no TEST_LOOP in test - no timing of additional run() overhead
-            iteration_times[0] = thr.iteration_times[0] - sApp->current_test_starttime_at_run;
+            iteration_times[0] = thr.iteration_times[0] - time_at_run_threads_start;
         }
         int n = 0;
         for (int i = 1; i < DesiredIterations; ++i) {
@@ -880,7 +895,7 @@ int test_run_wrapper_function(const struct test *test, int thread_number)
 
 void test_loop_start() noexcept
 {
-    sApp->current_test_starttime_at_run_first_loop = MonotonicTimePoint::clock::now();
+    sApp->at_loop_start(current_test);
     using namespace AssemblyMarker;
     assembly_marker<TestLoop, Start>();
 }
@@ -1509,7 +1524,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
             break;
         }
 
-        sApp->current_test_starttime_at_run = MonotonicTimePoint::clock::now();
+        sApp->at_run_threads_start(test);
         run_threads(test);
 
         if (test->test_cleanup) {
