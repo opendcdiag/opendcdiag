@@ -22,6 +22,7 @@
 #ifdef __cplusplus
 #include <span>
 #include <vector>
+#include <map>
 
 #include "device/device_topology.h"
 #include "device/test_data_device.h"
@@ -176,6 +177,8 @@ struct test_group
    initfunc (*group_init)() noexcept;       // returns a replacement init function (or not)
 };
 
+typedef std::map<std::string, void*> map;
+
 template <bool IsDebug> struct test_the_test_data
 {
     bool test_tests_enabled() const { return false; }
@@ -324,6 +327,8 @@ struct SandstoneApplicationConfig {
     std::unique_ptr<DeviceScheduler> device_scheduler = nullptr;
 };
 
+typedef std::map<std::string, void*> xcmp_thread_data_t;
+
 struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_data<SandstoneConfig::Debug>
 {
     static constexpr int MaxRetestCount = sizeof(PerThreadFailures::value_type) * 8;
@@ -347,6 +352,7 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     HardwareInfo hwinfo;
     SlicePlans slice_plans;
     std::vector<test_data_per_thread> user_thread_data;
+    std::vector<std::unique_ptr<xcmp_thread_data_t>> xcmp_thread_data;
     PerThreadData::Main *main_thread_data_ptr;  // points to somewhere in the shmem
     PerThreadData::Test *test_thread_data_ptr;  // points to somewhere in the shmem
     SharedMemory *shmem = nullptr;
