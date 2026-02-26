@@ -34,8 +34,8 @@ struct ProgramOptions {
     bool list_tests_include_groups = false; // for list_tests
 
     // test selection
-    std::vector<const char *> enabled_tests;
-    std::vector<const char *> disabled_tests;
+    std::vector<std::string> enabled_tests;
+    std::vector<std::string> disabled_tests;
     const char *test_list_file_path = nullptr;
 
     struct test_set_cfg test_set_config = {

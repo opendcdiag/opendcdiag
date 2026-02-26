@@ -360,11 +360,37 @@ TEST(ProgramOptionsParser, test_selection_works)
     auto ret = opts.parse(5, argv, &cfg);
     EXPECT_EQ(ret, EXIT_SUCCESS);
     EXPECT_EQ(opts.enabled_tests.size(), 2);
-    EXPECT_TRUE(memcmp(opts.enabled_tests[0], "foo", 3) == 0);
-    EXPECT_TRUE(memcmp(opts.enabled_tests[1], "bar", 3) == 0);
+    EXPECT_TRUE(memcmp(opts.enabled_tests[0].c_str(), "foo", 3) == 0);
+    EXPECT_TRUE(memcmp(opts.enabled_tests[1].c_str(), "bar", 3) == 0);
     EXPECT_EQ(opts.disabled_tests.size(), 2);
-    EXPECT_TRUE(memcmp(opts.disabled_tests[0], "baz", 3) == 0);
-    EXPECT_TRUE(memcmp(opts.disabled_tests[1], "qux", 3) == 0);
+    EXPECT_TRUE(memcmp(opts.disabled_tests[0].c_str(), "baz", 3) == 0);
+    EXPECT_TRUE(memcmp(opts.disabled_tests[1].c_str(), "qux", 3) == 0);
+    sb.check_eq(EMPTY_STR); // no messages printed
+}
+
+TEST(ProgramOptionsParser, tests_selection__comma_separated)
+{
+    StreamBuffer sb;
+    ProgramOptions opts;
+    SandstoneApplicationConfig cfg{};
+    char* argv[] = {
+        (char*)"foo-bar", // binary name
+        (char*)"--enable=test1,test2,test3",
+        (char*)"-etest4*,test5",
+        (char*)"-e",
+        (char*)"test6,test7*",
+    };
+
+    auto ret = opts.parse(5, argv, &cfg);
+    EXPECT_EQ(opts.enabled_tests.size(), 7);
+    EXPECT_STREQ(opts.enabled_tests[0].c_str(), "test1");
+    EXPECT_STREQ(opts.enabled_tests[1].c_str(), "test2");
+    EXPECT_STREQ(opts.enabled_tests[2].c_str(), "test3");
+    EXPECT_STREQ(opts.enabled_tests[3].c_str(), "test4*");
+    EXPECT_STREQ(opts.enabled_tests[4].c_str(), "test5");
+    EXPECT_STREQ(opts.enabled_tests[5].c_str(), "test6");
+    EXPECT_STREQ(opts.enabled_tests[6].c_str(), "test7*");
+    EXPECT_EQ(ret, EXIT_SUCCESS);
     sb.check_eq(EMPTY_STR); // no messages printed
 }
 
