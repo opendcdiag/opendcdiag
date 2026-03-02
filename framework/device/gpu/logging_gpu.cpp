@@ -53,6 +53,7 @@ std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerb
     line += std::format("pci_address: {:04x}:{:02x}:{:02x}.{:01x}, ",
         info->bdf.domain, info->bdf.bus, info->bdf.device, info->bdf.function
     );
+    line += std::format("arch: {}.{}.{}, ", (uint32_t)info->gpu_arch.gmd_arch, (uint32_t)info->gpu_arch.gmd_release, (uint32_t)info->gpu_arch.revision_id);
     line += std::format("name: \"{}\"", // no comma
         info->device_properties.name
     );

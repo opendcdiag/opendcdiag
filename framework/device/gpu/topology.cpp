@@ -481,9 +481,13 @@ void setup_devices<GpusSet>(const GpusSet &enabled_devices)
         CHECK_EXIT(zesDeviceGetProperties(zes_handle, &zes_device_prop));
         info->num_subdevices = zes_device_prop.numSubdevices;
 
+        ze_device_ip_version_ext_t device_ip_version{};
+        device_ip_version.stype = ZE_STRUCTURE_TYPE_DEVICE_IP_VERSION_EXT;
         ze_device_properties_t device_prop = { .stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES };
+        device_prop.pNext = &device_ip_version;
         CHECK_EXIT(zeDeviceGetProperties(ze_handle, &device_prop));
         info->device_properties = device_prop;
+        info->gpu_arch.as_dword = device_ip_version.ipVersion;
 
         ze_device_compute_properties_t compute_prop = { .stype = ZE_STRUCTURE_TYPE_DEVICE_COMPUTE_PROPERTIES };
         CHECK_EXIT(zeDeviceGetComputeProperties(ze_handle, &compute_prop));

@@ -14,6 +14,24 @@
 #   include <compare>
 #endif
 
+/// Struct based on GFX_GMD_ID_DEF from:
+/// https://github.com/intel/intel-graphics-compiler/blob/master/IGC/ZEBinWriter/zebin/spec/elf.md
+struct gpu_arch_t
+{
+    union
+    {
+        struct __attribute__((packed))
+        {
+            uint32_t revision_id : 6;
+            uint32_t reserved    : 8;
+            uint32_t gmd_release : 8;
+            uint32_t gmd_arch    : 10;
+        };
+        uint32_t as_dword;
+    };
+};
+typedef struct gpu_arch_t gpu_arch_t;
+
 struct gpu_info_t
 {
     /// Logical OS processor number.
@@ -34,6 +52,7 @@ struct gpu_info_t
 
     /// Properties read from L0 API.
     ze_pci_address_ext_t bdf;                          // from: ze_pci_ext_properties_t
+    gpu_arch_t gpu_arch;                               // from: ze_device_ip_version_ext_t
     uint32_t num_subdevices;                           // from: zes_device_properties_t
     ze_device_properties_t device_properties;          // contains: uuid, bdf, deviceId, subdeviceId, num of Xe cores, etc.
     ze_device_compute_properties_t compute_properties; // contains: maxSharedLocalMemory, numSubGroupSizes, etc.
