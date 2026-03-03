@@ -921,6 +921,7 @@ bool reschedule_enabled = false;
 void reschedule_internal()
 {
     assert(thread_num >= 0 && "reschedule() can only be called from test threads!");
+    assert(sApp->device_scheduler);
     sApp->device_scheduler->reschedule_to_next_device();
 }
 
