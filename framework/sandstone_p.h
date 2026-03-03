@@ -320,8 +320,6 @@ struct SandstoneApplicationConfig {
     int thermal_throttle_temp = DefaultTemperatureThreshold;
 
     int thread_count;
-
-    std::unique_ptr<DeviceScheduler> device_scheduler = nullptr;
 };
 
 struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_data<SandstoneConfig::Debug>
