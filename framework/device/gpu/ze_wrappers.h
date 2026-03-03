@@ -11,6 +11,7 @@
 #include "level_zero/ze_api.h"
 
 #include <memory>
+#include <utility>
 
 extern bool logging_in_test;
 
@@ -31,6 +32,8 @@ public:
     NonCopyable() = default;
     NonCopyable(const NonCopyable&) = delete;
     NonCopyable& operator=(const NonCopyable&) = delete;
+    NonCopyable(NonCopyable&&) = default;
+    NonCopyable& operator=(NonCopyable&&) = default;
 };
 
 /// Wrappers being classes. They require getters to return ref, which std::unique_ptr won't allow.
@@ -49,8 +52,27 @@ public:
         ZE_CHECK_AND_LOG(zeMemAllocDevice(context, &desc, size, alignment, device, &data));
     }
 
+    ZeDeviceDataPtr(ZeDeviceDataPtr&& other) noexcept :
+        NonCopyable{std::move(other)},
+        data{std::exchange(other.data, nullptr)},
+        context{std::exchange(other.context, nullptr)}
+    {}
+
+    ZeDeviceDataPtr& operator=(ZeDeviceDataPtr&& other) {
+        if (this != &other) {
+            if (data) {
+                ZE_CHECK_AND_LOG(zeMemFree(context, data));
+            }
+            data = std::exchange(other.data, nullptr);
+            context = std::exchange(other.context, nullptr);
+        }
+        return *this;
+    }
+
     ~ZeDeviceDataPtr() {
-        ZE_CHECK_AND_LOG(zeMemFree(context, data));
+        if (data) {
+            ZE_CHECK_AND_LOG(zeMemFree(context, data));
+        }
     }
 
     // zeKernelSetArgumentValue requires ref
@@ -68,8 +90,25 @@ public:
     ZeCmdListPtr(ze_context_handle_t context, ze_device_handle_t device, const ze_command_list_desc_t& desc) {
         ZE_CHECK_AND_LOG(zeCommandListCreate(context, device, &desc, &cmd_list));
     }
+
+    ZeCmdListPtr(ZeCmdListPtr&& other) noexcept:
+        NonCopyable{std::move(other)},
+        cmd_list{std::exchange(other.cmd_list, nullptr)}
+    {}
+
+    ZeCmdListPtr& operator=(ZeCmdListPtr&& other) {
+        if (this != &other) {
+            if (cmd_list) {
+                ZE_CHECK_AND_LOG(zeCommandListDestroy(cmd_list));
+            }
+            cmd_list = std::exchange(other.cmd_list, nullptr);
+        }
+        return *this;
+    }
+
     ~ZeCmdListPtr() {
-        ZE_CHECK_AND_LOG(zeCommandListDestroy(cmd_list));
+        if (cmd_list)
+            ZE_CHECK_AND_LOG(zeCommandListDestroy(cmd_list));
     }
 
     // zeCommandQueueExecuteCommandLists takes _ze_command_list_handle_t** as argument
