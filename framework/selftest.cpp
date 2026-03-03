@@ -32,6 +32,7 @@
 #endif // _WIN32
 #include "sandstone_p.h"
 
+#include <charconv>
 #include <exception>
 #include <unordered_map>
 
@@ -617,8 +618,10 @@ static int selftest_logerror_lots_run(struct test *test, int thread)
     // using environment because get_testspecific_knob_value_int() doesn't work
     // in -fexec mode
     int count = 10;
-    if (const char *env = getenv("SELFTEST_LOGERROR_LOTS_COUNT"))
+    if (const char *env = getenv("SELFTEST_LOGERROR_LOTS_COUNT")) {
         count = strtol(env, nullptr, 0);
+        [[maybe_unused]] auto [_, ec] = std::from_chars(env, env + strlen(env), count);
+    }
     for (int i = 0; i < count; ++i) {
         log_info("This is log info message #%d", i);
         log_error("This is log error message #%d", i);
