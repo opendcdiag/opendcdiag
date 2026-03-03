@@ -15,7 +15,7 @@
 
 /// ZE API allows for nested enumeration of devices and their subdevices,
 /// depending on the ZE_FLAT_DEVICE_HIERARCHY env var value.
-int for_each_ze_device(std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func)
+int for_each_ze_device(const std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
     uint32_t n_drivers = 0;
     ze_init_driver_type_desc_t init_desc = { .stype = ZE_STRUCTURE_TYPE_DRIVER_PROPERTIES, .flags = ZE_INIT_DRIVER_TYPE_FLAG_GPU };
@@ -57,7 +57,7 @@ int for_each_ze_device(std::function<int(ze_device_handle_t, ze_driver_handle_t,
 /// ZES API ignores ZE_FLAT_DEVICE_HIERARCHY and will always enumerate, for example, 6 root devices, instead of 12.
 /// Properties queried with this API will always contain data for all subdevices. For distinction there is subdeviceId
 /// field in ZES properties structs. func should accomodate for that.
-int for_each_zes_device(std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func)
+int for_each_zes_device(const std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
     ZE_CHECK(zesInit(zes_init_flags_t{}));
     uint32_t n_zes_drivers = 0;
@@ -92,7 +92,7 @@ int for_each_zes_device(std::function<int(zes_device_handle_t, ze_driver_handle_
 
 namespace {
 template <typename Map, typename Func>
-int find_and_call_func(const gpu_info_t& info, ze_driver_handle_t ze_driver, const Map& map, Func func)
+int find_and_call_func(const gpu_info_t& info, ze_driver_handle_t ze_driver, const Map& map, const Func& func)
 {
     MultiSliceGpu indices{
         .gpu_number = info.gpu_number, .device_index = info.device_index, .subdevice_index = info.subdevice_index
@@ -106,7 +106,7 @@ int find_and_call_func(const gpu_info_t& info, ze_driver_handle_t ze_driver, con
 }
 
 template <typename DeviceType>
-int for_each_device_within_topo_internal(std::function<int(DeviceType, ze_driver_handle_t, const MultiSliceGpu&)> func)
+int for_each_device_within_topo_internal(const std::function<int(DeviceType, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
     // Collect all handles for easier lookup.
     ze_driver_handle_t ze_driver;
@@ -138,12 +138,12 @@ int for_each_device_within_topo_internal(std::function<int(DeviceType, ze_driver
 }
 } // end anonymous namespace
 
-int for_each_ze_device_within_topo(std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func)
+int for_each_ze_device_within_topo(const std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
     return for_each_device_within_topo_internal<ze_device_handle_t>(func);
 }
 
-int for_each_zes_device_within_topo(std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)> func)
+int for_each_zes_device_within_topo(const std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
     return for_each_device_within_topo_internal<zes_device_handle_t>(func);
 }
