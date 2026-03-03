@@ -297,7 +297,7 @@ static ChildExitStatus test_result_from_exit_code(DWORD status)
 }
 #endif // _WIN32
 
-static void merge_test_result(ChildExitStatus &current, ChildExitStatus incoming)
+static void merge_test_result(ChildExitStatus &current, const ChildExitStatus& incoming)
 {
     // don't decrease a previously-stored severity
     if (current.result < incoming.result)
