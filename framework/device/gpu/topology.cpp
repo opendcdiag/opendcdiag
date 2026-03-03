@@ -9,6 +9,7 @@
 #include "ze_enumeration.h"
 
 #include <algorithm>
+#include <charconv>
 #include <format>
 #include <fstream>
 #include <numeric>
@@ -357,21 +358,28 @@ std::vector<int> find_numa_local_cpus(const ze_pci_address_ext_t& bdf)
     struct Range { int start, stop; };
     std::vector<Range> ranges;
     const char* ptr = contents.data();
-    char* endptr;
-    while (ptr != contents.data() + contents.size()) {
+    const char* const endptr = ptr + contents.size();
+    while (ptr != endptr) {
         auto& range = ranges.emplace_back();
-        range.start = strtol(ptr, &endptr, 10);
-        if (*endptr == '-') {
+        auto [nextptr, ec] = std::from_chars(ptr, endptr, range.start);
+        if (ec != std::errc()) {
+            return res;
+        }
+        ptr = nextptr;
+        if (ptr != endptr && *ptr == '-') {
             // it's a range
-            range.stop = strtol(endptr + 1, &endptr, 10);
+            auto [nextptr2, ec] = std::from_chars(ptr + 1, endptr, range.stop);
+            if (ec != std::errc()) {
+                return res;
+            }
+            ptr = nextptr2;
         } else {
             // it was a single number
             range.stop = range.start;
         }
-        if (*endptr == ',') {
-            ++endptr;   // there's more
+        if (ptr != endptr && *ptr == ',') {
+            ++ptr;   // there's more
         }
-        ptr = endptr;
     }
 
     for (auto& range : ranges) {
