@@ -25,14 +25,14 @@ enum class RescheduleMode : int8_t {
     random,
 };
 
-class DeviceScheduler {
-public:
+struct DeviceScheduler
+{
     virtual ~DeviceScheduler() = default;
     virtual void reschedule_to_next_device() = 0;
     virtual void finish_reschedule() = 0;
 };
 
-std::unique_ptr<DeviceScheduler> make_rescheduler(RescheduleMode mode);
+DeviceScheduler *make_rescheduler(RescheduleMode mode);
 
 using PerThreadFailures = std::vector<__uint128_t>;
 

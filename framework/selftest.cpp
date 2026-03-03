@@ -246,8 +246,7 @@ static int selftest_logs_reschedule_run(struct test *test, int thread)
     if (thread > 0)
         sem_wait(&semaphores[thread-1]);
 
-    if (sApp->device_scheduler)
-        sApp->device_scheduler->reschedule_to_next_device();
+    reschedule();
 
     // When we finish, instruct next thread it can proceed
     // unless we are the last one

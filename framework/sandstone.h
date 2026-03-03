@@ -492,12 +492,13 @@ static inline bool write_msr(int cpu, uint32_t msr, uint64_t value)
 #endif
 
 /// Interface for C-based tests
-extern bool reschedule_enabled;
-void reschedule_internal(void);
+struct DeviceScheduler;
+extern struct DeviceScheduler *device_scheduler;
+void reschedule_internal(struct DeviceScheduler *) __attribute__((nonnull));
 static inline void reschedule(void)
 {
-    if (reschedule_enabled)
-        reschedule_internal();
+    if (device_scheduler)
+        reschedule_internal(device_scheduler);
 }
 
 /// Calls aligned_alloc but first checks to see whether size is a multiple

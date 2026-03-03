@@ -917,11 +917,11 @@ void test_loop_end() noexcept
 #endif
 } // extern "C"
 
-bool reschedule_enabled = false;
-void reschedule_internal()
+DeviceScheduler *device_scheduler = nullptr;
+void reschedule_internal(DeviceScheduler *scheduler)
 {
     assert(thread_num >= 0 && "reschedule() can only be called from test threads!");
-    sApp->device_scheduler->reschedule_to_next_device();
+    scheduler->reschedule_to_next_device();
 }
 
 static uintptr_t thread_runner(int thread_number)
@@ -955,8 +955,8 @@ static uintptr_t thread_runner(int thread_number)
         test_end(new_state);
 
         // If rescheduling, do cleanup
-        if (sApp->device_scheduler)
-            sApp->device_scheduler->finish_reschedule();
+        if (device_scheduler)
+            device_scheduler->finish_reschedule();
     });
 
     // indicate to SIGQUIT handler that we're running
@@ -2696,7 +2696,7 @@ int main(int argc, char **argv)
         check_and_exit_for_no_device();
         break; // continue program
     }
-    sApp->device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
+    device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
 
     if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
         if (sApp->shmem->cfg.log_test_knobs) {
@@ -2704,9 +2704,9 @@ int main(int argc, char **argv)
                     program_invocation_name);
             return EX_USAGE;
         }
-        if (sApp->device_scheduler) {
-            reschedule_enabled = false;
-            sApp->device_scheduler = nullptr;
+        if (device_scheduler) {
+            delete device_scheduler;
+            device_scheduler = nullptr;
             logging_printf(LOG_LEVEL_VERBOSE(1), "# WARNING: --reschedule is not supported in this configuration\n");
         }
     }
@@ -2799,7 +2799,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (thread_count() < 2 && sApp->device_scheduler)
+    if (thread_count() < 2 && device_scheduler)
         logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 threads\n");
 
 #if SANDSTONE_FREQUENCY_MANAGER
