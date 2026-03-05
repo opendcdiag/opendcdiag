@@ -903,6 +903,12 @@ struct ProgramOptionsParser {
                 fprintf(ERR_STREAM, "%s: unknown reschedule mode: %s\n", argv[0], value);
                 return EX_USAGE;
             }
+
+            // Warning when reschedule is explicit and not enough cores
+            if (sApp->shmem->cfg.reschedule_mode != RescheduleMode::none && opts.thread_count < 2) {
+                opts.shmem_cfg.reschedule_mode = RescheduleMode::none;
+                fprintf(OUT_STREAM, "# WARNING: --reschedule is only useful with at least 2 cores\n");
+            }
         }
 
         if (auto it = opts_map.find('O'); it != opts_map.end()) {

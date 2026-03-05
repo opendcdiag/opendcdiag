@@ -2799,9 +2799,6 @@ int main(int argc, char **argv)
         }
     }
 
-    if (thread_count() < 2 && device_scheduler)
-        logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 threads\n");
-
 #if SANDSTONE_FREQUENCY_MANAGER
     if (sApp->vary_frequency_mode || sApp->vary_uncore_frequency_mode)
         sApp->frequency_manager = std::make_unique<FrequencyManager>();
