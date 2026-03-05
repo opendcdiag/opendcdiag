@@ -132,7 +132,7 @@ DeviceScheduler *make_rescheduler(RescheduleMode mode)
 {
     if (mode == RescheduleMode::barrier) {
         return new BarrierDeviceScheduler();
-    } else if (mode == RescheduleMode::queue) {
+    } else if (mode == RescheduleMode::queue || mode == RescheduleMode::unset) {
         return new QueueDeviceScheduler();
     } else if (mode == RescheduleMode::random) {
         return new RandomDeviceScheduler();
