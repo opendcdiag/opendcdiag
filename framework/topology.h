@@ -19,7 +19,8 @@
 #include "gettid.h"
 
 enum class RescheduleMode : int8_t {
-    none    = 0,
+    unset = -1,
+    none,
     queue,
     barrier,
     random,

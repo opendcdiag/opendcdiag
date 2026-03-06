@@ -2696,6 +2696,19 @@ int main(int argc, char **argv)
         check_and_exit_for_no_device();
         break; // continue program
     }
+
+    if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
+        sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
+
+    if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
+        restrict_topology({ 0, opts.thread_count });
+    slice_plan_init(opts.max_cores_per_slice);
+    commit_shmem();
+
+    if (sApp->shmem->cfg.reschedule_mode != RescheduleMode::unset && sApp->shmem->cfg.reschedule_mode != RescheduleMode::none && thread_count() < 2) {
+        logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 cores, ignoring\n");
+        sApp->shmem->cfg.reschedule_mode = RescheduleMode::none;
+    }
     device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
 
     if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
@@ -2710,14 +2723,6 @@ int main(int argc, char **argv)
             logging_printf(LOG_LEVEL_VERBOSE(1), "# WARNING: --reschedule is not supported in this configuration\n");
         }
     }
-
-    if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
-        sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
-
-    if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
-        restrict_topology({ 0, opts.thread_count });
-    slice_plan_init(opts.max_cores_per_slice);
-    commit_shmem();
 
     signals_init_global();
     resource_init_global();
@@ -2798,9 +2803,6 @@ int main(int argc, char **argv)
             test_set->remove(&mce_test);
         }
     }
-
-    if (thread_count() < 2 && device_scheduler)
-        logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 threads\n");
 
 #if SANDSTONE_FREQUENCY_MANAGER
     if (sApp->vary_frequency_mode || sApp->vary_uncore_frequency_mode)
