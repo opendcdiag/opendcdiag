@@ -188,6 +188,7 @@ framework_files += files(
     'sandstone_context_dump.cpp',
     'sandstone_data.cpp',
     'sandstone_opts.cpp',
+    'sandstone_run.cpp',
     'sandstone_test_groups.cpp',
     'sandstone_tests.cpp',
     'sandstone_thread.cpp',
