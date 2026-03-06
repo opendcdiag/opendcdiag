@@ -446,7 +446,8 @@ bool test_is_retry() noexcept __attribute__((pure));
 /// failures to allocate memory or create a file.
 extern void log_platform_message(const char *msg, ...) ATTRIBUTE_PRINTF(1, 2);
 extern void log_message(int thread_num, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
-extern void log_message_skip(int thread_num, SkipCategory c, const char *msg, ...) ATTRIBUTE_PRINTF(3, 4);
+extern void log_message_skip(int thread_num, SkipCategory c, const char *msg, ...)
+    ATTRIBUTE_PRINTF(3, 4) __attribute__((cold));
 /// logs binary data to the logs.  The data is specified in the data
 /// parameter and the size of the data in bytes in the size parameter.
 /// The message parameter provides a description of the data which
