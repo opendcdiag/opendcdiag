@@ -1548,7 +1548,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
     return state;
 }
 
-static TestResult child_run(/*nonconst*/ struct test *test, int child_number)
+TestResult child_run(/*nonconst*/ struct test *test, int child_number)
 {
     if (sApp->current_fork_mode() != SandstoneApplication::ForkMode::no_fork) {
         protect_shmem();
@@ -1938,8 +1938,7 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
     analyze_test_failures_for_topology(test, per_thread_failures);
 }
 
-static TestResult
-run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failures)
+TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failures)
 {
     const struct test *test = test_cfg.test;
     TestResult state = TestResult::Skipped;

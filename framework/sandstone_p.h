@@ -627,6 +627,11 @@ TestResult run_one_test(int *tc, const struct test *test, PerThreadFailures &per
 TestResult prepare_test_for_device(struct test* test);
 void finish_test_for_device(struct test* test);
 
+/* sandstone_run.cpp */
+TestResult child_run(/*nonconst*/ struct test *test, int child_number);
+struct test_cfg_info;
+TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failures);
+
 /*
  * Called from sandstone_main() before logging_global_init() and before
  * logging_global_finish(). Feel free to add your own banner or footer. Be
