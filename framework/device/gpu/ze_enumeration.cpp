@@ -91,16 +91,19 @@ int for_each_zes_device(const std::function<int(zes_device_handle_t, ze_driver_h
 }
 
 namespace {
-template <typename Map, typename Func>
-int find_and_call_func(const gpu_info_t& info, ze_driver_handle_t ze_driver, const Map& map, const Func& func)
+template <typename DeviceType>
+int find_and_call_func(
+    const gpu_info_t& info, ze_driver_handle_t ze_driver,
+    const std::unordered_map<MultiSliceGpu, DeviceType>& map,
+    const std::function<int(DeviceType, ze_driver_handle_t, const MultiSliceGpu&)>& func
+)
 {
     MultiSliceGpu indices{
         .gpu_number = info.gpu_number, .device_index = info.device_index, .subdevice_index = info.subdevice_index
     };
     auto it = map.find(indices);
     if (it != map.cend()) {
-        func(it->second, ze_driver, indices);
-        return EXIT_SUCCESS;
+        return func(it->second, ze_driver, indices);
     }
     return EXIT_FAILURE;
 }

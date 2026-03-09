@@ -43,7 +43,7 @@ const Topology &Topology::topology()
     return cached_topology();
 }
 
-int for_each_topo_device(std::function<int(const gpu_info_t&)> func)
+int for_each_topo_device(const std::function<int(const gpu_info_t&)>& func)
 {
     const auto& topo = Topology::topology();
     for (const auto& device : topo.devices) {
