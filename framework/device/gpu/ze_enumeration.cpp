@@ -108,7 +108,9 @@ int find_and_call_func(
     return EXIT_FAILURE;
 }
 
-template <typename DeviceType>
+// XXX depending on API version, ze_device_handle_t and zes_device_handle_t can be the exact same type,
+// so we need an explicit template argument to choose between for_each_zes_device and for_each_ze_device.
+template <typename DeviceType, bool IsSysmanAPI = false>
 int for_each_device_within_topo_internal(const std::function<int(DeviceType, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
     // Collect all handles for easier lookup.
@@ -121,10 +123,10 @@ int for_each_device_within_topo_internal(const std::function<int(DeviceType, ze_
     };
 
     int ret;
-    if constexpr (std::is_same_v<DeviceType, ze_device_handle_t>) {
-        ret = for_each_ze_device(emplace_map);
-    } else {
+    if constexpr (IsSysmanAPI) {
         ret = for_each_zes_device(emplace_map);
+    } else {
+        ret = for_each_ze_device(emplace_map);
     }
     if (ze_driver == nullptr || ret != EXIT_SUCCESS) {
         return EXIT_FAILURE;
@@ -148,5 +150,5 @@ int for_each_ze_device_within_topo(const std::function<int(ze_device_handle_t, z
 
 int for_each_zes_device_within_topo(const std::function<int(zes_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
-    return for_each_device_within_topo_internal<zes_device_handle_t>(func);
+    return for_each_device_within_topo_internal<zes_device_handle_t, true>(func);
 }
