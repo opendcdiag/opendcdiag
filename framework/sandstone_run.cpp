@@ -85,27 +85,6 @@ static const char *path_to_exe()
 #endif
 }
 
-int test_result_to_exit_code(TestResult result)
-{
-    switch (result) {
-    case TestResult::Passed:
-        break;
-    case TestResult::Skipped:
-        return -1;
-    case TestResult::Failed:
-        return EXIT_FAILURE;
-    case TestResult::OperatingSystemError:
-    case TestResult::Killed:
-    case TestResult::CoreDumped:
-    case TestResult::OutOfMemory:
-    case TestResult::TimedOut:
-    case TestResult::Interrupted:
-        assert(false && "Tests don't produce these conditions themselves");
-        __builtin_unreachable();
-    }
-    return EXIT_SUCCESS;
-}
-
 #ifndef _WIN32
 static ChildExitStatus test_result_from_exit_code(forkfd_info info)
 {
