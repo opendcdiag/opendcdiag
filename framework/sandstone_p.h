@@ -581,6 +581,27 @@ template <typename F> inline auto scopeExit(F &&f)
 static_assert(std::is_trivially_copyable_v<SandstoneApplication::SharedMemory>);
 static_assert(std::is_trivially_destructible_v<SandstoneApplication::SharedMemory>);
 
+inline int test_result_to_exit_code(TestResult result)
+{
+    switch (result) {
+    case TestResult::Passed:
+        break;
+    case TestResult::Skipped:
+        return -1;
+    case TestResult::Failed:
+        return EXIT_FAILURE;
+    case TestResult::OperatingSystemError:
+    case TestResult::Killed:
+    case TestResult::CoreDumped:
+    case TestResult::OutOfMemory:
+    case TestResult::TimedOut:
+    case TestResult::Interrupted:
+        assert(false && "Tests don't produce these conditions themselves");
+        __builtin_unreachable();
+    }
+    return EXIT_SUCCESS;
+}
+
 /* child_debug.cpp */
 void debug_init_child(void);
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg);
@@ -626,6 +647,14 @@ void random_init_thread(int thread_num);
 TestResult run_one_test(int *tc, const struct test *test, PerThreadFailures &per_thread_fails);
 TestResult prepare_test_for_device(struct test* test);
 void finish_test_for_device(struct test* test);
+int cleanup_global(int exit_code, PerThreadFailures per_thread_failures);
+bool wallclock_deadline_has_expired(MonotonicTimePoint deadline);
+ShortDuration test_timeout(ShortDuration regular_duration);
+
+/* sandstone_run.cpp */
+TestResult child_run(/*nonconst*/ struct test *test, int child_number);
+struct test_cfg_info;
+TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failures);
 
 /*
  * Called from sandstone_main() before logging_global_init() and before
