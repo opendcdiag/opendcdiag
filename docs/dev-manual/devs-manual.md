@@ -1,6 +1,6 @@
-# Sandstone Framework — Developer Manual
+# OpenDCDiag — Developer Manual
 
-> **Audience:** Developers, contributors, and AI agents working on the Sandstone test framework.
+> **Audience:** Developers, contributors, and AI agents working on the OpenDCDiag tool (built on the Sandstone framework).
 >
 > **Scope:** This manual covers the framework located in `opendcdiag/framework/`. It explains the
 > execution flow from `main()`, directory organization, file descriptions, and all command-line
@@ -27,7 +27,7 @@
 
 ## 1. Architecture Overview
 
-Sandstone is a hardware validation framework that detects Silent Data Errors (SDEs) by running
+OpenDCDiag is a hardware validation framework that detects Silent Data Errors (SDEs) by running
 stress tests on Intel CPUs and GPUs. It operates at the OS level on Linux and Windows.
 
 ### Design Principles
@@ -165,7 +165,7 @@ graph LR
 | File | Purpose |
 |------|---------|
 | `sandstone_ssl.cpp/.h` | OpenSSL wrapper with dynamic function loading. Provides AES, SHA, MD5, RSA, HMAC, BIO, EVP operations. Can link statically or load `libssl`/`libcrypto` at runtime. |
-| `sandstone_ssl_rand.cpp/.h` | Integrates Sandstone's RNG as an OpenSSL RAND provider. |
+| `sandstone_ssl_rand.cpp/.h` | Integrates the framework's RNG as an OpenSSL RAND provider. |
 
 ### Time & Chrono
 
@@ -320,7 +320,8 @@ flowchart TD
 
 ### Fracturing Mechanism
 
-Tests can run multiple times within a single invocation ("fracturing") to increase stress:
+Tests can run multiple times within a single invocation ("fracturing") to increase stress.
+Fractures target running for **200–400 ms** and then restart to re-seed the RNG.
 
 - **Auto-fracture**: Starts with 40 iterations, doubles every 10ms until time is up
 - **Configured fracture**: Uses `test->fracture_loop_count`
@@ -328,25 +329,23 @@ Tests can run multiple times within a single invocation ("fracturing") to increa
 
 Each fracture iteration re-seeds the RNG with an advanced state.
 
-### Slicing Strategy
+### Slicing
 
-```mermaid
-flowchart TD
-    A["slices_for_test(test)"] --> B{"test->flags & schedule_mask?"}
+To parallelize test execution, systems with a high core count divide available CPU cores into
+groups known as `slices`. Each slice runs its own main thread, which is a replica of the original
+process. These slices operate concurrently, with each child process isolated to its slice
+(maintaining an independent address space). Slices are confined to cores within the same NUMA
+domain, ensuring efficient memory access and performance.
 
-    B -->|test_schedule_sequential| C["1 slice<br/>All cores: {0, thread_count()}"]
-    B -->|test_schedule_fullsystem| C
-    B -->|test_schedule_isolate_socket| D["N slices<br/>One per socket"]
-    B -->|test_schedule_isolate_numa| E["N slices<br/>One per NUMA domain"]
-    B -->|test_schedule_default| F["Heuristic SlicePlans"]
+#### Slicing Modes
 
-    F --> G["Max cores per slice = 32"]
-    G --> H["Min CPUs per socket = 8"]
-    H --> I["Divide into balanced slices"]
-```
-
-Each slice runs as a separate child process. All slices execute the same test concurrently on
-their assigned subset of cores.
+| Mode                | Flag                         | Description                                              | Typical Use Case                                             |
+|---------------------|------------------------------|----------------------------------------------------------|--------------------------------------------------------------|
+| **Heuristic** (default)    | `test_schedule_default`       | Cores are divided into balanced slices for maximum parallelism.         | Suitable for most test scenarios                             |
+| **Isolate Socket**         | `test_schedule_isolate_socket`| One slice is assigned per CPU socket.                    | Tests accessing off-core resources (e.g., accelerators, LLC/L3 cache) |
+| **Full System**            | `test_schedule_fullsystem`    | No slicing; tests run with a full system view.           | Tests involving cross-socket communication                    |
+| **Sequential**             | `test_schedule_sequential`    | Tests run sequentially across the full system.           | Tests that must execute serially (e.g., In-Field Scan)        |
+| **Isolate NUMA**           | `test_schedule_isolate_numa`  | One slice per NUMA domain.                               | Tests accessing NUMA-local resources (e.g., memory)           |
 
 ### Fork Mode Execution
 
