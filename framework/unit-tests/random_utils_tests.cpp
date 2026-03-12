@@ -1,0 +1,263 @@
+/*
+ * Copyright 2026 Intel Corporation.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <gtest/gtest.h>
+
+#include <sandstone.h>
+#include <bit>
+
+// "overrides" for random functions including random_utils
+#include <unit-tests/random_utils_mocked.cpp>
+
+static bool second_mock(void) {
+    RandomMocker::Mock<uint32_t> local_mock{{}};
+    if (local_mock.all_values_used()) {
+        return true;
+    }
+    return false;
+}
+
+TEST(RandomUtils, random_mocked) {
+    RandomMocker::Mock<uint32_t> mock{{0x01234567U, 0x89abcdefU}};
+    // cannot create second instance of the same mocker
+    ASSERT_DEATH(second_mock(), "");
+
+    EXPECT_EQ(random32(), 0x01234567U);
+    EXPECT_FALSE(mock.all_values_used());
+    EXPECT_EQ(random32(), 0x89abcdefU);
+    EXPECT_TRUE(mock.all_values_used());
+    // no more values
+    ASSERT_DEATH(random32(), "");
+
+    RandomMocker::Mock<uint64_t> mock64{{0x0123456789abcdefULL}};
+    EXPECT_EQ(random64(), 0x0123456789abcdefULL);
+}
+
+TEST(RandomUtils, get_random_bits) {
+    {
+        RandomMocker::Mock<int> mock_random{{}};
+        EXPECT_EQ(get_random_bits31(0), 0); // neither bit consumed!
+    }
+
+    RandomMocker::Mock<int> mock_random{{ 0x12345678, 0x01234567, 0x79abcdef, 0x69696969, 0x1a5a5a5a, 0x54321059 }};
+    // first value
+    EXPECT_EQ(get_random_bits31(8), 0x78);
+    EXPECT_EQ(get_random_bits31(8), 0x56);
+    EXPECT_EQ(get_random_bits31(8), 0x34);
+    EXPECT_EQ(get_random_bits31(7), 0x12);
+
+    // second value
+    EXPECT_EQ(get_random_bits31(1), 0x01);
+    EXPECT_EQ(get_random_bits31(2), 0x03);
+    EXPECT_EQ(get_random_bits31(1), 0x00);
+
+    EXPECT_EQ(get_random_bits31(8), 0x56);
+
+    EXPECT_EQ(get_random_bits31(4), 0x04);
+    EXPECT_EQ(get_random_bits31(8), 0x23);
+
+    // 7 bits from second value, 17 bits from third
+    EXPECT_EQ(get_random_bits31(24), (0x01 << 17) | (0x79abcdef & 0x1ffff));
+    // the rest of third value
+    EXPECT_EQ(get_random_bits31(14), (0x79ab >> 1));
+
+    // do not even try to consume any bits!
+    EXPECT_EQ(get_random_bits31(0), 0x00);
+
+    // long merge
+    EXPECT_EQ(get_random_bits31(64), 0xd2d2d2d269696969ULL); // 2 bits form #5
+
+    EXPECT_EQ(get_random_bits31(16), (0x54321059 >> 2) & 0xffff);
+    EXPECT_EQ(get_random_bits31(5), (0x54321059 >> 18) & 0x1f);
+
+    // only 8 bits left, requesting more should fail
+    // does ASSERT_DEATH internally use fork()? Internal state is **not** preserved after it,
+    // therefore the bits available are kept after the call!
+    EXPECT_DEATH(get_random_bits31(9), "");
+}
+
+static inline constexpr __uint128_t U128(uint64_t low, uint64_t high) {
+    return static_cast<__uint128_t>(low) | (static_cast<__uint128_t>(high) << 64);
+}
+
+TEST(RandomUtils, get_random_bits_128) {
+    RandomMocker::Mock<__uint128_t> mock_random{{ U128(0x0123456789abcdefULL, 0xfedcba9876543210ULL) }};
+    // lower bits first!
+    EXPECT_EQ(get_random_bits128(64), 0x0123456789abcdefULL);
+    EXPECT_EQ(get_random_bits128(64), 0xfedcba9876543210ULL);
+    EXPECT_DEATH(get_random_bits128(1), ""); // no more values
+}
+
+static uint8_t get_random_bits8(uint32_t range) {
+    return get_random_bits<uint8_t, random32, 32>(range);
+}
+
+TEST(RandomUtils, get_random_bits_ub_shifts) {
+    RandomMocker::Mock<uint32_t> mock_random{{ 0xa5a5a5a5U, 0x01234567U, 0x89abcdefU, 0x5a5a5a5aU, 0xffffffff }};
+    EXPECT_EQ(get_random_bits8(40), 0xa5 ^ 0x67);
+    EXPECT_EQ(get_random_bits8(16), 0x45); // '23' discarded
+    EXPECT_EQ(get_random_bits8(24), 0x01 ^ 0xef); // 'abcd' discarded
+    EXPECT_EQ(get_random_bits8(12), 0xab); // '9' discarded
+    EXPECT_EQ(get_random_bits8(68), 0x08 ^ 0x5a ^ 0xff); // '5a's and 'ff's discarded
+
+    EXPECT_DEATH(get_random_bits8(1), ""); // nothing left
+}
+
+TEST(RandomUtils, get_random_value) {
+    auto num_bits = [](uint32_t v) {
+        return sizeof(uint32_t) * 8 - std::countl_zero(v);
+    };
+
+    // "pairs" of (range, "random" result)
+    std::vector<int> mocked_values{};
+    struct ValueToMock {
+        uint32_t first; // range
+        uint32_t second; // result
+        bool final = false;
+    };
+    std::initializer_list<ValueToMock> values = {
+        // first set
+        { 2, 1 },  // 0+1
+        { 4, 2 },  // 1+2
+        { 5, 1 },  // 3+3
+        { 10, 3 }, // 6+4
+        { 3, 1 },  // 10+2
+        { 8, 1 },  // 12+3
+        { 7, 6 },  // 15+3
+        { 9, 3 },  // 18+4
+        { 1, 0 },  // nasty case, doesn't use any bits from random()
+        { 16, 4 }, // 22+4
+        { 2, 1 },  // 26+1
+        { 32, 3 }, // 27+5, 1 bit in next random()
+        { 5, 4 },  // 32+3
+        { 123, 2 },// 35+7
+        { 64, 10 },// 42+6
+        { 100, 69 },//48+7
+        { 8, 5 },  // 55+3
+        { 69, 6 }, // 58+7, 3 bits in next random()
+        { 3, 0 },  // 65+2
+        { 4, 3 },  // 67+2
+        { 2, 1 },  // 69+1
+        { 9, 8 },  // 70+4
+        { 10, 11 }, //74+4 sample rejection case, 7 times plus modulo
+        { 10, 12 }, //78+4
+        { 10, 13 }, //82+4
+        { 10, 14 }, //86+4
+        { 10, 15 }, //90+4, 3 bits in next random()
+        { 10, 11 }, //94+4
+        { 10, 12 }, //98+4 last try before modulo
+        { 10, 13, true }, //102+4 8th "final" value to get modulo
+        { 20, 24 }, //106+5 // rejected value
+        { 20, 19 }, //111+5 // but this is accepted one
+        { 250, 25 },//116+8
+                    // 124, no dangling bits
+    };
+    // prepare random()) values according experiment definition above
+    static constexpr uint32_t BITS_PER_RANDOM = 31;
+    uint64_t value = 0;
+    uint32_t bits_used = 0;
+    for (auto v: values) {
+        if (v.first > 1) {
+            uint32_t bits = num_bits(v.first - 1);
+            // verify the "test data"
+            ASSERT_GT(bits, 0);
+            ASSERT_GE(bits, num_bits(v.second));
+
+            uint64_t s;
+            if (bits_used + bits > BITS_PER_RANDOM) {
+                // rearrange bits when crossing random() boundary
+                uint32_t n = bits_used + bits - BITS_PER_RANDOM;
+                s = (v.second >> n) | ((v.second & ((1ULL << n) - 1)) << (bits - n));
+            } else {
+                s = v.second;
+            }
+            value |= s << bits_used;
+            bits_used += bits;
+
+            if (bits_used >= BITS_PER_RANDOM) {
+                bits_used -= BITS_PER_RANDOM;
+                mocked_values.push_back(value & 0x7fffffff);
+                value >>= BITS_PER_RANDOM;
+            }
+        }
+    }
+    ASSERT_EQ(bits_used, 0);
+
+    // and check all mocked random() values
+    RandomMocker::Mock<int> mock_random{ mocked_values };
+    EXPECT_EQ(get_random_value31(1), 0); // always 0, no chunks consumed
+    for (const auto& v: values) {
+        if ((v.first > v.second)) {
+            EXPECT_EQ(get_random_value31(v.first), v.second);
+        } else if (v.final) {
+            // 8th rejected value triggers modulo path
+            EXPECT_EQ(get_random_value31(v.first), v.second % v.first);
+        }
+    }
+
+    // no more values available, the mock is empty too
+    EXPECT_DEATH(get_random_value31(2), "");
+}
+
+TEST(RandomUtils, get_random_value_uniformity) {
+    std::vector<std::vector<uint64_t>> counts{};
+    counts.push_back(std::vector<uint64_t>(2)); // 0 rejections
+    counts.push_back(std::vector<uint64_t>(3)); // 1/4
+    counts.push_back(std::vector<uint64_t>(5)); // 3/8
+    counts.push_back(std::vector<uint64_t>(7)); // 1/8
+    counts.push_back(std::vector<uint64_t>(11)); // 5/16
+    counts.push_back(std::vector<uint64_t>(13)); // 3/16
+    counts.push_back(std::vector<uint64_t>(23)); // 9/32
+    counts.push_back(std::vector<uint64_t>(64)); // 0
+    // average bits per value: 1 + 2 + 3 + 3 + 4 + 4 + 5 + 6 = 28 / 8 = 3.5 bits
+    // each loop consumes 3 bits for selecting random counts (8 entries)
+    // average rejection rate is (49/32)/8 = ~19%
+
+    static constexpr size_t NUM_LOOPS = 1'000'000ULL;
+    static constexpr uint32_t BITS_PER_RANDOM = 31;
+    static constexpr size_t NUM_RANDOM_CALLS = (6.5 * NUM_LOOPS) / BITS_PER_RANDOM;
+
+
+    std::vector<uint64_t> ranges(counts.size());
+
+    srandom(std::chrono::system_clock::now().time_since_epoch().count());
+    struct urng {
+        using result_type = int32_t;
+        static constexpr result_type min() { return 0; };
+        static constexpr result_type max() { return INT32_MAX; };
+        result_type operator()() { return random(); };
+    };
+    std::shuffle(counts.begin(), counts.end(), urng{});
+
+    // lets expect no fail is caught
+    RandomMocker::Counting mock_random{};
+    for (uint64_t loop = 0; loop < NUM_LOOPS; loop++) {
+        uint32_t index = get_random_value31(counts.size());
+        ASSERT_LT(index, counts.size());
+        ranges[index]++;
+        uint32_t range = counts[index].size();
+        uint32_t r = get_random_value31(range);
+        ASSERT_LT(r, range);
+        counts[index][r]++;
+    }
+    // expected is ~200k random() calls. Allow 20% for rejectsions and 1% for distribution variance
+    EXPECT_GT(mock_random.get_count(), (NUM_RANDOM_CALLS / 1.01));
+    EXPECT_LT(mock_random.get_count(), (NUM_RANDOM_CALLS * (1.20 * 1.01)));
+
+    #ifdef OUTPUT_THE_DISTRIBUTION_STATS
+    for (uint32_t index = 0; index < counts.size(); index++) {
+        if (ranges[index] == 0) {
+            printf("No samples for range %d\n", static_cast<int>(counts[index].size()));
+        } else {
+            printf("%d:", static_cast<int>(counts[index].size()));
+            for (auto v : counts[index]) {
+                double v_ratio = counts[index].size() * static_cast<double>(v) / ranges[index] - 1.0;
+                printf(" %g", v_ratio);
+            }
+            printf(" (%ld hits)\n", ranges[index]);
+        }
+    }
+    #endif
+}

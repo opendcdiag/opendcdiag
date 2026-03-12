@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <unistd.h>
 #include <sandstone_data.h>
 #include <sandstone_p.h>
+
+#include <fp_vectors/static_vectors.h>
 
 /**
  * @brief C++ assertion validators
@@ -168,7 +169,7 @@ static_assert(FLOAT80_SIGN_BITS + FLOAT80_EXPONENT_BITS + FLOAT80_JBIT_BITS + FL
 /** @} */
 
 /**
- * @brief C function definitions
+ * @brief C conversion definitions
  * @{
  */
 BFloat8 to_bfloat8_emulated(float f) {
@@ -241,7 +242,7 @@ float from_bfloat8_emulated(BFloat8 f) {
 
 HFloat8 to_hfloat8_emulated(float f) {
     Float32 f32{ f };
-    // NaN/Inf always reported as NAN_INF
+    // Inf/NaN always reported as INF_NAN
     if (f32.exponent == FLOAT32_INFINITY_EXPONENT) {
         return { (uint8_t) f32.sign, HFLOAT8_INF_NAN_VALUE };
     }
@@ -302,6 +303,14 @@ float from_hfloat8_emulated(HFloat8 f) {
     return f32.as_float;
 }
 
+/** @} */
+
+#if defined(OBSOLETE_RANDOM_GENERATORS)
+// TODO remove when new approach is accepted
+/**
+ * @brief C dummy random float generators
+ * @{
+ */
 HFloat8 new_random_hfloat8()
 {
     HFloat8 f;
@@ -376,3 +385,584 @@ Float80 new_random_float80()
 }
 
 /** @} */
+
+#elif !defined(OBSOLETE_RANDOM_GENERATORS)
+
+namespace {
+
+template<typename T>
+constexpr T get_mask(uint32_t bits) {
+    if (bits >= sizeof(T) * 8) {
+        return T(~0);
+    }
+    return (static_cast<T>(1) << bits) - 1;
+}
+
+static constexpr uint32_t BITS_FROM_RANDOM = 31;
+
+template<typename F>
+F get_predefined_float(int& selected_predefined) {
+    assert(false && "Predefined values not available for the type");
+    return {};
+}
+template<> Float16 get_predefined_float(int& selected_predefined) {
+    if (selected_predefined < 0) {
+        selected_predefined = get_random_value<uint32_t>(num_float16_vectors());
+    }
+    return get_float16_vector(selected_predefined);
+}
+template<> Float32 get_predefined_float(int& selected_predefined) {
+    if (selected_predefined < 0) {
+        selected_predefined = get_random_value<uint32_t>(num_float32_vectors());
+    }
+    return get_float32_vector(selected_predefined);
+}
+template<> Float64 get_predefined_float(int& selected_predefined) {
+    if (selected_predefined < 0) {
+        selected_predefined = get_random_value<uint32_t>(num_float64_vectors());
+    }
+    return get_float64_vector(selected_predefined);
+}
+template<> Float80 get_predefined_float(int& selected_predefined) {
+    if (selected_predefined < 0) {
+        selected_predefined = get_random_value<uint32_t>(num_float80_vectors());
+    }
+    return get_float80_vector(selected_predefined);
+}
+
+static_assert(HFLOAT8_DENORM_EXPONENT == 0, "Denormal exponent must be zero");
+static_assert(BFLOAT8_DENORM_EXPONENT == 0, "Denormal exponent must be zero");
+static_assert(FLOAT16_DENORM_EXPONENT == 0, "Denormal exponent must be zero");
+static_assert(BFLOAT16_DENORM_EXPONENT == 0, "Denormal exponent must be zero");
+static_assert(FLOAT32_DENORM_EXPONENT == 0, "Denormal exponent must be zero");
+static_assert(FLOAT64_DENORM_EXPONENT == 0, "Denormal exponent must be zero");
+static_assert(FLOAT80_DENORM_EXPONENT == 0, "Denormal exponent must be zero");
+
+template<typename F>
+F force_denormal(F& f) {
+    f.exponent = 0;
+    // prevent against 0 by setting any bit
+    if (f.mantissa == 0) {
+        f.mantissa |= static_cast<typename F::base_type>(1ULL << get_random_value<uint32_t>(F::mantissa_bits()));
+    }
+    return f;
+}
+template<>
+Float80 force_denormal(Float80& f) {
+    f.exponent = FLOAT80_DENORM_EXPONENT;
+    f.jbit = 0;
+    // prevent against 0 by setting any bit
+    if (f.mantissa == 0) {
+        f.mantissa |= static_cast<typename Float80::base_type>(1ULL << get_random_value<uint32_t>(Float80::mantissa_bits()));
+    }
+    return f;
+}
+
+static_assert(get_mask<typename BFloat8::base_type>(BFloat8::exponent_bits())   == BFLOAT8_INFINITY_EXPONENT);
+static_assert(get_mask<typename Float16::base_type>(Float16::exponent_bits())   == FLOAT16_INFINITY_EXPONENT);
+static_assert(get_mask<typename BFloat16::base_type>(BFloat16::exponent_bits()) == BFLOAT16_INFINITY_EXPONENT);
+static_assert(get_mask<typename Float32::base_type>(Float32::exponent_bits())   == FLOAT32_INFINITY_EXPONENT);
+static_assert(get_mask<typename Float64::base_type>(Float64::exponent_bits())   == FLOAT64_INFINITY_EXPONENT);
+static_assert(get_mask<typename Float80::base_type>(Float80::exponent_bits())   == FLOAT80_INFINITY_EXPONENT);
+
+template<typename F>
+F force_infinity(F& f) {
+    f.exponent = get_mask<typename F::base_type>(F::exponent_bits());
+    f.mantissa = 0;
+    return f;
+}
+template<>
+HFloat8 force_infinity(HFloat8& f) {
+    f.value = HFLOAT8_INF_NAN_VALUE;
+    return f;
+}
+
+static_assert(get_mask<typename HFloat8::base_type>(HFloat8::exponent_bits())   == HFLOAT8_INF_NAN_EXPONENT);
+static_assert(get_mask<typename BFloat8::base_type>(BFloat8::exponent_bits())   == BFLOAT8_NAN_EXPONENT);
+static_assert(get_mask<typename Float16::base_type>(Float16::exponent_bits())   == FLOAT16_NAN_EXPONENT);
+static_assert(get_mask<typename BFloat16::base_type>(BFloat16::exponent_bits()) == BFLOAT16_NAN_EXPONENT);
+static_assert(get_mask<typename Float32::base_type>(Float32::exponent_bits())   == FLOAT32_NAN_EXPONENT);
+static_assert(get_mask<typename Float64::base_type>(Float64::exponent_bits())   == FLOAT64_NAN_EXPONENT);
+static_assert(get_mask<typename Float80::base_type>(Float80::exponent_bits())   == FLOAT80_NAN_EXPONENT);
+
+static_assert(1ULL << (Float16::mantissa_bits() - 1)  == FLOAT16_MANTISSA_QUIET_NAN_MASK);
+static_assert(1ULL << (BFloat16::mantissa_bits() - 1) == BFLOAT16_MANTISSA_QUIET_NAN_MASK);
+static_assert(1ULL << (Float32::mantissa_bits() - 1)  == FLOAT32_MANTISSA_QUIET_NAN_MASK);
+static_assert(1ULL << (Float64::mantissa_bits() - 1)  == FLOAT64_MANTISSA_QUIET_NAN_MASK);
+static_assert(1ULL << (Float80::mantissa_bits() - 1)  == FLOAT80_MANTISSA_QUIET_NAN_MASK);
+
+template<typename F>
+F force_nan(F& f) {
+    f.exponent = get_mask<typename F::base_type>(F::exponent_bits());
+    if (f.mantissa == 0) {
+        // prevent against 0 by setting any bit, including quiet bit (most significant one)
+        uint32_t bit = get_random_value<uint32_t>(F::mantissa_bits());
+        f.mantissa = static_cast<F::base_type>(1ULL << bit);
+    }
+    return f;
+}
+template<typename F>
+F force_nan(F& f, bool quiet) {
+    // the most significant bit of mantissa is a quiet bit for most types
+    // but there's no type::prop to check that. Let's use static_asserts for specific types above
+    // static_assert(F::mantissa_bits() - 1 == F::quiet_bit_position(), "Unexpected quiet bit position");
+    f.exponent = get_mask<typename F::base_type>(F::exponent_bits());
+    if (quiet) {
+        f.mantissa |= static_cast<F::base_type>(1ULL << (F::mantissa_bits() - 1));
+    } else {
+        // make sure quiet bit is cleared
+        f.mantissa &= static_cast<F::base_type>(~(1ULL << (F::mantissa_bits() - 1)));
+        // prevent against 0 by setting any bit, excluding quiet bit (most significant one)
+        if (f.mantissa == 0) {
+            uint32_t bit = get_random_value<uint32_t>(F::mantissa_bits() - 1);
+            f.mantissa = static_cast<F::base_type>(1ULL << bit);
+        }
+    }
+    return f;
+}
+template<>
+HFloat8 force_nan(HFloat8& f, bool quiet) {
+    // HFloat8 has only Inf
+    assert(false && "HFloat8 with S/Q NaN values");
+    return f;
+}
+template<>
+HFloat8 force_nan(HFloat8& f) {
+    assert(false && "HFloat8 with NaN values");
+    return f;
+}
+template<>
+BFloat8 force_nan(BFloat8& f, bool quiet) {
+    f.exponent = BFLOAT8_NAN_EXPONENT;
+    f.mantissa = quiet ? BFLOAT8_QNAN_AT_INPUT_MANTISSA : BFLOAT8_SNAN_AT_INPUT_MANTISSA;
+    return f;
+}
+template<>
+BFloat8 force_nan(BFloat8& f) {
+    // either sNaN or qNaN, separate non-zero payloads
+    return force_nan(f, static_cast<bool>(get_random_bits<uint32_t>(1)));
+}
+
+template<typename F>
+F force_overflow(F& f) {
+    assert(false && "No specific overflow value for the type");
+    return f;
+}
+template<>
+HFloat8 force_overflow(HFloat8& f) {
+    f.value = HFLOAT8_SATURATED_OVERFLOW_VALUE;
+    return f;
+}
+template<>
+BFloat8 force_overflow(BFloat8& f) {
+    f.exponent = BFLOAT8_NAN_EXPONENT;
+    f.mantissa = BFLOAT8_OVERFLOW_MANTISSA;
+    return f;
+}
+
+template<typename F>
+constexpr uint32_t get_exponent_bias() {
+    return get_mask<typename F::base_type>(F::exponent_bits() - 1);
+}
+
+static_assert(get_exponent_bias<HFloat8>()  == HFLOAT8_EXPONENT_BIAS);
+static_assert(get_exponent_bias<BFloat8>()  == BFLOAT8_EXPONENT_BIAS);
+static_assert(get_exponent_bias<Float16>()  == FLOAT16_EXPONENT_BIAS);
+static_assert(get_exponent_bias<BFloat16>() == BFLOAT16_EXPONENT_BIAS);
+static_assert(get_exponent_bias<Float32>()  == FLOAT32_EXPONENT_BIAS);
+static_assert(get_exponent_bias<Float64>()  == FLOAT64_EXPONENT_BIAS);
+static_assert(get_exponent_bias<Float80>()  == FLOAT80_EXPONENT_BIAS);
+
+template<typename F>
+void fix_bits(F&) {
+}
+template<>
+void fix_bits(Float80& f) {
+    f.jbit = (f.exponent == 0) ? 0 : 1;
+}
+
+// verify that the default flags are zero: RNG optimized random values in all fields
+static_assert(FP_GEN_RANDOM == 0, "FP_GEN_RANDOM is expected to be a default and equal 0");
+
+template<typename F>
+inline F single_random(uint32_t flags) {
+    // special cases: compatibility generator and static vector with percentage selector
+    using BaseType = F::base_type;
+    switch (flags) {
+        case FP_GEN_FAST_ZERO:
+            return F{
+                /* .sign */     static_cast<BaseType>(0),
+                /* .exponent */ static_cast<BaseType>(0),
+                /* .mantissa */ static_cast<BaseType>(0)
+            };
+        case FP_GEN_COMPATIBILITY_GENERATOR:
+            return F{
+                /* .sign */     static_cast<BaseType>(random32()),
+                /* .exponent */ static_cast<BaseType>(random32()),
+                /* .mantissa */ static_cast<BaseType>(set_random_bits(random32() % (F::mantissa_bits() + 1), F::mantissa_bits()))
+            };
+    }
+
+    int selected_predefined = -1;
+    if (flags & FP_GEN_PCT_VEC_SELECTOR) {
+        // make sure if low-significance bits are used for percentage
+        static constexpr uint32_t ANY_PCT1 = 90;
+        static_assert((ANY_PCT1 & FP_GEN_PCT_VEC_SELECTOR_VAL_MASK) == ANY_PCT1, "Invalid percentage mask");
+        static constexpr uint32_t ANY_PCT2 = 45;
+        static_assert((ANY_PCT2 & FP_GEN_PCT_VEC_SELECTOR_VAL_MASK) == ANY_PCT2, "Invalid percentage mask");
+
+        // percentage must be in the range 1..100 to have effect
+        assert(((flags & FP_GEN_PCT_VEC_SELECTOR_VAL_MASK) <= 100) && "Invalid percentage for static_vector selector");
+        if (((flags & FP_GEN_PCT_VEC_SELECTOR_VAL_MASK) == 100) ||
+            (((flags & FP_GEN_PCT_VEC_SELECTOR_VAL_MASK) != 0) &&
+             (get_random_value<uint32_t>(100) < (flags & FP_GEN_PCT_VEC_SELECTOR_VAL_MASK))))
+        {
+            return get_predefined_float<F>(selected_predefined);
+        }
+    }
+
+    // validate generation flags, do not check PCT selector bits
+    assert(({
+            constexpr uint32_t handled =
+                FP_GEN_RANDOM_FLAGS_MANTISSA_MASK | FP_GEN_RANDOM_FLAGS_EXPONENT_MASK | FP_GEN_RANDOM_FLAGS_SIGN_MASK |
+                FP_GEN_RANDOM_FLAGS_FORCE_FINITE | FP_GEN_RANDOM_FLAGS_NO_SUBNORMALS;
+            static_assert((handled & (FP_GEN_PCT_VEC_SELECTOR | FP_GEN_PCT_VEC_SELECTOR_VAL_MASK)) == 0,
+                "PCT shares the same bits as other flags");
+            uint32_t ff = flags;
+            if (ff & FP_GEN_PCT_VEC_SELECTOR) {
+                ff = ff & (~(FP_GEN_PCT_VEC_SELECTOR | FP_GEN_PCT_VEC_SELECTOR_VAL_MASK));
+            }
+            ((ff & (~handled)) == 0);
+        }) && "Unknown flags in random float generator");
+
+    F f;
+    switch (flags & FP_GEN_RANDOM_FLAGS_SIGN_MASK) {
+        case FP_GEN_RANDOM_FLAGS_SIGN_RANDOM:
+            f.sign = random();
+            break;
+        case FP_GEN_RANDOM_FLAGS_SIGN_BITS:
+            static_assert(FP_GEN_RANDOM_FLAGS_SIGN_BITS == 0, "RNG optimized random sign is expected to be the default");
+            f.sign = get_random_bits<BaseType>(1);
+            break;
+        case FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE:
+            f.sign = 0;
+            break;
+        case FP_GEN_RANDOM_FLAGS_SIGN_NEGATIVE:
+            f.sign = 1;
+            break;
+        default:
+            assert(false && "Unhandled sign generator");
+            __builtin_unreachable();
+    }
+
+    switch (flags & FP_GEN_RANDOM_FLAGS_EXPONENT_MASK) {
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_RANDOM:
+            static_assert(F::exponent_bits() <= BITS_FROM_RANDOM, "RNG result is not sufficient for exponent");
+            f.exponent = random();
+            break;
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_BITS:
+            static_assert(FP_GEN_RANDOM_FLAGS_EXPONENT_BITS == 0, "RNG optimized random exponent is expected to be the default");
+            f.exponent = get_random_bits<BaseType>(F::exponent_bits());
+            break;
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_GAUSSIAN2:
+            static_assert(F::exponent_bits() > 1, "Type is not capable of Gaussian 2 distribution");
+            f.exponent = get_random_bits<BaseType>(F::exponent_bits() - 1) +
+                         get_random_bits<BaseType>(F::exponent_bits() - 1);
+            break;
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_GAUSSIAN4:
+            static_assert(F::exponent_bits() > 2, "Type is not capable of Gaussian 4 distribution");
+            f.exponent = get_random_bits<BaseType>(F::exponent_bits() - 1) +
+                         get_random_bits<BaseType>(F::exponent_bits() - 2) +
+                         get_random_bits<BaseType>(F::exponent_bits() - 2);
+            break;
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_GAUSSIAN8:
+            static_assert(F::exponent_bits() > 3, "Type is not capable of Gaussian 8 distribution");
+            f.exponent = get_random_bits<BaseType>(F::exponent_bits() - 1) +
+                         get_random_bits<BaseType>(F::exponent_bits() - 2) +
+                         get_random_bits<BaseType>(F::exponent_bits() - 3) +
+                         get_random_bits<BaseType>(F::exponent_bits() - 3);
+            break;
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_VECTOR:
+            f.exponent = get_predefined_float<F>(selected_predefined).exponent;
+            break;
+
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_MAX:
+            // in most cases (except BFloat8/HFloat8) infinity or NaNs
+            f.exponent = get_mask<BaseType>(F::exponent_bits());
+            break;
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_BIAS:
+            // range [1..2)
+            f.exponent = get_exponent_bias<F>();
+            break;
+        case FP_GEN_RANDOM_FLAGS_EXPONENT_ZERO:
+        case FP_GEN_RANDOM_FLAGS_VALUE_DENORMAL:
+            // zero or denormal
+            f.exponent = 0;
+            break;
+        case FP_GEN_RANDOM_FLAGS_VALUE_ZERO:
+            // fast path: both exponent and mantissa are zeros
+            f.exponent = 0;
+            flags = (flags & (~FP_GEN_RANDOM_FLAGS_MANTISSA_MASK)) | FP_GEN_RANDOM_FLAGS_MANTISSA_ZERO;
+            break;
+        case FP_GEN_RANDOM_FLAGS_VALUE_INF:
+        case FP_GEN_RANDOM_FLAGS_VALUE_OVERFLOW:
+            // exponent will be enforced, do not randomize the mantissa (unconditionally zeroed)
+            flags = (flags & (~FP_GEN_RANDOM_FLAGS_MANTISSA_MASK)) | FP_GEN_RANDOM_FLAGS_MANTISSA_ZERO;
+            break;
+        case FP_GEN_RANDOM_FLAGS_VALUE_NAN:
+        case FP_GEN_RANDOM_FLAGS_VALUE_SNAN:
+        case FP_GEN_RANDOM_FLAGS_VALUE_QNAN:
+            // exponent will be enforced later, mantissa generation should follow the flags
+            break;
+
+        default:
+            assert(false && "Unhandled exponent generator");
+            __builtin_unreachable();
+    }
+
+    switch (flags & FP_GEN_RANDOM_FLAGS_MANTISSA_MASK) {
+        case FP_GEN_RANDOM_FLAGS_MANTISSA_RANDOM:
+            if constexpr (F::mantissa_bits() > 64) {
+                f.mantissa = random128();
+            } else if constexpr (F::mantissa_bits() > 32) {
+                f.mantissa = random64();
+            } else if constexpr (F::mantissa_bits() > BITS_FROM_RANDOM) {
+                f.mantissa = random32();
+            } else {
+                f.mantissa = random();
+            }
+            break;
+        case FP_GEN_RANDOM_FLAGS_MANTISSA_BITS:
+            static_assert(FP_GEN_RANDOM_FLAGS_MANTISSA_BITS == 0, "RNG optimized random mantissa is expected to be the default");
+            f.mantissa = get_random_bits<BaseType>(F::mantissa_bits());
+            break;
+        case FP_GEN_RANDOM_FLAGS_MANTISSA_PATTERNED:
+            // existing pattern to generate "chains" of 1s and 0s, RNG optimized
+            f.mantissa = set_random_bits(get_random_value<uint32_t>(F::mantissa_bits() + 1), F::mantissa_bits());
+            break;
+        case FP_GEN_RANDOM_FLAGS_MANTISSA_VECTOR:
+            f.mantissa = get_predefined_float<F>(selected_predefined).mantissa;
+            break;
+        case FP_GEN_RANDOM_FLAGS_MANTISSA_ZERO:
+            f.mantissa = 0;
+            break;
+        default:
+            assert(false && "Unhandled mantissa generator");
+            __builtin_unreachable();
+    }
+
+    // enforce specific exponent/mantissa combinations. Mantissa must be ready as some force() require it
+    switch (flags & FP_GEN_RANDOM_FLAGS_EXPONENT_MASK) {
+        // VALUE_ZERO already handled
+        case FP_GEN_RANDOM_FLAGS_VALUE_INF:
+            force_infinity(f);
+            break;
+        case FP_GEN_RANDOM_FLAGS_VALUE_OVERFLOW:
+            force_overflow(f);
+            break;
+        case FP_GEN_RANDOM_FLAGS_VALUE_DENORMAL:
+            force_denormal(f);
+            break;
+        case FP_GEN_RANDOM_FLAGS_VALUE_NAN:
+            force_nan(f);
+            break;
+        case FP_GEN_RANDOM_FLAGS_VALUE_QNAN:
+            force_nan(f, true);
+            break;
+        case FP_GEN_RANDOM_FLAGS_VALUE_SNAN:
+            force_nan(f, false);
+            break;
+    }
+
+    if (flags & FP_GEN_RANDOM_FLAGS_FORCE_FINITE) {
+        assert(({
+                bool compatible;
+                switch (flags & FP_GEN_RANDOM_FLAGS_EXPONENT_MASK) {
+                    case FP_GEN_RANDOM_FLAGS_VALUE_INF:
+                    case FP_GEN_RANDOM_FLAGS_VALUE_OVERFLOW:
+                    case FP_GEN_RANDOM_FLAGS_VALUE_NAN:
+                    case FP_GEN_RANDOM_FLAGS_VALUE_SNAN:
+                    case FP_GEN_RANDOM_FLAGS_VALUE_QNAN:
+                        compatible = false;
+                        break;
+                    default:
+                        compatible = true;
+                        break;
+                }
+                compatible;
+            }) && "Cannot request finite value when Inf/NaN/overflow is forced");
+        if (!f.is_finite()) {
+            f.exponent = get_exponent_bias<F>();
+        }
+    }
+    if (flags & FP_GEN_RANDOM_FLAGS_NO_SUBNORMALS) {
+        assert(({
+                bool compatible;
+                switch (flags & FP_GEN_RANDOM_FLAGS_EXPONENT_MASK) {
+                    case FP_GEN_RANDOM_FLAGS_VALUE_ZERO:
+                    case FP_GEN_RANDOM_FLAGS_VALUE_DENORMAL:
+                        compatible = false;
+                        break;
+                    default:
+                        compatible = true;
+                        break;
+                }
+                compatible;
+            }) && "Cannot request normal value if zero/denormal/Inf/NaN/overflow is forced");
+        if (f.is_zero() || f.is_denormal()) {
+            f.exponent = get_exponent_bias<F>();
+        }
+    }
+    fix_bits(f);
+    return f;
+}
+
+#undef set_random
+template<typename F>
+inline void set_random(F* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    // extra scenarios, fast paths (all values at once)
+    switch (flags) {
+        case FP_GEN_FAST_MEMSET_ZERO:
+            memset((void*) ptr, 0, sizeof(F) * num);
+            return;
+        case FP_GEN_FAST_MEMSET_RANDOM:
+            memset_random((void*) ptr, sizeof(F) * num);
+            return;
+    }
+
+    bool normalize = false;
+    if (flags & FP_GEN_NORMALIZE) {
+        flags &= (~FP_GEN_NORMALIZE);
+
+        // return the value normalized to the full/half-axis ranges if +-maximum float values were given.
+        // Force negative/positive values if the range covers only half-axis range.
+        // In "regular" cases, just normalize [1..2) randomly selected value to given range.
+        constexpr uint32_t A = 0; // any particular value
+        constexpr uint32_t Z = 1; // zero
+        constexpr uint32_t P = 2; // positive inf
+        constexpr uint32_t N = 3; // negative inf
+        auto props = [](F f) -> uint32_t {
+            if (f.is_zero()) {
+                return Z;
+            } else if ((!f.is_finite()) || f.is_max()) {
+                return f.is_negative() ? N : P;
+            }
+            return A;
+        };
+        F f1{v1};
+        F f2{v2};
+        uint32_t s1 = props(f1);
+        uint32_t s2 = props(f2);
+
+        // do the sanity checks
+        assert(!(((s1 == Z) || (f1.is_negative())) && ((s2 == Z) || f2.is_negative()) &&
+                ((flags & FP_GEN_RANDOM_FLAGS_SIGN_MASK) == FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE) &&
+                "Negative range for positive value"));
+        assert(!(((s1 == Z) || (!f1.is_negative())) && ((s2 == Z) || (!f2.is_negative())) &&
+                ((flags & FP_GEN_RANDOM_FLAGS_SIGN_MASK) == FP_GEN_RANDOM_FLAGS_SIGN_NEGATIVE) &&
+                "Positive range for negative value"));
+        assert(!(((s1 == N) && (s2 == N)) || ((s1 == P) && (s2 == P))) &&
+                "Both range limits cannot be infinite of the same sign");
+
+        if ((s1 == Z) && (s2 == Z)) {
+            assert((flags & FP_GEN_RANDOM_FLAGS_EXPONENT_MASK) == 0 &&
+                "Exponent generator conflicts with zero range");
+            flags |= FP_GEN_RANDOM_FLAGS_VALUE_ZERO;
+
+        } else if (((s1 == A) || (s1 == Z)) && ((s2 == A) || (s2 == Z))) {
+            assert((!(f1.is_negative() && f2.is_negative() &&
+                      ((flags & FP_GEN_RANDOM_FLAGS_SIGN_MASK) == FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE))
+                   ) && "Negative range when positive requested");
+            assert((!((!f1.is_negative()) && (!f2.is_negative()) &&
+                      ((flags & FP_GEN_RANDOM_FLAGS_SIGN_MASK) == FP_GEN_RANDOM_FLAGS_SIGN_NEGATIVE))
+                   ) && "Positive range when negative requested");
+            assert(({
+                    bool compatible;
+                    switch (flags & FP_GEN_RANDOM_FLAGS_EXPONENT_MASK) {
+                        case FP_GEN_RANDOM_FLAGS_EXPONENT_ZERO:
+                        case FP_GEN_RANDOM_FLAGS_EXPONENT_MAX:
+                        case FP_GEN_RANDOM_FLAGS_VALUE_DENORMAL:
+                        case FP_GEN_RANDOM_FLAGS_VALUE_INF:
+                        case FP_GEN_RANDOM_FLAGS_VALUE_OVERFLOW:
+                        case FP_GEN_RANDOM_FLAGS_VALUE_NAN:
+                        case FP_GEN_RANDOM_FLAGS_VALUE_SNAN:
+                        case FP_GEN_RANDOM_FLAGS_VALUE_QNAN:
+                            compatible = false;
+                            break;
+                        default:
+                            compatible = true;
+                            break;
+                    }
+                    compatible;
+                }) && "Incompatible exponent generator for normalized values");
+
+            // special case: zero requested to get first value of the range
+            if ((flags & FP_GEN_RANDOM_FLAGS_EXPONENT_MASK) == FP_GEN_RANDOM_FLAGS_VALUE_ZERO) {
+                flags = ((flags & (~FP_GEN_RANDOM_FLAGS_MANTISSA_MASK)) | FP_GEN_RANDOM_FLAGS_MANTISSA_ZERO);
+            }
+            // select any value in range [1..2) and normalize to given range
+            flags |= FP_GEN_RANDOM_FLAGS_EXPONENT_BIAS;
+            flags = ((flags & (~FP_GEN_RANDOM_FLAGS_SIGN_MASK)) | FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE);
+            normalize = true;
+
+        } else if ((s1 == A) || (s2 == A)) {
+            assert(false && "Cannot start half-axis range with a value");
+
+        } else if (((s1 == N) && (s2 == P)) || ((s1 == P) && (s2 == N))) {
+            // full range, no normalization at all
+
+        } else if ((s1 == P) || (s2 == P)) {
+            assert(((flags & FP_GEN_RANDOM_FLAGS_SIGN_MASK) != FP_GEN_RANDOM_FLAGS_SIGN_NEGATIVE) &&
+                "Sign conficts for positive range");
+            flags = ((flags & (~FP_GEN_RANDOM_FLAGS_SIGN_MASK)) | FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE);
+
+        } else if ((s1 == N) || (s2 == N)) {
+            assert(((flags & FP_GEN_RANDOM_FLAGS_SIGN_MASK) != FP_GEN_RANDOM_FLAGS_SIGN_POSITIVE) &&
+                "Sign conficts for negative range");
+            flags = ((flags & (~FP_GEN_RANDOM_FLAGS_SIGN_MASK)) | FP_GEN_RANDOM_FLAGS_SIGN_NEGATIVE);
+        }
+    }
+
+    for (size_t i = 0; i < num; i++) {
+        if (normalize) {
+            // TODO single_random<Float32>()?
+            F f = single_random<F>(flags);
+            auto v = f.as_fp();
+            ptr[i] = F((v - (decltype(v)) 1.0) * ((decltype(v)) v2 - (decltype(v)) v1) + (decltype(v)) v1);
+        } else {
+            ptr[i] = single_random<F>(flags);
+        }
+    }
+}
+
+} // anonymous namespace
+
+void set_random_hfloat8(HFloat8* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<HFloat8>(ptr, num, flags, v1, v2);
+}
+void set_random_bfloat8(BFloat8* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<BFloat8>(ptr, num, flags, v1, v2);
+}
+void set_random_float16(Float16* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<Float16>(ptr, num, flags, v1, v2);
+}
+void set_random_bfloat16(BFloat16* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<BFloat16>(ptr, num, flags, v1, v2);
+}
+void set_random_float32(Float32* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<Float32>(ptr, num, flags, v1, v2);
+}
+void set_random_float(float* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<Float32>(reinterpret_cast<Float32*>(ptr), num, flags, v1, v2);
+}
+void set_random_float64(Float64* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<Float64>(ptr, num, flags, v1, v2);
+}
+void set_random_double(double* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<Float64>(reinterpret_cast<Float64*>(ptr), num, flags, v1, v2);
+}
+void set_random_float80(Float80* ptr, size_t num, uint32_t flags, float v1, float v2) {
+    set_random<Float80>(ptr, num, flags, v1, v2);
+}
+
+#endif // !OBSOLETE_RANDOM_GENERATORS
