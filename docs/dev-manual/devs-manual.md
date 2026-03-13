@@ -318,14 +318,79 @@ flowchart TD
     O --> P["Return Failed"]
 ```
 
+### The `TEST_LOOP` Macro
+
+`TEST_LOOP` is the core iteration primitive used inside every test's `test_run` function. It
+executes the loop body repeatedly until the framework signals that the test's time slot has
+elapsed.
+
+#### Signature
+
+```c
+TEST_LOOP(test, N) {
+    // loop body
+}
+```
+
+- **`test`** — the `struct test *` pointer received by `test_run`.
+- **`N`** — the *granularity* of the loop. The body executes **N** times before the framework
+  checks whether the time slot is still active. By convention `N` is always a **power of two**.
+
+#### How It Works
+
+`TEST_LOOP` expands into a nested `for`-loop structure:
+
+1. **`test_loop_start()`** — called once at entry. Records the loop start time and emits an
+   assembly marker (used by profiling tools such as Intel SDE/PIN).
+2. **Inner loop** — executes the body `N` times without any check.
+3. **`test_loop_condition(N)`** — called after each batch of `N` iterations. It:
+   - Injects idle time if `--inject-idle` is configured (sleeps `idle_duration / N` per batch).
+   - Increments `inner_loop_count` on the per-thread data.
+   - Checks `current_max_loop_count`; if exceeded, the loop ends.
+   - Checks the wall-clock deadline (`current_test_endtime`); if expired, the loop ends.
+4. **`test_loop_end()`** — called once on exit. Emits the end assembly marker with the final
+   iteration count.
+
+```mermaid
+flowchart TD
+    A["TEST_LOOP(test, N)"] --> B["test_loop_start()"]
+    B --> C["Execute body N times"]
+    C --> D["test_loop_condition(N)"]
+    D --> E{"Max loop count\nexceeded?"}
+    E -->|Yes| H["test_loop_end()"]
+    E -->|No| F{"Wall-clock deadline\nexpired?"}
+    F -->|Yes| H
+    F -->|No| C
+    H --> I["Loop finished"]
+```
+
+#### Interaction with Fracturing
+
+Each fracture iteration sets a new `current_max_loop_count` and `current_test_endtime`. When a
+fracture completes, the RNG is re-seeded and a new `TEST_LOOP` execution begins in the next
+fracture cycle. The `inner_loop_count` is tracked per-thread for diagnostics and controls when
+the loop terminates.
+
+#### Alternative: `test_time_condition()`
+
+Tests that cannot use the `TEST_LOOP` macro (e.g. tests with custom looping structures) can call
+`test_time_condition()` directly. It returns `true` while time remains in the test's slot.
+
 ### Fracturing Mechanism
 
-Tests can run multiple times within a single invocation ("fracturing") to increase stress.
-Fractures target running for **200–400 ms** and then restart to re-seed the RNG.
+Tests can run multiple time within a single invocation, a technique called `fracturing`.
+Each `fracture`, resets the random data generated during initialization, runs for 200–400
+milliseconds, and then restarts to re-seed the random number generator (RNG). This lets a test
+run multiple times in one invocation, ensuring fresh random data is used each time and
+increasing test coverage.
 
-- **Auto-fracture**: Starts with 40 iterations, doubles every 10ms until time is up
-- **Configured fracture**: Uses `test->fracture_loop_count`
-- **Duration-limited**: Repeats until `sApp->current_test_duration` is exceeded
+
+- **Auto-fracture**: Starts with 40 iterations, doubles on each fracture cycle during an initial
+                     10ms ramp-up window.
+- **Configured fracture**: Uses `fracture_loop_count` to change the number of iterations per
+                           fracture cycle. `<0` means no fracture (run once), `0` means default
+                           behavior, and `>0` means fixed iterations per cycle.
+- **Duration-limited**: Repeats until `sApp->current_test_duration` is exceeded.
 
 Each fracture iteration re-seeds the RNG with an advanced state.
 
