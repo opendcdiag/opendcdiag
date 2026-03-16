@@ -57,6 +57,7 @@
 #include "sandstone_tests.h"
 #include "sandstone_utils.h"
 #include "topology.h"
+#include "logging.h"
 
 #include "device/device_topology.h"
 
@@ -748,11 +749,10 @@ static void preinit_tests()
         return e.replacement;
     };
 
-    static const initfunc preinit_replacement = [](struct test*) {
-        log_skip(RuntimeSkipCategory, "Skip replacement from preinit");
-        return EXIT_SKIP;
-    };
     int preinit_ret = EXIT_SUCCESS;
+
+    // For preinit all skip messages for all tests are stored in one log_fd.
+    int last_skip_msg_offset = 0;
 
     for (test_cfg_info &cfg : *test_set) {
         struct test *test = cfg.test;
@@ -781,7 +781,17 @@ static void preinit_tests()
 
         // Skip from group init has precendence over preinit.
         if (!group_init_failed && preinit_ret != EXIT_SUCCESS) {
-            test->test_init = preinit_replacement;
+            std::string skip_message = AbstractLogger::get_skip_message(-1, last_skip_msg_offset);
+            if (!skip_message.empty()) {
+                skip_message.erase(0, 1);
+            } else {
+                skip_message = "Skip replacement from preinit";
+            }
+            std::memcpy(test->preinit_skip_message, skip_message.c_str(), std::min(skip_message.size(), sizeof(test->preinit_skip_message)));
+            test->test_init = [](struct test* test) {
+                log_skip(RuntimeSkipCategory, "%s", test->preinit_skip_message);
+                return EXIT_SKIP;
+            };
             test->flags = test->flags | test_init_in_parent; // for -fexec
         }
     }
