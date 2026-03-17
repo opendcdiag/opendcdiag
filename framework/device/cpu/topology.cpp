@@ -120,7 +120,7 @@ static void update_topology(std::span<const cpu_info_t> new_cpu_info,
 
 int num_cpus()
 {
-    return thread_count();
+    return device_count();
 }
 
 int num_packages()
@@ -1819,6 +1819,7 @@ void update_topology(std::span<const cpu_info_t> new_cpu_info,
         std::fill_n(end, excess, (cpu_info_t){});
 
     sApp->thread_count = new_thread_count;
+    sApp->device_count = new_thread_count;
     cached_topology() = build_topology();
 }
 
@@ -1827,6 +1828,7 @@ LogicalProcessorSet detect_devices<LogicalProcessorSet>()
 {
     LogicalProcessorSet result = ambient_logical_processor_set();
     sApp->thread_count = result.count();
+    sApp->device_count = result.count();
     if (sApp->thread_count == 0) [[unlikely]] {
         fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
                 program_invocation_name);
@@ -1854,6 +1856,7 @@ void restrict_topology(DeviceRange range)
     assert(range.starting_device + range.device_count <= sApp->thread_count);
     auto old_cpu_info = std::exchange(device_info, sApp->shmem->device_info + range.starting_device);
     int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
+    sApp->device_count = range.device_count;
 
     Topology &topo = cached_topology();
     if (old_cpu_info != device_info || old_thread_count != sApp->thread_count ||
