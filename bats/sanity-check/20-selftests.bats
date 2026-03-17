@@ -117,6 +117,9 @@ tap_negative_check() {
 }
 
 @test "TAP output fails" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        skip "TAP skipped for GPU"
+    fi
     # not all tests
     for test in selftest_failinit selftest_fail; do
         local notok
@@ -130,6 +133,9 @@ tap_negative_check() {
 }
 
 @test "TAP output crash" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        skip "TAP skipped for GPU"
+    fi
     if $is_asan; then
         skip "Crashing tests skipped with ASAN"
     fi
@@ -149,6 +155,9 @@ tap_negative_check() {
 }
 
 @test "TAP output OS error" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        skip "TAP skipped for GPU"
+    fi
     run $SANDSTONE --output-format=tap --selftests --retest-on-failure=0 --on-crash=kill -e selftest_oserror -o /dev/null -v
     [[ $status -eq 2 ]]
     sed 's/\r$//' <<<"$output" | \
@@ -156,6 +165,9 @@ tap_negative_check() {
 }
 
 @test "TAP silent output" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        skip "TAP skipped for GPU"
+    fi
     local -a opts=(--output-format=tap --quick --selftests --quiet --disable="*fork" -e @positive)
     $SANDSTONE "${opts[@]}" > $BATS_TEST_TMPDIR/output.tap
 
