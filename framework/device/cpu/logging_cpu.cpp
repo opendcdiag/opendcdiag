@@ -92,7 +92,7 @@ void KeyValuePairLogger::print_thread_header(int fd, int device, const char *pre
         return;
     }
 
-    cpu_info_t *info = device_info + device;
+    cpu_info_t *info = device_info + (device % device_count());
     const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
     PerThreadData::Test *thr = sApp->test_thread_data(device);
     if (std::string time = format_duration(thr->fail_time); time.size()) {
@@ -284,7 +284,7 @@ void TapFormatLogger::print_thread_header(int fd, int device, LogLevelVerbosity 
         return;
     }
 
-    cpu_info_t *info = device_info + device;
+    cpu_info_t *info = device_info + (device % device_count());
     std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", device,
             info->cpu_number, info->package_id, info->core_id, info->thread_id);
     if (const char *type = native_device_type(info))
@@ -360,7 +360,7 @@ auto thread_core_spacing()
         struct { int logical, core; } result = { 1, 1 };
         int max_core_id = 0;
         int max_logical_id = 0;
-        for (int i = 0; i < thread_count(); ++i) {
+        for (int i = 0; i < device_count(); ++i) {
             if (device_info[i].cpu_number > max_logical_id)
                 max_logical_id = device_info[i].cpu_number;
             if (device_info[i].core_id > max_core_id)
@@ -384,7 +384,7 @@ auto thread_core_spacing()
 
 std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerbosity verbosity)
 {
-    cpu_info_t *info = device_info + thread;
+    cpu_info_t *info = device_info + (thread % device_count());
     std::string line;
 #ifdef _WIN32
     line = stdprintf("{ logical-group: %2u, logical: %2u, ",

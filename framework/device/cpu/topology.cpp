@@ -1853,13 +1853,12 @@ void setup_devices<LogicalProcessorSet>(const LogicalProcessorSet &enabled_devic
 
 void restrict_topology(DeviceRange range)
 {
-    assert(range.starting_device + range.device_count <= sApp->thread_count);
+    assert(range.starting_device + range.device_count <= sApp->device_count);
     auto old_cpu_info = std::exchange(device_info, sApp->shmem->device_info + range.starting_device);
-    int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
-    sApp->device_count = range.device_count;
+    int old_device_count = std::exchange(sApp->device_count, range.device_count);
 
     Topology &topo = cached_topology();
-    if (old_cpu_info != device_info || old_thread_count != sApp->thread_count ||
+    if (old_cpu_info != device_info || old_device_count != sApp->device_count ||
             topo.packages.size() == 0)
         topo = build_topology();
 }
@@ -2092,7 +2091,8 @@ std::string build_failure_mask_for_topology(const struct test* test)
 
 uint32_t mixin_from_device_info(int thread_num)
 {
-    auto& info = device_info[thread_num];
+    // Use modular indexing to support oversubscription (thread_count > device_count)
+    auto& info = device_info[thread_num % device_count()];
     auto mixin = scramble(static_cast<uint32_t>(info.core_id), static_cast<uint32_t>(info.package_id));
     mixin ^= [=](){
         switch (info.thread_id & 3) {
