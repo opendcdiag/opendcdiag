@@ -120,7 +120,7 @@ static void update_topology(std::span<const cpu_info_t> new_cpu_info,
 
 int num_cpus()
 {
-    return thread_count();
+    return device_count();
 }
 
 int num_packages()
@@ -1819,6 +1819,7 @@ void update_topology(std::span<const cpu_info_t> new_cpu_info,
         std::fill_n(end, excess, (cpu_info_t){});
 
     sApp->thread_count = new_thread_count;
+    sApp->device_count = new_thread_count;
     cached_topology() = build_topology();
 }
 
@@ -1827,6 +1828,7 @@ LogicalProcessorSet detect_devices<LogicalProcessorSet>()
 {
     LogicalProcessorSet result = ambient_logical_processor_set();
     sApp->thread_count = result.count();
+    sApp->device_count = result.count();
     if (sApp->thread_count == 0) [[unlikely]] {
         fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
                 program_invocation_name);
@@ -1851,12 +1853,12 @@ void setup_devices<LogicalProcessorSet>(const LogicalProcessorSet &enabled_devic
 
 void restrict_topology(DeviceRange range)
 {
-    assert(range.starting_device + range.device_count <= sApp->thread_count);
+    assert(range.starting_device + range.device_count <= sApp->device_count);
     auto old_cpu_info = std::exchange(device_info, sApp->shmem->device_info + range.starting_device);
-    int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
+    int old_device_count = std::exchange(sApp->device_count, range.device_count);
 
     Topology &topo = cached_topology();
-    if (old_cpu_info != device_info || old_thread_count != sApp->thread_count ||
+    if (old_cpu_info != device_info || old_device_count != sApp->device_count ||
             topo.packages.size() == 0)
         topo = build_topology();
 }
@@ -2089,7 +2091,8 @@ std::string build_failure_mask_for_topology(const struct test* test)
 
 uint32_t mixin_from_device_info(int thread_num)
 {
-    auto& info = device_info[thread_num];
+    // Use modular indexing to support oversubscription (thread_count > device_count)
+    auto& info = device_info[thread_num % device_count()];
     auto mixin = scramble(static_cast<uint32_t>(info.core_id), static_cast<uint32_t>(info.package_id));
     mixin ^= [=](){
         switch (info.thread_id & 3) {

@@ -94,6 +94,7 @@ void update_topology(std::span<const gpu_info_t> new_gpu_info)
     }
 
     sApp->thread_count = new_thread_count;
+    sApp->device_count = new_thread_count;
     cached_topology() = build_topology();
 }
 }
@@ -317,6 +318,7 @@ GpusSet detect_devices<GpusSet>()
     }
 
     sApp->thread_count = enabled_devices.size();
+    sApp->device_count = enabled_devices.size();
     sApp->user_thread_data.resize(sApp->thread_count);
 
     return enabled_devices;
@@ -516,6 +518,7 @@ void restrict_topology(DeviceRange range)
     assert(range.starting_device + range.device_count <= sApp->thread_count);
     auto old_gpu_info = std::exchange(device_info, sApp->shmem->device_info + range.starting_device);
     int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
+    sApp->device_count = range.device_count;
 
     Topology &topo = cached_topology();
     if (old_gpu_info != device_info || old_thread_count != sApp->thread_count /*|| topo.devices.size() == 0  TODO: why would we check that? */) {

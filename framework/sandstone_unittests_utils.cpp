@@ -12,7 +12,8 @@ device_info_t *device_info = nullptr;
 
 /* Define dummy number of dummy threads */
 int thread_count() { return UNITTESTS_THREAD_COUNT; }
-int num_cpus() { return thread_count(); }
+int device_count() { return UNITTESTS_THREAD_COUNT; }
+int num_cpus() { return device_count(); }
 
 bool test_is_retry() noexcept { return false; }
 

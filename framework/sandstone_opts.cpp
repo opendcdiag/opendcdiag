@@ -877,8 +877,6 @@ struct ProgramOptionsParser {
             auto maybe_int = ParseIntArgument<>{
                     .name = "-n / --threads",
                     .min = 1,
-                    .max = app_cfg->thread_count,
-                    .range_mode = OutOfRangeMode::Saturate
             }(value);
             if (maybe_int) {
                 opts.thread_count = maybe_int.value();

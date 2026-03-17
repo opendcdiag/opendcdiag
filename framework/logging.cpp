@@ -2189,7 +2189,7 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
 #else
     logging_printf(LOG_LEVEL_VERBOSE(1), "device-info:\n");
 #endif
-    for (int i = 0; i < thread_count(); ++i) {
+    for (int i = 0; i < device_count(); ++i) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "- %s   # %d\n",
                        thread_id_header_for_device(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
     }

@@ -927,7 +927,8 @@ void reschedule_internal(DeviceScheduler *scheduler)
 static uintptr_t thread_runner(int thread_number)
 {
     // convert from internal Sandstone numbering to the system one
-    pin_to_logical_processor(LogicalProcessor(device_info[thread_number].cpu_number), current_test->id);
+    // Use modular indexing to support oversubscription (thread_count > device_count)
+    pin_to_logical_processor(LogicalProcessor(device_info[thread_number % device_count()].cpu_number), current_test->id);
 
     PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
     random_init_thread(thread_number);
@@ -1030,7 +1031,7 @@ static void init_shmem()
     per_thread_size = ROUND_UP_TO_PAGE(per_thread_size);
 
     unsigned thread_data_offset = sizeof(SandstoneApplication::SharedMemory) +
-            sizeof(Topology::Thread) * thread_count();
+            sizeof(Topology::Thread) * device_count();
     thread_data_offset = ROUND_UP_TO_PAGE(thread_data_offset);
 
     size_t size = thread_data_offset;
@@ -1061,6 +1062,7 @@ static void commit_shmem()
     size_t main_thread_count = plan.size();
     sApp->shmem->main_thread_count = main_thread_count;
     sApp->shmem->total_thread_count = thread_count();
+    sApp->shmem->total_device_count = device_count();
 
     // unmap the current area, because Windows doesn't allow us to have two
     // blocks for this file
@@ -1085,7 +1087,7 @@ static void commit_shmem()
     }
 
     // sApp->shmem has probably moved
-    restrict_topology({ 0, thread_count() });
+    restrict_topology({ 0, device_count() });
 }
 
 static void attach_shmem(int fd)
@@ -1762,7 +1764,7 @@ static int slices_for_test(const struct test *test)
         return SandstoneApplication::SlicePlans::Heuristic;
     }();
     if (type == SandstoneApplication::SlicePlans::FullSystem) {
-        sApp->main_thread_data()->device_range = { 0, thread_count() };
+        sApp->main_thread_data()->device_range = { 0, device_count() };
         return 1;
     }
 
@@ -2262,6 +2264,7 @@ static int exec_mode_run(int argc, char **argv)
     attach_shmem(parse_int(argv[2]));
     device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
+    sApp->device_count = sApp->shmem->total_device_count;
     rebuild_topology();
     sApp->user_thread_data.resize(sApp->thread_count);
 
@@ -2508,6 +2511,11 @@ int thread_count()
     return sApp->thread_count;
 }
 
+int device_count()
+{
+    return sApp->device_count;
+}
+
 int8_t sandstone_verbosity_level()
 {
     return std::to_underlying(sApp->shmem->cfg.verbosity);
@@ -2700,8 +2708,15 @@ int main(int argc, char **argv)
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
-    if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
-        restrict_topology({ 0, opts.thread_count });
+    if (opts.thread_count > 0)
+        sApp->thread_count = opts.thread_count;
+
+    if (unsigned(opts.device_count) < unsigned(sApp->device_count))
+        restrict_topology({ 0, opts.device_count });
+
+    // Resize user_thread_data if thread_count changed (e.g. oversubscription)
+    if (sApp->thread_count != int(sApp->user_thread_data.size()))
+        sApp->user_thread_data.resize(sApp->thread_count);
     slice_plan_init(opts.max_cores_per_slice);
     commit_shmem();
 
