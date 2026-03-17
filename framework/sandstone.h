@@ -578,6 +578,10 @@ extern __thread int thread_num __attribute__((tls_model("initial-exec")));
 /// restricts the number of CPUs sandstone can see.
 int thread_count() __attribute__((pure));
 
+/// Returns the number of devices (CPUs or GPUs) available to a test.
+/// Normally equal to thread_count(), but tracked separately.
+int device_count() __attribute__((pure));
+
 /// Returns the number of physical CPU packages (a.k.a. sockets) available to a
 /// test.
 int num_packages() __attribute__((pure));
