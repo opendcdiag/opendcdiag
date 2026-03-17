@@ -2708,7 +2708,10 @@ int main(int argc, char **argv)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
     if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
-        restrict_topology({ 0, opts.thread_count });
+        sApp->thread_count = opts.thread_count;
+
+    if (unsigned(opts.device_count) < unsigned(sApp->device_count))
+        restrict_topology({ 0, opts.device_count });
     slice_plan_init(opts.max_cores_per_slice);
     commit_shmem();
 

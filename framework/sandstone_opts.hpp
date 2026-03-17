@@ -22,6 +22,7 @@ struct ProgramOptions {
 
     const char* seed = nullptr;
     int max_cores_per_slice = 0;
+    int device_count = -1;
     int thread_count = -1;
     bool fatal_errors = false;
     const char* on_hang_arg = nullptr;
@@ -53,6 +54,7 @@ struct ProgramOptions {
     void apply_restrictions() {
         seed = nullptr;
         max_cores_per_slice = 0;
+        device_count = -1;
         thread_count = -1;
         fatal_errors = true;
         on_hang_arg = nullptr;
