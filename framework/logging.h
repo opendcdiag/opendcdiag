@@ -56,10 +56,11 @@ public:
             friend auto operator<=>(const_iterator, const_iterator) = default;
             const LogMessage &operator*() const { return *ptr; }
             const LogMessage *operator->() const { return ptr; }
-            const_iterator operator++(int) noexcept
-            { return { reinterpret_cast<const LogMessage *>(ptr->payload + ptr->msglen) }; }
-            const_iterator &operator++() noexcept
-            { return *this = (*this)++; }
+            // pre-increment
+            const_iterator &operator++() noexcept {
+                ptr = reinterpret_cast<const LogMessage*>(ptr->payload + ptr->msglen);
+                return *this;
+            }
         };
 
         LogMessagesFile() noexcept : r{} {}
