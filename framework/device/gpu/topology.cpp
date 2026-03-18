@@ -293,6 +293,18 @@ template <>
 GpusSet detect_devices<GpusSet>()
 {
     GpusSet enabled_devices;
+
+    if (const char* mock_topo = getenv("SANDSTONE_MOCK_TOPOLOGY"); SandstoneConfig::Debug && mock_topo && *mock_topo) {
+        // our selftests use mock topologies of up to 4 GPUs, so we need to prepare enough space in device_info
+        static constexpr auto MAX_MOCK_THREAD_COUNT = 4;
+        sApp->thread_count = MAX_MOCK_THREAD_COUNT;
+        sApp->user_thread_data.resize(sApp->thread_count);
+        for (auto i = 0; i < MAX_MOCK_THREAD_COUNT; i++) {
+            enabled_devices.emplace(MultiSliceGpu{.gpu_number = i}, ZeDeviceCtx{}); // fill with anything, we will check !empty() later
+        }
+        return enabled_devices;
+    }
+
     auto ret = for_each_ze_device([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu& indices) {
         enabled_devices.emplace(indices, ZeDeviceCtx{ .driver = driver, .ze_handle = device_handle });
         return EXIT_SUCCESS;
@@ -452,11 +464,58 @@ int16_t detect_package_id_via_os(int cpu)
     } while (0)
 }
 
+/// Builds device_info array with only BDF filled, because for now the
+/// only use case is random selftests (mixin is computed from BDF).
+/// Topology is not constructed.
+void create_mock_topology(const char *topo)
+{
+    auto parse_int_and_advance = [&topo](uint32_t *ptr) {
+        char *end;
+        *ptr = strtoll(topo, &end, 16);
+        topo = end;
+    };
+
+    int gpu_count = 0;
+    while (topo && *topo) {
+        gpu_info_t *info = &device_info[gpu_count];
+        gpu_count++;
+
+        info->package_id = info->cpu_number = info->gpu_number = info->device_index = 0;
+        info->subdevice_index = -1;
+        info->num_subdevices = 0;
+        info->gpu_arch.as_dword = 0x0u;
+
+        parse_int_and_advance(&info->bdf.domain);
+        if (*topo != ':') break;
+        topo++;
+
+        parse_int_and_advance(&info->bdf.bus);
+        if (*topo != ':') break;
+        topo++;
+
+        parse_int_and_advance(&info->bdf.device);
+        if (*topo != '.') break;
+        topo++;
+
+        parse_int_and_advance(&info->bdf.function);
+
+        while (topo && (*topo == ' ' || *topo == ','))
+            ++topo;
+    }
+
+    sApp->thread_count = gpu_count;
+}
+
 /// Builds whole device_info array, then builds topology based on that.
 template <>
 void setup_devices<GpusSet>(const GpusSet &enabled_devices)
 {
     device_info = sApp->shmem->device_info;
+
+    if (const char* mock_topo = getenv("SANDSTONE_MOCK_TOPOLOGY"); SandstoneConfig::Debug && mock_topo && *mock_topo) {
+        create_mock_topology(mock_topo);
+        return;
+    }
 
     assert(enabled_devices.size() == thread_count());
     gpu_info_t* info = device_info;
