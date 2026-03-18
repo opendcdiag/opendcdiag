@@ -1181,7 +1181,14 @@ static void logging_format_data(DataType type, std::string_view description, con
     };
 
     buffer += "description: '";
-    buffer += description;
+    if (description.size()) {
+        while (description.ends_with('\n'))
+            description.remove_suffix(1);       // chop trailing newlines
+        size_t nl = description.find('\n');
+        buffer += escape_for_single_line(description.substr(0, nl));
+        if (nl != std::string::npos)
+            description.remove_prefix(nl + 1);
+    }
     buffer += "'\ntype:        ";
 
     const char *typeName = SandstoneDataDetails::type_name(type);
@@ -1225,25 +1232,43 @@ static void logging_format_data(DataType type, std::string_view description, con
                   "remark:      'memcmp_offset() could not locate difference'";
     }
 
+    // are there more details supplied by the callback?
+    if (description.size()) {
+        buffer += "\ndetails:\n";
+        std::string_view details = description;
+        size_t lastpos = 0;
+        size_t nl = details.find('\n', lastpos);
+        while (nl != std::string_view::npos) {
+            buffer += "  ";
+            ++nl;       // include newline
+            buffer += details.substr(lastpos, nl - lastpos);
+            lastpos = nl;
+            nl = details.find('\n', lastpos);
+        }
+        buffer += "  ";
+        buffer += details.substr(lastpos);
+    }
+
     PerThreadData::Common *thread = sApp->thread_data(thread_num);
     log_message_for_thread(thread, LogTypes::RawYaml, LOG_LEVEL_QUIET, buffer);
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
-                                    size_t size, ptrdiff_t offset, const char *fmt, va_list va)
+                                    size_t size, ptrdiff_t offset,
+                                    SandstoneMemcmpOrFail::FormatterCallback formatter,
+                                    const void *token1, void *token2)
 {
     logging_mark_thread_failed(thread_num);
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;
 
-    {
+    if (formatter) {
         // create the description of what failed
-        std::string description, escaped_description;
-        if (fmt && *fmt)
-            description = vstdprintf(fmt, va);
-
-        logging_format_data(type, escape_for_single_line(description, escaped_description),
-                            actual, expected, offset);
+        ptrdiff_t idx = offset / SandstoneDataDetails::type_size(type);
+        std::string description = formatter(token1, token2, idx);
+        logging_format_data(type, description, actual, expected, offset);
+    } else {
+        logging_format_data(type, {}, actual, expected, offset);
     }
     if (offset < 0) {
         // we couldn't find a difference

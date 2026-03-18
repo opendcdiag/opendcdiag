@@ -381,7 +381,56 @@ bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...)
     }
     return ok;
 }
+
+// we can only rely on the CI for this
+bool SandstoneMemcmpOrFail::test_formatter(std::function<std::string ()> cb, size_t)
+{
+    log_yaml(SANDSTONE_LOG_DEBUG, ("memcmp_or_fail: " + cb()).c_str());
+    return true;
+}
+
+bool SandstoneMemcmpOrFail::test_formatter(std::function<std::string (ptrdiff_t)> cb, size_t max)
+{
+    auto doit = [&](ptrdiff_t idx) {
+        std::string yaml = stdprintf("memcmp_or_fail %td: ", idx) + cb(idx);
+        log_yaml(SANDSTONE_LOG_DEBUG, yaml.c_str());
+    };
+    doit(-1);
+    doit(max - 1);
+    return true;
+}
+
+bool _memcmp_fail_check_cb(char *(*cb)(void *token, ptrdiff_t), void *token, size_t max)
+{
+    auto doit = [&](ptrdiff_t idx) {
+        char *r = cb(token, idx);
+        std::string yaml = stdprintf("memcmp_or_fail_cb %td: ", idx) + r;
+        log_yaml(SANDSTONE_LOG_DEBUG, yaml.c_str());
+        free(r);
+    };
+    doit(-1);
+    doit(max - 1);
+    return true;
+}
 #endif
+
+void _memcmp_fail_report_cb(const void *actual, const void *expected, size_t size,
+                            DataType type, char *(*cb)(void *token, ptrdiff_t), void *token)
+{
+    // Execute UD2 early if we've failed
+    if (sApp->shmem->cfg.ud_on_failure)
+        ud2();
+    if (SandstoneConfig::NoLogging)
+        report_fail_common();
+
+    using Fn = decltype(cb);
+    auto wrapper = [](const void *pcb, void *token, ptrdiff_t idx) -> std::string {
+        Fn callback = reinterpret_cast<Fn>(const_cast<void *>(pcb));
+        return callback(token, idx);
+    };
+    SandstoneMemcmpOrFail::report(actual, expected, size, type, wrapper,
+                                  reinterpret_cast<const void *>(cb), token);
+}
 
 void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, DataType type, const char *fmt, ...)
 {
@@ -389,18 +438,37 @@ void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size
     if (sApp->shmem->cfg.ud_on_failure)
         ud2();
 
+    using namespace SandstoneMemcmpOrFail;
+    if (!SandstoneConfig::NoLogging)
+        fmt = nullptr;
+    if (!fmt)
+        report(_actual, _expected, size, type, nullptr, nullptr);
+
+    auto wrapper = [](const void *pfmt, void *pva, ptrdiff_t) {
+        return vstdprintf(static_cast<const char *>(pfmt), *static_cast<va_list *>(pva));
+    };
+    va_list va;
+    va_start(va, fmt);
+    report(_actual, _expected, size, type, wrapper, fmt, &va);
+    va_end(va);
+}
+
+void SandstoneMemcmpOrFail::report(const void *_actual, const void *_expected, size_t size,
+                                   DataType type, FormatterCallback formatter, const void *t1, void *t2)
+{
+    // Execute UD2 early if we've failed
+    if (sApp->shmem->cfg.ud_on_failure)
+        ud2();
+
     if (!SandstoneConfig::NoLogging) {
-        if (fmt)
-            assert(strchr(fmt, '\n') == nullptr && "Data descriptions should not include a newline");
+        // mark time-to-fail before the calling the callback
+        logging_mark_thread_failed(thread_num);
 
         auto actual = static_cast<const uint8_t *>(_actual);
         auto expected = static_cast<const uint8_t *>(_expected);
         ptrdiff_t offset = memcmp_offset(actual, expected, size);
 
-        va_list va;
-        va_start(va, fmt);
-        logging_report_mismatched_data(type, actual, expected, size, offset, fmt, va);
-        va_end(va);
+        logging_report_mismatched_data(type, actual, expected, size, offset, formatter, t1, t2);
     }
 
     report_fail_common();

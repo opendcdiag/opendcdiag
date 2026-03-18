@@ -30,6 +30,7 @@
 
 #ifdef __cplusplus
 #include <atomic>
+#include <functional>
 #include <memory>
 using std::atomic_int;
 extern "C" {
@@ -395,6 +396,10 @@ struct test {
 
 /* internal functions; see C macro and C++ templates at the end of this file */
 extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);
+extern bool _memcmp_fail_check_cb(char *(*cb)(void *token, ptrdiff_t), void *, size_t);
+extern void _memcmp_fail_report_cb(const void *actual, const void *expected, size_t size,
+                                   enum DataType, char *(*cb)(void *token, ptrdiff_t), void *)
+    __attribute__((cold, noreturn));
 extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, enum DataType, const char *fmt, ...)
     ATTRIBUTE_PRINTF(5, 6) __attribute__((cold, noreturn));
 
@@ -609,21 +614,69 @@ template <typename Callback> void install_failure_callback(Callback cb)
     }
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-security"
-template <typename T, typename... FmtArgs> [[noreturn, gnu::cold]] static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
-memcmp_fail_report(const T *actual, const T *expected, size_t count, const char *fmt, FmtArgs &&... args)
+namespace SandstoneMemcmpOrFail {
+using namespace SandstoneDataDetails;
+template <typename Callback> concept FormatterFunction =
+        std::is_invocable_r_v<std::string, Callback>
+        || std::is_invocable_r_v<std::string, Callback, ptrdiff_t>
+        || std::is_null_pointer_v<Callback>;
+
+using FormatterCallback = std::string (*)(const void *token1, void *token2, ptrdiff_t idx);
+[[noreturn, gnu::cold]] void
+report(const void *, const void *, size_t, DataType, FormatterCallback,
+       const void * = nullptr, void * = nullptr);
+bool test_formatter(std::function<std::string ()> cb, size_t max);
+bool test_formatter(std::function<std::string (ptrdiff_t)> cb, size_t max);
+
+/// compares the arrays actual and expected, both of which are expected to have
+/// count elements, and fails the test if the two arrays are not equal. In the
+/// case of a mismatch the calling thread will exit and diagnostic information
+/// will be output to the logs to indicate the first mismatch detected. The
+/// callback @p formatter will be called with the index of where in the array
+/// the mismatch was detected and is supposed to return a string with
+/// information to include in the logs.
+template <ValidDataType T, FormatterFunction Fn>
+static inline void memcmp_or_fail(const T *actual, const T *expected, size_t count, Fn formatter)
 {
-    DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
+    DataType type = TypeToDataType<T>::Type;
     size_t elemSize = 1;
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
-    if (SandstoneConfig::NoLogging)
-        _memcmp_fail_report(actual, expected, count * elemSize, type, nullptr);
-    else
-        _memcmp_fail_report(actual, expected, count * elemSize, type, fmt, std::forward<FmtArgs>(args)...);
+    if (__builtin_memcmp(actual, expected, count * elemSize) == 0) [[likely]] {
+        if constexpr (!std::is_null_pointer_v<Fn>)
+            assert(test_formatter(formatter, count));
+        return;         // no mismatch!
+    }
+
+    FormatterCallback cb = {};
+    const void *token = nullptr;
+    if constexpr (std::is_null_pointer_v<Fn>) {
+        // use null pointers
+    } else if (!SandstoneConfig::NoLogging) {
+        token = &formatter;
+        cb = [](const void *token, void *, ptrdiff_t idx) -> std::string {
+            auto formatter = static_cast<const Fn *>(token);
+            if constexpr (std::is_invocable_v<Fn>)
+                return (*formatter)();
+            else
+                return (*formatter)(idx);
+        };
+    }
+    report(actual, expected, count * elemSize, type, cb, token);
+    __builtin_unreachable();
 }
 
+template <ValidDataType T> static inline void
+memcmp_or_fail(const T *actual, const T *expected, size_t count)
+{
+    return memcmp_or_fail(actual, expected, count, nullptr);
+}
+}
+
+using SandstoneMemcmpOrFail::memcmp_or_fail;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-security"
 /// compares the arrays actual and expected, both of which are expected to have count elements,
 /// and fails the test if the two arrays are not equal.  In the case of a mismatch the calling
 /// thread will exit and diagnostic information will be output to the logs to indicate the
@@ -634,20 +687,21 @@ memcmp_fail_report(const T *actual, const T *expected, size_t count, const char 
 template <typename T, typename... FmtArgs> static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
 memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt, FmtArgs &&... args)
 {
+    DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
     size_t elemSize = 1;
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
 
     assert(_memcmp_or_fail_check_fmt_nonewline(fmt, std::forward<FmtArgs>(args)...)
            && "Data descriptions should not include a newline");
-    if (__builtin_memcmp(actual, expected, count * elemSize) != 0)
-        memcmp_fail_report(actual, expected, count, fmt, std::forward<FmtArgs>(args)...);
-}
+    if (SandstoneConfig::NoLogging)
+        fmt = nullptr;
+    if (!fmt)
+        memcmp_or_fail(actual, expected, count);
 
-template <typename T> static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
-memcmp_or_fail(const T *actual, const T *expected, size_t count)
-{
-    return memcmp_or_fail(actual, expected, count, nullptr);
+    // printf style instead
+    if (__builtin_memcmp(actual, expected, count * elemSize) != 0)
+        _memcmp_fail_report(actual, expected, count * elemSize, type, fmt, std::forward<FmtArgs>(args)...);
 }
 #pragma GCC diagnostic pop
 
@@ -677,6 +731,20 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 #define memcmp_or_fail(actual, expected, size, ...) \
     _memcmp_or_fail(actual, expected, size, "" __VA_ARGS__)
 
+#define _memcmp_or_fail_cb(actual, expected, size, cb, token)       \
+    __extension__ ({                                                \
+        __auto_type _actual = actual;                               \
+        __auto_type _expected = expected;                           \
+        size_t _size = sizeof(*_actual) * size;                     \
+        enum DataType _type = DATATYPEFORTYPE(*_actual);            \
+        assert(!cb || _memcmp_fail_check_cb(cb, token, size));      \
+        if (__builtin_expect(__builtin_memcmp(_actual, _expected, _size), 0)) \
+            _memcmp_fail_report_cb(_actual, _expected, _size, _type,\
+                                   cb, token);                      \
+    })
+#define memcmp_or_fail_cb(actual, expected, size, cb, token)        \
+    _memcmp_or_fail_cb((actual), (expected), (size), (cb), (token))
+
 #endif
 
 #if SANDSTONE_NO_LOGGING
@@ -704,6 +772,10 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 #  ifdef memcmp_fail_report
 #    define _memcmp_fail_report(actual, expected, size, type, ...) \
         _memcmp_fail_report(actual, expected, size, type, NULL)
+#  endif
+#  ifdef memcmp_or_fail_cb
+#   define memcmp_or_fail_cb(actual, expected, size, cb, token)     \
+    _memcmp_or_fail_cb((actual), (expected), (size), NULL, NULL)
 #  endif
 #endif
 
