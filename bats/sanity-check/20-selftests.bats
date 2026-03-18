@@ -768,18 +768,18 @@ test_random() {
         skip "Test only works with Debug builds (to mock the topology)"
     fi
     local results=()
-    local cpus=()
+    local devices=()
     seed=$1
     shift
-    for cpu; do
-        r=${random_results[$cpu]}
+    for device; do
+        r=${random_results[$device]}
         [[ -n "$r" ]]
         results+=("$r")
-        cpus+=($cpu)
+        devices+=($device)
     done
 
     declare -A yamldump
-    SANDSTONE_MOCK_TOPOLOGY="${cpus[*]}" sandstone_selftest -e selftest_logs_random -s $seed
+    SANDSTONE_MOCK_TOPOLOGY="${devices[*]}" sandstone_selftest -e selftest_logs_random -s $seed
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     #test_yaml_regexp "/tests/0/result" pass
@@ -790,13 +790,15 @@ test_random() {
         numbers=${yamldump[/tests/0/threads/$i/messages/0/text]}
         numbers=${numbers#I> }
         if [[ "$numbers" != "${results[$i]}" ]]; then
-            echo "Random numbers for CPU ${cpus[$i]} ($numbers) don't match expected (${results[$i]})" >&2
+            echo "Random numbers for CPU ${devices[$i]} ($numbers) don't match expected (${results[$i]})" >&2
             false
         fi
     done
 }
 
 @test "selftest_logs_random_lcg" {
+    local -r SEED=LCG:1348219713
+
     if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
         local -Ar random_results=(
             [p0c0t0]="2008263207 1313955870 34286625 1487267185"
@@ -811,15 +813,30 @@ test_random() {
         )
 
         # Mocking 4 sockets of 1 core each
-        test_random LCG:1348219713 p0c0t0 p1c0t0 p2c0t0 p3c0t0
+        test_random $SEED p0c0t0 p1c0t0 p2c0t0 p3c0t0
 
         # Mocking 1 socket of 4 single-thread cores
-        test_random LCG:1348219713 p0c0t0 p0c1t0 p0c2t0 p0c3t0
+        test_random $SEED p0c0t0 p0c1t0 p0c2t0 p0c3t0
 
         # Mocking 1 socket of 4 hyperthreaded cores
-        test_random LCG:1348219713 p0c0t0 p0c0t1 p0c1t0 p0c1t1
-    # else
-    #     # TODO
+        test_random $SEED p0c0t0 p0c0t1 p0c1t0 p0c1t1
+    else
+
+        local -Ar random_results=(
+            [0000:19:00.0]="1138815635 483121179 1217508736 179228007"
+            [1234:55:66.7]="945355282 1364802319 2016901430 1677790785"
+            [1111:00:11.0]="1181093213 1154624167 1220074666 1632667158"
+            [9876:55:44.3]="1855020762 81573543 1298969202 314824636"
+        )
+
+        # we need >1 for the duration of this selftest
+        local max_proc_old=$MAX_PROC
+        MAX_PROC=`nproc`
+
+        # Mocking 4 GPUs
+        test_random $SEED 0000:19:00.0 1234:55:66.7 1111:00:11.0 9876:55:44.3
+
+        MAX_PROC=$max_proc_old
     fi
 }
 
@@ -829,8 +846,9 @@ test_random() {
         skip "AES engine is not present in this build"
     fi
 
+    local -r SEED=AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
+
     if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
-        local -r SEED=AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
         local -Ar random_results=(
             [p0c0t0]="1442152966 848034066 1178242204 1152613460"
             [p0c0t1]="801863574 1764783886 468436526 1150421294"
@@ -851,8 +869,22 @@ test_random() {
 
         # Mocking 1 socket of 4 hyperthreaded cores
         test_random $SEED p0c0t0 p0c0t1 p0c1t0 p0c1t1
-    # else
-    #     # TODO
+    else
+        local -Ar random_results=(
+            [0000:19:00.0]="1801315994 1428042404 1906386045 648907624"
+            [1234:55:66.7]="1043019765 489305543 1649509585 1525138440"
+            [1111:00:11.0]="2064196841 141036801 666473059 1756577774"
+            [9876:55:44.3]="1219182571 577652178 1203741544 709846939"
+        )
+
+        # we need >1 for the duration of this selftest
+        local max_proc_old=$MAX_PROC
+        MAX_PROC=`nproc`
+
+        # Mocking 4 GPUs
+        test_random $SEED 0000:19:00.0 1234:55:66.7 1111:00:11.0 9876:55:44.3
+
+        MAX_PROC=$max_proc_old
     fi
 }
 
