@@ -382,6 +382,9 @@ struct test {
     /// flags for this test. See enum for possible values
     test_flags flags;
 
+    /// placeholder for skip message generated in preinit
+    char preinit_skip_message[32];
+
     /* private fields for test use only */
 
     /// can be used by tests to store a pointer to test specific resources whose lifetime

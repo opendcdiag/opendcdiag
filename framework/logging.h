@@ -12,6 +12,8 @@
 
 #include "gitid.h"
 
+#include <boost/optional.hpp>
+
 #include <functional>
 #include <string>
 #include <span>
@@ -56,10 +58,22 @@ public:
             friend auto operator<=>(const_iterator, const_iterator) = default;
             const LogMessage &operator*() const { return *ptr; }
             const LogMessage *operator->() const { return ptr; }
-            const_iterator operator++(int) noexcept
-            { return { reinterpret_cast<const LogMessage *>(ptr->payload + ptr->msglen) }; }
-            const_iterator &operator++() noexcept
-            { return *this = (*this)++; }
+            // pre-increment
+            const_iterator &operator++() noexcept {
+                ptr = reinterpret_cast<const LogMessage*>(ptr->payload + ptr->msglen); // advance
+                return *this;   // return self
+            }
+            // post-increment
+            const_iterator operator++(int) noexcept {
+                const_iterator tmp = *this; // save old
+                ++(*this);                  // advance
+                return tmp;                 // return old
+            }
+            const_iterator operator+(size_t n) const noexcept {
+                const_iterator tmp = *this;
+                for (size_t i = 0; i < n; ++i) tmp++;
+                return tmp;
+            }
         };
 
         LogMessagesFile() noexcept : r{} {}
@@ -89,7 +103,8 @@ public:
 
     static const char *iso8601_time_now(Iso8601Format format);
     static std::string log_timestamp();
-    static std::string get_skip_message(int thread_num);
+    // offset is used for preinit, where all preinits write to the same log_fd and there are multiple skip messages there
+    static std::string get_skip_message(int thread_num, boost::optional<int&> last_skip_msg_offset = boost::none);
     static const char *char_to_skip_category(int val);
     static LogMessagesFile maybe_mmap_log(const PerThreadData::Common *data);
     static void munmap_and_truncate_log(PerThreadData::Common *data, LogMessagesFile &r);

@@ -1420,13 +1420,19 @@ static void print_content_single_line(int fd, std::string_view before,
     writeln(fd, before, escape_for_single_line(message), after);
 }
 
-std::string AbstractLogger::get_skip_message(int thread_num)
+std::string AbstractLogger::get_skip_message(int thread_num, boost::optional<int&> last_skip_msg_offset)
 {
     std::string skip_message;
     LogMessagesFile msgs(sApp->thread_data(thread_num)->log_fd);
-    for (const LogMessage &msg : msgs) {
-        if (msg.type == LogTypes::SkipMessages) {
-            skip_message.assign(msg);
+    const int offset = last_skip_msg_offset ? *last_skip_msg_offset : 0;
+    auto it = msgs.begin() + offset;
+    if (it == msgs.end()) {
+        return skip_message;
+    }
+    for (; it != msgs.end(); it++) {
+        if (last_skip_msg_offset.has_value()) last_skip_msg_offset.value()++;
+        if (it->type == LogTypes::SkipMessages) {
+            skip_message.assign(*it);
             break;
         }
     }
