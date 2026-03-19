@@ -11,40 +11,42 @@
 #include "level_zero/ze_api.h"
 #include "level_zero/zes_api.h"
 
+#include <type_traits>
+
 /// ZE API allows for nested enumeration of devices and their subdevices,
 /// depending on the ZE_FLAT_DEVICE_HIERARCHY env var value.
 int for_each_ze_device(const std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
-    ZE_CHECK(zeInit(ze_init_flags_t{}));
     uint32_t n_drivers = 0;
-    ZE_CHECK(zeDriverGet(&n_drivers, nullptr));
+    ze_init_driver_type_desc_t init_desc = { .stype = ZE_STRUCTURE_TYPE_DRIVER_PROPERTIES, .flags = ZE_INIT_DRIVER_TYPE_FLAG_GPU };
+    ZE_CHECK(zeInitDrivers(&n_drivers, nullptr, &init_desc));
     if (n_drivers == 0) {
         return EXIT_SUCCESS;
     }
     std::vector<ze_driver_handle_t> drivers(n_drivers);
-    ZE_CHECK(zeDriverGet(&n_drivers, drivers.data()));
+    ZE_CHECK(zeInitDrivers(&n_drivers, drivers.data(), &init_desc));
 
-    for (auto ze_driver: drivers) {
-        int gpu_number = 0;
-        uint32_t n_devices = 0;
-        ZE_CHECK(zeDeviceGet(ze_driver, &n_devices, nullptr));
-        std::vector<ze_device_handle_t> devices(n_devices);
-        ZE_CHECK(zeDeviceGet(ze_driver, &n_devices, devices.data()));
+    // Always pick the last ("newest") one.
+    auto ze_driver = drivers.back();
+    int gpu_number = 0;
+    uint32_t n_devices = 0;
+    ZE_CHECK(zeDeviceGet(ze_driver, &n_devices, nullptr));
+    std::vector<ze_device_handle_t> devices(n_devices);
+    ZE_CHECK(zeDeviceGet(ze_driver, &n_devices, devices.data()));
 
-        for (int i = 0; i < (int)devices.size(); i++) {
-            ze_device_properties_t device_properties = { .stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES };
-            ZE_CHECK(zeDeviceGetProperties(devices[i], &device_properties));
-            if (device_properties.type == ZE_DEVICE_TYPE_GPU) {
-                uint32_t n_subdevices = 0;
-                ZE_CHECK(zeDeviceGetSubDevices(devices[i], &n_subdevices, nullptr));
-                if (n_subdevices == 0) {
-                    CHECK_SANDSTONE(func(devices[i], ze_driver, MultiSliceGpu{gpu_number++, i, -1})); // subdevice_index is -1 (undefined)
-                } else {
-                    std::vector<ze_device_handle_t> subdevices(n_subdevices);
-                    ZE_CHECK(zeDeviceGetSubDevices(devices[i], &n_subdevices, subdevices.data()));
-                    for (int sub_i = 0; sub_i < (int)subdevices.size(); sub_i++) {
-                        CHECK_SANDSTONE(func(subdevices[sub_i], ze_driver, MultiSliceGpu{gpu_number++, i, sub_i}));
-                    }
+    for (int i = 0; i < (int)devices.size(); i++) {
+        ze_device_properties_t device_properties = { .stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES };
+        ZE_CHECK(zeDeviceGetProperties(devices[i], &device_properties));
+        if (device_properties.type == ZE_DEVICE_TYPE_GPU) {
+            uint32_t n_subdevices = 0;
+            ZE_CHECK(zeDeviceGetSubDevices(devices[i], &n_subdevices, nullptr));
+            if (n_subdevices == 0) {
+                CHECK_SANDSTONE(func(devices[i], ze_driver, MultiSliceGpu{gpu_number++, i, -1})); // subdevice_index is -1 (undefined)
+            } else {
+                std::vector<ze_device_handle_t> subdevices(n_subdevices);
+                ZE_CHECK(zeDeviceGetSubDevices(devices[i], &n_subdevices, subdevices.data()));
+                for (int sub_i = 0; sub_i < (int)subdevices.size(); sub_i++) {
+                    CHECK_SANDSTONE(func(subdevices[sub_i], ze_driver, MultiSliceGpu{gpu_number++, i, sub_i}));
                 }
             }
         }
