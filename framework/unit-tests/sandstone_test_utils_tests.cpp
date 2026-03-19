@@ -8,7 +8,23 @@
 #include "gtest/gtest.h"
 
 #include "sandstone_test_utils.h"
+#include "random_utils_mock.hpp"
+#include <sandstone.h>
 
+TEST(Random, mocked_val) {
+    // random is expected to return non-negative values
+    EXPECT_GE(random(), 0);
+
+    RandomMock::Values<int> mock{{ 0x12345678, 0x7fffffff }};
+    EXPECT_EQ(random(), 0x12345678);
+    EXPECT_EQ(random(), 0x7fffffff);
+    EXPECT_DEATH(random(), "");
+}
+
+TEST(Random, random_bits) {
+    uint64_t v = get_random_bits(1);
+    EXPECT_TRUE(v == 0 || v == 1);
+}
 
 class CodeBufferTestFixture : public ::testing::Test {
 public:
