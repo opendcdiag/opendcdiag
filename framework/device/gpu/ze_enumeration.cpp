@@ -11,8 +11,6 @@
 #include "level_zero/ze_api.h"
 #include "level_zero/zes_api.h"
 
-#include <type_traits>
-
 /// ZE API allows for nested enumeration of devices and their subdevices,
 /// depending on the ZE_FLAT_DEVICE_HIERARCHY env var value.
 int for_each_ze_device(const std::function<int(ze_device_handle_t, ze_driver_handle_t, const MultiSliceGpu&)>& func)
