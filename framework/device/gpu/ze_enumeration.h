@@ -6,16 +6,13 @@
 #ifndef INC_ZE_ENUMERATION_H
 #define INC_ZE_ENUMERATION_H
 
-#include "sandstone_p.h"
 #include "multi_slice_gpu.h"
 #include "ze_check.h"
 
 #include "level_zero/ze_api.h"
 #include "level_zero/zes_api.h"
 
-#include <concepts>
 #include <functional>
-#include <type_traits>
 
 #define CHECK_SANDSTONE(...) \
     if ((__VA_ARGS__) != EXIT_SUCCESS) \
