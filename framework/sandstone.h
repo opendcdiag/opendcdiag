@@ -395,8 +395,8 @@ struct test {
 
 /* internal functions; see C macro and C++ templates at the end of this file */
 extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);
-extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, enum DataType, const char *fmt, ...)
-    ATTRIBUTE_PRINTF(5, 6) __attribute__((cold, noreturn));
+extern void _memcmp_fail_report(const void *actual, const void *expected, size_t size, size_t size_per_hw_block, enum DataType, const char *fmt, ...)
+    ATTRIBUTE_PRINTF(6, 7) __attribute__((cold, noreturn));
 
 /// Installs @p cb and will call it (with @p token as a parameter) the first
 /// time this thread logs an error (with memcmp_or_fail(), log_error(),
@@ -619,9 +619,23 @@ memcmp_fail_report(const T *actual, const T *expected, size_t count, const char 
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
     if (SandstoneConfig::NoLogging)
-        _memcmp_fail_report(actual, expected, count * elemSize, type, nullptr);
+        _memcmp_fail_report(actual, expected, count * elemSize, 0, type, nullptr);
     else
-        _memcmp_fail_report(actual, expected, count * elemSize, type, fmt, std::forward<FmtArgs>(args)...);
+        _memcmp_fail_report(actual, expected, count * elemSize, 0, type, fmt, std::forward<FmtArgs>(args)...);
+}
+
+// overload for GPUs
+template <typename T, typename... FmtArgs> [[noreturn, gnu::cold]] static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
+memcmp_fail_report(const T *actual, const T *expected, size_t count_total, size_t count_per_hw_block, const char *fmt, FmtArgs &&... args)
+{
+    DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
+    size_t elemSize = 1;
+    if constexpr (!std::is_same_v<T, void>)
+        elemSize = sizeof(T);
+    if (SandstoneConfig::NoLogging)
+        _memcmp_fail_report(actual, expected, count_total * elemSize, count_per_hw_block * elemSize,  type, nullptr);
+    else
+        _memcmp_fail_report(actual, expected, count_total * elemSize, count_per_hw_block * elemSize, type, fmt, std::forward<FmtArgs>(args)...);
 }
 
 /// compares the arrays actual and expected, both of which are expected to have count elements,
@@ -649,6 +663,20 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 {
     return memcmp_or_fail(actual, expected, count, nullptr);
 }
+
+// overload for GPUs
+template <typename T, typename... FmtArgs> static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
+memcmp_or_fail(const T *actual, const T *expected, size_t count_total, size_t count_per_hw_block, const char *fmt, FmtArgs &&... args)
+{
+    size_t elemSize = 1;
+    if constexpr (!std::is_same_v<T, void>)
+        elemSize = sizeof(T);
+
+    assert(_memcmp_or_fail_check_fmt_nonewline(fmt, std::forward<FmtArgs>(args)...)
+           && "Data descriptions should not include a newline");
+    if (__builtin_memcmp(actual, expected, count_total * elemSize) != 0)
+        memcmp_fail_report(actual, expected, count_total, count_per_hw_block, fmt, std::forward<FmtArgs>(args)...);
+}
 #pragma GCC diagnostic pop
 
 #else
@@ -661,7 +689,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
         _Pragma("GCC diagnostic ignored \"-Wunused-variable\"");    \
         assert(_memcmp_or_fail_check_fmt_nonewline((fmt), ##__VA_ARGS__) \
                && "Data descriptions should not include a newline");\
-        _memcmp_fail_report((actual), (expected), _size2, _type,    \
+        _memcmp_fail_report((actual), (expected), _size2, 0, _type, \
                             *(fmt) ? (fmt) : NULL, ##__VA_ARGS__);  \
         _Pragma("GCC diagnostic pop");                              \
     })
@@ -703,7 +731,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 
 #  ifdef memcmp_fail_report
 #    define _memcmp_fail_report(actual, expected, size, type, ...) \
-        _memcmp_fail_report(actual, expected, size, type, NULL)
+        _memcmp_fail_report(actual, expected, size, 0, type, NULL)
 #  endif
 #endif
 

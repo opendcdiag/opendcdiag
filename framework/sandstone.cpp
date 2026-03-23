@@ -383,7 +383,7 @@ bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...)
 }
 #endif
 
-void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, DataType type, const char *fmt, ...)
+void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size, size_t size_per_hw_block, DataType type, const char *fmt, ...)
 {
     // Execute UD2 early if we've failed
     if (sApp->shmem->cfg.ud_on_failure)
@@ -399,7 +399,7 @@ void _memcmp_fail_report(const void *_actual, const void *_expected, size_t size
 
         va_list va;
         va_start(va, fmt);
-        logging_report_mismatched_data(type, actual, expected, size, offset, fmt, va);
+        logging_report_mismatched_data(type, actual, expected, size, offset, size_per_hw_block, fmt, va);
         va_end(va);
     }
 
