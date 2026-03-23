@@ -71,4 +71,26 @@ void AbstractLogger::print_fixed_for_device()
 
 }
 
+std::string AbstractLogger::hw_id_of_mismatched_data_for_device(int offset, int size_per_hw_block)
+{
+    struct
+    { // TODO hardcoded
+        int n_slices = 5;
+        int n_subslices = 4;
+        int n_eus = 8;
+        int n_threads = 8;
+        int n_lanes = 32;
+    }
+    hw_layout;
+
+    int idx = offset / size_per_hw_block;
+    int lane     = idx % hw_layout.n_lanes;   idx /= hw_layout.n_lanes;
+    int thread   = idx % hw_layout.n_threads; idx /= hw_layout.n_threads;
+    int eu       = idx % hw_layout.n_eus;     idx /= hw_layout.n_eus;
+    int subslice = idx % hw_layout.n_subslices; idx /= hw_layout.n_subslices;
+    int slice    = idx;
+
+    return std::format("HW loc:      [{}, {}, {}, {}, {}]\n", slice, subslice, eu, thread, lane);
+}
+
 #endif // !SANDSTONE_NO_LOGGING

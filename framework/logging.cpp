@@ -1167,7 +1167,7 @@ void log_data(const char *message, const void *data, size_t size)
 }
 
 static void logging_format_data(DataType type, std::string_view description, const uint8_t *data1,
-                                const uint8_t *data2, ptrdiff_t offset)
+                                const uint8_t *data2, ptrdiff_t offset, int size_per_hw)
 {
     // see format_and_print_raw_yaml() for the line protocol
     std::string buffer = "data-miscompare:\n\n";
@@ -1208,6 +1208,8 @@ static void logging_format_data(DataType type, std::string_view description, con
 
         buffer += stdprintf("offset:      [ %td, %td ]\n",
                             alignedOffset, offset - alignedOffset);
+        if (size_per_hw)
+            buffer += AbstractLogger::hw_id_of_mismatched_data_for_device(offset, size_per_hw);
         buffer += formatAddresses(data1 + offset);
         buffer += stdprintf("actual:      '0x%s'\n"
                             "expected:    '0x%s'\n"
@@ -1230,7 +1232,7 @@ static void logging_format_data(DataType type, std::string_view description, con
 }
 
 void logging_report_mismatched_data(DataType type, const uint8_t *actual, const uint8_t *expected,
-                                    size_t size, ptrdiff_t offset, const char *fmt, va_list va)
+                                    size_t size, ptrdiff_t offset, int size_per_hw, const char *fmt, va_list va)
 {
     logging_mark_thread_failed(thread_num);
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
@@ -1243,7 +1245,7 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
             description = vstdprintf(fmt, va);
 
         logging_format_data(type, escape_for_single_line(description, escaped_description),
-                            actual, expected, offset);
+                            actual, expected, offset, size_per_hw);
     }
     if (offset < 0) {
         // we couldn't find a difference

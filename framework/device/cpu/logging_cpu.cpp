@@ -444,4 +444,9 @@ void AbstractLogger::print_fixed_for_device()
         logging_printf(LOG_LEVEL_VERBOSE(1), "  avg-freq-mhz: %.1f\n", freq_avg);
 }
 
+std::string AbstractLogger::hw_id_of_mismatched_data_for_device(int, int)
+{
+    return {};
+}
+
 #endif // !SANDSTONE_NO_LOGGING

@@ -110,6 +110,7 @@ public:
     static std::string thread_id_header_for_device(int device, LogLevelVerbosity verbosity);
     static void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
     static void print_fixed_for_device();
+    static std::string hw_id_of_mismatched_data_for_device(int offset, int size_per_hw_block);
 
     const struct test *test;
     MonotonicTimePoint earliest_fail = MonotonicTimePoint::max();
