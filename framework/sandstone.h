@@ -77,7 +77,7 @@ extern "C" {
 #ifndef NDEBUG
 #  define log_debug(...)        log_message(thread_num, SANDSTONE_LOG_DEBUG __VA_ARGS__)
 #else
-#  define log_debug( ...)       (void)0
+#  define log_debug( ...)       __extension__({ if (true) {} else log_message(thread_num, SANDSTONE_LOG_DEBUG __VA_ARGS__); })
 #endif
 
 // skip categories
