@@ -178,10 +178,6 @@ static void preinit_tests()
         return e.replacement;
     };
 
-    static const initfunc preinit_replacement = [](struct test*) {
-        log_skip(RuntimeSkipCategory, "Skip replacement from preinit");
-        return EXIT_SKIP;
-    };
     int preinit_ret = EXIT_SUCCESS;
     bool truncate_log = false; // preinit may clutter the main thread's log file
 
@@ -213,8 +209,24 @@ static void preinit_tests()
 
         // Skip from group init has precendence over preinit.
         if (!group_init_failed && preinit_ret != EXIT_SUCCESS) {
-            test->test_init = preinit_replacement;
             test->flags = test->flags | test_init_in_parent; // for -fexec
+            std::string skip_message = AbstractLogger::get_skip_message(-1);
+            assert(SandstoneConfig::NoLogging || (!skip_message.empty() && "Internal error: Skip in preinit must provide a skip reason"));
+
+            char* msg_ptr = strdup(skip_message.c_str());
+            test->data = msg_ptr;
+
+            test->test_init = [](struct test* test) {
+                auto msg_ptr = static_cast<const char*>(test->data);
+                log_skip(static_cast<SkipCategory>(msg_ptr[0]), "%s", msg_ptr + 1);
+                return EXIT_SKIP;
+            };
+            test->test_postcleanup = [](struct test* test) {
+                auto* msg_ptr = test->data;
+                test->data = nullptr;
+                free(msg_ptr);
+                return EXIT_SUCCESS;
+            };
         }
 
         if (truncate_log) {
