@@ -221,11 +221,14 @@ static void postcleanup_tests()
     for (test_cfg_info &cfg : *test_set) {
         struct test *test = cfg.test;
         if (test->test_postcleanup) {
+            [[maybe_unused]] PerThreadData::Main *main = sApp->main_thread_data();
+            // save test status pre-postcleanup, as we may want to call postcleanup on a skipped test too.
+            [[maybe_unused]] auto has_skipped = main->has_skipped();
+            [[maybe_unused]] auto has_failed = main->has_failed();
             [[maybe_unused]] auto ret = test->test_postcleanup(test);
 
             assert(ret == EXIT_SUCCESS && "Internal error: test_postcleanup must return EXIT_SUCCESS");
-            [[maybe_unused]] PerThreadData::Main *main = sApp->main_thread_data();
-            assert(!main->has_skipped() && !main->has_failed() && "Internal error: test_postcleanup must not cause test skip or fail");
+            assert(!(main->has_skipped() ^ has_skipped) && !(main->has_failed() ^ has_failed) && "Internal error: test_postcleanup must not cause test skip or fail");
         }
     }
 }
