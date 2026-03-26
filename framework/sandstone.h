@@ -389,6 +389,7 @@ struct test {
     /// such resources in the test_init function, store a pointer to them in this
     /// field, retrieve and use the resources in the test_run function and optionally
     /// free them in the test_cleanup function.
+    /// For tests that skipped in preinit, this pointer points to a string with skip message.
     void *data;
     struct test_data_per_thread *per_thread;
 };
