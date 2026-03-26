@@ -8,12 +8,13 @@
 #include "sandstone_opts.hpp"
 #include "sandstone_system.h"
 #include "sandstone_tests.h"
-
-#include "interrupt_monitor.hpp"
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
 #  include "sandstone_ssl_rand.h"
 #endif
+
+#include "interrupt_monitor.hpp"
+#include "logging.h"
 
 #include <algorithm>
 #include <chrono>
@@ -182,6 +183,7 @@ static void preinit_tests()
         return EXIT_SKIP;
     };
     int preinit_ret = EXIT_SUCCESS;
+    bool truncate_log = false; // preinit may clutter the main thread's log file
 
     for (test_cfg_info &cfg : *test_set) {
         struct test *test = cfg.test;
@@ -189,6 +191,7 @@ static void preinit_tests()
         if (test->test_preinit) {
             preinit_ret = test->test_preinit(test);
             test->test_preinit = nullptr;   // don't rerun in case the test is re-added
+            truncate_log = true;
         }
 
         // If the group_init function decides that the group cannot run at all,
@@ -212,6 +215,13 @@ static void preinit_tests()
         if (!group_init_failed && preinit_ret != EXIT_SUCCESS) {
             test->test_init = preinit_replacement;
             test->flags = test->flags | test_init_in_parent; // for -fexec
+        }
+
+        if (truncate_log) {
+            auto data = sApp->thread_data(-1);
+            AbstractLogger::LogMessagesFile r = AbstractLogger::maybe_mmap_log(data);
+            AbstractLogger::munmap_and_truncate_log(data, r);
+            truncate_log = false;
         }
     }
 }
