@@ -13,10 +13,19 @@ level_zero_kernels_generator_script = find_program(
     dirs : [ meson.current_source_dir() / '..' / '..' / 'framework' / 'device' / 'gpu' / 'scripts', ],
 )
 
-level_zero_kernels_generator = generator(
+level_zero_kernels_generator_ocl = generator(
     level_zero_kernels_generator_script,
     arguments : [
         '@BASENAME@', '@INPUT@', target_device, 'OpenCL'
+    ],
+    capture : true,
+    output : '@BASENAME@_source.h',
+)
+
+level_zero_kernels_generator_cmc = generator(
+    level_zero_kernels_generator_script,
+    arguments : [
+        '@BASENAME@', '@INPUT@', target_device, 'CMC'
     ],
     capture : true,
     output : '@BASENAME@_source.h',
