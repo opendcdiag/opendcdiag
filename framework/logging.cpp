@@ -336,7 +336,7 @@ static inline int open_new_log()
         return open_memfd(MemfdCloseOnExec);
 }
 
-static inline void truncate_log(int fd)
+static inline void truncate_log_internal(int fd)
 {
     // truncate files back to empty, preparing for the next iteration
     lseek(fd, 0, SEEK_SET);
@@ -350,13 +350,18 @@ AbstractLogger::LogMessagesFile AbstractLogger::maybe_mmap_log(const PerThreadDa
     return LogMessagesFile(data->log_fd);
 }
 
+void AbstractLogger::truncate_log(PerThreadData::Common *data)
+{
+    truncate_log_internal(data->log_fd);
+    data->messages_logged.store(0, std::memory_order_relaxed);
+}
+
 void AbstractLogger::munmap_and_truncate_log(PerThreadData::Common *data, LogMessagesFile &r)
 {
     if (r.empty())
         return;
     r.unmap();
-    truncate_log(data->log_fd);
-    data->messages_logged.store(0, std::memory_order_relaxed);
+    truncate_log(data);
 }
 
 void logging_init_global_child()
@@ -1590,7 +1595,7 @@ void AbstractLogger::print_child_stderr_common(std::function<void(int)> header)
     munmap_file(r);
 
     /* reset it for the next iteration */
-    truncate_log(stderr_fd);
+    truncate_log_internal(stderr_fd);
 }
 
 static ChildExitStatus find_most_serious_result(std::span<const ChildExitStatus> results)

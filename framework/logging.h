@@ -93,6 +93,7 @@ public:
     static std::string get_skip_message(int thread_num);
     static const char *char_to_skip_category(int val);
     static LogMessagesFile maybe_mmap_log(const PerThreadData::Common *data);
+    static void truncate_log(PerThreadData::Common *data);
     static void munmap_and_truncate_log(PerThreadData::Common *data, LogMessagesFile &r);
     static void print_child_stderr_common(std::function<void(int)> header);
     static std::string_view indent_spaces();
