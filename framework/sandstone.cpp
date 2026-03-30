@@ -835,6 +835,11 @@ int thread_count()
     return sApp->thread_count;
 }
 
+int device_count()
+{
+    return sApp->device_count;
+}
+
 int8_t sandstone_verbosity_level()
 {
     return std::to_underlying(sApp->shmem->cfg.verbosity);
