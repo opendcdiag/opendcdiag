@@ -320,6 +320,7 @@ struct SandstoneApplicationConfig {
     int thermal_throttle_temp = DefaultTemperatureThreshold;
 
     int thread_count;
+    int device_count;
 };
 
 struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_data<SandstoneConfig::Debug>
@@ -428,6 +429,7 @@ struct SandstoneApplication::SharedMemory
     // per-thread & variable length
     int main_thread_count = 0;
     int total_thread_count = 0;
+    int total_device_count = 0;
     alignas(64) device_info_t device_info[];         // C99 Flexible Array Member
 
 #if 0
