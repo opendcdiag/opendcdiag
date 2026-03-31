@@ -222,9 +222,7 @@ static void preinit_tests()
                 return EXIT_SKIP;
             };
             test->test_postcleanup = [](struct test* test) {
-                auto* msg_ptr = test->data;
-                test->data = nullptr;
-                free(msg_ptr);
+                free(std::exchange(test->data, nullptr));
                 return EXIT_SUCCESS;
             };
         }
