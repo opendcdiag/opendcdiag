@@ -86,6 +86,7 @@ framework_incdir = [
 framework_files = files()
 generated_files = files()
 extra_objects = []
+premain_files = []
 
 # Run device-specific build steps early to ensure that any auto-generated
 # file is available before anything else.
@@ -267,6 +268,24 @@ if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
     subdir('sysdeps/unix')
 endif
 subdir(sysdeps_dir)
+
+if premain_files.length() > 0
+    framework_main_a = static_library(
+        'framework_main',
+        premain_files,
+        build_by_default: false,
+        include_directories: [
+            framework_incdir,
+        ],
+        cpp_args: [
+            debug_c_flags,
+            march_generic_flags,
+            default_cpp_flags,
+            default_cpp_warn,
+        ],
+    )
+    extra_objects += framework_main_a.extract_all_objects(recursive: false)
+endif
 
 configure_file(
     input: 'sandstone_config.h.in',
