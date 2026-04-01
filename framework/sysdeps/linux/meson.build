@@ -23,10 +23,11 @@ endif
 framework_files += \
     files(
         'cpu_affinity.cpp',
-        'malloc.cpp',
         'memfpt.cpp',
         'physicaladdress.cpp',
     )
+
+premain_files += files('malloc.cpp')
 
 if get_option('cpp_link_args').contains('-static')
     ar = find_program('ar')
