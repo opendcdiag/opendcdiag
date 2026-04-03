@@ -222,17 +222,13 @@ static void preinit_tests()
                 return EXIT_SKIP;
             };
             test->test_postcleanup = [](struct test* test) {
-                auto* msg_ptr = test->data;
-                test->data = nullptr;
-                free(msg_ptr);
+                free(std::exchange(test->data, nullptr));
                 return EXIT_SUCCESS;
             };
         }
 
         if (truncate_log) {
-            auto data = sApp->thread_data(-1);
-            AbstractLogger::LogMessagesFile r = AbstractLogger::maybe_mmap_log(data);
-            AbstractLogger::munmap_and_truncate_log(data, r);
+            AbstractLogger::truncate_log(sApp->thread_data(-1));
             truncate_log = false;
         }
     }
