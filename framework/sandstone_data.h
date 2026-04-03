@@ -102,6 +102,8 @@ struct Float128
 #endif // __FLT128_MAX__
 
 #ifdef __cplusplus
+#include <concepts>
+
 
 namespace SandstoneDataDetails {
 enum { MaxDataTypeSize = 16 };
@@ -137,14 +139,15 @@ static constexpr const char *type_name(DataType type)
     return nullptr;
 }
 
-template <DataType V> struct TypeToDataType_helper
+template <DataType V> struct TypeToDataType_helper : std::true_type
 {
     static constexpr DataType Type = V;
+    static constexpr bool IsValid = true;
     static const char *name() { return type_name(Type); }
-    enum { IsValid = true };
 };
 
-template <typename T> struct TypeToDataType { enum { IsValid = false }; };
+template <typename T> struct TypeToDataType
+{ static constexpr bool IsValid = false; };
 template<> struct TypeToDataType<void>  : TypeToDataType_helper<UInt8Data> {};
 template<> struct TypeToDataType<bool>  : TypeToDataType_helper<UInt8Data> {};
 template<> struct TypeToDataType<char>  : TypeToDataType_helper<UInt8Data> {};
@@ -176,6 +179,8 @@ template<> struct TypeToDataType<__float128> : TypeToDataType_helper<Float128Dat
 #ifdef SANDSTONE_FP16_TYPE
 template<> struct TypeToDataType<fp16_t> : TypeToDataType_helper<Float16Data> {};
 #endif
+
+template <typename T> concept ValidDataType = TypeToDataType<T>::IsValid;
 
 static constexpr size_t type_real_size(DataType type)
 {

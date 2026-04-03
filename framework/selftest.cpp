@@ -673,6 +673,35 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     int diff = (thread & (Count - 1));
     values[diff] = make_datacompare_value<T>();
 
+    auto formatter = [&](ptrdiff_t idx) {
+        return stdprintf("data at index %td\n"
+                         "rare: false\n"
+                         "modified_at: %d\n"
+                         "count: %zu", idx, diff, Count);
+    };
+
+    if constexpr (std::is_integral_v<T>) {
+        // use the C++ way with a lambda
+        memcmp_or_fail(values, values + 1, Count, formatter);
+    } else {
+        // use the C way
+        using FormatterType = decltype(formatter);
+        auto c_callback = [](void *token, ptrdiff_t idx) {
+            auto formatter = static_cast<FormatterType *>(token);
+            std::string result = std::move(*formatter)(idx);
+            return strdup(result.c_str());
+        };
+
+        // memcmp_or_fail_cb is only provided as a C macro, so we go straight to the callback
+        DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
+        _memcmp_fail_report_cb(values, values + 1, Count, type, c_callback, &formatter);
+    }
+
+    // unreachable past this point; now only confirm the calls do compile
+    memcmp_or_fail(values, values + 1, Count, [] {
+        abort(); return std::string();
+    });
+    memcmp_or_fail(values, values + 1, Count, "formatted string '%s'", "Hello World");
     memcmp_or_fail(values, values + 1, Count);
     return EXIT_SUCCESS;
 }
@@ -716,8 +745,17 @@ static int selftest_datacompare_nodifference_run(struct test *, int)
     memset_random(actual, sizeof(actual));
     memcpy(expected, actual, sizeof(actual));
 
-    memcmp_or_fail(actual, expected, sizeof(actual));        // won't fail
-    memcmp_fail_report(actual, expected, sizeof(actual), nullptr);
+    auto formatter = [&](ptrdiff_t idx) -> std::string {
+        assert(idx >= -1);
+        assert(idx < ptrdiff_t(sizeof(actual)));
+        std::string r = "random data\ndata: 0h";
+        for (uint8_t b : actual)
+            r += stdprintf("%02x", b);
+        return r;
+    };
+    memcmp_or_fail(actual, expected, sizeof(actual), formatter);    // won't fail
+    // now pretend we did see a failure and call the internal reporting function
+    _memcmp_fail_report(actual, expected, sizeof(actual), UInt8Data, nullptr);
 }
 
 static int selftest_cxxthrow_run(struct test *, int) noexcept(false)
