@@ -185,6 +185,7 @@ static void preinit_tests()
         struct test *test = cfg.test;
         preinit_ret = EXIT_SUCCESS;
         if (test->test_preinit) {
+            sApp->main_thread_data()->init();
             preinit_ret = test->test_preinit(test);
             test->test_preinit = nullptr;   // don't rerun in case the test is re-added
             truncate_log = true;
