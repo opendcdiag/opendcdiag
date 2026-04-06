@@ -1010,7 +1010,9 @@ int main(int argc, char **argv)
         if (device_scheduler) {
             delete device_scheduler;
             device_scheduler = nullptr;
+#ifndef _WIN32
             logging_printf(LOG_LEVEL_VERBOSE(1), "# WARNING: --reschedule is not supported in this configuration\n");
+#endif
         }
     }
 
