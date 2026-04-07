@@ -558,6 +558,7 @@ static int exec_mode_run(int argc, char **argv)
 
     logging_init_global_child();
     random_init_global(argv[1]);
+    make_rescheduler(sApp->shmem->cfg.reschedule_mode);
 
     return test_result_to_exit_code(child_run(tests_to_run.at(0), child_number));
 }
@@ -996,20 +997,13 @@ int main(int argc, char **argv)
         logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 cores, ignoring\n");
         sApp->shmem->cfg.reschedule_mode = RescheduleMode::none;
     }
-    device_scheduler = make_rescheduler(sApp->shmem->cfg.reschedule_mode);
+    make_rescheduler(sApp->shmem->cfg.reschedule_mode);
 
     if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
         if (sApp->shmem->cfg.log_test_knobs) {
             fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",
                     program_invocation_name);
             return EX_USAGE;
-        }
-        if (device_scheduler) {
-            delete device_scheduler;
-            device_scheduler = nullptr;
-#ifndef _WIN32
-            logging_printf(LOG_LEVEL_VERBOSE(1), "# WARNING: --reschedule is not supported in this configuration\n");
-#endif
         }
     }
 

@@ -599,10 +599,6 @@ function selftest_cpuset_accumulate() {
         skip "Not supported"
     fi
 
-    if $is_windows; then
-       skip "Reschedule isn't supported "
-    fi
-
     run $SANDSTONE --selftests -e selftest_logs_reschedule --reschedule=queue
     [[ $status == 64 ]] && false
 

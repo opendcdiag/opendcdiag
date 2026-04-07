@@ -128,16 +128,17 @@ int num_packages()
     return Topology::topology().packages.size();
 }
 
-DeviceScheduler *make_rescheduler(RescheduleMode mode)
+void make_rescheduler(RescheduleMode mode)
 {
+    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test)
+        return; // we'll be called again in the child
     if (mode == RescheduleMode::barrier) {
-        return new BarrierDeviceScheduler();
+        device_scheduler = new BarrierDeviceScheduler();
     } else if (mode == RescheduleMode::queue || mode == RescheduleMode::unset) {
-        return new QueueDeviceScheduler();
+        device_scheduler = new QueueDeviceScheduler();
     } else if (mode == RescheduleMode::random) {
-        return new RandomDeviceScheduler();
+        device_scheduler = new RandomDeviceScheduler();
     }
-    return nullptr;
 }
 
 namespace {

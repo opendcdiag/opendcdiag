@@ -25,9 +25,8 @@ int num_packages()
     return 1;
 }
 
-DeviceScheduler *make_rescheduler(RescheduleMode mode)
+void make_rescheduler(RescheduleMode)
 {
-    return nullptr;
 }
 
 namespace {

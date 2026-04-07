@@ -33,7 +33,7 @@ struct DeviceScheduler
     virtual void finish_reschedule() = 0;
 };
 
-DeviceScheduler *make_rescheduler(RescheduleMode mode);
+void make_rescheduler(RescheduleMode mode);
 
 using PerThreadFailures = std::vector<__uint128_t>;
 
