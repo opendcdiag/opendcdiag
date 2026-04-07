@@ -80,6 +80,9 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
 
 bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const char *thread_name)
 {
+    if (thread_id == 0)
+        return pin_to_logical_processor(n, thread_name);
+
     HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, FALSE, thread_id);
     bool ret = pin_handle_to_logical_processor(n, hThread, thread_name);
     CloseHandle(hThread);
