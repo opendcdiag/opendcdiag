@@ -6,9 +6,9 @@
 #include <pthread.h>
 #include <pthread_np.h>
 
-static void set_thread_name(const char *thread_name)
+static void set_thread_name(tid_t tid, const char *thread_name)
 {
-    if (thread_name)
+    if (tid == 0 && thread_name)
         pthread_set_name_np(pthread_self(), thread_name);
 }
 

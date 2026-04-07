@@ -14,9 +14,9 @@
 #ifdef __linux__
 #include <sys/prctl.h>
 
-static void set_thread_name(const char *thread_name)
+static void set_thread_name(tid_t tid, const char *thread_name)
 {
-    if (thread_name)
+    if (tid == 0 && thread_name)
         prctl(PR_SET_NAME, thread_name);
 }
 #endif
@@ -49,7 +49,7 @@ bool pin_to_logical_processor(LogicalProcessor n, const char *thread_name)
 
 bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const char *thread_name)
 {
-    set_thread_name(thread_name);
+    set_thread_name(thread_id, thread_name);
     if (n == LogicalProcessor(-1))
         return true;            // don't change affinity
 
@@ -70,7 +70,7 @@ bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const 
 
 bool pin_to_logical_processors(DeviceRange range, const char *thread_name)
 {
-    set_thread_name(thread_name);
+    set_thread_name(0, thread_name);
 
     // find the maximum CPU number
     int n = 0;

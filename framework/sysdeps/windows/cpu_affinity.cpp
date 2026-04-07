@@ -48,14 +48,15 @@ static constexpr PROCESSOR_NUMBER to_processor_number(LogicalProcessor lp)
     return n;
 }
 
-static void set_thread_name(const char *thread_name)
+static void set_thread_name(HANDLE hThread, const char *thread_name)
 {
+    (void) hThread;
     (void) thread_name;
 }
 
 bool pin_handle_to_logical_processor(LogicalProcessor n, HANDLE hThread, const char *thread_name)
 {
-    set_thread_name(thread_name);
+    set_thread_name(hThread, thread_name);
     if (n == LogicalProcessor(-1))
         return true;            // don't change affinity
 
@@ -87,7 +88,7 @@ bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const 
 
 bool pin_to_logical_processors(DeviceRange range, const char *thread_name)
 {
-    set_thread_name(thread_name);
+    set_thread_name(GetCurrentThread(), thread_name);
     const device_info_t *first_cpu = &device_info[range.starting_device];
     const device_info_t *last_cpu = &device_info[range.starting_device + range.device_count - 1];
     PROCESSOR_NUMBER first = to_processor_number(LogicalProcessor(first_cpu->cpu_number));
