@@ -115,6 +115,9 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
     if ((code >> 16) != 0xC000)
         return EXCEPTION_CONTINUE_SEARCH;
 
+    // mark thread as failed
+    logging_mark_thread_failed(thread_num);
+
     static std::atomic_flag in_crash_handler = {};
     if (in_crash_handler.test_and_set()) {
         // wait forever
