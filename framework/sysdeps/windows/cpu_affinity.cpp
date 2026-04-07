@@ -10,6 +10,10 @@
 
 #include <windows.h>
 
+#ifndef GetCurrentThread
+#  define GetCurrentThread()    HANDLE(-2)
+#endif
+
 static constexpr unsigned MaxLogicalProcessorsPerGroup =
         std::numeric_limits<KAFFINITY>::digits;
 
