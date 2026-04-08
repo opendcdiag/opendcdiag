@@ -320,6 +320,7 @@ static void commit_shmem()
     size_t main_thread_count = plan.size();
     sApp->shmem->main_thread_count = main_thread_count;
     sApp->shmem->total_thread_count = thread_count();
+    sApp->shmem->total_device_count = device_count();
 
     // unmap the current area, because Windows doesn't allow us to have two
     // blocks for this file
@@ -549,6 +550,7 @@ static int exec_mode_run(int argc, char **argv)
     attach_shmem(parse_int(argv[2]));
     device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
+    sApp->device_count = sApp->shmem->total_device_count;
     rebuild_topology();
     sApp->user_thread_data.resize(sApp->thread_count);
 
@@ -998,7 +1000,7 @@ int main(int argc, char **argv)
     slice_plan_init(opts.max_cores_per_slice);
     commit_shmem();
 
-    if (std::to_underlying(sApp->shmem->cfg.reschedule_mode) > std::to_underlying(RescheduleMode::none) && thread_count() < 2) {
+    if (std::to_underlying(sApp->shmem->cfg.reschedule_mode) > std::to_underlying(RescheduleMode::none) && device_count() < 2) {
         logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 cores, ignoring\n");
         sApp->shmem->cfg.reschedule_mode = RescheduleMode::none;
     }

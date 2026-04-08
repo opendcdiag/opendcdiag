@@ -170,8 +170,8 @@ void BarrierDeviceScheduler::reschedule_to_next_device()
     std::unique_lock lock(groups_mutex);
     // Initialize groups on first run
     if (groups.empty()) {
-        int full_groups = num_cpus() / members_per_group;
-        int partial_group_members = num_cpus() % members_per_group;
+        int full_groups = device_count() / members_per_group;
+        int partial_group_members = device_count() % members_per_group;
 
         groups.reserve(full_groups + (partial_group_members > 0));
         for (int i=0; i<full_groups; i++) {
@@ -243,7 +243,7 @@ void QueueDeviceScheduler::shuffle_queue()
     // Must be called with mutex locked
     if (queue.size() == 0) {
         // First use: populate queue with the indexes available
-        for (int i=0; i<num_cpus(); i++)
+        for (int i=0; i<device_count(); i++)
             queue.push_back(i);
     }
 
@@ -254,7 +254,7 @@ void QueueDeviceScheduler::shuffle_queue()
 void RandomDeviceScheduler::reschedule_to_next_device()
 {
     // Select a random cpu index among the ones available
-    int next_idx = unsigned(random()) % num_cpus();
+    int next_idx = unsigned(random()) % device_count();
     pin_to_next_cpu(device_info[next_idx].cpu_number);
 
     return;
@@ -378,7 +378,7 @@ static bool cpu_compare(const cpu_info_t &cpu1, const cpu_info_t &cpu2)
 __attribute__((noinline))
 void TopologyDetector::sort()
 {
-    std::sort(device_info, device_info + num_cpus(), cpu_compare);
+    std::sort(device_info, device_info + device_count(), cpu_compare);
 }
 
 bool TopologyDetector::old_create_mock_topology(const char *topo)
@@ -398,7 +398,7 @@ bool TopologyDetector::old_create_mock_topology(const char *topo)
 
     int cpu_count = 0;
     while (topo && *topo) {
-        if (cpu_count == sApp->thread_count)
+        if (cpu_count == sApp->device_count)
             break;      // can't add more
 
         cpu_info_t *info = &device_info[cpu_count];
@@ -428,7 +428,7 @@ bool TopologyDetector::old_create_mock_topology(const char *topo)
             continue;
     }
 
-    sApp->thread_count = cpu_count;
+    sApp->device_count = cpu_count;
     return true;
 }
 
@@ -455,7 +455,7 @@ bool TopologyDetector::create_mock_topology(const char *topo)
 
     int cpu_count = 0;
     while (topo && *topo) {
-        if (cpu_count == sApp->thread_count)
+        if (cpu_count == sApp->device_count)
             break;      // can't add more
 
         cpu_info_t *info = &device_info[cpu_count];
@@ -519,7 +519,7 @@ bool TopologyDetector::create_mock_topology(const char *topo)
             ++topo;
     }
 
-    sApp->thread_count = cpu_count;
+    sApp->device_count = cpu_count;
     return true;
 }
 
@@ -666,7 +666,7 @@ bool TopologyDetector::detect_numa()
 
         // Parse the list. This will *usually* be one or two ranges.
         cpu_info_t *cpu = &device_info[0];
-        cpu_info_t *const end = device_info + sApp->thread_count;
+        cpu_info_t *const end = device_info + sApp->device_count;
         const char *ptr = cpulist.c_str();
         while (*ptr && cpu != end) {
             auto [start, stop] = parse_cpulist_range(ptr);
@@ -814,7 +814,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
             std::numeric_limits<KAFFINITY>::digits;
 
     cpu_info_t *const info = device_info;
-    std::span infos(info, info + num_cpus());
+    std::span infos(info, info + device_count());
     auto first_cpu_for_group = [infos](unsigned group) -> cpu_info_t * {
         for (cpu_info_t &info : infos) {
             if (info.cpu_number / CpusPerGroup == group)
@@ -1337,7 +1337,7 @@ void apply_deviceset_param(const char *param)
     if (SandstoneConfig::RestrictedCommandLine)
         return;
 
-    std::span<cpu_info_t> old_cpu_info(device_info, sApp->thread_count);
+    std::span<cpu_info_t> old_cpu_info(device_info, sApp->device_count);
     std::vector<cpu_info_t> new_cpu_info;
     int total_matches = 0;
 
@@ -1507,14 +1507,14 @@ void apply_deviceset_param(const char *param)
 
 void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
 {
-    assert(sApp->thread_count);
-    assert(sApp->thread_count == enabled_cpus.count());
+    assert(sApp->device_count);
+    assert(sApp->device_count == enabled_cpus.count());
     device_info = sApp->shmem->device_info;
 
     // detect this CPU's family - it's impossible for them to be different
     detect_family_via_cpuid();
 
-    int count = sApp->thread_count;
+    int count = sApp->device_count;
     [[assume(count > 0)]];
 
     // fill in device_info first
@@ -1550,7 +1550,7 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
 
     auto detect = [](void *ptr) -> void * {
         auto self = static_cast<TopologyDetector *>(ptr);
-        int count = sApp->thread_count;
+        int count = sApp->device_count;
         [[assume(count > 0)]];
         for (Topology::Thread &cpu : std::span(device_info, count)) {
             pin_to_logical_processor(LogicalProcessor(cpu.cpu_number));
@@ -1602,7 +1602,7 @@ static void populate_core_group(Topology::CoreGrouping *group, const Topology::T
 static Topology build_topology()
 {
     cpu_info_t *info = device_info;
-    const cpu_info_t *const end = device_info + num_cpus();
+    const cpu_info_t *const end = device_info + device_count();
 
     std::vector<Topology::Package> packages;
     if (int max_package_id = end[-1].package_id; max_package_id >= 0)
@@ -1659,7 +1659,7 @@ void slice_plan_init(int max_cores_per_slice)
 {
     auto set_to_full_system = []() {
         // only one plan and that's the full system
-        std::vector plan = { DeviceRange{ 0, num_cpus() } };
+        std::vector plan = { DeviceRange{ 0, device_count() } };
         sApp->slice_plans.plans.fill(plan);
         return;
     };
@@ -1692,7 +1692,7 @@ void slice_plan_init(int max_cores_per_slice)
     // as described above. Be aware bypasses the minimum average processor per
     // socket check.
 
-    int max_cpu = num_cpus();
+    int max_cpu = device_count();
     const Topology &topology = Topology::topology();
     while (topology.isValid()) {     // not a loop, just so we can use break
         using SlicePlans = SandstoneApplication::SlicePlans;
@@ -1781,7 +1781,7 @@ const Topology &Topology::topology()
 Topology::Data Topology::clone() const
 {
     Data result;
-    result.all_threads.assign(device_info, device_info + num_cpus());
+    result.all_threads.assign(device_info, device_info + device_count());
     result.packages = packages;
 
     // now update all spans to point to the data we carry
@@ -1815,11 +1815,12 @@ void update_topology(std::span<const cpu_info_t> new_cpu_info,
         end = std::copy_if(new_cpu_info.begin(), new_cpu_info.end(), device_info, matching);
     }
 
-    int new_thread_count = end - device_info;
-    if (int excess = sApp->thread_count - new_thread_count; excess > 0)
+    int new_device_count = end - device_info;
+    if (int excess = sApp->device_count - new_device_count; excess > 0)
         std::fill_n(end, excess, (cpu_info_t){});
 
-    sApp->thread_count = new_thread_count;
+    sApp->device_count = new_device_count;
+    sApp->thread_count = sApp->device_count;
     cached_topology() = build_topology();
 }
 
@@ -1827,12 +1828,13 @@ template <>
 LogicalProcessorSet detect_devices<LogicalProcessorSet>()
 {
     LogicalProcessorSet result = ambient_logical_processor_set();
-    sApp->thread_count = result.count();
-    if (sApp->thread_count == 0) [[unlikely]] {
+    sApp->device_count = result.count();
+    if (sApp->device_count == 0) [[unlikely]] {
         fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
                 program_invocation_name);
         return result;
     }
+    sApp->thread_count = sApp->device_count;
     sApp->user_thread_data.resize(sApp->thread_count);
 #ifdef M_ARENA_MAX
     mallopt(M_ARENA_MAX, sApp->thread_count * 2);
@@ -1852,12 +1854,12 @@ void setup_devices<LogicalProcessorSet>(const LogicalProcessorSet &enabled_devic
 
 void restrict_topology(DeviceRange range)
 {
-    assert(range.starting_device + range.device_count <= sApp->thread_count);
+    assert(range.starting_device + range.device_count <= sApp->device_count);
     auto old_cpu_info = std::exchange(device_info, sApp->shmem->device_info + range.starting_device);
-    int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
+    int old_device_count = std::exchange(sApp->device_count, range.device_count);
 
     Topology &topo = cached_topology();
-    if (old_cpu_info != device_info || old_thread_count != sApp->thread_count ||
+    if (old_cpu_info != device_info || old_device_count != sApp->device_count ||
             topo.packages.size() == 0)
         topo = build_topology();
 }
