@@ -318,15 +318,15 @@ static void init_shmem()
             "PerThreadData::Test size grew, please check if it was intended");
     assert(sApp->current_fork_mode() != SandstoneApplication::ForkMode::child_exec_each_test);
     assert(sApp->shmem == nullptr);
-    assert(thread_count());
+    assert(device_count());
 
     unsigned per_thread_size = sizeof(PerThreadData::Main);
     per_thread_size = ROUND_UP_TO(per_thread_size, alignof(PerThreadData::Test));
-    per_thread_size += sizeof(PerThreadData::Test) * thread_count();
+    per_thread_size += sizeof(PerThreadData::Test) * device_count();
     per_thread_size = ROUND_UP_TO_PAGE(per_thread_size);
 
     unsigned thread_data_offset = sizeof(SandstoneApplication::SharedMemory) +
-            sizeof(Topology::Thread) * thread_count();
+            sizeof(Topology::Thread) * device_count();
     thread_data_offset = ROUND_UP_TO_PAGE(thread_data_offset);
 
     size_t size = thread_data_offset;
@@ -357,6 +357,7 @@ static void commit_shmem()
     size_t main_thread_count = plan.size();
     sApp->shmem->main_thread_count = main_thread_count;
     sApp->shmem->total_thread_count = thread_count();
+    sApp->shmem->total_device_count = device_count();
 
     // unmap the current area, because Windows doesn't allow us to have two
     // blocks for this file
@@ -381,7 +382,7 @@ static void commit_shmem()
     }
 
     // sApp->shmem has probably moved
-    restrict_topology({ 0, thread_count() });
+    restrict_topology({ 0, device_count() });
 }
 
 static void attach_shmem(int fd)
@@ -586,6 +587,7 @@ static int exec_mode_run(int argc, char **argv)
     attach_shmem(parse_int(argv[1]));
     device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
+    sApp->device_count = sApp->shmem->total_device_count;
     rebuild_topology();
     sApp->user_thread_data.resize(sApp->thread_count);
 
@@ -1048,12 +1050,13 @@ int main(int argc, char **argv)
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
-    if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
-        restrict_topology({ 0, opts.thread_count });
+    if (unsigned(opts.thread_count) < unsigned(sApp->device_count))
+        restrict_topology({ 0, opts.thread_count }); // TODO: Remove this when thread_count and device_count are decoupled
+    sApp->thread_count = sApp->device_count;
     slice_plan_init(opts.max_cores_per_slice);
     commit_shmem();
 
-    if (std::to_underlying(sApp->shmem->cfg.reschedule_mode) > std::to_underlying(RescheduleMode::none) && thread_count() < 2) {
+    if (std::to_underlying(sApp->shmem->cfg.reschedule_mode) > std::to_underlying(RescheduleMode::none) && device_count() < 2) {
         logging_printf(LOG_LEVEL_QUIET, "# WARNING: --reschedule is only useful with at least 2 cores, ignoring\n");
         sApp->shmem->cfg.reschedule_mode = RescheduleMode::none;
     }

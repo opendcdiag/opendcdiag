@@ -360,7 +360,7 @@ auto thread_core_spacing()
         struct { int logical, core; } result = { 1, 1 };
         int max_core_id = 0;
         int max_logical_id = 0;
-        for (int i = 0; i < thread_count(); ++i) {
+        for (int i = 0; i < device_count(); ++i) {
             if (device_info[i].cpu_number > max_logical_id)
                 max_logical_id = device_info[i].cpu_number;
             if (device_info[i].core_id > max_core_id)

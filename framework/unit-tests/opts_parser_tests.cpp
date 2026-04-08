@@ -406,7 +406,7 @@ TEST(ProgramOptionsParser, saturation_works__thread_count)
         };
 
         // simulate init_cpus() before parsing
-        cfg.thread_count = 48;
+        cfg.device_count = 48;
 
         auto ret = opts.parse(2, argv, &cfg);
         EXPECT_EQ(ret, EXIT_SUCCESS);
@@ -424,7 +424,7 @@ TEST(ProgramOptionsParser, saturation_works__thread_count)
         };
 
         // simulate init_cpus() before parsing
-        cfg.thread_count = 1000;
+        cfg.device_count = 1000;
 
         auto ret = opts.parse(2, argv, &cfg);
         EXPECT_EQ(ret, EXIT_SUCCESS);
@@ -442,7 +442,7 @@ TEST(ProgramOptionsParser, saturation_works__thread_count)
         };
 
         // simulate init_cpus() before parsing
-        cfg.thread_count = 48;
+        cfg.device_count = 48;
 
         auto ret = opts.parse(2, argv, &cfg);
         EXPECT_EQ(ret, EXIT_SUCCESS);
