@@ -80,6 +80,7 @@ enum {
     service_option,
     shortened_runtime_option,
     strict_runtime_option,
+    subscription_option,
     syslog_runtime_option,
     temperature_threshold_option,
     test_delay_option,
@@ -167,6 +168,7 @@ static struct option long_options[]  = {
     { "service", no_argument, nullptr, service_option },
     { "shorten-runtime", required_argument, nullptr, shortened_runtime_option },
     { "strict-runtime", no_argument, nullptr, strict_runtime_option },
+    { "subscription", required_argument, nullptr, subscription_option },
     { "syslog", no_argument, nullptr, syslog_runtime_option },
     { "temperature-threshold", required_argument, nullptr, temperature_threshold_option },
     { "test-delay", required_argument, nullptr, test_delay_option },
@@ -286,6 +288,11 @@ Common command-line options are:
  -s <STATE>, --rng-state=<STATE>
      Specify the random generator state to reload. The seed is in the form:
      Engine:engine-specific-data
+ --subscription=<PERCENT>
+     Set the thread-to-device subscription ratio as a percentage (range: 10-200).
+     100 (default) means one thread per device. Values above 100 oversubscribe
+     (e.g. 200 runs two threads per device); values below 100 undersubscribe
+     (e.g. 50 runs one thread for every two devices).
  -v, -q, --verbose, --quiet
      Set logging output verbosity level. Default is quiet.
  --version
@@ -499,6 +506,7 @@ struct ProgramOptionsParser {
             case max_logdata_option:
             case max_messages_option:
             case reschedule_option:
+            case subscription_option:
                 opts_map.insert_or_assign(opt, optarg);
                 break;
 
@@ -1112,6 +1120,20 @@ struct ProgramOptionsParser {
             }(value);
             if (maybe_int) {
                 app_cfg->inject_idle = maybe_int.value();
+            } else {
+                return EX_USAGE;
+            }
+        }
+
+        if (auto value = string_opt_for(subscription_option)) {
+            auto maybe_int = ParseIntArgument<>{
+                .name = "--subscription",
+                .min = 10,
+                .max = 200,
+                .range_mode = OutOfRangeMode::Saturate
+            }(value);
+            if (maybe_int) {
+                opts.subscription_ratio = maybe_int.value();
             } else {
                 return EX_USAGE;
             }

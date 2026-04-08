@@ -24,6 +24,7 @@ struct ProgramOptions {
     int max_cores_per_slice = 0;
     int thread_count = -1;
     int device_count = -1;
+    int subscription_ratio = -1;
     bool fatal_errors = false;
     const char* on_hang_arg = nullptr;
     const char* on_crash_arg = nullptr;
