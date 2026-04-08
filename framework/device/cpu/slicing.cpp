@@ -99,7 +99,7 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
 
     if (max_cores_per_slice == 0) {
         // set to full system
-        std::vector plan = { DeviceRange{ 0, thread_count() } };
+        std::vector plan = { DeviceRange{ 0, device_count() } };
         plans.fill(plan);
     } else {
         // dumb plan, not *cores*

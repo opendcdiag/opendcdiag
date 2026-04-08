@@ -86,13 +86,13 @@ int parse_int(char*& arg, const char* orig_arg) {
 void update_topology(std::span<const gpu_info_t> new_gpu_info)
 {
     gpu_info_t* end = std::copy(new_gpu_info.begin(), new_gpu_info.end(), device_info);
-    int new_thread_count = new_gpu_info.size();
-    if (int excess = sApp->thread_count - new_thread_count; excess > 0) {
+    int new_device_count = new_gpu_info.size();
+    if (int excess = sApp->device_count - new_device_count; excess > 0) {
         // reset excess entries
         std::fill_n(end, excess, gpu_info_t{});
     }
 
-    sApp->thread_count = new_thread_count;
+    sApp->device_count = new_device_count;
     cached_topology() = build_topology();
 }
 }
@@ -114,7 +114,7 @@ void apply_deviceset_param(const char *param)
         { return gpu.gpu_number == gpu_number; }
     };
 
-    std::span<gpu_info_t> old_gpu_info(device_info, sApp->thread_count);
+    std::span<gpu_info_t> old_gpu_info(device_info, sApp->device_count);
     std::vector<gpu_info_t> new_gpu_info;
     int total_matches = 0;
 
@@ -295,10 +295,10 @@ GpusSet detect_devices<GpusSet>()
 
     if (const char* mock_topo = getenv("SANDSTONE_MOCK_TOPOLOGY"); SandstoneConfig::Debug && mock_topo && *mock_topo) {
         // our selftests use mock topologies of up to 4 GPUs, so we need to prepare enough space in device_info
-        static constexpr auto MAX_MOCK_THREAD_COUNT = 4;
-        sApp->thread_count = MAX_MOCK_THREAD_COUNT;
-        sApp->user_thread_data.resize(sApp->thread_count);
-        for (auto i = 0; i < MAX_MOCK_THREAD_COUNT; i++) {
+        static constexpr auto MAX_MOCK_DEVICE_COUNT = 4;
+        sApp->device_count = MAX_MOCK_DEVICE_COUNT;
+        sApp->user_thread_data.resize(sApp->device_count);
+        for (auto i = 0; i < MAX_MOCK_DEVICE_COUNT; i++) {
             enabled_devices.emplace(MultiSliceGpu{.gpu_number = i}, ZeDeviceCtx{}); // fill with anything, we will check !empty() later
         }
         return enabled_devices;
@@ -327,8 +327,8 @@ GpusSet detect_devices<GpusSet>()
         return enabled_devices;
     }
 
-    sApp->thread_count = enabled_devices.size();
-    sApp->user_thread_data.resize(sApp->thread_count);
+    sApp->device_count = enabled_devices.size();
+    sApp->user_thread_data.resize(sApp->device_count);
 
     return enabled_devices;
 }
@@ -522,7 +522,7 @@ void create_mock_topology(const char *topo)
             ++topo;
     }
 
-    sApp->thread_count = gpu_count;
+    sApp->device_count = gpu_count;
 }
 
 /// Builds whole device_info array, then builds topology based on that.
@@ -536,9 +536,9 @@ void setup_devices<GpusSet>(const GpusSet &enabled_devices)
         return;
     }
 
-    assert(enabled_devices.size() == thread_count());
+    assert(enabled_devices.size() == device_count());
     gpu_info_t* info = device_info;
-    [[maybe_unused]] const gpu_info_t* cend = device_info + thread_count();
+    [[maybe_unused]] const gpu_info_t* cend = device_info + device_count();
 
     auto enabled_cpus = to_vector(ambient_logical_processor_set());
     if (enabled_cpus.size() < enabled_devices.size()) {
@@ -587,24 +587,24 @@ void setup_devices<GpusSet>(const GpusSet &enabled_devices)
     cached_topology() = build_topology();
 }
 
-/// Called after apply_deviceset_param(). Means we have smaller thread_count and a new range of devices.
+/// Called after apply_deviceset_param(). Means we have smaller device_count and a new range of devices.
 /// Changes pointer of device_info, as sApp->shmem has moved. Must also rebuild topology (built upon device_info).
 /// TODO: It's very similar to the CPU version. Should we abstract build_topology(), rather than restrict_topology()?
 void restrict_topology(DeviceRange range)
 {
-    assert(range.starting_device + range.device_count <= sApp->thread_count);
+    assert(range.starting_device + range.device_count <= sApp->device_count);
     auto old_gpu_info = std::exchange(device_info, sApp->shmem->device_info + range.starting_device);
-    int old_thread_count = std::exchange(sApp->thread_count, range.device_count);
+    int old_device_count = std::exchange(sApp->device_count, range.device_count);
 
     Topology &topo = cached_topology();
-    if (old_gpu_info != device_info || old_thread_count != sApp->thread_count /*|| topo.devices.size() == 0  TODO: why would we check that? */) {
+    if (old_gpu_info != device_info || old_device_count != sApp->device_count /*|| topo.devices.size() == 0  TODO: why would we check that? */) {
         topo = build_topology();
     }
 }
 
 void rebuild_topology()
 {
-    assert(device_info && sApp->thread_count && "device_info must be filled at this point");
+    assert(device_info && sApp->device_count && "device_info must be filled at this point");
     cached_topology() = build_topology();
 }
 

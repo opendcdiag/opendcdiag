@@ -196,7 +196,7 @@ typedef struct cpu_info_t device_info_t;
 /// device_info is an array of cpu_info_t structures.  Each element of the array
 /// contains information about a logical CPU that will be used to
 /// execute a test's test_run function.  The size of this array is
-/// equal to the value returned by num_cpus().
+/// equal to the value returned by device_count().
 extern struct cpu_info_t *device_info;
 // Interim alias for compatibility.
 extern struct cpu_info_t *cpu_info asm("device_info");

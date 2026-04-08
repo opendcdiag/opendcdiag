@@ -1217,6 +1217,7 @@ TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         sApp->select_main_thread(child_number);
         pin_to_logical_processors(sApp->main_thread_data()->device_range, "control");
         restrict_topology(sApp->main_thread_data()->device_range);
+        sApp->thread_count = sApp->device_count; // TODO: Update when thread_count and device_count are decoupled
         signals_init_child();
         debug_init_child();
     }
@@ -1415,7 +1416,7 @@ static int slices_for_test(const struct test *test)
         return SlicePlans::Heuristic;
     }();
     if (type == SlicePlans::FullSystem) {
-        sApp->main_thread_data()->device_range = { 0, sApp->thread_count };
+        sApp->main_thread_data()->device_range = { 0, sApp->device_count };
         return 1;
     }
 
