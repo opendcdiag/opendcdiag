@@ -1820,7 +1820,7 @@ void update_topology(std::span<const cpu_info_t> new_cpu_info,
         std::fill_n(end, excess, (cpu_info_t){});
 
     sApp->device_count = new_device_count;
-    sApp->thread_count = sApp->device_count;
+    update_thread_count();
     cached_topology() = build_topology();
 }
 
@@ -2092,7 +2092,8 @@ std::string build_failure_mask_for_topology(const struct test* test)
 
 uint32_t mixin_from_device_info(int thread_num)
 {
-    auto& info = device_info[thread_num];
+    // Use modular indexing to support oversubscription (thread_count > device_count)
+    auto& info = device_info[thread_num % device_count()];
     auto mixin = scramble(static_cast<uint32_t>(info.core_id), static_cast<uint32_t>(info.package_id));
     mixin ^= [=](){
         switch (info.thread_id & 3) {

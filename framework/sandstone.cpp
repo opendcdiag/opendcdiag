@@ -321,6 +321,7 @@ static void commit_shmem()
     sApp->shmem->main_thread_count = main_thread_count;
     sApp->shmem->total_thread_count = thread_count();
     sApp->shmem->total_device_count = device_count();
+    sApp->shmem->subscription_ratio = sApp->subscription_ratio;
 
     // unmap the current area, because Windows doesn't allow us to have two
     // blocks for this file
@@ -345,7 +346,7 @@ static void commit_shmem()
     }
 
     // sApp->shmem has probably moved
-    restrict_topology({ 0, thread_count() });
+    restrict_topology({ 0, device_count() });
 }
 
 static void attach_shmem(int fd)
@@ -551,6 +552,7 @@ static int exec_mode_run(int argc, char **argv)
     device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
     sApp->device_count = sApp->shmem->total_device_count;
+    sApp->subscription_ratio = sApp->shmem->subscription_ratio;
     rebuild_topology();
     sApp->user_thread_data.resize(sApp->thread_count);
 
@@ -803,6 +805,11 @@ int device_count()
     return sApp->device_count;
 }
 
+void update_thread_count()
+{
+    sApp->thread_count = std::max(1, sApp->device_count * sApp->subscription_ratio / 100);
+}
+
 int8_t sandstone_verbosity_level()
 {
     return std::to_underlying(sApp->shmem->cfg.verbosity);
@@ -995,8 +1002,21 @@ int main(int argc, char **argv)
     if (sApp->total_retest_count < -1 || sApp->retest_count == 0)
         sApp->total_retest_count = 10 * sApp->retest_count; // by default, 100
 
+
+    if (opts.subscription_ratio != -1 ) {
+        sApp->subscription_ratio = opts.subscription_ratio;
+
+        // -n/--threads and --subscription cannot be used together. Print warning and ignore -n/--threads
+        if (opts.thread_count != -1) {
+            logging_printf(LOG_LEVEL_QUIET, "# WARNING: -n/--threads and --subscription cannot be used together, ignoring -n/--threads\n");
+            opts.thread_count = -1;
+        }
+    }
+
     if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
         restrict_topology({ 0, opts.thread_count });
+    update_thread_count();
+    sApp->user_thread_data.resize(sApp->thread_count);
     slice_plan_init(opts.max_cores_per_slice);
     commit_shmem();
 

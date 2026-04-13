@@ -588,6 +588,8 @@ int device_count() __attribute__((pure));
 /// test.
 int num_packages() __attribute__((pure));
 
+void update_thread_count();
+
 extern int8_t sandstone_verbosity_level() __attribute__((pure));
 
 #ifdef __cplusplus

@@ -1128,7 +1128,7 @@ struct ProgramOptionsParser {
         if (auto value = string_opt_for(subscription_option)) {
             auto maybe_int = ParseIntArgument<>{
                 .name = "--subscription",
-                .min = 10,
+                .min = 1,
                 .max = 200,
                 .range_mode = OutOfRangeMode::Saturate
             }(value);

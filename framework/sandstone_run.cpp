@@ -660,7 +660,8 @@ void reschedule_internal(DeviceScheduler *scheduler)
 static uintptr_t thread_runner(int thread_number)
 {
     // convert from internal Sandstone numbering to the system one
-    pin_to_logical_processor(LogicalProcessor(device_info[thread_number].cpu_number), current_test->id);
+    // Use modular indexing to support oversubscription (thread_count > device_count)
+    pin_to_logical_processor(LogicalProcessor(device_info[thread_number % device_count()].cpu_number), current_test->id);
 
     PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
     random_init_thread(thread_number);
@@ -1160,7 +1161,8 @@ TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         sApp->select_main_thread(child_number);
         pin_to_logical_processors(sApp->main_thread_data()->device_range, "control");
         restrict_topology(sApp->main_thread_data()->device_range);
-        sApp->thread_count = sApp->device_count; // Sync value of thread_count after restricting topology.
+        update_thread_count();
+        sApp->user_thread_data.resize(sApp->thread_count);
         signals_init_child();
         debug_init_child();
     }
@@ -1369,12 +1371,17 @@ static int slices_for_test(const struct test *test)
     }();
     if (type == SandstoneApplication::SlicePlans::FullSystem) {
         sApp->main_thread_data()->device_range = { 0, sApp->device_count };
+        sApp->main_thread_data()->starting_thread = 0;
         return 1;
     }
 
     const std::vector<DeviceRange> &plan = sApp->slice_plans.plans[type];
-    for (size_t i = 0; i < plan.size(); ++i)
+    int thread_counter = 0;
+    for (size_t i = 0; i < plan.size(); ++i) {
         sApp->main_thread_data(i)->device_range = plan[i];
+        sApp->main_thread_data(i)->starting_thread = thread_counter;
+        thread_counter += std::max(1, plan[i].device_count * sApp->subscription_ratio / 100);
+    }
 
     return plan.size();
 }

@@ -83,6 +83,7 @@ struct Common
 struct alignas(64) Main : Common
 {
     DeviceRange device_range;
+    int starting_thread = 0;
 };
 
 struct alignas(64) TestCommon : Common

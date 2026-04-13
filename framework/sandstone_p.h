@@ -106,6 +106,8 @@ int open_memfd(enum MemfdCloexecFlag);
 void dump_device_info();
 
 #ifdef __cplusplus
+
+void update_thread_count();
 }
 
 enum class LogLevelVerbosity : int8_t
@@ -321,6 +323,7 @@ struct SandstoneApplicationConfig {
 
     int thread_count;
     int device_count;
+    int subscription_ratio = 100; // percentage: 100 = 1:1, 50 = 1:2 undersubscription, 200 = 2:1 oversubscription
 };
 
 struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_data<SandstoneConfig::Debug>
@@ -479,7 +482,7 @@ inline void SandstoneApplication::select_main_thread(int slice)
 {
     assert(current_fork_mode() != ForkMode::no_fork || slice == 0);
     main_thread_data_ptr += slice;
-    test_thread_data_ptr += main_thread_data_ptr->device_range.starting_device;
+    test_thread_data_ptr += main_thread_data_ptr->starting_thread;
 }
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_slices = INT_MAX)
