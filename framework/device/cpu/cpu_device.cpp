@@ -59,7 +59,8 @@ TestResult prepare_test_for_device(struct test *test)
 {
     auto has_smt = []() -> bool {
         for(int idx = 0; idx < thread_count() - 1; idx++) {
-            if (device_info[idx].core_id == device_info[idx + 1].core_id)
+            if (device_info[idx].package_id == device_info[idx + 1].package_id &&
+                device_info[idx].core_id == device_info[idx + 1].core_id)
                 return true;
         }
         return false;
