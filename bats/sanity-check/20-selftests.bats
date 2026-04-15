@@ -1305,6 +1305,22 @@ function selftest_logerror_init_common() {
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'I> cleanup returns FAIL'
 }
 
+@test "selftest_fail_run_and_cleanup" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_run_and_cleanup
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/threads/0/thread" 'main'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/level" info
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" 'I> cleanup returns FAIL'
+
+    # check every thread also failed
+    for ((i = 1; i < MAX_PROC + 1; ++i)); do
+        test_yaml_regexp "/tests/0/threads/$i/state" failed
+        test_yaml_regexp "/tests/0/threads/$i/messages/0/text" 'I> run returns FAIL'
+    done
+}
+
 @test "selftest_logerror_cleanup" {
     declare -A yamldump
     sandstone_selftest -e selftest_logerror_cleanup

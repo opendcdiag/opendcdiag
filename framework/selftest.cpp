@@ -1926,6 +1926,15 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_fail_run_and_cleanup",
+    .description = "Fails in the run and cleanup functions",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_fail_run,
+    .test_cleanup = selftest_fail_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_logerror_cleanup",
     .description = "Fails in the cleanup function with log_error()",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
