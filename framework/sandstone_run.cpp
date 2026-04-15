@@ -1067,18 +1067,16 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
 
 static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
 {
-    TestResult state = TestResult::Passed;
-
-    do {
+    TestResult state = [&] {
         int ret = 0;
         test->per_thread = sApp->user_thread_data.data();
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
         init_per_thread_data();
 
         sApp->prepare_test_tests(test);
-        state = prepare_test_for_device(test);
+        TestResult state = prepare_test_for_device(test);
         if (state != TestResult::Passed) {
-            break;
+            return state;
         }
 
         if (test->test_init) {
@@ -1119,13 +1117,11 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
             logging_mark_thread_failed(-1);
             if (ret > 0)
                 log_error("Init function failed with code %i", ret);
-            state = TestResult::Failed;
-            break;
+            return TestResult::Failed;
         } else if (state == TestResult::Skipped) {
             if (ret != 0 && ret != EXIT_SKIP)
                 log_skip(RuntimeSkipCategory, "Unexpected OS error: %s", strerror(-ret));
-            state = TestResult::Skipped;
-            break;
+            return TestResult::Skipped;
         }
 
         sApp->at_run_threads_start(test);
@@ -1147,7 +1143,8 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
 
         finish_test_for_device(test);
         sApp->test_tests_finish(test);
-    } while (false);
+        return state;
+    }();
 
     logging_cleanup_failure_callback();
     return state;
