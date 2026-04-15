@@ -469,7 +469,7 @@ function selftest_log_skip_init_common() {
     test_yaml_regexp "/tests/0/result" skip
     test_yaml_regexp "/tests/0/skip-category" Runtime
     test_yaml_regexp "/tests/0/skip-reason" '.*test_run().*'
-    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+    for ((i = 0; i < MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/messages/0/level" skip
         test_yaml_regexp "/tests/0/threads/$i/messages/0/text" '.*Skipping.*'
     done
@@ -1238,7 +1238,7 @@ function selftest_logerror_init_common() {
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/test" selftest_fail_run_mainproc
-    for ((i = 0; i < yamldump[/tests/0/threads@len]; ++i)); do
+    for ((i = 0; i < MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/state" failed
         test_yaml_regexp "/tests/0/threads/$i/messages/0/level" info
         test_yaml_regexp "/tests/0/threads/$i/messages/0/text" 'I> run returns FAIL'
@@ -1441,6 +1441,7 @@ function selftest_logerror_common() {
     pattern=$2
     set -e
     fail_common
+    test_yaml_numeric "/tests/0/threads@len" "value >= $MAX_PROC"
     for ((i = 0; i < ${yamldump[/tests/0/threads@len]}; ++i)); do
         local cpu=${yamldump[/tests/0/threads/$i/thread]}
         [[ "$cpu" = [0-9]* ]] || continue   # skip main thread
@@ -1472,7 +1473,7 @@ function selftest_logerror_common() {
     fail_common
 
     # ensure that we see 4 error messages in each thread, in spite of --max-messages
-    for ((i = 0; i < ${yamldump[/tests/0/threads@len]}; ++i)); do
+    for ((i = 0; i < MAX_PROC; ++i)); do
         local cpu=${yamldump[/tests/0/threads/$i/thread]}
         [[ "$cpu" = [0-9]* ]] || continue   # skip main thread
 
