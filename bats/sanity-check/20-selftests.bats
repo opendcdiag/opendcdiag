@@ -1556,7 +1556,7 @@ function selftest_logerror_common() {
             Float16)            type=_Float16;;
             long_double)        type=_Float64x;;
         esac
-        local description="data of type '$type'"
+        local description="data of type '$type'.*"
         case "$type" in
             uint8_t)            description='';;
         esac
@@ -1575,7 +1575,7 @@ function selftest_logerror_common() {
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/mask" '0x[0-9a-f]+'
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/actual data" '[0-9a-f ]+'
             test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/expected data" '[0-9a-f ]+'
-            test_yaml_expr "/tests/0/threads/$i/messages/0/data-miscompare/description" = "$description"
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/description" "$description"
         done
     done
 }

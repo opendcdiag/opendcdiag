@@ -697,17 +697,44 @@ static int selftest_datacomparefail_with_cb_init(struct test *test)
 template <typename T> static int selftest_datacomparefail_run(struct test *, int thread)
 {
     constexpr size_t Count = 16;
+    const char *type_name = SandstoneDataDetails::TypeToDataType<T>::name();
     T values[Count + 1] = {};
 
     int diff = (thread & (Count - 1));
     values[diff] = make_datacompare_value<T>();
 
-    if constexpr (std::is_same_v<T, uint8_t>)
+    auto formatter = [&](ptrdiff_t idx) {
+        return stdprintf("data of type '%s' at index %td", type_name, idx);
+    };
+
+    if constexpr (std::is_same_v<T, uint8_t>) {
+        // stateless comparison with no description
         memcmp_or_fail(values, values + 1, Count);
-    memcmp_or_fail(values, values + 1, Count, "data of type '%s'",
-                   SandstoneDataDetails::TypeToDataType<T>::name());
+    } else if constexpr (std::is_same_v<T, _Float16>) {
+        // older, printf-like formatting
+        memcmp_or_fail(values, values + 1, Count, "data of type '%s'", type_name);
+    } else if constexpr (std::is_integral_v<T>) {
+        // use the C++ way with a lambda
+        memcmp_or_fail(values, values + 1, Count, formatter);
+    } else {
+        // use the C way
+        using FormatterType = decltype(formatter);
+        auto c_callback = [](void *token, ptrdiff_t idx) {
+            auto formatter = static_cast<FormatterType *>(token);
+            std::string result = std::move(*formatter)(idx);
+            return strdup(result.c_str());
+        };
+
+        // memcmp_or_fail_cb is only provided as a C macro (it uses C generics
+        // and __auto_type), so we must go straight to the callback.
+        DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
+        _memcmp_fail_report_cb(values, values + 1, Count * sizeof(T), type, c_callback, &formatter);
+    }
 
     // won't be reached, but verify that it compiles
+    memcmp_or_fail(values, values + 1, Count, [] {
+        abort(); return std::string();
+    });
     memcmp_or_fail(values, values + 1, Count);
     return EXIT_SUCCESS;
 }
