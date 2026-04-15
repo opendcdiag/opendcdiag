@@ -702,6 +702,12 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     int diff = (thread & (Count - 1));
     values[diff] = make_datacompare_value<T>();
 
+    if constexpr (std::is_same_v<T, uint8_t>)
+        memcmp_or_fail(values, values + 1, Count);
+    memcmp_or_fail(values, values + 1, Count, "data of type '%s'",
+                   SandstoneDataDetails::TypeToDataType<T>::name());
+
+    // won't be reached, but verify that it compiles
     memcmp_or_fail(values, values + 1, Count);
     return EXIT_SUCCESS;
 }
