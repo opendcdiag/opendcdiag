@@ -65,7 +65,9 @@ test_yaml_expr() {
 test_yaml_regexp() {
     local value
     extract_from_yaml "$1"
-    if printf "%s" "$value" | grep --line-regexp -Eq -e "$2"; then
+    if [[ "$2" = "" ]] && [[ "$value" == "" ]]; then
+        return 0
+    elif printf "%s" "$value" | grep --line-regexp -Eq -e "$2"; then
         return 0
     fi
     printf "Regexp match failed:\n"
