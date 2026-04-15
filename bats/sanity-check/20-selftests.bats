@@ -1545,7 +1545,7 @@ function selftest_logerror_common() {
 @test "selftest_datacompare" {  # also "_with_cb" version
     declare -A yamldump
     local dataregexp='0x[0-9a-f]+( \(([-0-9]+|[-+0-9a-fpx.]+)\))?'
-    for test in `$SANDSTONE --selftests --list-tests | sed -n '/^selftest_datacomparefail/s/\r$//p'`; do
+    for test in `$SANDSTONE --selftests --list-tests | sed -n '/^selftest_datacomparefail_/s/\r$//p'`; do
         type=${test#selftest_datacomparefail_}
         case "$type" in
             Float16)            type=_Float16;;

@@ -1785,7 +1785,7 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
-    .id = "selftest_datacomparefail_int_50pct",
+    .id = "selftest_datacomparefailrare_int_50pct",
     .description = "Fakes a memcmp_or_fail that finds a difference that isn't there, 50% of the time",
     .groups = DECLARE_TEST_GROUPS(&group_random),
             .test_run = selftest_datacomparefailrare_run<std::ratio<1, 2>>,
@@ -1793,7 +1793,7 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
-    .id = "selftest_datacomparefail_int_rare",
+    .id = "selftest_datacomparefailrare_int_rare",
     .description = "Fakes a memcmp_or_fail that finds a difference that isn't there, less than 0.1% of the time",
     .groups = DECLARE_TEST_GROUPS(&group_random),
             .test_run = selftest_datacomparefailrare_run<std::ratio<1, 1024>>,
@@ -1801,7 +1801,7 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
-    .id = "selftest_datacomparefail_double_50pct",
+    .id = "selftest_datacomparefailrare_double_50pct",
     .description = "Fakes a memcmp_or_fail that finds a difference that isn't there, 50% of the time",
     .groups = DECLARE_TEST_GROUPS(&group_random),
             .test_run = selftest_datacomparefailrare_run<std::ratio<1, 2>, double>,
@@ -1809,7 +1809,7 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
-    .id = "selftest_datacomparefail_double_rare",
+    .id = "selftest_datacomparefailrare_double_rare",
     .description = "Fakes a memcmp_or_fail that finds a difference that isn't there, less than 0.1% of the time",
     .groups = DECLARE_TEST_GROUPS(&group_random),
             .test_run = selftest_datacomparefailrare_run<std::ratio<1, 1024>, double>,
