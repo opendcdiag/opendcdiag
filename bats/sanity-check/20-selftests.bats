@@ -1547,6 +1547,7 @@ function selftest_logerror_common() {
     local dataregexp='0x[0-9a-f]+( \(([-0-9]+|[-+0-9a-fpx.]+)\))?'
     for test in `$SANDSTONE --selftests --list-tests | sed -n '/^selftest_datacomparefail_/s/\r$//p'`; do
         type=${test#selftest_datacomparefail_}
+        type=${type%_with_cb}   # if any
         case "$type" in
             Float16)            type=_Float16;;
             long_double)        type=_Float64x;;
