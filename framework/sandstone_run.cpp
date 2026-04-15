@@ -1149,6 +1149,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         sApp->test_tests_finish(test);
     } while (false);
 
+    logging_cleanup_failure_callback();
     return state;
 }
 

@@ -640,8 +640,8 @@ void logging_run_callback()
 
     // make sure so we don't recurse in case the callback calls log_error()
     thr->thread_flags |= uint32_t(PerThreadData::Common::Flag::CallbackCalled);
-    if (!SandstoneConfig::NoLogging && sApp->current_test_failure_callback.cb)
-        sApp->current_test_failure_callback.cb(sApp->current_test_failure_callback.token);
+    if (!SandstoneConfig::NoLogging && sApp->current_test_failure_callback.call)
+        sApp->current_test_failure_callback.call(sApp->current_test_failure_callback.token);
 }
 
 static void log_message_preformatted(int thread_num, std::string_view msg)
@@ -949,7 +949,6 @@ void logging_flush(void)
 
 void logging_init(const struct test *test)
 {
-    sApp->current_test_failure_callback = {};
     if (sApp->shmem->cfg.verbosity <= 0)
         progress_bar_update();
 
@@ -1052,12 +1051,22 @@ void log_message(int thread_num, const char *fmt, ...)
 }
 
 #if SANDSTONE_NO_LOGGING == 0
-void install_failure_callback(void (*cb)(void *), void *token)
+void install_failure_callback(void (*cb)(void *), void *token, void (*cleanup)(void *))
 {
     assert(thread_num < 0 && "callbacks can only be installed from the main thread");
     sApp->current_test_failure_callback.token = token;
-    sApp->current_test_failure_callback.cb = cb;
+    sApp->current_test_failure_callback.call = cb;
+    sApp->current_test_failure_callback.cleanup = cleanup;
 }
+
+void logging_cleanup_failure_callback() noexcept
+{
+    if (sApp->current_test_failure_callback.cleanup)
+        sApp->current_test_failure_callback.cleanup(sApp->current_test_failure_callback.token);
+    sApp->current_test_failure_callback = {};
+}
+#else
+void logging_cleanup_failure_callback() noexcept {}
 #endif
 
 /// Escapes \c{message} suitable for a single-quote YAML line and returns it.

@@ -405,8 +405,9 @@ extern void _memcmp_fail_report(const void *actual, const void *expected, size_t
 /// the test's run function). The callback is called at most once per thread.
 ///
 /// This function must be called from the main thread (usually, from the test's
-/// init function).
-extern void install_failure_callback(void (*cb)(void *), void *token);
+/// init function). The @p cleanup callback, if not a null pointer, will be
+/// called from the main thread between after the test's cleanup function.
+extern void install_failure_callback(void (*cb)(void *), void *token, void (*cleanup)(void *));
 
 /// can be called from a test's test_run function to fail the test.
 /// This macro will kill the calling thread and cause the test to
@@ -601,13 +602,16 @@ template <typename Callback> void install_failure_callback(Callback cb)
 {
     using Stateless = void (*)();
     if constexpr (std::is_constructible_v<Stateless, Callback>) {
-        install_failure_callback(reinterpret_cast<void (*)(void *)>(+cb), nullptr);
+        install_failure_callback(reinterpret_cast<void (*)(void *)>(+cb), nullptr, nullptr);
     } else {
+        auto call_cb = [](void *token) {
+            (*static_cast<Callback *>(token))();
+        };
+        auto cleanup_cb = [](void *token) {
+            delete static_cast<Callback *>(token);
+        };
         auto copy = new Callback(std::forward<Callback>(cb));
-        install_failure_callback([](void *token) {
-            std::unique_ptr<Callback> self(static_cast<Callback *>(token));
-            (*self)();
-        }, copy);
+        install_failure_callback(call_cb, copy, cleanup_cb);
     }
 }
 
