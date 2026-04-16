@@ -1098,7 +1098,7 @@ bool TopologyDetector::setup_cpuid_detection()
     // extract the domain levels
     while (b) {
         Domain domain = Domain((c >> 8) & 0xff);
-        a &= 0xf;
+        a &= 0x1f;
         switch (domain) {
         case Domain::Invalid:
             __builtin_unreachable();
