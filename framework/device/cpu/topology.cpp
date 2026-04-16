@@ -1670,7 +1670,7 @@ void slice_plan_init(int max_cores_per_slice)
 
     // The heuristic is enabled by max_cores_per_slice == 0 and a valid
     // topology:
-    // - if the CPU Set has less than or equal to MinimumCpusPerSocket (8)
+    // - if the CPU Set has less than MinimumCpusPerSocket (4)
     //   logical processors per socket (on average), we ignore the topology and
     //   will instead run in slices of up to DefaultMaxCoresPerSlice (32)
     //   logical processors.
@@ -1702,7 +1702,7 @@ void slice_plan_init(int max_cores_per_slice)
             // apply defaults
             int average_cpus_per_socket = max_cpu / topology.packages.size();
             max_cores_per_slice = DefaultMaxCoresPerSlice;
-            if (average_cpus_per_socket <= MinimumCpusPerSocket)
+            if (average_cpus_per_socket < MinimumCpusPerSocket)
                 break;
         }
 

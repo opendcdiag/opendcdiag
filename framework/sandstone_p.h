@@ -328,7 +328,7 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     using OutputFormat = TestConfig::OutputFormat;
 
     struct SlicePlans {
-        static constexpr int MinimumCpusPerSocket = 8;
+        static constexpr int MinimumCpusPerSocket = 4;
         static constexpr int DefaultMaxCoresPerSlice = 32;
         enum Type : int8_t {
             FullSystem = -1,
