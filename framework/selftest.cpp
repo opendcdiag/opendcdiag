@@ -440,7 +440,7 @@ static int selftest_check_sequential_init(struct test *test)
 
 static int selftest_check_sequential_run(struct test *test, int thread)
 {
-    usleep(1'000 * (random() % 16u));   // sleep up to 16 ms
+    usleep(1'000 * (random32() % 16u));   // sleep up to 16 ms
     int n = selftest_sequential_last_thread.load(std::memory_order_relaxed);
     log_debug("Last CPU was %d", n);
     if (n != thread - 1)
@@ -668,7 +668,7 @@ static int selftest_fail_after_reschedule_lowest_cpu_run(struct test *test, int 
     int n = thread_count();
     n *= n;
     while (n--) {
-        struct timespec ts = { 0, random() & 0x3ff };   // ~1 us
+        struct timespec ts = { 0, random32() & 0x3ff };   // ~1 us
         nanosleep(&ts, nullptr);    // yield CPU a little (we can ignore EINTR)
 
         reschedule();
