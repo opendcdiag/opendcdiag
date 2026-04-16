@@ -1169,7 +1169,7 @@ bool TopologyDetector::detect_topology_via_cpuid(Topology::Thread *info)
         // and is what Linux implements (how Windows determines how to return
         // RelationProcessorModule is a guess). Intel docs say "the nearest
         // power-of-2 not smaller than".
-        int l2_sharing_width = 31 - std::countl_zero(max_cpus_sharing_l2);
+        int l2_sharing_width = std::bit_width(max_cpus_sharing_l2 - 1);
         info->module_id = extract(l2_sharing_width, width(Package));
     } else {
         // if neither CPUID nor cache provide module information, we assume module == core
