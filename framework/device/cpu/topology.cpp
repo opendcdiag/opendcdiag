@@ -1895,7 +1895,8 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
             for (size_t c = 0; c < pkg->cores.size(); ++c) {
                 Topology::Core *core = &pkg->cores[c];
                 for (const Topology::Thread &thr : core->threads) {
-                    if (per_thread_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
+                    if (size_t(thr.cpu()) < per_thread_failures.size() &&
+                        per_thread_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
                         last_bad_package = pkg->id();
                         failed_packages++;
                         pkg_failures[p] = pkg->id();
@@ -1924,7 +1925,8 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
                 int nthreads = 0;
                 PerThreadFailures::value_type fail_pattern = 0;
                 for (const Topology::Thread &thr : core->threads) {
-                    auto this_pattern = per_thread_failures[thr.cpu()];
+                    auto this_pattern = size_t(thr.cpu()) < per_thread_failures.size()
+                        ? per_thread_failures[thr.cpu()] : 0;
                     if (this_pattern == 0)
                         all_threads_failed_once = false;
                     if (++nthreads == 1) {
@@ -1995,7 +1997,8 @@ std::string Topology::build_failure_mask(const struct test *test) const
             int failcount = 0;
             for (const Thread &t : core.threads) {
                 int cpu_id = t.cpu();
-                if (sApp->thread_data(cpu_id)->has_failed()) {
+                // Skip devices that were never assigned a thread.
+                if (cpu_id < thread_count() && sApp->thread_data(cpu_id)->has_failed()) {
                     threadmask |= 1U << t.thread_id;
                     ++failcount;
                 }
