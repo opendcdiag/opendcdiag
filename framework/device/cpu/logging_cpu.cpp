@@ -395,8 +395,11 @@ static std::string full_cpu_info(LogicalProcessor lp, LogLevelVerbosity verbosit
 #endif
 
     if (info) {
-        line += stdprintf(", package: %d, numa_node: %d, module: %*d, core: %*d, thread: %d",
-                          info->package_id, info->numa_id, thread_core_spacing().core, info->module_id,
+        line += stdprintf(", package: %d, numa_node: %d, ", info->package_id, info->numa_id);
+        if (info->tile_id >= 0)
+            line += stdprintf("tile: %d, ", info->tile_id);
+        line += stdprintf("module: %*d, core: %*d, thread: %d",
+                          thread_core_spacing().core, info->module_id,
                           thread_core_spacing().core, info->core_id, info->thread_id);
         if (const char *type = native_device_type(info))
             line += stdprintf(", core_type: %s", type);
