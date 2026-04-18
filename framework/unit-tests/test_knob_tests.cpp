@@ -5,6 +5,7 @@
 
 #include "gtest/gtest.h"
 #include "sandstone.h"       // for struct test
+#include <sandstone_yaml.h>
 #include "test_knobs.h"
 
 #include <algorithm>
@@ -12,6 +13,7 @@
 
 void clear_test_knobs();
 
+using TestKnobValue = YamlFormatter::SimpleValue;
 struct UsedKeyValues
 {
     std::string key;
@@ -103,21 +105,22 @@ TEST_F(KnobTestSuite, test_can_retrieve_int_value) {
     assertKnobWasUsed("NegOne", INT64_C(-1), KnobOrigin::Options);
 }
 
+using namespace std::string_view_literals;
 TEST_F(KnobTestSuite, test_can_retrieve_string_value) {
     set_knob_from_key_value_string("Key1=Key1_Value");
     EXPECT_STREQ(get_test_knob_value_string("Key1", "X"), "Key1_Value");
-    assertKnobWasUsed("Key1", std::string("Key1_Value"), KnobOrigin::Options);
+    assertKnobWasUsed("Key1", "Key1_Value"sv, KnobOrigin::Options);
 }
 
 TEST_F(KnobTestSuite, if_key_exists_default_string_ignored) {
     set_knob_from_key_value_string("Key1=Key1_Value");
     EXPECT_STREQ(get_test_knob_value_string("Key1", "Default"), "Key1_Value");
-    assertKnobWasUsed("Key1", std::string("Key1_Value"), KnobOrigin::Options);
+    assertKnobWasUsed("Key1", "Key1_Value"sv, KnobOrigin::Options);
 }
 
 TEST_F(KnobTestSuite, if_key_does_not_exists_default_string_used){
     EXPECT_STREQ(get_test_knob_value_string("NonExistingKey", "Default"), "Default");
-    assertKnobWasUsed("NonExistingKey", std::string("Default"), KnobOrigin::Defaulted);
+    assertKnobWasUsed("NonExistingKey", "Default"sv, KnobOrigin::Defaulted);
 }
 
 TEST_F(KnobTestSuite, test_name_prepended_to_key) {
@@ -127,8 +130,8 @@ TEST_F(KnobTestSuite, test_name_prepended_to_key) {
 
     EXPECT_STREQ(get_testspecific_knob_value_string(&t, "Key1", "Default"), "Key1_Value");
     EXPECT_STREQ(get_testspecific_knob_value_string(&t, "NonExistingKey", "Default"), "Default");
-    assertKnobWasUsed("TestName.Key1", std::string("Key1_Value"), KnobOrigin::Options);
-    assertKnobWasUsed("TestName.NonExistingKey", std::string("Default"), KnobOrigin::Defaulted);
+    assertKnobWasUsed("TestName.Key1", "Key1_Value"sv, KnobOrigin::Options);
+    assertKnobWasUsed("TestName.NonExistingKey", "Default"sv, KnobOrigin::Defaulted);
 }
 
 TEST_F(KnobTestSuite, read_knob_from_cmdline_argument_string){

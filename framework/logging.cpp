@@ -12,6 +12,7 @@
 #include "sandstone_iovec.h"
 #include "sandstone_utils.h"
 #include "sandstone_virt.h"
+#include "sandstone_yaml.h"
 
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
@@ -1345,7 +1346,7 @@ void log_yaml(char levelchar, const char *yaml)
         logging_run_callback();
 }
 
-void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigin origin)
+void logging_mark_knob_used(std::string_view key, YamlFormatter::SimpleValue value, KnobOrigin origin)
 {
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;             // short-circuit
@@ -1370,40 +1371,9 @@ void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigi
     if (!sApp->shmem->cfg.log_test_knobs)
         return;
 
-    struct Visitor {
-        std::string operator()(uint64_t v)
-        {
-            if (v < 4096)
-                return stdprintf("%u", unsigned(v));
-            else
-                return stdprintf("0x%" PRIx64, v);
-        }
-        std::string operator()(int64_t v)
-        {
-            if (v >= 0)
-                return operator()(uint64_t(v));
-            else if (v >= -4096)
-                return stdprintf("%d", int(v));
-            else
-                return stdprintf("-0x%" PRIx64, -v);
-        }
-        std::string operator()(double v)
-        {
-            return stdprintf("%.17g", double(v));
-        }
-        std::string operator()(std::string_view v)
-        {
-            if (v.data() == nullptr) {
-                return "null";
-            } else {
-                return stdprintf("'%s'", escape_for_single_line(v).data());
-            }
-        }
-    };
-    std::string formatted = std::visit(Visitor{}, value);
     PerThreadData::Common *thread = sApp->thread_data(thread_num);
     log_message_for_thread(thread, LogTypes::UsedKnobValue, UsedKnobValueLoggingLevel,
-                           key, ": ", formatted);
+                           format_yaml(key, value));
 }
 
 static void print_content_indented(int fd, std::string_view indent, std::string_view content)

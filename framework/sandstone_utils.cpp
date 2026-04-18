@@ -9,10 +9,11 @@
 //     All unit tests should be put in framework/unit-tests/sandstone_utils_tests.cpp
 
 #include "sandstone_utils.h"
+#include "sandstone_yaml.h"
 
-#include <stdexcept>
 #include <string>
 
+#include <inttypes.h>
 #include <math.h>
 #include <string.h>
 #include <time.h>
@@ -247,5 +248,124 @@ static void escape_multi_line(std::string &append_to, int indent, std::string_vi
     }
     append_to.append(indent + 2, ' ');
     append_to += message;
+}
+
+struct FormatSimpleValue
+{
+    FormatSimpleValue(std::string &append_to, std::string_view key,
+                      const YamlFormatter::SimpleValue &value, int indent = 0)
+        : append_to(append_to), indent(indent)
+    {
+        append_to.append(indent, ' ');
+        append_to += key;
+        append_to += ": ";
+        prefix_len = indent + key.size() + 3;
+        std::visit(*this, value);
+    }
+
+    void operator()(bool v)
+    {
+        append_to += v ? "true" : "false";
+    }
+
+    void operator()(uint64_t v)
+    {
+        if (v < 4096)
+            append_to += stdprintf("%u", unsigned(v));
+        else
+            append_to += stdprintf("0x%" PRIx64, v);
+    }
+    void operator()(int64_t v)
+    {
+        if (v >= 0)
+            operator()(uint64_t(v));
+        else if (v >= -4096)
+            append_to += stdprintf("%d", int(v));
+        else
+            append_to += stdprintf("-0x%" PRIx64, -(uint64_t(v)));
+    }
+    void operator()(double v)
+    {
+        Float64 u(v);
+        int cl = fpclassify(v);
+        if (cl == FP_INFINITE) {
+            if (v < 0)
+                append_to += '-';
+            append_to += ".inf";
+            return;
+        }
+
+        std::string r;
+        auto pad_string = [&] {
+            // align to the right with spaces
+            size_t size = prefix_len + r.size() + 15;
+            size = size / 16 * 16;
+            r.resize(size - prefix_len, ' ');
+        };
+        if (cl == FP_NAN) {
+            Float64 qnan(std::numeric_limits<double>::quiet_NaN());
+            r = ".nan";
+            if (u.as_hex != qnan.as_hex) {
+                pad_string();
+                r += stdprintf(" # %s%s(%#" PRIx64 ")",
+                               u.as_nan.sign ? "-" : "",
+                               u.as_nan.quiet ? "nan" : "snan",
+                               u.as_nan.payload);
+            }
+        } else {
+            r = stdprintf("%.17g", v);
+            if (!r.contains('.'))
+                r += ".0";
+            pad_string();
+            r += stdprintf(" # %a", v);
+        }
+
+        append_to += std::move(r);
+    }
+    void operator()(std::string_view v)
+    {
+        if (v.data() == nullptr) {
+            append_to += "null";
+            return;
+        }
+        if (v.ends_with('\n'))
+            v.remove_suffix(1);
+        if (v.contains('\n')) {
+            escape_multi_line(append_to, indent, v);
+        } else {
+            append_to += '\'';
+            append_to += escape_for_single_line(v);
+            append_to += '\'';
+        }
+    }
+
+private:
+    std::string &append_to;
+    int indent;
+    int prefix_len;
+};
+
+static std::string format_yaml(const std::map<std::string, YamlFormatter::SimpleValue> &values, int indent)
+{
+    std::string result;
+
+    for (auto &[key, value]: values) {
+        if (result.size())
+            result += '\n';
+        FormatSimpleValue(result, key, value, indent);
+    }
+    return result;
+}
+
+std::string format_yaml(std::string_view key, const SimpleValue &value)
+{
+    std::string result;
+    FormatSimpleValue(result, key, value);
+    return result;
+}
+
+std::string format_yaml(const std::map<std::string, YamlFormatter::SimpleValue> &values)
+{
+    return format_yaml(values, 0);
 }
 } // namespace YamlFormatter

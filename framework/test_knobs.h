@@ -55,7 +55,6 @@ static inline const char *get_test_knob_value_string(const char *key, const char
 } // extern "C"
 
 enum class KnobOrigin { Options, Defaulted };
-using TestKnobValue = std::variant<std::string_view, uint64_t, int64_t, double>;
 #endif
 
 #endif //FRAMEWORK_TEST_KNOBS_H
