@@ -1341,36 +1341,31 @@ static StartedChild call_forkfd()
     return { .pid = pid, .fd = ffd };
 }
 
-static StartedChild spawn_child(const struct test *test, int child_number,
-                                const std::vector<const char *> &common_args)
+static StartedChild spawn_child(int child_number, const std::vector<const char *> &common_args)
 {
     assert(sApp->shmemfd != -1);
-    std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
     std::string childnumstr = stdprintf("%d", child_number);
-    std::string random_seed = random_format_seed();
 
     StartedChild ret = {};
-#ifdef _WIN32
-    if (sApp->gdb_server_comm.size()) {
-        // we need the actual Windows handle, because the file
-        // descriptors don't inherit properly via gdbserver
-       shmemfdstr = stdprintf("h%tx", _get_osfhandle(sApp->shmemfd));
-    }
-#endif
+
     // argument order must match exec_mode_run()
     std::vector argv = {
         static_cast<const char *>(program_invocation_name), "-x", childnumstr.c_str(),
-        shmemfdstr.c_str(), test->id, random_seed.c_str(),
     };
+    argv.insert(argv.end(), common_args.begin(), common_args.end());
+    assert(argv.back() == nullptr);
 
     if (sApp->gdb_server_comm.size()) {
-        argv.insert(argv.begin(), {
+#ifdef _WIN32
+        // we need the actual Windows handle, because the file
+        // descriptors don't inherit properly via gdbserver
+       static std::string shmemfdstr = stdprintf("h%tx", _get_osfhandle(sApp->shmemfd));
+       argv[3] = shmemfdstr.c_str();
+#endif
+       argv.insert(argv.begin(), {
             "gdbserver", "--no-startup-with-shell", sApp->gdb_server_comm.c_str(),
         });
     }
-
-    argv.insert(argv.end(), common_args.begin(), common_args.end());
-    argv.push_back(nullptr);
 
 #ifdef _WIN32
     // save stderr
@@ -1470,10 +1465,13 @@ static void run_one_test_children(ChildrenList &children, const struct test *tes
             }
         }
     } else {
-        std::vector<const char *> common_args;
+        std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
+        std::string random_seed = random_format_seed();
+        std::vector<const char *> common_args = { shmemfdstr.c_str(), test->id, random_seed.c_str() };
         save_test_knob_args(common_args, test->id);
+        common_args.push_back(nullptr);
         for (int i = 0; i < child_count; ++i)
-            children.add(spawn_child(test, i, common_args));
+            children.add(spawn_child(i, common_args));
     }
 
     /* wait for the children */
