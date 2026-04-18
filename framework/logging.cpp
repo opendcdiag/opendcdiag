@@ -88,6 +88,7 @@ RtlGetVersion(
 
 using LogMessage = AbstractLogger::LogMessage;              // for convenience
 using LogMessagesFile = AbstractLogger::LogMessagesFile;    // for convenience
+using YamlFormatter::escape_for_single_line;                // for convenience
 
 static constexpr const char *levels[] = { "error", "warning", "info", "debug" };
 
@@ -1068,39 +1069,6 @@ void logging_cleanup_failure_callback() noexcept
 #else
 void logging_cleanup_failure_callback() noexcept {}
 #endif
-
-/// Escapes \c{message} suitable for a single-quote YAML line and returns it.
-/// The \c{storage} parameter is used in case we need to do escaping.
-/// (This could've been a std::variant<std::string, std::string_view>)
-static std::string_view escape_for_single_line(std::string_view message, std::string &storage)
-{
-    const char quote = '\'';
-    size_t pos = message.find(quote);
-    if (pos == std::string_view::npos)
-        return message;
-
-    // Message contains apostrophes, so we need to double the single
-    // quotes. Do that by looping over the string copying it in chunks
-    // delimited by apostrophes, with the apostrophes being copied twice
-    // (that means we're inefficient for back-to-back apostrophes, but
-    // that's not common English text)
-    storage.resize(0);          // just in case
-    storage.reserve(message.size() + message.size() / 16);  // 1/16th is guesstimate
-
-    while (pos != std::string_view::npos) {
-        storage += message.substr(0, pos + 1);
-        message.remove_prefix(pos);
-        pos = message.find(quote, 1);
-    }
-
-    storage += message;     // copy the last chunk (if any)
-    return storage;
-}
-
-static std::string_view escape_for_single_line(std::string_view msg, std::string &&storage = {})
-{
-    return escape_for_single_line(msg, storage);
-}
 
 static void log_data_common(const char *message, const uint8_t *ptr, size_t size, bool from_memcmp)
 {

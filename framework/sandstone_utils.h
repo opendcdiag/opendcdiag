@@ -55,6 +55,16 @@ inline int dprintf(int fd, const char *fmt, ...)
 }
 #endif
 
+namespace YamlFormatter {
+/// Escapes \c{message} suitable for a single-quote YAML line and returns it.
+/// The \c{storage} parameter is used in case we need to do escaping.
+std::string_view escape_for_single_line(std::string_view message, std::string &storage);
+inline std::string_view escape_for_single_line(std::string_view msg, std::string &&storage = {})
+{
+    return escape_for_single_line(msg, storage);
+}
+}
+
 struct AutoClosingFile
 {
     FILE *f = nullptr;

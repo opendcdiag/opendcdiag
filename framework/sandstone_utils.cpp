@@ -201,3 +201,51 @@ std::string stdprintf(const char *fmt, ...)
 {
     return va_start_and_stdprintf(fmt);
 }
+
+namespace YamlFormatter {
+std::string_view escape_for_single_line(std::string_view message, std::string &storage)
+{
+    const char quote = '\'';
+    size_t pos = message.find(quote);
+    if (pos == std::string_view::npos)
+        return message;
+
+    // Message contains apostrophes, so we need to double the single
+    // quotes. Do that by looping over the string copying it in chunks
+    // delimited by apostrophes, with the apostrophes being copied twice
+    // (that means we're inefficient for back-to-back apostrophes, but
+    // that's not common English text)
+    storage.resize(0);          // just in case
+    storage.reserve(message.size() + message.size() / 16);  // 1/16th is guesstimate
+
+    while (pos != std::string_view::npos) {
+        storage += message.substr(0, pos + 1);
+        message.remove_prefix(pos);
+        pos = message.find(quote, 1);
+    }
+
+    storage += message;     // copy the last chunk (if any)
+    return storage;
+}
+
+static void escape_multi_line(std::string &append_to, int indent, std::string_view message)
+{
+    append_to += '|';
+    if (message.ends_with('\n'))
+        append_to += '+';
+    append_to += '\n';
+
+    ptrdiff_t nl = message.find('\n');
+    while (nl >= 0) {
+        append_to.append(indent + 2, ' ');
+
+        // write the newline too
+        ++nl;
+        append_to += message.substr(0, nl);
+        message.remove_prefix(nl);
+        nl = message.find('\n');
+    }
+    append_to.append(indent + 2, ' ');
+    append_to += message;
+}
+} // namespace YamlFormatter
