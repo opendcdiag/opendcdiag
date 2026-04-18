@@ -9,6 +9,7 @@
 
 #include <map>
 #include <string>
+#include <span>
 #include <vector>
 #include <boost/algorithm/string.hpp>
 
@@ -76,12 +77,35 @@ public:
     {
         instance().test_knobs.clear();
     }
+
+    static void append_knob_argv(std::vector<const char *> &argv, std::string_view test_id)
+    {
+        for (const auto &e : instance().test_knobs) {
+            size_t dot_pos = e.key.find('.');
+            bool is_for_test = dot_pos == test_id.size() && e.key.starts_with(test_id);
+            if (dot_pos == std::string::npos || is_for_test) {
+                argv.push_back(e.key.c_str());
+                argv.push_back(e.value.c_str());
+            }
+        }
+    }
 };
 }  // end anonymous namespace
 
 
 void clear_test_knobs(){
     TestKnobSingleton::clear();
+}
+
+void load_test_knob_args(std::span<const char *const> args)
+{
+    for (size_t i = 0; i + 1 < args.size(); i += 2)
+        TestKnobSingleton::set_knob(args[i], args[i + 1]);
+}
+
+void save_test_knob_args(std::vector<const char *> &argv, std::string_view test_id)
+{
+    TestKnobSingleton::append_knob_argv(argv, test_id);
 }
 
 // external interface methods

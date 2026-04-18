@@ -660,6 +660,10 @@ TestResult child_run(/*nonconst*/ struct test *test, int child_number);
 struct test_cfg_info;
 TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failures);
 
+/* test_knobs.cpp */
+void load_test_knob_args(std::span<const char *const> args);
+void save_test_knob_args(std::vector<const char *> &argv, std::string_view test_id);
+
 /*
  * Called from sandstone_main() before logging_global_init() and before
  * logging_global_finish(). Feel free to add your own banner or footer. Be

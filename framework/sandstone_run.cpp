@@ -1341,7 +1341,8 @@ static StartedChild call_forkfd()
     return { .pid = pid, .fd = ffd };
 }
 
-static StartedChild spawn_child(const struct test *test, int child_number)
+static StartedChild spawn_child(const struct test *test, int child_number,
+                                const std::vector<const char *> &common_args)
 {
     assert(sApp->shmemfd != -1);
     std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
@@ -1369,6 +1370,7 @@ static StartedChild spawn_child(const struct test *test, int child_number)
         });
     }
 
+    argv.insert(argv.end(), common_args.begin(), common_args.end());
     argv.push_back(nullptr);
 
 #ifdef _WIN32
@@ -1469,8 +1471,10 @@ static void run_one_test_children(ChildrenList &children, const struct test *tes
             }
         }
     } else {
+        std::vector<const char *> common_args;
+        save_test_knob_args(common_args, test->id);
         for (int i = 0; i < child_count; ++i)
-            children.add(spawn_child(test, i));
+            children.add(spawn_child(test, i, common_args));
     }
 
     /* wait for the children */

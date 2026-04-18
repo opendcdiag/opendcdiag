@@ -560,6 +560,8 @@ static int exec_mode_run(int argc, char **argv)
     random_init_global(argv[1]);
     make_rescheduler(sApp->shmem->cfg.reschedule_mode);
 
+    load_test_knob_args({ argv + 4, argv + argc });
+
     return test_result_to_exit_code(child_run(tests_to_run.at(0), child_number));
 }
 
@@ -998,14 +1000,6 @@ int main(int argc, char **argv)
         sApp->shmem->cfg.reschedule_mode = RescheduleMode::none;
     }
     make_rescheduler(sApp->shmem->cfg.reschedule_mode);
-
-    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
-        if (sApp->shmem->cfg.log_test_knobs) {
-            fprintf(stderr, "%s: error: --test-option is not supported in this configuration\n",
-                    program_invocation_name);
-            return EX_USAGE;
-        }
-    }
 
     signals_init_global();
     resource_init_global();

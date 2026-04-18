@@ -680,10 +680,6 @@ function selftest_log_skip_init_common() {
 }
 
 @test "selftest_logs_options" {
-    run $SANDSTONE -n1 --selftests -e selftest_logs_options -O dummy=dummy
-    if [[ $status == 64 ]]; then
-       skip "Not supported"
-    fi
     declare -A yamldump
     sandstone_selftest -vvv --max-messages=0 -e selftest_logs_options
     [[ "$status" -eq 0 ]]
