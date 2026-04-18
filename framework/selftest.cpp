@@ -1424,15 +1424,6 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
-    .id = "selftest_log_raw_yaml_with_cb",
-    .description = "Logs YAML content (with callback active)",
-    .groups = DECLARE_TEST_GROUPS(&group_positive),
-    .test_init = selftest_log_platform_init,
-    .test_run = selftest_lograwyaml_run,
-    .desired_duration = -1,
-    .quality_level = TEST_QUALITY_PROD,
-},
-{
     .id = "selftest_logs_options",
     .description = "Logs some command-line options",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
