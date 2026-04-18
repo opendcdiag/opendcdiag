@@ -1359,9 +1359,8 @@ static StartedChild spawn_child(const struct test *test, int child_number,
 #endif
     // argument order must match exec_mode_run()
     std::vector argv = {
-        static_cast<const char *>(program_invocation_name), "-x", test->id, random_seed.c_str(),
-        shmemfdstr.c_str(),
-        childnumstr.c_str(),
+        static_cast<const char *>(program_invocation_name), "-x", childnumstr.c_str(),
+        shmemfdstr.c_str(), test->id, random_seed.c_str(),
     };
 
     if (sApp->gdb_server_comm.size()) {

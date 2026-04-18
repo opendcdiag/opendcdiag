@@ -544,20 +544,20 @@ static int exec_mode_run(int argc, char **argv)
         }
         return int(n);
     };
-    int child_number = parse_int(argv[3]);
+    int child_number = parse_int(argv[0]);
 
-    attach_shmem(parse_int(argv[2]));
+    attach_shmem(parse_int(argv[1]));
     device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
     rebuild_topology();
     sApp->user_thread_data.resize(sApp->thread_count);
 
     test_set = new SandstoneTestSet({ .is_selftest = sApp->shmem->cfg.selftest, }, SandstoneTestSet::enable_all_tests);
-    std::vector<struct test *> tests_to_run = test_set->lookup(argv[0]);
+    std::vector<struct test *> tests_to_run = test_set->lookup(argv[2]);
     if (tests_to_run.size() != 1) return EX_DATAERR;
 
     logging_init_global_child();
-    random_init_global(argv[1]);
+    random_init_global(argv[3]);
     make_rescheduler(sApp->shmem->cfg.reschedule_mode);
 
     load_test_knob_args({ argv + 4, argv + argc });
