@@ -54,10 +54,8 @@ static inline const char *get_test_knob_value_string(const char *key, const char
 #ifdef __cplusplus
 } // extern "C"
 
-// implemented in logging.cpp (or unit test)
 enum class KnobOrigin { Options, Defaulted };
 using TestKnobValue = std::variant<std::string_view, uint64_t, int64_t, double>;
-void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigin origin);
 #endif
 
 #endif //FRAMEWORK_TEST_KNOBS_H

@@ -625,6 +625,7 @@ void logging_restricted(LogLevelVerbosity level, const char *fmt, ...);
 void logging_printf(LogLevelVerbosity level, const char *msg, ...) ATTRIBUTE_PRINTF(2, 3);
 void logging_mark_thread_failed(int thread_num) noexcept;
 void logging_mark_thread_skipped(int thread_num) noexcept;
+void logging_mark_knob_used(std::string_view key, TestKnobValue value, KnobOrigin origin);
 void logging_cleanup_failure_callback() noexcept;
 void logging_run_callback();
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,

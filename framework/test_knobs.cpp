@@ -5,9 +5,8 @@
 
 #include "test_knobs.h"
 
-#include "sandstone.h"
+#include "sandstone_p.h"
 
-#include <map>
 #include <string>
 #include <vector>
 #include <boost/algorithm/string.hpp>
