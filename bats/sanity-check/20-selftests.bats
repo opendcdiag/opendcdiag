@@ -651,9 +651,9 @@ function selftest_log_skip_init_common() {
     check_test 1
 }
 
-@test "selftest_log_raw_yaml" {
+function selftest_log_yaml_common() {
     declare -A yamldump
-    sandstone_selftest -e selftest_log_raw_yaml
+    sandstone_selftest -e $1
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" pass
@@ -664,6 +664,13 @@ function selftest_log_skip_init_common() {
         test_yaml_regexp "/tests/0/threads/$i/messages/0/details/random" '.*'
         test_yaml_regexp "/tests/0/threads/$i/messages/0/details/text" 'foo bar'
     done
+}
+
+@test "selftest_log_raw_yaml" {
+    selftest_log_yaml_common selftest_log_raw_yaml
+}
+@test "selftest_log_formatted_yaml" {
+    selftest_log_yaml_common selftest_log_formatted_yaml
 }
 
 @test "selftest_logdata" {

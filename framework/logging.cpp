@@ -1325,21 +1325,28 @@ void log_thread_context(std::string_view ctx)
     log_message_for_thread(thread, LogTypes::ThreadContext, LOG_LEVEL_VERBOSE(1), ctx);
 }
 
-void log_thread_yaml(int thread_num, char levelchar, const char *yaml)
+static PerThreadData::Common *log_yaml_common(int thread_num, char levelchar)
 {
-    LogLevelVerbosity level = status_level(levelchar);
     if (levelchar == 'E')
         logging_mark_thread_failed(thread_num);
     if (!SandstoneConfig::Debug && levelchar == 'd')
-        return;             // no Debug in non-debug build
+        return nullptr;     // no Debug in non-debug build
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
-        return;             // short-circuit
+        return nullptr;     // short-circuit
 
     PerThreadData::Common *thread = sApp->thread_data(thread_num);
     std::atomic<int> &messages_logged = thread->messages_logged;
     if (messages_logged.load(std::memory_order_relaxed) >= sApp->shmem->cfg.max_messages_per_thread)
-        return;
+        return nullptr;     // enough messages
+    return thread;
+}
 
+void log_thread_yaml(int thread_num, char levelchar, const char *yaml)
+{
+    LogLevelVerbosity level = status_level(levelchar);
+    PerThreadData::Common *thread = log_yaml_common(thread_num, levelchar);
+    if (!thread)
+        return;
     log_message_for_thread(thread, LogTypes::RawYaml, level, '\n', yaml);
     if (levelchar == 'E')
         logging_run_callback();
@@ -1349,6 +1356,25 @@ void log_thread_yaml(int thread_num, char levelchar, const char *yaml)
 void log_yaml(char levelchar, const char *yaml)
 {
     log_thread_yaml(thread_num, levelchar, yaml);
+}
+
+void log_yaml(char levelchar, std::string_view description,
+              const std::map<std::string, YamlFormatter::SimpleValue> &values)
+{
+    assert(description.find('\n') == std::string::npos
+           && "YAML descriptions should not include a newline");
+    if (values.empty())
+        log_yaml(levelchar, description.data());
+
+    PerThreadData::Common *thread = log_yaml_common(thread_num, levelchar);
+    if (!thread)
+        return;
+
+    std::string payload = format_yaml(values);
+    log_message_for_thread(thread, LogTypes::RawYaml, status_level(levelchar),
+                           '\n', description, '\n', payload);
+    if (levelchar == 'E')
+        logging_run_callback();
 }
 
 void logging_mark_knob_used(std::string_view key, YamlFormatter::SimpleValue value, KnobOrigin origin)

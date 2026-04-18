@@ -21,4 +21,8 @@ std::string format_yaml(const std::map<std::string, YamlFormatter::SimpleValue> 
 
 using YamlFormatter::format_yaml;
 
+// parentheses because log_yaml may be a macro here
+void (log_yaml)(char levelchar, std::string_view descr,
+                const std::map<std::string, YamlFormatter::SimpleValue> &values);
+
 #endif // SANDSTONE_YAML_H

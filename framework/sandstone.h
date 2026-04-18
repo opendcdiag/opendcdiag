@@ -467,7 +467,7 @@ extern void log_data(const char *message, const void *data, size_t size);
 extern void log_thread_context(const char *msg, ...) ATTRIBUTE_PRINTF(1, 2);
 /// Logs pre-formatted YAML to the logs.
 extern void log_yaml(char levelchar, const char *yaml);
-#define log_yaml(level, yaml)       log_yaml(level[0], yaml)
+#define log_yaml(level, ...)        log_yaml(level[0], __VA_ARGS__)
 
 /// retrieves the physical address of a given pointer.  Currently
 /// this function is only supported on Linux and requires root
@@ -767,7 +767,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
 #  define log_error(...)                    log_message(thread_num, SANDSTONE_LOG_ERROR "")
 #  define log_warning(...)                  (void)0
 #  define log_info(...)                     (void)0
-#  define log_yaml(level, yaml)             log_yaml(level[0], NULL)
+#  define log_yaml(level, ...)              log_yaml(level[0], NULL)
 #  define report_fail(test)                 _report_fail(test, NULL, 0)
 #  define report_fail_msg(...)              _report_fail_msg(NULL, 0, NULL)
 

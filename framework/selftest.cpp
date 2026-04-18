@@ -203,6 +203,17 @@ static int selftest_lograwyaml_run(struct test *test, int cpu)
     return EXIT_SUCCESS;
 }
 
+static int selftest_logformattedyaml_run(struct test *test, int cpu)
+{
+    std::map<std::string, YamlFormatter::SimpleValue> map = {
+        { "cpu", cpu },
+        { "random", random64() },
+        { "text", std::string_view("foo bar") },
+    };
+    log_yaml(SANDSTONE_LOG_INFO, "Some details from the test", map);
+    return EXIT_SUCCESS;
+}
+
 static int selftest_logs_options_init(struct test *test)
 {
     const char *strvalue = get_testspecific_knob_value_string(test, "StringValue", "DefaultValue");
@@ -1417,9 +1428,17 @@ static struct test selftests_array[] = {
 },
 {
     .id = "selftest_log_raw_yaml",
-    .description = "Logs YAML content",
+    .description = "Logs YAML content (raw string)",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_lograwyaml_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_log_formatted_yaml",
+    .description = "Logs YAML content (using format_yaml)",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_logformattedyaml_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
