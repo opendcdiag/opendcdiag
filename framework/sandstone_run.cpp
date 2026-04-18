@@ -1350,29 +1350,26 @@ static StartedChild spawn_child(const struct test *test, int child_number)
 
     StartedChild ret = {};
 #ifdef _WIN32
-    // _spawn on Windows requires argv elements to be quoted if they contain space.
-    const char * const argv0 = SANDSTONE_EXECUTABLE_NAME ".exe";
     if (sApp->gdb_server_comm.size()) {
         // we need the actual Windows handle, because the file
         // descriptors don't inherit properly via gdbserver
        shmemfdstr = stdprintf("h%tx", _get_osfhandle(sApp->shmemfd));
     }
-#else
-    const char * const argv0 = SANDSTONE_EXECUTABLE_NAME;
 #endif
-    const char *argv[] = {
-        // argument order must match exec_mode_run()
-        argv0, "-x", test->id, random_seed.c_str(),
+    // argument order must match exec_mode_run()
+    std::vector argv = {
+        static_cast<const char *>(program_invocation_name), "-x", test->id, random_seed.c_str(),
         shmemfdstr.c_str(),
         childnumstr.c_str(),
-        nullptr
     };
 
-    const char *gdbserverargs[std::size(argv) + 3] = {
-        "gdbserver", "--no-startup-with-shell", sApp->gdb_server_comm.c_str(),
-        program_invocation_name
-    };
-    std::copy(argv + 1, std::end(argv), gdbserverargs + 4);
+    if (sApp->gdb_server_comm.size()) {
+        argv.insert(argv.begin(), {
+            "gdbserver", "--no-startup-with-shell", sApp->gdb_server_comm.c_str(),
+        });
+    }
+
+    argv.push_back(nullptr);
 
 #ifdef _WIN32
     // save stderr
@@ -1380,10 +1377,9 @@ static StartedChild spawn_child(const struct test *test, int child_number)
     logging_init_child_preexec();
 
     if (sApp->gdb_server_comm.size()) {
-        // launch gdbserver instead
-        ret.pid = _spawnvp(_P_NOWAIT, gdbserverargs[0], const_cast<char **>(gdbserverargs));
+        ret.pid = _spawnvp(_P_NOWAIT, argv[0], const_cast<char **>(argv.data()));
     } else {
-        ret.pid = _spawnv(_P_NOWAIT, path_to_exe(), argv);
+        ret.pid = _spawnv(_P_NOWAIT, path_to_exe(), const_cast<char **>(argv.data()));
     }
 
     int saved_errno = errno;
@@ -1402,11 +1398,10 @@ static StartedChild spawn_child(const struct test *test, int child_number)
         logging_init_child_preexec();
 
         if (sApp->gdb_server_comm.size()) {
-            // launch gdbserver instead
-            execvp(gdbserverargs[0], const_cast<char **>(gdbserverargs));
+            execvp(argv[0], const_cast<char **>(argv.data()));
         }
 
-        execv(path_to_exe(), const_cast<char **>(argv));
+        execv(path_to_exe(), const_cast<char **>(argv.data()));
         /* does not return */
         perror("execv");
         _exit(EX_OSERR);
