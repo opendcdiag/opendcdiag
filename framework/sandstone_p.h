@@ -646,6 +646,7 @@ void random_init_global(const char *argument);
 void random_advance_seed();
 std::string random_format_seed();
 void random_init_thread(int thread_num);
+uint32_t random_seed_low32();
 
 /* sandstone.cpp */
 TestResult run_one_test(int *tc, const struct test *test, PerThreadFailures &per_thread_fails);
