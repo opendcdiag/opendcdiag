@@ -319,6 +319,7 @@ struct SandstoneApplicationConfig {
 struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_data<SandstoneConfig::Debug>
 {
     static constexpr int MaxRetestCount = sizeof(PerThreadFailures::value_type) * 8;
+    static constexpr int UlogCount = 3;
     using OutputFormat = TestConfig::OutputFormat;
 
     struct SharedMemory;
@@ -345,6 +346,9 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     } current_test_failure_callback = {};
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
+#if SANDSTONE_ULOG
+    std::array<volatile uint32_t *, UlogCount> ulog_addresses = {};
+#endif
 #if SANDSTONE_FREQUENCY_MANAGER
     std::unique_ptr<FrequencyManager> frequency_manager;
 #endif
@@ -660,6 +664,10 @@ ShortDuration test_timeout(ShortDuration regular_duration);
 TestResult child_run(/*nonconst*/ struct test *test, int child_number);
 struct test_cfg_info;
 TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failures);
+
+/* sandstone_ulog.cpp */
+void ulog_init(std::span<const char * const> args);
+void ulog_update(const struct test *test);
 
 /* test_knobs.cpp */
 void load_test_knob_args(std::span<const char *const> args);

@@ -175,6 +175,11 @@ else
     )
 endif
 
+framework_config.set10(
+    'SANDSTONE_ULOG',
+    not get_option('framework_options').contains('no-ulog'),
+)
+
 framework_config.set10('SANDSTONE_SSL_BUILD', get_option('ssl_link_type') != 'none')
 framework_config.set10(
     'SANDSTONE_SSL_LINKED',
@@ -196,6 +201,7 @@ framework_files += files(
     'sandstone_test_groups.cpp',
     'sandstone_tests.cpp',
     'sandstone_thread.cpp',
+    'sandstone_ulog.cpp',
     'sandstone_utils.cpp',
     'static_vectors.c',
     'test_knobs.cpp',

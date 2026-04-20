@@ -600,6 +600,7 @@ static void init_internal(const struct test *test)
     print_temperature_of_device();
 
     logging_init(test);
+    ulog_update(test);
 }
 
 static void init_per_thread_data()

@@ -35,6 +35,7 @@ struct ProgramOptions {
     const char* on_hang_arg = nullptr;
     const char* on_crash_arg = nullptr;
     std::vector<const char*> deviceset;
+    std::vector<const char *> ulog_args;
 
     std::string list_group_name; // for list_group
 
