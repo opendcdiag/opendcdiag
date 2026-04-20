@@ -554,6 +554,11 @@ void random_advance_seed()
     rand();
 }
 
+uint32_t random_seed_low32()
+{
+    return rng_for_thread(-1)->u32[0];
+}
+
 void random_init_thread(int thread_num)
 {
     // nothing should be modifying the global engine now
