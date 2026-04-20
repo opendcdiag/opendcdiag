@@ -1086,6 +1086,7 @@ int main(int argc, char **argv)
     signals_init_global();
     resource_init_global();
     random_init_global(opts.seed);
+    ulog_init(opts.ulog_args);
     debug_init_global(opts.on_hang_arg, opts.on_crash_arg);
     background_scan_init();
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);

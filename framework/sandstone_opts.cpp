@@ -92,6 +92,7 @@ enum {
     total_retest_on_failure,
     triage_option,
     ud_on_failure_option,
+    ulog_option,
     use_builtin_test_list_option,
 #if SANDSTONE_FREQUENCY_MANAGER
     vary_frequency,
@@ -184,6 +185,9 @@ static struct option long_options[]  = {
     { "total-retest-on-failure", required_argument, nullptr, total_retest_on_failure },
     { "total-time", required_argument, nullptr, 'T' },
     { "ud-on-failure", no_argument, nullptr, ud_on_failure_option },
+#if SANDSTONE_ULOG
+    { "ulog", required_argument, nullptr, ulog_option },
+#endif
     { "use-builtin-test-list", optional_argument, nullptr, use_builtin_test_list_option },
 #if SANDSTONE_FREQUENCY_MANAGER
     { "vary-frequency", no_argument, nullptr, vary_frequency},
@@ -451,6 +455,9 @@ struct ProgramOptionsParser {
             case disable_option:
             case 'e':
             case 'O':
+#if SANDSTONE_ULOG
+            case ulog_option:
+#endif
                 add_to_map_as_vec(opt, optarg);
                 break;
 
@@ -938,6 +945,10 @@ struct ProgramOptionsParser {
             }
         }
 
+#if SANDSTONE_ULOG
+        if (auto it = opts_map.find(ulog_option); it != opts_map.end())
+            opts.ulog_args = std::get<std::vector<const char*>>(it->second);
+#endif
         if (auto it = opts_map.find(_format_option); it != opts_map.end()) {
             switch (std::get<int>(it->second)) {
             case 'Y': {
