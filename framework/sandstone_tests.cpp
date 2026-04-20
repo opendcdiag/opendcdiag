@@ -19,6 +19,10 @@ void SandstoneTestSet::load_all_tests()
     std::span<struct test> known_tests = test_source();
     for (struct test &t : known_tests) {
         all_tests.push_back(&t);
+        if (is_selftest()) {
+            // self tests don't have hardcoded test IDs, so add them now
+            t.shortid = std::hash<std::string_view>()(t.id) & 0xffffff;
+        }
         if (!SandstoneConfig::RestrictedCommandLine) {
             // only populate all_group_map if we're parsing command-line
             for (auto ptr = t.groups; ptr && *ptr; ++ptr) {
