@@ -60,6 +60,17 @@ jobs:
         run: |
           ./builddir/unittests \
             --gtest_filter=-LinuxThermalFixture.CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine # this test doesn't execute properly in a github runner
+      - name: verify selftests
+        shell: bash
+        run: |
+          set -x
+          set selftest_skip \
+              $(builddir/opendcdiag --selftests --list-tests | grep selftest_log_skip) \
+              '@positive'
+          for t; do
+            builddir/opendcdiag --quick --selftests -e "$t" -o -
+          done
+          builddir/opendcdiag --quick --selftests -e selftest_failinit && exit 1 || [[ $? = 1 ]]
       - name: run selftests
         if: ${{ matrix.selftests }}
         shell: bash
@@ -92,6 +103,17 @@ jobs:
         uses: actions/checkout@v6
       - name: Build for CPU (Windows)
         uses: ./.github/actions/build-cpu-win
+      - name: verify selftests
+        shell: msys2 {0}
+        run: |
+          set -x
+          set selftest_skip \
+              $(builddir-windows/opendcdiag --selftests --list-tests | grep selftest_log_skip) \
+              '@positive'
+          for t; do
+            builddir-windows/opendcdiag --quick --selftests -e "$t" -o -
+          done
+          builddir-windows/opendcdiag --quick --selftests -e selftest_failinit && exit 1 || [[ $? = 1 ]]
       - name: run selftests
         shell: msys2 {0}
         run: SANDSTONE_BIN=builddir-windows/opendcdiag.exe bats-core/bin/bats -t bats/sanity-check
