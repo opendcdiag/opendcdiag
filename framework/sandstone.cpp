@@ -178,12 +178,11 @@ static void preinit_tests()
         return e.replacement;
     };
 
-    int preinit_ret = EXIT_SUCCESS;
-    bool truncate_log = false; // preinit may clutter the main thread's log file
-
     for (test_cfg_info &cfg : *test_set) {
+        int preinit_ret = EXIT_SUCCESS;
+        bool truncate_log = false; // preinit may clutter the main thread's log file
         struct test *test = cfg.test;
-        preinit_ret = EXIT_SUCCESS;
+
         if (test->test_preinit) {
             sApp->main_thread_data()->init();
             preinit_ret = test->test_preinit(test);
@@ -230,7 +229,6 @@ static void preinit_tests()
 
         if (truncate_log) {
             AbstractLogger::truncate_log(sApp->thread_data(-1));
-            truncate_log = false;
         }
     }
 }
