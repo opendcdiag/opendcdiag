@@ -1840,7 +1840,7 @@ void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int de
         failing_cpu_label = "id";
     } else {
         dprintf(fd, "%s    id: %s\n", indent_spaces().data(),
-                thread_id_header_for_device(device, verbosity).c_str());
+                format_logical_processor(thr->initial_cpu).c_str());
     }
     if (has_failed) {
         dprintf(fd, "%s    %s: %s\n", indent_spaces().data(), failing_cpu_label,

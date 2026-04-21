@@ -661,9 +661,11 @@ static uintptr_t thread_runner(int thread_number)
 {
     // convert from internal Sandstone numbering to the system one
     // Use modular indexing to support oversubscription (thread_count > device_count)
-    pin_to_logical_processor(LogicalProcessor(device_info[thread_number % device_count()].cpu_number), current_test->id);
+    auto cpu = LogicalProcessor(device_info[thread_number % device_count()].cpu_number);
+    pin_to_logical_processor(cpu, current_test->id);
 
     PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
+    this_thread->initial_cpu = cpu;
     random_init_thread(thread_number);
     int ret = EXIT_FAILURE;
 

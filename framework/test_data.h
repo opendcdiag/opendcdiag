@@ -57,6 +57,7 @@ struct Common
         return flags & unsigned(f2);
     }
 
+    LogicalProcessor initial_cpu;
     LogicalProcessor failing_cpu;
     MonotonicTimePoint fail_time;
     bool has_failed() const
@@ -75,6 +76,7 @@ struct Common
         messages_logged.store(0, std::memory_order_relaxed);
         data_bytes_logged.store(0, std::memory_order_relaxed);
         failing_cpu = LogicalProcessor::None;
+        initial_cpu = LogicalProcessor::None;
         fail_time = MonotonicTimePoint{};
         thread_flags = {};
     }
