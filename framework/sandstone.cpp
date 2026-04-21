@@ -194,14 +194,14 @@ static void preinit_tests()
         // If the group_init function decides that the group cannot run at all,
         // it will return a pointer to a replacement function that will in turn
         // cause the test to fail or skip during test_init().
-        bool group_init_failed = false;
+        bool init_replaced = false;
         if (test->groups) {
             for (auto ptr = test->groups; *ptr; ++ptr) {
                 const struct test_group *group = *ptr;
                 initfunc group_init_replacement = cached_replacement(group);
                 if (!group_init_replacement)
                     continue;
-                group_init_failed = true;
+                init_replaced = true;
                 test->test_init = group_init_replacement;
                 test->flags = test->flags | test_init_in_parent;
                 break;
@@ -209,7 +209,7 @@ static void preinit_tests()
         }
 
         // Skip from group init has precendence over preinit.
-        if (!group_init_failed && preinit_ret != EXIT_SUCCESS) {
+        if (!init_replaced && preinit_ret != EXIT_SUCCESS) {
             test->flags = test->flags | test_init_in_parent; // for -fexec
             std::string skip_message = AbstractLogger::get_skip_message(-1);
             assert(SandstoneConfig::NoLogging || (!skip_message.empty() && "Internal error: Skip in preinit must provide a skip reason"));
