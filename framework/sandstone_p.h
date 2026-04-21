@@ -76,12 +76,6 @@ extern char *program_invocation_name;       // also in glibc's <errno.h>
 
 struct test;
 
-struct mmap_region
-{
-    void *base;
-    size_t size;        /* actual size, not rounded up to page */
-};
-
 /*
  * Called from sandstone_main(). A function for framework to check for system or device criteria.
  */
@@ -89,10 +83,6 @@ void device_specific_init(void);
 
 /* splitlock_detect.c */
 bool splitlock_enforcement_enabled(void);
-
-/* mmap_region.c */
-struct mmap_region mmap_file(int fd);
-void munmap_file(struct mmap_region r);
 
 /* memfpt.c / cpp */
 size_t memfpt_current_high_water_mark(void);

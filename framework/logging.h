@@ -44,7 +44,8 @@ public:
     };
 
     class LogMessagesFile {
-        mmap_region r;
+        void *base = nullptr;
+        size_t size = 0;            // actual size, not rounded up to page
     public:
         struct const_iterator {
             const LogMessage *ptr;
@@ -63,24 +64,23 @@ public:
             }
         };
 
-        LogMessagesFile() noexcept : r{} {}
-        explicit LogMessagesFile(mmap_region r) noexcept : r(r) {}
-        LogMessagesFile(int fd) : LogMessagesFile(mmap_file(fd)) {}
+        LogMessagesFile() noexcept {}
+        LogMessagesFile(int fd);
         LogMessagesFile(const LogMessagesFile &) = delete;
-        LogMessagesFile(LogMessagesFile &&other) : r(std::exchange(other.r, {})) {}
+        LogMessagesFile(LogMessagesFile &&other) = default;
         ~LogMessagesFile() { unmap(); }
         LogMessagesFile &operator=(const LogMessagesFile &) = delete;
         LogMessagesFile &operator=(LogMessagesFile &&) = delete;
 
-        bool empty() const { return r.size == 0; }
+        bool empty() const { return size == 0; }
         const_iterator begin() const
-        { return { static_cast<const LogMessage *>(r.base) }; }
+        { return { static_cast<const LogMessage *>(base) }; }
         const_iterator end() const
         { return { reinterpret_cast<const LogMessage *>(bytes() + size) }; }
 
-        size_t size_bytes() const { return r.size; }
-        const char *bytes() const { return static_cast<const char *>(r.base); }
-        void unmap() { if (r.size) munmap_file(r); r = {}; }
+        size_t size_bytes() const { return size; }
+        const char *bytes() const { return static_cast<const char *>(base); }
+        void unmap();
     };
 
     AbstractLogger(const struct test *test, std::span<const ChildExitStatus> state);
