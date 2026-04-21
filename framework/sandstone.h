@@ -773,6 +773,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
 
 #  define log_message(thrnum, msg, ...)     ({ if (msg[0] == SANDSTONE_LOG_ERROR[0]) log_message(thrnum, SANDSTONE_LOG_ERROR); })
 #  define log_platform_message(msg, ...)    ({ if (msg[0] == SANDSTONE_LOG_ERROR[0]) log_platform_message(SANDSTONE_LOG_ERROR); })
+#  define log_message_skip(thr, cat, ...)   log_message_skip(thr, cat, NULL)
 
 #  ifdef memcmp_fail_report
 #    define _memcmp_fail_report(actual, expected, size, type, ...) \
