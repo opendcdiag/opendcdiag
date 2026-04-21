@@ -166,8 +166,9 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
         hFile = (HANDLE)_get_osfhandle(fildes);
     }
 
-    uint32_t lsize = length & 0xFFFFFFFF;
-    uint32_t hsize = (length >> 32) & 0xFFFFFFFF;
+    size_t map_size = (size_t)off + length;
+    uint32_t lsize = map_size & 0xFFFFFFFF;
+    uint32_t hsize = ((uint64_t)map_size >> 32) & 0xFFFFFFFF;
     LPSECURITY_ATTRIBUTES lpFileMappingAttributes = NULL;
     LPCWSTR lpName = NULL;
     DWORD flMaxProtect = map_max_protection(prot, flags);
