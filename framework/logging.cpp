@@ -31,6 +31,8 @@
 #include <inttypes.h>
 #include <sched.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #ifndef _WIN32
@@ -344,6 +346,33 @@ static inline void truncate_log_internal(int fd)
     // truncate files back to empty, preparing for the next iteration
     lseek(fd, 0, SEEK_SET);
     IGNORE_RETVAL(ftruncate(fd, 0));
+}
+
+AbstractLogger::LogMessagesFile::LogMessagesFile(int fd)
+{
+    struct stat st;
+    if (fstat(fd, &st) == -1)
+        return;
+
+    size = st.st_size;
+    if (size == 0)
+        return;
+
+    // map the entire contents
+    base = mmap(NULL, ROUND_UP_TO_PAGE(size), PROT_READ, MAP_PRIVATE, fd, 0);
+    if (base == MAP_FAILED) [[unlikely]] {
+        fprintf(stderr, "%s: failed to map file to memory: %s\n", program_invocation_name,
+                strerror_for_mmap());
+        exit(EX_OSERR);
+    }
+}
+
+void AbstractLogger::LogMessagesFile::unmap()
+{
+     if (size)
+         munmap(base, ROUND_UP_TO_PAGE(size));
+     base = nullptr;
+     size = 0;
 }
 
 AbstractLogger::LogMessagesFile AbstractLogger::maybe_mmap_log(const PerThreadData::Common *data)
