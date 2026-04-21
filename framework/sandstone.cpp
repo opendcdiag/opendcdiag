@@ -186,6 +186,7 @@ static void preinit_tests()
         if (test->test_preinit) {
             sApp->main_thread_data()->init();
             preinit_ret = test->test_preinit(test);
+            assert(preinit_ret <= EXIT_SUCCESS && "preinit functions cannot fail");
             test->test_preinit = nullptr;   // don't rerun in case the test is re-added
             truncate_log = true;
         }
@@ -210,21 +211,29 @@ static void preinit_tests()
         // Skip from group init has precendence over preinit.
         if (!init_replaced && preinit_ret != EXIT_SUCCESS) {
             test->flags = test->flags | test_init_in_parent; // for -fexec
-            std::string skip_message = AbstractLogger::get_skip_message(-1);
-            assert(SandstoneConfig::NoLogging || (!skip_message.empty() && "Internal error: Skip in preinit must provide a skip reason"));
+            if (SandstoneConfig::NoLogging) {
+                test->test_init = [](struct test *test) {
+                    // category doesn't matter, there's no logging
+                    log_skip(UnknownSkipCategory, nullptr);
+                    return EXIT_SKIP;
+                };
+            } else {
+                std::string skip_message = AbstractLogger::get_skip_message(-1);
+                assert(!skip_message.empty() && "Internal error: Skip in preinit must provide a skip reason");
 
-            char* msg_ptr = strdup(skip_message.c_str());
-            test->data = msg_ptr;
+                char* msg_ptr = strdup(skip_message.c_str());
+                test->data = msg_ptr;
 
-            test->test_init = [](struct test* test) {
-                auto msg_ptr = static_cast<const char*>(test->data);
-                log_skip(static_cast<SkipCategory>(msg_ptr[0]), "%s", msg_ptr + 1);
-                return EXIT_SKIP;
-            };
-            test->test_postcleanup = [](struct test* test) {
-                free(std::exchange(test->data, nullptr));
-                return EXIT_SUCCESS;
-            };
+                test->test_init = [](struct test* test) {
+                    auto msg_ptr = static_cast<const char*>(test->data);
+                    log_skip(static_cast<SkipCategory>(msg_ptr[0]), "%s", msg_ptr + 1);
+                    return EXIT_SKIP;
+                };
+                test->test_postcleanup = [](struct test* test) {
+                    free(std::exchange(test->data, nullptr));
+                    return EXIT_SUCCESS;
+                };
+            }
         }
 
         if (truncate_log) {
