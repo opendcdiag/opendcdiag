@@ -76,9 +76,10 @@ public:
         const_iterator begin() const
         { return { static_cast<const LogMessage *>(r.base) }; }
         const_iterator end() const
-        { return { reinterpret_cast<const LogMessage *>(static_cast<const char *>(r.base) + r.size) }; }
+        { return { reinterpret_cast<const LogMessage *>(bytes() + size) }; }
 
         size_t size_bytes() const { return r.size; }
+        const char *bytes() const { return static_cast<const char *>(r.base); }
         void unmap() { if (r.size) munmap_file(r); r = {}; }
     };
 

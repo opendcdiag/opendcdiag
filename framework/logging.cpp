@@ -1584,12 +1584,12 @@ AbstractLogger::print_one_thread_messages_tdata(int fd, PerThreadData::Common *d
 
 void AbstractLogger::print_child_stderr_common(std::function<void(int)> header)
 {
-    struct mmap_region r = mmap_file(stderr_fd);
-    if (r.size == 0)
+    LogMessagesFile f(stderr_fd);
+    if (f.size_bytes() == 0)
         return;
 
     char indent[] = "    ";
-    std::string_view contents(static_cast<const char *>(r.base), r.size);
+    std::string_view contents(f.bytes(), f.size_bytes());
 
     header(AbstractLogger::file_log_fd);
     print_content_indented(AbstractLogger::file_log_fd, indent, contents);
@@ -1597,7 +1597,7 @@ void AbstractLogger::print_child_stderr_common(std::function<void(int)> header)
         header(AbstractLogger::real_stdout_fd);
         print_content_indented(AbstractLogger::real_stdout_fd, indent, contents);
     }
-    munmap_file(r);
+    f.unmap();
 
     /* reset it for the next iteration */
     truncate_log_internal(stderr_fd);
