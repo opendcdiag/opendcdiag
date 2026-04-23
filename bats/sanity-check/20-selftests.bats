@@ -1894,17 +1894,21 @@ selftest_crash_common() {
 
 crash_code_dump_common() {
     local testname=$1 signame=$2
-    if $is_windows; then
-        skip "Unix-only test"
+    if ! $is_windows; then
+        check_gdb_usable
     fi
-    check_gdb_usable
     sandstone_selftest -n1 -e $testname --on-crash=context
     [[ "$status" -eq 1 ]]
     test_yaml_regexp "/exit" fail
     test_yaml_regexp "/tests/0/result" crash
-    local signum=`kill -l $signame`
-    test_yaml_regexp "/tests/0/threads/1/messages/0/text" \
-        ".*Received signal $signum \(.*\) code=[0-9]+.* RIP = 0x.*"
+    if $is_windows; then
+        test_yaml_regexp "/tests/0/threads/1/messages/0/text" \
+            ".*Received exception 0x[0-9a-f]+ \(.*\), RIP = 0x.*"
+    else
+        local signum=`kill -l $signame`
+        test_yaml_regexp "/tests/0/threads/1/messages/0/text" \
+            ".*Received signal $signum \(.*\) code=[0-9]+.* RIP = 0x.*"
+    fi
     test_yaml_regexp "/tests/0/threads/1/messages/2/text" \
         "Code around RIP \(0x[0-9a-f]+\):"
 }

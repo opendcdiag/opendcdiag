@@ -44,6 +44,7 @@ struct CrashContext
             CONTEXT_FULL;
 
     Header header;
+    CodeDump code_dump;
     EXCEPTION_RECORD exceptionRecord;
     alignas(64) CONTEXT fixedContext;
     char xsave_area[];      // C99 Flexible Array Member
@@ -102,6 +103,40 @@ close_hslot:
     return false;
 }
 
+static CodeDump dump_code_around_pc(const void *pc)
+{
+    // ReadProcessMemory on the current process handles unmapped pages
+    // gracefully (returns FALSE); read each page independently so that
+    // an unmapped page on one side doesn't suppress the other.
+    CodeDump dump;
+    if (!pc)
+        return dump;
+
+    static constexpr uintptr_t PageMask = 4096 - 1;
+    uintptr_t base = uintptr_t(pc) - CodeDump::BytesBefore;
+    uintptr_t last = base + CodeDump::TotalBytes - 1;
+    if ((base & ~PageMask) == (last & ~PageMask)) {
+        SIZE_T n = 0;
+        if (ReadProcessMemory(GetCurrentProcess(), LPCVOID(base), dump.bytes, CodeDump::TotalBytes, &n)) {
+            dump.valid_start = 0;
+            dump.valid_end   = n;
+        }
+    } else {
+        size_t first_len  = (base | PageMask) + 1 - base;
+        size_t second_len = CodeDump::TotalBytes - first_len;
+        SIZE_T n1 = 0, n2 = 0;
+        bool ok1 = ReadProcessMemory(GetCurrentProcess(), LPCVOID(base),
+                                     dump.bytes, first_len, &n1);
+        bool ok2 = ReadProcessMemory(GetCurrentProcess(), LPCVOID(base + first_len),
+                                     dump.bytes + first_len, second_len, &n2);
+        if (ok1 || ok2) {
+            dump.valid_start = ok1 ? 0          : first_len;
+            dump.valid_end   = ok2 ? first_len + n2 : n1;
+        }
+    }
+    return dump;
+}
+
 static LONG WINAPI handler(EXCEPTION_POINTERS *info)
 {
     // Ignore non-error or user-defined exceptions. See
@@ -138,6 +173,13 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
     if (uintptr_t(info->ExceptionRecord->ExceptionAddress) >= executableImageStart
             && uintptr_t(info->ExceptionRecord->ExceptionAddress) < executableImageEnd)
         ctx->header.baseAddress = executableImageStart;
+
+    // Read code bytes around the PC before the process exits.
+    void *pc = nullptr;
+#ifdef __x86_64__
+    pc = reinterpret_cast<void *>(ctx->fixedContext.Rip);
+#endif
+    ctx->code_dump = dump_code_around_pc(pc);
 
     if (!WriteFile(HANDLE(sApp->shmem->child_debug_socket), ctx, context_size, nullptr, nullptr))
         win32_perror("WriteFile for mailslot");
@@ -334,6 +376,14 @@ void debug_crashed_child(std::span<const pid_t> children)
             log.insert(0, "Registers:\n");
             log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
         }
+
+        void *pc = nullptr;
+#ifdef __x86_64__
+        pc = reinterpret_cast<void *>(ctx->fixedContext.Rip);
+#endif
+        if (std::string code_log = format_code_dump(pc, ctx->code_dump);
+                !code_log.empty())
+            log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), code_log);
     }
 
     // got here on failure
