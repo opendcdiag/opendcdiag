@@ -727,7 +727,7 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     if constexpr (std::is_same_v<T, uint8_t>) {
         // stateless comparison with no description
         memcmp_or_fail(values, values + 1, Count);
-    } else if constexpr (std::is_same_v<T, _Float16>) {
+    } else if constexpr (std::is_same_v<T, float>) {
         // older, printf-like formatting
         memcmp_or_fail(values, values + 1, Count,
                        "data of type '%s'\n"
