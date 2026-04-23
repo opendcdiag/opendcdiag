@@ -260,11 +260,9 @@ static void child_crash_handler(int signum, siginfo_t *si, void *ucontext)
         // let parent process know
         CrashContext::send(socket, si, ucontext);
 
-        if (on_crash_action & attach_gdb_on_crash) {
-            // now wait for the parent process to be done with us
-            while (thread_state.load(std::memory_order_relaxed) == thread_failed)
-                futex_wait(&thread_state, int(thread_failed));
-        }
+        // wait for the parent process to be done with us
+        while (thread_state.load(std::memory_order_relaxed) == thread_failed)
+            futex_wait(&thread_state, int(thread_failed));
     }
 
     // restore the signal handler so we can be killed
@@ -1125,10 +1123,8 @@ void debug_crashed_child(std::span<const pid_t> children)
         // release the child
         auto &thread_state = sApp->main_thread_data(slice)->thread_state;
         thread_state.load(std::memory_order_acquire);
-        if (on_crash_action != context_on_crash) {
-            thread_state.store(thread_debugged, std::memory_order_relaxed);
-            futex_wake_all(&thread_state);
-        }
+        thread_state.store(thread_debugged, std::memory_order_relaxed);
+        futex_wake_all(&thread_state);
     }
 }
 
