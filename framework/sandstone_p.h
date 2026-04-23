@@ -616,6 +616,7 @@ extern "C" initfunc group_kvm_init(void) noexcept;
 #endif
 
 /* logging.cpp */
+void log_message_yaml(int thread_num, char levelchar, const char *yaml);
 void log_message_preformatted(int thread_num, LogLevelVerbosity level, std::string_view msg);
 int logging_stdout_fd(void);
 void logging_init_global(void);

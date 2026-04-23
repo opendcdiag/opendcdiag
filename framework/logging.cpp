@@ -1325,8 +1325,7 @@ void log_thread_context(std::string_view ctx)
     log_message_for_thread(thread, LogTypes::ThreadContext, LOG_LEVEL_VERBOSE(1), ctx);
 }
 
-#undef log_yaml
-void log_yaml(char levelchar, const char *yaml)
+void log_thread_yaml(int thread_num, char levelchar, const char *yaml)
 {
     LogLevelVerbosity level = status_level(levelchar);
     if (levelchar == 'E')
@@ -1344,6 +1343,12 @@ void log_yaml(char levelchar, const char *yaml)
     log_message_for_thread(thread, LogTypes::RawYaml, level, '\n', yaml);
     if (levelchar == 'E')
         logging_run_callback();
+}
+
+#undef log_yaml
+void log_yaml(char levelchar, const char *yaml)
+{
+    log_thread_yaml(thread_num, levelchar, yaml);
 }
 
 void logging_mark_knob_used(std::string_view key, YamlFormatter::SimpleValue value, KnobOrigin origin)
