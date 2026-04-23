@@ -124,10 +124,19 @@ selftest_crash_context_common() {
     fi
 
     if [[ `uname -m` = x86_64 ]]; then
-        # OpenDCDiag's built-in register dumper is only implemented for x86-64
-        msgidx=$((yamldump[/tests/0/threads/$threadidx/messages@len] - 1))
-        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$msgidx/level" "info"
-        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$msgidx/text" "Registers:"
-        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$msgidx/text" " rax += 0x[0-9a-f]{16}.*"
+        # OpenDCDiag's built-in register dumper is only implemented for x86-64.
+        # Scan messages to find the one containing "Registers:".
+        local msgcount=$((yamldump[/tests/0/threads/$threadidx/messages@len]))
+        local regmsgidx=-1
+        for ((i = 0; i < msgcount; ++i)); do
+            if [[ "${yamldump[/tests/0/threads/$threadidx/messages/$i/text]}" = *"Registers:"* ]]; then
+                regmsgidx=$i
+                break
+            fi
+        done
+        (( regmsgidx >= 0 ))
+        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$regmsgidx/level" "info"
+        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$regmsgidx/text" "Registers:"
+        test_yaml_regexp "/tests/0/threads/$threadidx/messages/$regmsgidx/text" " rax += 0x[0-9a-f]{16}.*"
     fi
 }
