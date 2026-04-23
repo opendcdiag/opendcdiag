@@ -981,8 +981,74 @@ static void cause_sigsegv_noncanonical()
 
 static void cause_sigsegv_instruction()
 {
-    uintptr_t ptr = rand() & 0xfff;
+    // Jump near a page boundary so that both the page containing the address
+    // and the adjacent page are unmapped.
+    uintptr_t ptr = 0xff0 + (rand() & 0xf);
     force_call(ptr);
+}
+
+static void cause_sigill_partial()
+{
+    constexpr size_t page_size = 4096;
+    // Map writable first so we can write the instruction bytes.
+    auto *pages = static_cast<uint8_t *>(
+            mmap(nullptr, 2 * page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    if (pages == MAP_FAILED) {
+        log_skip(SelftestSkipCategory, "mmap failed: %s", strerror_for_mmap());
+        return;
+    }
+
+    // Write a guaranteed-crash instruction 8 bytes before the page boundary
+    // (offset 0xff8) so that RIP is valid/readable but the 8 bytes after it
+    // cross into PROT_NONE, producing a partial code dump.
+    uint8_t *insn = pages + page_size - 8;
+#if defined(__x86_64__)
+    insn[0] = 0x0f; insn[1] = 0x0b;    // UD2
+#elif defined(__aarch64__)
+    insn[0] = 0x00; insn[1] = 0x00; insn[2] = 0x00; insn[3] = 0x00;   // UDF #0
+#else
+    log_skip(SelftestSkipCategory, "unsupported architecture");
+    munmap(pages, 2 * page_size);
+    return;
+#endif
+
+    if (mprotect(pages, page_size, PROT_READ | PROT_EXEC) < 0
+            || mprotect(pages + page_size, page_size, PROT_NONE) < 0) {
+        log_skip(SelftestSkipCategory, "mprotect failed: %s", strerror_for_mmap());
+        munmap(pages, 2 * page_size);
+        return;
+    }
+    force_call(uintptr_t(insn));
+    munmap(pages, 2 * page_size);
+}
+
+static void cause_sigsegv_readable_unreadable()
+{
+    constexpr size_t page_size = 4096;
+    // First page readable, second PROT_NONE. Jump 4 bytes into the unreadable
+    // page: row 1 of the dump shows readable bytes then ??, row 2 is all ??.
+    auto *pages = static_cast<uint8_t *>(
+            mmap(nullptr, 2 * page_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    if (pages == MAP_FAILED || mprotect(pages, page_size, PROT_READ | PROT_EXEC) < 0) {
+        log_skip(SelftestSkipCategory, "mmap/mprotect failed: %s", strerror_for_mmap());
+        return;
+    }
+    force_call(uintptr_t(pages + page_size + 4));
+    munmap(pages, 2 * page_size);
+}
+
+static void cause_sigsegv_unreadable_readable()
+{
+    constexpr size_t page_size = 4096;
+    // First page PROT_NONE, second readable. Jump 4 bytes before the readable page.
+    auto *pages = static_cast<uint8_t *>(
+            mmap(nullptr, 2 * page_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    if (pages == MAP_FAILED || mprotect(pages + page_size, page_size, PROT_READ | PROT_EXEC) < 0) {
+        log_skip(SelftestSkipCategory, "mmap/mprotect failed: %s", strerror_for_mmap());
+        return;
+    }
+    force_call(uintptr_t(pages + page_size - 4));
+    munmap(pages, 2 * page_size);
 }
 
 static void cause_sigtrap_int3()
@@ -2282,6 +2348,30 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .description = "Crashes with SIGSEGV (instruction)",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_crash_run<cause_sigsegv_instruction>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sigill_near_unreadable",
+    .description = "Crashes with SIGILL (UD2/UDF instruction) near a readable/unmapped page boundary",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crash_run<cause_sigill_partial>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sigsegv_readable_unreadable",
+    .description = "Crashes with SIGSEGV (instruction) jumping from a readable page into an unmapped page",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crash_run<cause_sigsegv_readable_unreadable>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sigsegv_unreadable_readable",
+    .description = "Crashes with SIGSEGV (instruction) on an unmapped page adjacent to a readable page",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crash_run<cause_sigsegv_unreadable_readable>,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },

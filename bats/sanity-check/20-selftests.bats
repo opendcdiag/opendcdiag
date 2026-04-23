@@ -1892,6 +1892,53 @@ selftest_crash_common() {
     fi
 }
 
+crash_code_dump_common() {
+    local testname=$1 signame=$2
+    if $is_windows; then
+        skip "Unix-only test"
+    fi
+    check_gdb_usable
+    sandstone_selftest -n1 -e $testname --on-crash=context
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" crash
+    local signum=`kill -l $signame`
+    test_yaml_regexp "/tests/0/threads/1/messages/0/text" \
+        ".*Received signal $signum \(.*\) code=[0-9]+.* RIP = 0x.*"
+    test_yaml_regexp "/tests/0/threads/1/messages/2/text" \
+        "Code around RIP \(0x[0-9a-f]+\):"
+}
+
+@test "crash code dump (sigill near unreadable)" {
+    declare -A yamldump
+    crash_code_dump_common selftest_sigill_near_unreadable ILL
+    # RIP row: some readable hex bytes followed by ??
+    test_yaml_regexp "/tests/0/threads/1/messages/2/text" \
+        " +0x[0-9a-f]+: ([0-9a-f]{2} )+(\?\? )+\?\?"
+}
+
+@test "crash code dump (sigsegv readable-unreadable)" {
+    declare -A yamldump
+    crash_code_dump_common selftest_sigsegv_readable_unreadable SEGV
+    # First row: some readable bytes then ??
+    test_yaml_regexp "/tests/0/threads/1/messages/2/text" \
+        " +0x[0-9a-f]+: ([0-9a-f]{2} )+(\?\? )+\?\?"
+    # RIP row: entirely ??
+    test_yaml_regexp "/tests/0/threads/1/messages/2/text" \
+        " +0x[0-9a-f]+: (\?\? )+\?\?"
+}
+
+@test "crash code dump (sigsegv unreadable-readable)" {
+    declare -A yamldump
+    crash_code_dump_common selftest_sigsegv_unreadable_readable SEGV
+    # Row 0: entirely ?? (RIP page unmapped)
+    test_yaml_regexp "/tests/0/threads/1/messages/2/text" \
+        " +0x[0-9a-f]+: (\?\? )+\?\?"
+    # Row 1: some ?? followed by readable bytes
+    test_yaml_regexp "/tests/0/threads/1/messages/2/text" \
+        " +0x[0-9a-f]+: (\?\? )+([0-9a-f]{2} )+[0-9a-f]{2}"
+}
+
 @test "crash backtrace" {
     check_gdb_usable
     declare -A yamldump

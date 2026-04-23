@@ -15,3 +15,7 @@ framework_files += files(
 if get_option('cpp_link_args').contains('-static')
     framework_config.set10('SANDSTONE_STATIC', true)
 endif
+
+if cpp.has_function('process_vm_readv', prefix: '#include <sys/uio.h>')
+    framework_extra_cpp_args += ['-DHAVE_PROCESS_VM_READV=1']
+endif

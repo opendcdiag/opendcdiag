@@ -7,8 +7,10 @@
 #define SANDSTONE_CHILD_DEBUG_COMMON_H
 
 #include "sandstone_context_dump.h"
+#include "sandstone_utils.h"
 
 #include <stdint.h>
+#include <string>
 
 #ifdef __x86_64__
 #  include "xsave_states.h"
@@ -57,5 +59,34 @@ static int get_xsave_size()
     return 0;
 }
 #endif // x86_64
+
+struct CodeDump
+{
+    static constexpr size_t TotalBytes   = 32;
+    static constexpr size_t BytesBefore  = 16;  // bytes before RIP
+
+    uint8_t bytes[TotalBytes] = {};
+    size_t valid_start = 0;
+    size_t valid_end   = 0;
+
+    bool has_data() const { return valid_start < valid_end; }
+};
+
+inline std::string format_code_dump(const void *rip, const CodeDump &dump)
+{
+    if (!dump.has_data())
+        return {};
+    uintptr_t base = uintptr_t(rip) - CodeDump::BytesBefore;
+    std::string log = stdprintf("Code around RIP (0x%tx):\n", uintptr_t(rip));
+    for (size_t row = 0; row < CodeDump::TotalBytes; row += 16) {
+        log += stdprintf("  0x%tx:", base + row);
+        for (size_t i = row; i < row + 16; ++i) {
+            bool valid = (i >= dump.valid_start && i < dump.valid_end);
+            log += valid ? stdprintf(" %02x", dump.bytes[i]) : std::string(" ??");
+        }
+        log += "\n";
+    }
+    return log;
+}
 
 #endif // SANDSTONE_CHILD_DEBUG_COMMON_H

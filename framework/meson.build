@@ -264,6 +264,8 @@ if target_machine.system() == 'darwin'
     ]
 endif
 
+framework_extra_cpp_args = []
+
 if target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
     subdir('sysdeps/unix')
 endif
@@ -316,6 +318,7 @@ framework_a = static_library(
         march_flags,
         default_cpp_flags,
         default_cpp_warn,
+        framework_extra_cpp_args,
     ],
 )
 

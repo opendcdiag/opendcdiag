@@ -912,6 +912,48 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
     return true;
 }
 
+static std::string dump_code_around_pc(pid_t pid, const void *pc)
+{
+#if HAVE_PROCESS_VM_READV
+    CodeDump dump;
+
+    uintptr_t base = uintptr_t(pc) - CodeDump::BytesBefore;
+    uintptr_t last = base + CodeDump::TotalBytes - 1;
+
+    static constexpr uintptr_t PageMask = 4096 - 1;
+
+    if ((base & ~PageMask) == (last & ~PageMask)) {
+        // All bytes fall on the same page: single call suffices.
+        struct iovec local_iov  = { dump.bytes,                         CodeDump::TotalBytes };
+        struct iovec remote_iov = { reinterpret_cast<void *>(base),     CodeDump::TotalBytes };
+        ssize_t n = process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0);
+        if (n <= 0)
+            return {};
+        dump.valid_start = 0;
+        dump.valid_end   = n;
+    } else {
+        // The range spans a page boundary: read each page independently so
+        // that an unmapped page on one side doesn't suppress the other.
+        size_t first_len  = (base | PageMask) + 1 - base;
+        size_t second_len = CodeDump::TotalBytes - first_len;
+        struct iovec local1  = { dump.bytes,              first_len  };
+        struct iovec remote1 = { reinterpret_cast<void *>(base),              first_len  };
+        struct iovec local2  = { dump.bytes + first_len,  second_len };
+        struct iovec remote2 = { reinterpret_cast<void *>(base + first_len),  second_len };
+        ssize_t n1 = process_vm_readv(pid, &local1, 1, &remote1, 1, 0);
+        ssize_t n2 = process_vm_readv(pid, &local2, 1, &remote2, 1, 0);
+        if (n1 <= 0 && n2 <= 0)
+            return {};
+        dump.valid_start = (n1 > 0) ? 0          : first_len;
+        dump.valid_end   = (n2 > 0) ? first_len + n2 : n1;
+    }
+
+    return format_code_dump(pc, dump);
+#else
+    return {};
+#endif  // HAVE_PROCESS_VM_READV
+}
+
 static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
 {
     int thread = -1;
@@ -933,8 +975,11 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
         generate_backtrace(pidstr, slice, handle, thread);
     }
 
+    if (!handle)
+        return;
+
     // now include the register state
-    if (handle && ctx.contents & CrashContext::MachineContext) {
+    if (ctx.contents & CrashContext::MachineContext) {
         std::string log;
 
 #ifdef __x86_64__
@@ -947,6 +992,11 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
             log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
         }
     }
+
+    // Dump code bytes around RIP.
+    if (std::string code_log = dump_code_around_pc(ctx.fixed.pid, ctx.fixed.rip);
+            !code_log.empty())
+        log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), code_log);
 }
 
 void debug_init_global(const char *on_hang_arg, const char *on_crash_arg)
