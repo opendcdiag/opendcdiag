@@ -225,28 +225,15 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
 }
 
 #ifndef NDEBUG
-bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...)
+// we can only rely on the CI for this
+bool _memcmp_or_fail_check_fmt(const char *fmt, ...)
 {
-    bool ok = true;
-    size_t size = 256;
-    while (fmt) {
-        char buf[size];  // nowarn: -Wvla-cxx-extension, -Wvla
-        va_list va;
-        va_start(va, fmt);
-        int n = vsnprintf(buf, size, fmt, va);
-        va_end(va);
-        if (n < size) {
-            ok = strchr(buf, '\n') == nullptr;
-            break;
-        }
-
-        // insufficient buffer, try again
-        size = n;
-    }
-    return ok;
+    std::string msg = va_start_and_stdprintf(fmt);
+    if (msg.contains('\n'))
+        log_yaml(SANDSTONE_LOG_DEBUG, ("memcmp_or_fail: " + msg).c_str());
+    return true;
 }
 
-// we can only rely on the CI for this
 bool SandstoneMemcmpOrFail::test_formatter(std::function<std::string ()> cb, size_t)
 {
     log_yaml(SANDSTONE_LOG_DEBUG, ("memcmp_or_fail: " + cb()).c_str());
