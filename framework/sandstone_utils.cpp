@@ -271,18 +271,18 @@ struct FormatSimpleValue
     void operator()(uint64_t v)
     {
         if (v < 4096)
-            append_to += stdprintf("%u", unsigned(v));
-        else
+            append_to += stdprintf("%" PRIu64, v);
+        else if (int64_t(v) >= 0)
             append_to += stdprintf("0x%" PRIx64, v);
+        else
+            append_to += stdprintf("'0x%" PRIx64 "'", v);
     }
     void operator()(int64_t v)
     {
         if (v >= 0)
             operator()(uint64_t(v));
-        else if (v >= -4096)
-            append_to += stdprintf("%d", int(v));
         else
-            append_to += stdprintf("-0x%" PRIx64, -(uint64_t(v)));
+            append_to += stdprintf("%" PRId64, v);
     }
     void operator()(double v)
     {

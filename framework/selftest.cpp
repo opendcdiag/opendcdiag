@@ -209,6 +209,8 @@ static int selftest_logformattedyaml_run(struct test *test, int cpu)
         { "cpu", cpu },
         { "random", random64() },
         { "text", std::string_view("foo bar") },
+        { "large_number", int64_t(LLONG_MAX) },
+        { "small_number", int64_t(LLONG_MIN) },
     };
     log_yaml(SANDSTONE_LOG_INFO, "Some details from the test", map);
     return EXIT_SUCCESS;

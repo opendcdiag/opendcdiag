@@ -764,13 +764,13 @@ TEST(YamlFormatter, integer) {
     EXPECT_EQ(format_yaml("key", 4095), "key: 4095");
     EXPECT_EQ(format_yaml("key", -4096), "key: -4096");
     EXPECT_EQ(format_yaml("key", 4096), "key: 0x1000");
-    EXPECT_EQ(format_yaml("key", -4097), "key: -0x1001");
+    EXPECT_EQ(format_yaml("key", -4097), "key: -4097");
     EXPECT_EQ(format_yaml("key", INT_MAX), "key: 0x7fffffff");
-    EXPECT_EQ(format_yaml("key", INT_MIN), "key: -0x80000000");
+    EXPECT_EQ(format_yaml("key", INT_MIN), "key: -2147483648");
     EXPECT_EQ(format_yaml("key", int64_t(INT_MAX) + 1), "key: 0x80000000");
-    EXPECT_EQ(format_yaml("key", int64_t(INT_MIN) - 1), "key: -0x80000001");
+    EXPECT_EQ(format_yaml("key", int64_t(INT_MIN) - 1), "key: -2147483649");
     EXPECT_EQ(format_yaml("key", std::numeric_limits<int64_t>::max()), "key: 0x7fffffffffffffff");
-    EXPECT_EQ(format_yaml("key", std::numeric_limits<int64_t>::min()), "key: -0x8000000000000000");
+    EXPECT_EQ(format_yaml("key", std::numeric_limits<int64_t>::min()), "key: -9223372036854775808");
 
     EXPECT_EQ(format_yaml("key", uint64_t(0)), "key: 0");
     EXPECT_EQ(format_yaml("key", uint64_t(1)), "key: 1");
@@ -778,8 +778,11 @@ TEST(YamlFormatter, integer) {
     EXPECT_EQ(format_yaml("key", uint64_t(4096)), "key: 0x1000");
     EXPECT_EQ(format_yaml("key", uint64_t(INT_MAX)), "key: 0x7fffffff");
     EXPECT_EQ(format_yaml("key", uint64_t(std::numeric_limits<int64_t>::max())), "key: 0x7fffffffffffffff");
-    EXPECT_EQ(format_yaml("key", uint64_t(std::numeric_limits<int64_t>::min())), "key: 0x8000000000000000");
-    EXPECT_EQ(format_yaml("key", std::numeric_limits<uint64_t>::max()), "key: 0xffffffffffffffff");
+
+    // we always print as signed quantities because some YAML parsers don't like
+    // numbers out of the int64_t range
+    EXPECT_EQ(format_yaml("key", uint64_t(std::numeric_limits<int64_t>::min())), "key: '0x8000000000000000'");
+    EXPECT_EQ(format_yaml("key", std::numeric_limits<uint64_t>::max()), "key: '0xffffffffffffffff'");
 }
 
 TEST(YamlFormatter, floating_point) {
