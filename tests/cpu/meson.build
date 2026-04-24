@@ -153,54 +153,57 @@ if host_machine.cpu_family() == 'x86_64'
     endif
 
     tests_config_hsw = tests_set_hsw.apply(tests_config)
+    tests_hsw_sources = tests_config_hsw.sources()
 
-    tests_hsw_a = static_library(
-        'tests_hsw',
-        sources : tests_config_hsw.sources(),
-        dependencies : tests_config_hsw.dependencies(),
-        build_by_default: false,
-        include_directories : [
-            tests_common_incdirs,
-        ],
-        c_args : [
-            tests_common_c_args,
-            march_hsw,
-        ],
-        cpp_args : [
-            tests_common_cpp_args,
-            march_hsw,
-            '-DEigen=EigenAVX2',
-        ],
-    )
+    if tests_hsw_sources.length() > 0
+        tests_hsw_a = static_library(
+            'tests_hsw',
+            sources : tests_hsw_sources,
+            dependencies : tests_config_hsw.dependencies(),
+            build_by_default: false,
+            include_directories : [
+                tests_common_incdirs,
+            ],
+            c_args : [
+                tests_common_c_args,
+                march_hsw,
+            ],
+            cpp_args : [
+                tests_common_cpp_args,
+                march_hsw,
+                '-DEigen=EigenAVX2',
+            ],
+        )
+        sandstone_tests += [tests_hsw_a]
+    endif
 
     tests_config_skx = tests_set_skx.apply(tests_config)
+    tests_skx_sources = tests_config_skx.sources()
 
-    tests_skx_a = static_library(
-        'tests_skx',
-        sources : tests_config_skx.sources(),
-        build_by_default: false,
-        include_directories : [
-            tests_common_incdirs,
-        ],
-        dependencies: [
-            tests_config_skx.dependencies(),
-            boost_dep,
-        ],
-        c_args : [
-            tests_common_c_args,
-            march_skx,
-        ],
-        cpp_args : [
-            tests_common_cpp_args,
-            march_skx,
-            '-DEigen=EigenAVX512',
-        ],
-    )
-
-    sandstone_tests += [
-        tests_hsw_a,
-        tests_skx_a,
-    ]
+    if tests_skx_sources.length() > 0
+        tests_skx_a = static_library(
+            'tests_skx',
+            sources : tests_skx_sources,
+            build_by_default: false,
+            include_directories : [
+                tests_common_incdirs,
+            ],
+            dependencies: [
+                tests_config_skx.dependencies(),
+                boost_dep,
+            ],
+            c_args : [
+                tests_common_c_args,
+                march_skx,
+            ],
+            cpp_args : [
+                tests_common_cpp_args,
+                march_skx,
+                '-DEigen=EigenAVX512',
+            ],
+        )
+        sandstone_tests += [tests_skx_a]
+    endif
 
     unittests_sources += files(
         'ifs/unit/ifs_unit_utils.cpp',
