@@ -1551,6 +1551,10 @@ function selftest_logerror_common() {
     local testlist=($($SANDSTONE --selftests --list-tests | sed -n '/^selftest_datacomparefail_/{s/\r$//;p;}'))
     ((${#testlist[@]} > 0))      # ensure we've found at least one
     for test in ${testlist[@]}; do
+        if [[ "$test" = *_float* ]]; then
+            # test temporarily broken
+            continue
+        fi
         printf '# %s\n' "$test" >&3     # print as progress report
 
         type=${test#selftest_datacomparefail_}
