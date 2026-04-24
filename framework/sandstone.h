@@ -396,7 +396,7 @@ struct test {
 };
 
 /* internal functions; see C macro and C++ templates at the end of this file */
-extern bool _memcmp_or_fail_check_fmt_nonewline(const char *fmt, ...);
+extern bool _memcmp_or_fail_check_fmt(const char *fmt, ...);
 extern bool _memcmp_fail_check_cb(char *(*cb)(void *token, ptrdiff_t), void *, size_t);
 extern void _memcmp_fail_report_cb(const void *actual, const void *expected, size_t size,
                                    enum DataType, char *(*cb)(void *token, ptrdiff_t), void *)
@@ -703,8 +703,6 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
 
-    assert(_memcmp_or_fail_check_fmt_nonewline(fmt, std::forward<FmtArgs>(args)...)
-           && "Data descriptions should not include a newline");
     if (SandstoneConfig::NoLogging)
         fmt = nullptr;
     if (!fmt)
@@ -713,6 +711,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
     // printf style instead
     if (__builtin_memcmp(actual, expected, count * elemSize) != 0)
         _memcmp_fail_report(actual, expected, count * elemSize, type, fmt, std::forward<FmtArgs>(args)...);
+    assert(_memcmp_or_fail_check_fmt(fmt, std::forward<FmtArgs>(args)...));
 }
 #pragma GCC diagnostic pop
 
@@ -724,8 +723,6 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
         _Pragma("GCC diagnostic push");                             \
         _Pragma("GCC diagnostic ignored \"-Wformat-security\"");    \
         _Pragma("GCC diagnostic ignored \"-Wunused-variable\"");    \
-        assert(_memcmp_or_fail_check_fmt_nonewline((fmt), ##__VA_ARGS__) \
-               && "Data descriptions should not include a newline");\
         _memcmp_fail_report((actual), (expected), _size2, _type,    \
                             *(fmt) ? (fmt) : NULL, ##__VA_ARGS__);  \
         _Pragma("GCC diagnostic pop");                              \
@@ -738,6 +735,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
         size_t _size = sizeof(*_actual) * (size);                   \
         if (__builtin_memcmp(_actual, _expected, _size) != 0)       \
             memcmp_fail_report(_actual, _expected, (size), fmt, ##__VA_ARGS__); \
+        assert(_memcmp_or_fail_check_fmt((fmt), ##__VA_ARGS__));    \
     })
 #define memcmp_or_fail(actual, expected, size, ...) \
     _memcmp_or_fail(actual, expected, size, "" __VA_ARGS__)
