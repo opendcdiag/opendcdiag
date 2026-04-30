@@ -203,36 +203,6 @@ static void add_providers(std::string &info)
     info += "']";
 }
 
-static void add_engines(std::string &info)
-{
-    if (!s_ENGINE_get_first)
-        return;
-
-    std::vector<std::string_view> engines;
-    for (ENGINE *e = s_ENGINE_get_first(); e; e = s_ENGINE_get_next(e)) {
-        std::string_view id = s_ENGINE_get_id(e);
-#ifdef NDEBUG
-        // skip uninteresting engines (we keep in debug mode so we can check
-        // the code is working)
-        if (id == "dynamic")
-            continue;
-#endif
-        engines.emplace_back(id);
-    }
-
-    if (engines.size() == 0)
-        return;
-
-    std::ranges::sort(engines);
-    info += ", engines: ['";
-    for (size_t i = 0; i < engines.size(); ++i) {
-        if (i)
-            info += "','";
-        info += engines[i];
-    }
-    info += "']";
-}
-
 std::string openssl_info()
 {
     std::string result;
@@ -242,7 +212,6 @@ std::string openssl_info()
     // Start with the OpenSSL version & date
     result = s_OpenSSL_version(0);
     add_providers(result);
-    add_engines(result);
 
     return result;
 }

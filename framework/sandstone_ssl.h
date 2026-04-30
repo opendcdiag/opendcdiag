@@ -562,12 +562,6 @@
     F(EC_POINT_set_to_infinity)                 \
     /**/
 
-#define SANDSTONE_SSL_ENGINE_FUNCTIONS(F)       \
-    F(ENGINE_get_first)                         \
-    F(ENGINE_get_id)                            \
-    F(ENGINE_get_next)                          \
-    /**/
-
 #define SANDSTONE_SSL_HMAC_FUNCTIONS(F)         \
     F(HMAC)                                     \
     F(HMAC_CTX_copy)                            \
@@ -773,24 +767,6 @@
     F(EVP_CipherInit)                            \
     F(EVP_CIPHER_iv_length)                      \
     F(EVP_CIPHER_key_length)                     \
-    F(EVP_CIPHER_meth_dup)                       \
-    F(EVP_CIPHER_meth_free)                      \
-    F(EVP_CIPHER_meth_get_cleanup)               \
-    F(EVP_CIPHER_meth_get_ctrl)                  \
-    F(EVP_CIPHER_meth_get_do_cipher)             \
-    F(EVP_CIPHER_meth_get_get_asn1_params)       \
-    F(EVP_CIPHER_meth_get_init)                  \
-    F(EVP_CIPHER_meth_get_set_asn1_params)       \
-    F(EVP_CIPHER_meth_new)                       \
-    F(EVP_CIPHER_meth_set_cleanup)               \
-    F(EVP_CIPHER_meth_set_ctrl)                  \
-    F(EVP_CIPHER_meth_set_do_cipher)             \
-    F(EVP_CIPHER_meth_set_flags)                 \
-    F(EVP_CIPHER_meth_set_get_asn1_params)       \
-    F(EVP_CIPHER_meth_set_impl_ctx_size)         \
-    F(EVP_CIPHER_meth_set_init)                  \
-    F(EVP_CIPHER_meth_set_iv_length)             \
-    F(EVP_CIPHER_meth_set_set_asn1_params)       \
     /*F(EVP_CIPHER_mode)*/                       \
     F(EVP_CIPHER_nid)                            \
     F(EVP_CIPHER_param_to_asn1)                  \
@@ -893,35 +869,10 @@
     F(EVP_MD_CTX_reset)                          \
     F(EVP_MD_CTX_set_flags)                      \
     F(EVP_MD_CTX_set_pkey_ctx)                   \
-    F(EVP_MD_CTX_set_update_fn)                  \
     /*F(EVP_MD_CTX_size)*/                       \
     F(EVP_MD_CTX_test_flags)                     \
     /*F(EVP_MD_CTX_type)*/                       \
-    F(EVP_MD_CTX_update_fn)                      \
     F(EVP_MD_flags)                              \
-    F(EVP_MD_meth_dup)                           \
-    F(EVP_MD_meth_free)                          \
-    F(EVP_MD_meth_get_app_datasize)              \
-    F(EVP_MD_meth_get_cleanup)                   \
-    F(EVP_MD_meth_get_copy)                      \
-    F(EVP_MD_meth_get_ctrl)                      \
-    F(EVP_MD_meth_get_final)                     \
-    F(EVP_MD_meth_get_flags)                     \
-    F(EVP_MD_meth_get_init)                      \
-    F(EVP_MD_meth_get_input_blocksize)           \
-    F(EVP_MD_meth_get_result_size)               \
-    F(EVP_MD_meth_get_update)                    \
-    F(EVP_MD_meth_new)                           \
-    F(EVP_MD_meth_set_app_datasize)              \
-    F(EVP_MD_meth_set_cleanup)                   \
-    F(EVP_MD_meth_set_copy)                      \
-    F(EVP_MD_meth_set_ctrl)                      \
-    F(EVP_MD_meth_set_final)                     \
-    F(EVP_MD_meth_set_flags)                     \
-    F(EVP_MD_meth_set_init)                      \
-    F(EVP_MD_meth_set_input_blocksize)           \
-    F(EVP_MD_meth_set_result_size)               \
-    F(EVP_MD_meth_set_update)                    \
     F(EVP_md_null)                               \
     F(EVP_MD_pkey_type)                          \
     F(EVP_MD_size)                               \
@@ -929,32 +880,7 @@
     F(EVP_OpenFinal)                             \
     F(EVP_OpenInit)                              \
     /*F(EVP_OpenUpdate)*/                        \
-    F(EVP_PKEY_asn1_add0)                        \
-    F(EVP_PKEY_asn1_add_alias)                   \
-    F(EVP_PKEY_asn1_copy)                        \
-    F(EVP_PKEY_asn1_find)                        \
-    F(EVP_PKEY_asn1_find_str)                    \
-    F(EVP_PKEY_asn1_free)                        \
-    F(EVP_PKEY_asn1_get0)                        \
-    F(EVP_PKEY_asn1_get0_info)                   \
-    F(EVP_PKEY_asn1_get_count)                   \
     /*F(EVP_PKEY_ASN1_METHOD)*/                  \
-    F(EVP_PKEY_asn1_new)                         \
-    F(EVP_PKEY_asn1_set_check)                   \
-    F(EVP_PKEY_asn1_set_ctrl)                    \
-    F(EVP_PKEY_asn1_set_free)                    \
-    F(EVP_PKEY_asn1_set_get_priv_key)            \
-    F(EVP_PKEY_asn1_set_get_pub_key)             \
-    F(EVP_PKEY_asn1_set_item)                    \
-    F(EVP_PKEY_asn1_set_param_check)             \
-    F(EVP_PKEY_asn1_set_param)                   \
-    F(EVP_PKEY_asn1_set_private)                 \
-    F(EVP_PKEY_asn1_set_public_check)            \
-    F(EVP_PKEY_asn1_set_public)                  \
-    F(EVP_PKEY_asn1_set_security_bits)           \
-    F(EVP_PKEY_asn1_set_set_priv_key)            \
-    F(EVP_PKEY_asn1_set_set_pub_key)             \
-    F(EVP_PKEY_asn1_set_siginf)                  \
     F(EVP_PKEY_base_id)                          \
     F(EVP_PKEY_bits)                             \
     F(EVP_PKEY_check)                            \
@@ -987,10 +913,8 @@
     F(EVP_PKEY_fromdata_init)                    \
     F(EVP_PKEY_get0_DH)                          \
     F(EVP_PKEY_get0_DSA)                         \
-    F(EVP_PKEY_get0_asn1)                        \
     F(EVP_PKEY_get_size)                         \
     F(EVP_PKEY_get0_EC_KEY)                      \
-    F(EVP_PKEY_get0_engine)                      \
     F(EVP_PKEY_get0_hmac)                        \
     F(EVP_PKEY_get0_poly1305)                    \
     F(EVP_PKEY_get0_RSA)                         \
@@ -1005,55 +929,6 @@
     F(EVP_PKEY_id)                               \
     F(EVP_PKEY_keygen)                           \
     F(EVP_PKEY_keygen_init)                      \
-    F(EVP_PKEY_meth_add0)                        \
-    F(EVP_PKEY_meth_copy)                        \
-    F(EVP_PKEY_meth_find)                        \
-    F(EVP_PKEY_meth_free)                        \
-    F(EVP_PKEY_meth_get0)                        \
-    F(EVP_PKEY_meth_get0_info)                   \
-    F(EVP_PKEY_meth_get_check)                   \
-    F(EVP_PKEY_meth_get_cleanup)                 \
-    F(EVP_PKEY_meth_get_copy)                    \
-    F(EVP_PKEY_meth_get_count)                   \
-    F(EVP_PKEY_meth_get_ctrl)                    \
-    F(EVP_PKEY_meth_get_decrypt)                 \
-    F(EVP_PKEY_meth_get_derive)                  \
-    F(EVP_PKEY_meth_get_digest_custom)           \
-    F(EVP_PKEY_meth_get_digestsign)              \
-    F(EVP_PKEY_meth_get_digestverify)            \
-    F(EVP_PKEY_meth_get_encrypt)                 \
-    F(EVP_PKEY_meth_get_init)                    \
-    F(EVP_PKEY_meth_get_keygen)                  \
-    F(EVP_PKEY_meth_get_param_check)             \
-    F(EVP_PKEY_meth_get_paramgen)                \
-    F(EVP_PKEY_meth_get_public_check)            \
-    F(EVP_PKEY_meth_get_signctx)                 \
-    F(EVP_PKEY_meth_get_sign)                    \
-    F(EVP_PKEY_meth_get_verifyctx)               \
-    F(EVP_PKEY_meth_get_verify)                  \
-    F(EVP_PKEY_meth_get_verify_recover)          \
-    F(EVP_PKEY_meth_new)                         \
-    F(EVP_PKEY_meth_remove)                      \
-    F(EVP_PKEY_meth_set_check)                   \
-    F(EVP_PKEY_meth_set_cleanup)                 \
-    F(EVP_PKEY_meth_set_copy)                    \
-    F(EVP_PKEY_meth_set_ctrl)                    \
-    F(EVP_PKEY_meth_set_decrypt)                 \
-    F(EVP_PKEY_meth_set_derive)                  \
-    F(EVP_PKEY_meth_set_digest_custom)           \
-    F(EVP_PKEY_meth_set_digestsign)              \
-    F(EVP_PKEY_meth_set_digestverify)            \
-    F(EVP_PKEY_meth_set_encrypt)                 \
-    F(EVP_PKEY_meth_set_init)                    \
-    F(EVP_PKEY_meth_set_keygen)                  \
-    F(EVP_PKEY_meth_set_param_check)             \
-    F(EVP_PKEY_meth_set_paramgen)                \
-    F(EVP_PKEY_meth_set_public_check)            \
-    F(EVP_PKEY_meth_set_signctx)                 \
-    F(EVP_PKEY_meth_set_sign)                    \
-    F(EVP_PKEY_meth_set_verifyctx)               \
-    F(EVP_PKEY_meth_set_verify)                  \
-    F(EVP_PKEY_meth_set_verify_recover)          \
     F(EVP_PKEY_missing_parameters)               \
     F(EVP_PKEY_new_CMAC_key)                     \
     F(EVP_PKEY_new)                              \
@@ -1071,7 +946,6 @@
     F(EVP_PKEY_set1_DH)                          \
     F(EVP_PKEY_set1_DSA)                         \
     F(EVP_PKEY_set1_EC_KEY)                      \
-    F(EVP_PKEY_set1_engine)                      \
     F(EVP_PKEY_set1_RSA)                         \
     F(EVP_PKEY_sign)                             \
     F(EVP_PKEY_sign_init)                        \
@@ -1389,7 +1263,6 @@
     F(RSA_get0_dmp1)                            \
     F(RSA_get0_dmq1)                            \
     F(RSA_get0_e)                               \
-    F(RSA_get0_engine)                          \
     F(RSA_get0_factors)                         \
     F(RSA_get0_iqmp)                            \
     F(RSA_get0_key)                             \
@@ -2170,7 +2043,6 @@
     SANDSTONE_SSL_CMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_CRYPTO_FUNCTIONS(F)           \
     SANDSTONE_SSL_EC_FUNCTIONS(F)               \
-    SANDSTONE_SSL_ENGINE_FUNCTIONS(F)           \
     SANDSTONE_SSL_EVP_FUNCTIONS(F)              \
     SANDSTONE_SSL_HMAC_FUNCTIONS(F)             \
     SANDSTONE_SSL_GENERIC_FUNCTIONS(F)          \
