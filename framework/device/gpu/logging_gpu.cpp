@@ -35,7 +35,7 @@ auto calc_spacing()
 
 std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerbosity verbosity)
 {
-    gpu_info_t *info = device_info + thread;
+    const gpu_info_t *info = device_info + thread;
     std::string line;
     if (info->subdevice_index != -1) {
         line = std::format("{{ gpu_index: {}/{}, gpu_number: {:{}}, ", info->device_index, info->subdevice_index, info->gpu_number, calc_spacing().gpu);

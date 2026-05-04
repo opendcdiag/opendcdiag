@@ -666,7 +666,7 @@ bool TopologyDetector::detect_numa()
 
         // Parse the list. This will *usually* be one or two ranges.
         cpu_info_t *cpu = &device_info[0];
-        cpu_info_t *const end = device_info + sApp->thread_count;
+        const cpu_info_t *const end = device_info + sApp->thread_count;
         const char *ptr = cpulist.c_str();
         while (*ptr && cpu != end) {
             auto [start, stop] = parse_cpulist_range(ptr);
@@ -1601,7 +1601,7 @@ static void populate_core_group(Topology::CoreGrouping *group, const Topology::T
 
 static Topology build_topology()
 {
-    cpu_info_t *info = device_info;
+    const cpu_info_t *info = device_info;
     const cpu_info_t *const end = device_info + num_cpus();
 
     std::vector<Topology::Package> packages;
@@ -1617,8 +1617,8 @@ static Topology build_topology()
         Topology::Package *pkg = &packages.emplace_back();
 
         // scan forward to the end of this package
-        Topology::Thread *first = info;
-        Topology::Thread *groupfirst = info;
+        const Topology::Thread *first = info;
+        const Topology::Thread *groupfirst = info;
         int core_count = 0;
         for (int last_core_id = -1; info != end; ++info) {
             if (info->core_id < 0 || info->thread_id < 0)
@@ -2090,7 +2090,7 @@ std::string build_failure_mask_for_topology(const struct test* test)
 
 uint32_t mixin_from_device_info(int thread_num)
 {
-    auto& info = device_info[thread_num];
+    const auto& info = device_info[thread_num];
     auto mixin = scramble(static_cast<uint32_t>(info.core_id), static_cast<uint32_t>(info.package_id));
     mixin ^= [=](){
         switch (info.thread_id & 3) {
