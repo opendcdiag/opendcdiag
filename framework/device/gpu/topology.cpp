@@ -253,7 +253,7 @@ std::string build_failure_mask_for_topology(const struct test* test)
 
 uint32_t mixin_from_device_info(int thread_num)
 {
-    auto& info = device_info[thread_num];
+    const auto& info = device_info[thread_num];
     return scramble(
         static_cast<uint32_t>(info.bdf.domain), static_cast<uint32_t>(info.bdf.bus),
         static_cast<uint32_t>(info.bdf.device), static_cast<uint32_t>(info.bdf.function)
