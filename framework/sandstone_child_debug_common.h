@@ -89,4 +89,7 @@ inline std::string format_code_dump(const void *rip, const CodeDump &dump)
     return log;
 }
 
+// Appends device-specific crash diagnostics for the specified test thread.
+void dump_device_state(std::string &out, int thread_num);
+
 #endif // SANDSTONE_CHILD_DEBUG_COMMON_H
