@@ -538,11 +538,11 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
 
 static MonotonicTimePoint calculate_wallclock_deadline(Duration duration, MonotonicTimePoint *pnow = nullptr)
 {
-    MonotonicTimePoint later = MonotonicTimePoint::clock::now();
+    MonotonicTimePoint now = MonotonicTimePoint::clock::now();
     if (pnow)
-        *pnow = later;
+        *pnow = now;
 
-    return later + duration;
+    return now + duration;
 }
 
 bool wallclock_deadline_has_expired(MonotonicTimePoint deadline)
