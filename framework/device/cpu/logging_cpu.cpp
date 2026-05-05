@@ -472,3 +472,8 @@ void AbstractLogger::print_fixed_for_device()
 }
 
 #endif // !SANDSTONE_NO_LOGGING
+
+void dump_device_state(std::string&, int)
+{
+    // CPU crash dumps already include register and XSAVE state.
+}
