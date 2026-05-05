@@ -343,6 +343,7 @@ inline void test_the_test_data<true>::prepare_test_tests(const struct test *the_
         return;
 
     hwm_at_start = memfpt_current_high_water_mark();
+    time_at_test_start = MonotonicTimePoint::clock::now();
     per_thread.resize(sApp->thread_count);
     std::fill_n(per_thread.begin(), sApp->thread_count, PerThread{});
 }
@@ -423,10 +424,10 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
     }
 
     // check the overall time
-    Duration expected_runtime = sApp->shmem->current_test_endtime - sApp->current_test_starttime;
+    Duration expected_runtime = sApp->shmem->current_test_endtime - time_at_test_start;
     Duration min_expected_runtime = expected_runtime - expected_runtime / 4;
     Duration max_expected_runtime = expected_runtime + expected_runtime / 4;
-    Duration actual_runtime = now - sApp->current_test_starttime;
+    Duration actual_runtime = now - time_at_test_start;
     Duration difference = abs(expected_runtime - actual_runtime);
 
     if ((actual_runtime > min_expected_runtime && actual_runtime < max_expected_runtime)
@@ -449,7 +450,7 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
     Duration average = {};
     int average_counts = 0;
     int while_loops = 0;
-    log_info("Sampled init timing: %s", format_duration(time_at_run_threads_start - sApp->current_test_starttime).c_str());
+    log_info("Sampled init timing: %s", format_duration(time_at_run_threads_start - time_at_test_start).c_str());
     for (int t = 0; t < sApp->thread_count; ++t) {
         PerThread &thr = per_thread[t];
         if (thr.iteration_times[0].time_since_epoch() == 0s)
@@ -1128,11 +1129,11 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
         init_per_thread_data();
 
-        sApp->prepare_test_tests(test);
         TestResult state = prepare_test_for_device(test);
         if (state != TestResult::Passed) {
             return state;
         }
+        sApp->prepare_test_tests(test);
 
         if (test->test_init) {
             if (init_in_aux_thread) {
