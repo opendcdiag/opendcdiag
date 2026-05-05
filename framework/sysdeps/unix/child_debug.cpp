@@ -986,6 +986,7 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
         dump_gprs(log, &ctx.mc);
         dump_xsave(log, ctx.xsave_buffer.data(), ctx.xsave_buffer.size(), -1);
 #endif
+        dump_device_state(log, thread);
 
         if (log.size()) {
             log.insert(0, "Registers:\n");
