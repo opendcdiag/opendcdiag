@@ -202,6 +202,8 @@ template <> struct test_the_test_data<true>
     };
 
     std::vector<PerThread> per_thread;
+    // different from sApp->current_test_starttime that it does not include test preparation overhead
+    MonotonicTimePoint time_at_test_start;
     MonotonicTimePoint time_at_run_threads_start;
     size_t hwm_at_start;
     bool test_tests = false;
