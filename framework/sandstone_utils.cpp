@@ -284,6 +284,14 @@ struct FormatSimpleValue
         else
             append_to += stdprintf("%" PRId64, v);
     }
+    void operator()(uint32_t v)
+    {
+        operator()(uint64_t(v));
+    }
+    void operator()(int32_t v)
+    {
+        operator()(int64_t(v));
+    }
     void operator()(double v)
     {
         Float64 u(v);
