@@ -13,7 +13,7 @@
 #include <stdint.h>
 
 namespace YamlFormatter {
-using SimpleValue = std::variant<bool, int64_t, uint64_t, double, std::string_view, std::string>;
+using SimpleValue = std::variant<bool, int32_t, uint32_t, int64_t, uint64_t, double, std::string_view, std::string>;
 
 std::string format_yaml(std::string_view key, const YamlFormatter::SimpleValue &value);
 std::string format_yaml(const std::map<std::string, YamlFormatter::SimpleValue> &values);

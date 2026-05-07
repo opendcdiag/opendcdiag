@@ -772,6 +772,16 @@ TEST(YamlFormatter, integer) {
     EXPECT_EQ(format_yaml("key", std::numeric_limits<int64_t>::max()), "key: 0x7fffffffffffffff");
     EXPECT_EQ(format_yaml("key", std::numeric_limits<int64_t>::min()), "key: -9223372036854775808");
 
+    EXPECT_EQ(format_yaml("key", int32_t(0)), "key: 0");
+    EXPECT_EQ(format_yaml("key", int32_t(4096)), "key: 0x1000");
+    EXPECT_EQ(format_yaml("key", std::numeric_limits<int32_t>::max()), "key: 0x7fffffff");
+    EXPECT_EQ(format_yaml("key", std::numeric_limits<int32_t>::min()), "key: -2147483648");
+
+    EXPECT_EQ(format_yaml("key", uint32_t(0)), "key: 0");
+    EXPECT_EQ(format_yaml("key", uint32_t(4095)), "key: 4095");
+    EXPECT_EQ(format_yaml("key", uint32_t(4096)), "key: 0x1000");
+    EXPECT_EQ(format_yaml("key", std::numeric_limits<uint32_t>::max()), "key: 0xffffffff");
+
     EXPECT_EQ(format_yaml("key", uint64_t(0)), "key: 0");
     EXPECT_EQ(format_yaml("key", uint64_t(1)), "key: 1");
     EXPECT_EQ(format_yaml("key", uint64_t(4095)), "key: 4095");
