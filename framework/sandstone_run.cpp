@@ -243,8 +243,11 @@ bool SandstoneMemcmpOrFail::test_formatter(std::function<std::string ()> cb, siz
 bool SandstoneMemcmpOrFail::test_formatter(std::function<std::string (ptrdiff_t)> cb, size_t max)
 {
     auto doit = [&](ptrdiff_t idx) {
-        std::string yaml = stdprintf("memcmp_or_fail %td: ", idx) + cb(idx);
-        log_yaml(SANDSTONE_LOG_DEBUG, yaml.c_str());
+        auto payload = cb(idx);
+        if (!payload.empty()) {
+            std::string yaml = stdprintf("memcmp_or_fail %td: ", idx) + payload;
+            log_yaml(SANDSTONE_LOG_DEBUG, yaml.c_str());
+        }
     };
     doit(-1);
     doit(max - 1);
