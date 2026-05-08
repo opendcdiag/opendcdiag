@@ -24,6 +24,10 @@
 #    define memfd_create(name, flags)   -1
 #  endif
 #  define gettid()                      getpid()
+#  ifndef MFD_NOEXEC_SEAL
+#    define MFD_NOEXEC_SEAL 0
+#    define MFD_EXEC 0
+#  endif
 #else
 #  define gettid()                      syscall(SYS_gettid)
 
@@ -34,6 +38,10 @@
 #    endif
 #    define MFD_CLOEXEC 1U
 #    define memfd_create(name, flags)     syscall(319, name, flags)
+# endif
+# ifndef MFD_NOEXEC_SEAL
+#   define MFD_NOEXEC_SEAL 8U
+#   define MFD_EXEC 0x10U
 # endif
 #endif
 
@@ -79,7 +87,24 @@ static int try_open_regular_tmpfile(const char *dir, int ocloexec)
 int open_memfd(enum MemfdCloexecFlag flag)
 {
     int ocloexec = flag ? O_CLOEXEC : 0;
-    int fd = memfd_create("", flag ? MFD_CLOEXEC : 0);
+    unsigned int memfd_cloexec = flag ? MFD_CLOEXEC : 0;
+
+    int fd = -1;
+    if (MFD_NOEXEC_SEAL != 0) {
+        static _Atomic(unsigned int) memfd_noexec_seal = MFD_NOEXEC_SEAL;
+        unsigned int flag = atomic_load_explicit(&memfd_noexec_seal, memory_order_relaxed);
+        if (flag) {
+            /* try to use the flag, to avoid a kernel warning */
+            fd = memfd_create("", memfd_cloexec | flag);
+            if (fd >= 0)
+                return fd;
+            /* failed, cache the fact if the kernel didn't like the flag */
+            if (errno == EINVAL)
+                atomic_store_explicit(&memfd_noexec_seal, 0, memory_order_relaxed);
+        }
+    }
+
+    fd = memfd_create("", memfd_cloexec);
     if (fd >= 0)
         return fd;
 
