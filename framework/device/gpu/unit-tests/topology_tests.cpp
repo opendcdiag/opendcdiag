@@ -26,6 +26,13 @@ gpu_info_t make_gpu_info_entry(int subdevice_index, __uint128_t bdf, int16_t num
 }
 }
 
+Topology topo_global;
+
+const Topology &Topology::topology()
+{
+    return topo_global;
+}
+
 TEST(Topology, HeterogenousTopology)
 {
     std::vector<gpu_info_t> gpu_info;
@@ -165,4 +172,77 @@ TEST(Topology, NumaDomainsGrouping)
             EXPECT_EQ(dev->numa_id, domain.id());
         }
     }
+}
+
+TEST(Topology, SlicePlansCreation)
+{
+    std::vector<gpu_info_t> gpu_info;
+    gpu_info.reserve(UNITTESTS_THREAD_COUNT);
+
+    // NUMA 0, 3-elem root
+    gpu_info.emplace_back(make_gpu_info_entry(0, 0xfeed0, 0));
+    gpu_info.emplace_back(make_gpu_info_entry(1, 0xfeed0, 0));
+    gpu_info.emplace_back(make_gpu_info_entry(2, 0xfeed0, 0));
+
+    // NUMA 1, end device
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xbeef1, 1));
+
+    // NUMA 0, end device
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xface0, 0));
+
+    // NUMA 1, end device
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xbeef2, 1));
+
+    // NUMA 0, end devices
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xface1, 0));
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xface2, 0));
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xface3, 0));
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xface4, 0));
+
+    // NUMA 1, end devices
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xbeef3, 1));
+    gpu_info.emplace_back(make_gpu_info_entry(-1, 0xbeef4, 1));
+
+    // NUMA 1, 4-elem root
+    gpu_info.emplace_back(make_gpu_info_entry(0, 0xc0ff1, 1));
+    gpu_info.emplace_back(make_gpu_info_entry(1, 0xc0ff1, 1));
+    gpu_info.emplace_back(make_gpu_info_entry(2, 0xc0ff1, 1));
+    gpu_info.emplace_back(make_gpu_info_entry(3, 0xc0ff1, 1));
+
+    ASSERT_EQ(gpu_info.size(), UNITTESTS_THREAD_COUNT);
+
+    device_info = gpu_info.data();
+    topo_global = build_topology();
+
+    auto expect_plan = [](const auto& actual, const std::vector<std::pair<int, int>>& expected) {
+        ASSERT_EQ(actual.size(), expected.size());
+        auto expected_it = expected.begin();
+        for (size_t i = 0; i < actual.size(); ++i, ++expected_it) {
+            EXPECT_EQ(actual[i].starting_device, expected_it->first);
+            EXPECT_EQ(actual[i].device_count, expected_it->second);
+        }
+    };
+
+    SlicePlans plans;
+    slice_plan_init(plans.plans, 3);
+
+    expect_plan(plans.plans[SlicePlans::IsolateSockets], {
+        { 0, 16 },
+    });
+    // Current impl first discovers NUMA 0, then NUMA 1. This is why those indices are not 'sorted'.
+    expect_plan(plans.plans[SlicePlans::IsolateNuma], {
+        { 0, 3 }, { 4, 1 }, { 6, 4 },  // NUMA 0
+        { 3, 1 }, { 5, 1 }, { 10, 6 },  // NUMA 1
+    });
+    expect_plan(plans.plans[SlicePlans::Heuristic], {
+        { 0, 3 }, { 4, 1 }, { 6, 3 }, {9, 1},     // 4 > 3, split
+        { 3, 1 }, { 5, 1 }, { 10, 2 }, { 12, 4 }, // 4 > 3 but we don't split root devices
+    });
+
+    // For default heuristic DefaultMaxCoresPerSlice=32 is big enough to be same as isolate numa
+    slice_plan_init(plans.plans, 0);
+    expect_plan(plans.plans[SlicePlans::Heuristic], {
+        { 0, 3 }, { 4, 1 }, { 6, 4 },
+        { 3, 1 }, { 5, 1 }, { 10, 6 },
+    });
 }
