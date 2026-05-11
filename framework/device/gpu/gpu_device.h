@@ -43,6 +43,9 @@ struct gpu_info_t
     /// We keep it for legacy reasons (used in selftest.cpp)
     int16_t package_id;
 
+    /// NUMA node ID in the system, -1 if not known.
+    int16_t numa_id;
+
     /// GPU unique index, as iterated by the L0 driver.
     int gpu_number;
 
