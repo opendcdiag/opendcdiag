@@ -441,7 +441,26 @@ int16_t detect_package_id_via_os(int cpu)
     std::ifstream infile;
     infile.open(file.data());
     if (!infile.is_open()) { [[unlikely]]
-        fprintf(stderr, "%s: internal error: unable to find physical_package_id file\n",
+        fprintf(stderr, "%s: internal error: unable to find physical_package_id file: %m\n",
+                program_invocation_name);
+        return res;
+    }
+    infile >> res;
+    infile.close();
+
+    return res;
+}
+
+int16_t detect_numa_node_via_os(const ze_pci_address_ext_t& bdf)
+{
+    int16_t res = -1;
+    auto file = std::format("/sys/bus/pci/devices/{:04x}:{:02x}:{:02x}.{:01x}/numa_node",
+        bdf.domain, bdf.bus, bdf.device, bdf.function);
+
+    std::ifstream infile;
+    infile.open(file.data());
+    if (!infile.is_open()) { [[unlikely]]
+        fprintf(stderr, "%s: internal error: unable to find numa_node file: %m\n",
                 program_invocation_name);
         return res;
     }
@@ -480,6 +499,7 @@ void create_mock_topology(const char *topo)
         gpu_count++;
 
         info->package_id = info->cpu_number = info->gpu_number = info->device_index = 0;
+        info->numa_id = -1;
         info->subdevice_index = -1;
         info->num_subdevices = 0;
         info->gpu_arch.as_dword = 0x0u;
@@ -542,6 +562,7 @@ void setup_devices<GpusSet>(const GpusSet &enabled_devices)
 
         info->cpu_number = try_assign_local_cpu(enabled_cpus, info->bdf);
         info->package_id = detect_package_id_via_os(info->cpu_number);
+        info->numa_id = detect_numa_node_via_os(info->bdf);
 
         zes_device_properties_t zes_device_prop = { .stype = ZES_STRUCTURE_TYPE_DEVICE_PROPERTIES };
         CHECK_EXIT(zesDeviceGetProperties(zes_handle, &zes_device_prop));
@@ -659,10 +680,41 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
 
 void slice_plan_init(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
 {
-    for (std::vector<DeviceRange> &plan : plans) {
+    for (auto& plan : plans) {
         plan.clear();
     }
+
     std::vector plan = { DeviceRange{ 0, thread_count() } };
-    plans.fill(plan);
-    return;
+    plans[SlicePlans::IsolateSockets] = plan;
+    plans[SlicePlans::Heuristic] = plan;
+
+    auto& isolate_numa = plans[SlicePlans::IsolateNuma];
+
+    const Topology &topology = Topology::topology();
+    for (const auto& numa_domain : topology.numa_domains) {
+        if (numa_domain.devices.empty()) {
+            continue;
+        }
+
+        int range_start = numa_domain.devices.front()->gpu();
+        int prev_gpu = range_start;
+        for (size_t i = 1; i < numa_domain.devices.size(); ++i) {
+            int gpu = numa_domain.devices[i]->gpu();
+            if (gpu == prev_gpu + 1) {
+                prev_gpu = gpu;
+                continue; // continue within the contiguous range
+            }
+
+            // end of contiguous range
+            isolate_numa.push_back(DeviceRange{ range_start, prev_gpu - range_start + 1 });
+            range_start = prev_gpu = gpu;
+        }
+
+        // include open tailing range
+        isolate_numa.push_back(DeviceRange{ range_start, prev_gpu - range_start + 1 });
+    }
+
+    if (isolate_numa.empty()) [[unlikely]] {
+        isolate_numa = plan;
+    }
 }

@@ -6,6 +6,21 @@
 #include <sandstone.h>
 #include <topology_gpu.h>
 
+#include <algorithm>
+
+namespace {
+void push_to_numa_domains(std::vector<Topology::NumaNode>& numa_domains, const Topology::Thread* info)
+{
+    auto domain = std::find_if(numa_domains.begin(), numa_domains.end(), [&](const auto& node) {
+        return node.id() == info->numa_id; // devices with numa_id=-1 (unknown) will be grouped together
+    });
+    if (domain == numa_domains.end()) {
+        domain = numa_domains.emplace(numa_domains.end());
+    }
+    domain->devices.push_back(info);
+}
+} // end anonymous namespace
+
 Topology build_topology()
 {
     Topology topo;
@@ -19,6 +34,7 @@ Topology build_topology()
                 root_first = info;
             }
             topo.devices.emplace_back() = info;
+            push_to_numa_domains(topo.numa_domains, info);
             info++;
             root_first++;
         } else {
@@ -26,6 +42,7 @@ Topology build_topology()
                 topo.devices.emplace_back() = std::span(root_first, info); // close the open root
                 root_first = info; // start a new root
             }
+            push_to_numa_domains(topo.numa_domains, info);
             info++;
         }
     }

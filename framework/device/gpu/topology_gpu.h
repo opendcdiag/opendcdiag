@@ -45,6 +45,16 @@ public:
 
     std::vector<std::variant<RootDevice, EndDevice>> devices;
 
+    struct NumaNode
+    {
+        std::vector<EndDevice> devices; // here FLAT/COMPOSITE hierarchy does not matter
+        int id() const
+        {
+            return !devices.empty() ? devices.front()->numa_id : -1;
+        }
+    };
+    std::vector<NumaNode> numa_domains;
+
     static const Topology &topology();
 };
 
