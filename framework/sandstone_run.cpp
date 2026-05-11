@@ -1393,24 +1393,24 @@ static StartedChild spawn_child(int child_number, const std::vector<const char *
 
 static int slices_for_test(const struct test *test)
 {
-    SandstoneApplication::SlicePlans::Type type = [=]() {
+    SlicePlans::Type type = [=]() {
         switch (test->flags & test_schedule_mask) {
         case test_schedule_sequential:  // sequential tests see the full system
         case test_schedule_fullsystem:
-            return SandstoneApplication::SlicePlans::FullSystem;
+            return SlicePlans::FullSystem;
 
         case test_schedule_isolate_socket:
-            return SandstoneApplication::SlicePlans::IsolateSockets;
+            return SlicePlans::IsolateSockets;
 
         case test_schedule_isolate_numa_domain:
-            return SandstoneApplication::SlicePlans::IsolateNuma;
+            return SlicePlans::IsolateNuma;
 
         case test_schedule_default:
             break;
         }
-        return SandstoneApplication::SlicePlans::Heuristic;
+        return SlicePlans::Heuristic;
     }();
-    if (type == SandstoneApplication::SlicePlans::FullSystem) {
+    if (type == SlicePlans::FullSystem) {
         sApp->main_thread_data()->device_range = { 0, sApp->thread_count };
         return 1;
     }

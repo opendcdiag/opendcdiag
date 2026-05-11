@@ -657,8 +657,12 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
     }
 }
 
-void slice_plan_init(int max_cores_per_slice)
+void slice_plan_init(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
 {
+    for (std::vector<DeviceRange> &plan : plans) {
+        plan.clear();
+    }
     std::vector plan = { DeviceRange{ 0, thread_count() } };
-    sApp->slice_plans.plans.fill(plan);
+    plans.fill(plan);
+    return;
 }

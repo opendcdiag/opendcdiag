@@ -2260,9 +2260,9 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
         }
         return result;
     };
-    const std::vector<DeviceRange> &fullsocket = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::IsolateSockets];
-    const std::vector<DeviceRange> &isolatenuma = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::IsolateNuma];
-    const std::vector<DeviceRange> &heuristic = sApp->slice_plans.plans[SandstoneApplication::SlicePlans::Heuristic];
+    const std::vector<DeviceRange> &fullsocket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
+    const std::vector<DeviceRange> &isolatenuma = sApp->slice_plans.plans[SlicePlans::IsolateNuma];
+    const std::vector<DeviceRange> &heuristic = sApp->slice_plans.plans[SlicePlans::Heuristic];
     logging_printf(LOG_LEVEL_VERBOSE(1), "test-plans:\n");
     logging_printf(LOG_LEVEL_VERBOSE(1), "  fullsocket: [ %s ]\n",
                    make_plan_string(fullsocket).c_str());

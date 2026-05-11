@@ -195,7 +195,24 @@ bool pin_thread_to_logical_processor(LogicalProcessor n, tid_t thread_id, const 
 bool pin_to_logical_processors(DeviceRange, const char *thread_name);
 
 void apply_deviceset_param(const char *param);
-void slice_plan_init(int max_cores_per_slice);
+
+struct SlicePlans
+{
+    static constexpr int MinimumCpusPerSocket = 4;
+    static constexpr int DefaultMaxCoresPerSlice = 32;
+    enum Type : int8_t
+    {
+        FullSystem = -1,
+        IsolateSockets,
+        IsolateNuma,
+        Heuristic,
+    };
+    using Slices = std::vector<DeviceRange>;
+    using SlicesArray = std::array<Slices, 3>;
+    SlicesArray plans;
+};
+
+void slice_plan_init(SlicePlans::SlicesArray& plans, int max_cores_per_slice);
 
 template <typename EnabledDevices>
 EnabledDevices detect_devices();
