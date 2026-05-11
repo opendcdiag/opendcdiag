@@ -330,19 +330,6 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     static constexpr int MaxRetestCount = sizeof(PerThreadFailures::value_type) * 8;
     using OutputFormat = TestConfig::OutputFormat;
 
-    struct SlicePlans {
-        static constexpr int MinimumCpusPerSocket = 4;
-        static constexpr int DefaultMaxCoresPerSlice = 32;
-        enum Type : int8_t {
-            FullSystem = -1,
-            IsolateSockets,
-            IsolateNuma,
-            Heuristic,
-        };
-        using Slices = std::vector<DeviceRange>;
-        std::array<Slices, 3> plans;
-    };
-
     struct SharedMemory;
 
     HardwareInfo hwinfo;

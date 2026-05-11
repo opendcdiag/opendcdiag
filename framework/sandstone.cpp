@@ -1029,7 +1029,7 @@ int main(int argc, char **argv)
 
     if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
         restrict_topology({ 0, opts.thread_count });
-    slice_plan_init(opts.max_cores_per_slice);
+    slice_plan_init(sApp->slice_plans.plans, opts.max_cores_per_slice);
     commit_shmem();
 
     if (std::to_underlying(sApp->shmem->cfg.reschedule_mode) > std::to_underlying(RescheduleMode::none) && thread_count() < 2) {

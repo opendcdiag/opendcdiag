@@ -1655,15 +1655,15 @@ static Topology build_topology()
     return Topology(std::move(packages));
 }
 
-void slice_plan_init(int max_cores_per_slice)
+void slice_plan_init(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
 {
-    auto set_to_full_system = []() {
+    auto set_to_full_system = [&]() {
         // only one plan and that's the full system
         std::vector plan = { DeviceRange{ 0, num_cpus() } };
-        sApp->slice_plans.plans.fill(plan);
+        plans.fill(plan);
         return;
     };
-    for (std::vector<DeviceRange> &plan : sApp->slice_plans.plans)
+    for (std::vector<DeviceRange> &plan : plans)
         plan.clear();
 
     if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::no_fork || max_cores_per_slice < 0)
@@ -1695,7 +1695,6 @@ void slice_plan_init(int max_cores_per_slice)
     int max_cpu = num_cpus();
     const Topology &topology = Topology::topology();
     while (topology.isValid()) {     // not a loop, just so we can use break
-        using SlicePlans = SandstoneApplication::SlicePlans;
         static constexpr int MinimumCpusPerSocket = SlicePlans::MinimumCpusPerSocket;
         static constexpr int DefaultMaxCoresPerSlice = SlicePlans::DefaultMaxCoresPerSlice;
 
@@ -1708,9 +1707,9 @@ void slice_plan_init(int max_cores_per_slice)
         }
 
         // set up proper plans
-        std::vector<DeviceRange> &isolate_socket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
-        std::vector<DeviceRange> &isolate_numa = sApp->slice_plans.plans[SlicePlans::IsolateNuma];
-        std::vector<DeviceRange> &split = sApp->slice_plans.plans[SlicePlans::Heuristic];
+        std::vector<DeviceRange> &isolate_socket = plans[SlicePlans::IsolateSockets];
+        std::vector<DeviceRange> &isolate_numa = plans[SlicePlans::IsolateNuma];
+        std::vector<DeviceRange> &split = plans[SlicePlans::Heuristic];
         auto push_to = [](std::vector<DeviceRange> &to, auto start, auto end) {
             int start_cpu = start[0].threads.front().cpu();
             int end_cpu = end[-1].threads.back().cpu();
@@ -1769,7 +1768,7 @@ void slice_plan_init(int max_cores_per_slice)
         for ( ; cpu < max_cpu - slice_size; cpu += slice_size)
             plan.push_back(DeviceRange{ cpu, slice_size });
         plan.push_back(DeviceRange{ cpu, max_cpu - cpu });
-        sApp->slice_plans.plans.fill(plan);
+        plans.fill(plan);
     }
 }
 
