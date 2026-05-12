@@ -511,7 +511,7 @@ function selftest_cpuset_accumulate() {
 @test "cpuset accumulate (p0 c0)" {
     export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1'
 
-    run $SANDSTONE --cpuset=p0c0,p1c1 --dump-cpu-info
+    run $SANDSTONE --cpuset=p0c0,p0c1 --dump-cpu-info
     if (( status != 0 )); then
         skip "Test only works with Debug builds (to mock the topology) or package 0 with cores 0 and 1"
     fi
@@ -523,7 +523,7 @@ function selftest_cpuset_accumulate() {
 @test "cpuset accumulate (p0 c0,c1)" {
     export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1'
 
-    run $SANDSTONE --cpuset=p0c0,p1c1 --dump-cpu-info
+    run $SANDSTONE --cpuset=p0c0,p0c1 --dump-cpu-info
     if (( status != 0 )); then
         skip "Test only works with Debug builds (to mock the topology) or package 0 with cores 0 and 1"
     fi
@@ -534,7 +534,7 @@ function selftest_cpuset_accumulate() {
 @test "cpuset accumulate (p0 !c0 / p0 !c1)" {
     export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1'
 
-    run $SANDSTONE --cpuset=p0c0,p1c1 --dump-cpu-info
+    run $SANDSTONE --cpuset=p0c0,p0c1 --dump-cpu-info
     if (( status != 0 )); then
         skip "Test only works with Debug builds (to mock the topology) or package 0 with cores 0 and 1"
     fi
