@@ -53,12 +53,8 @@ Topology build_topology()
     return topo;
 }
 
-void slice_plan_init(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
+void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
 {
-    for (auto& plan : plans) {
-        plan.clear();
-    }
-
     std::vector plan = { DeviceRange{ 0, thread_count() } };
     plans[SlicePlans::IsolateSockets] = plan;
 

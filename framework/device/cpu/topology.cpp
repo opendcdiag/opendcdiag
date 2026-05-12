@@ -1655,20 +1655,8 @@ static Topology build_topology()
     return Topology(std::move(packages));
 }
 
-void slice_plan_init(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
+void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
 {
-    auto set_to_full_system = [&]() {
-        // only one plan and that's the full system
-        std::vector plan = { DeviceRange{ 0, num_cpus() } };
-        plans.fill(plan);
-        return;
-    };
-    for (std::vector<DeviceRange> &plan : plans)
-        plan.clear();
-
-    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::no_fork || max_cores_per_slice < 0)
-        return set_to_full_system();
-
     // The heuristic is enabled by max_cores_per_slice == 0 and a valid
     // topology:
     // - if the CPU Set has less than MinimumCpusPerSocket (4)
@@ -1754,7 +1742,9 @@ void slice_plan_init(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
     }
 
     if (max_cores_per_slice == 0) {
-        set_to_full_system();
+        // set to full system
+        std::vector plan = { DeviceRange{ 0, num_cpus() } };
+        plans.fill(plan);
     } else {
         // dumb plan, not *cores*
         int slice_count = (max_cpu - 1) / max_cores_per_slice + 1;

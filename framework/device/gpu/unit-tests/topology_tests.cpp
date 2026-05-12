@@ -224,7 +224,7 @@ TEST(Topology, SlicePlansCreation)
     };
 
     SlicePlans plans;
-    slice_plan_init(plans.plans, 3);
+    slice_plan_init_for_device(plans.plans, 3);
 
     expect_plan(plans.plans[SlicePlans::IsolateSockets], {
         { 0, 16 },
@@ -240,7 +240,10 @@ TEST(Topology, SlicePlansCreation)
     });
 
     // For default heuristic DefaultMaxCoresPerSlice=32 is big enough to be same as isolate numa
-    slice_plan_init(plans.plans, 0);
+    for (auto& plan : plans.plans) {
+        plan.clear();
+    }
+    slice_plan_init_for_device(plans.plans, 0);
     expect_plan(plans.plans[SlicePlans::Heuristic], {
         { 0, 3 }, { 4, 1 }, { 6, 4 },
         { 3, 1 }, { 5, 1 }, { 10, 6 },
