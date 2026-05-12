@@ -22,10 +22,13 @@ framework_files += files(
     'cpu_device.cpp',
     'topology.cpp',
     'logging_cpu.cpp',
+    'slicing.cpp',
 )
 
 unittests_sources += files(
     'unit-tests/thermal_monitor_tests.cpp',
+    'unit-tests/topology_tests.cpp',
+    'slicing.cpp',
 )
 
 premain_files += files(
