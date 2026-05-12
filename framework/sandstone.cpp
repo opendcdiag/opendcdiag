@@ -935,6 +935,22 @@ skip_wait:
     return true;
 }
 
+static void slice_plan_init(int max_cores_per_slice)
+{
+    for (std::vector<DeviceRange> &plan : sApp->slice_plans.plans) {
+        plan.clear();
+    }
+
+    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::no_fork || max_cores_per_slice < 0) {
+        // set to full system
+        std::vector plan = { DeviceRange{ 0, thread_count() } };
+        sApp->slice_plans.plans.fill(plan);
+        return;
+    }
+
+    slice_plan_init_for_device(sApp->slice_plans.plans, max_cores_per_slice);
+}
+
 int main(int argc, char **argv)
 {
     // initialize the main application
@@ -1029,7 +1045,7 @@ int main(int argc, char **argv)
 
     if (unsigned(opts.thread_count) < unsigned(sApp->thread_count))
         restrict_topology({ 0, opts.thread_count });
-    slice_plan_init(sApp->slice_plans.plans, opts.max_cores_per_slice);
+    slice_plan_init(opts.max_cores_per_slice);
     commit_shmem();
 
     if (std::to_underlying(sApp->shmem->cfg.reschedule_mode) > std::to_underlying(RescheduleMode::none) && thread_count() < 2) {
