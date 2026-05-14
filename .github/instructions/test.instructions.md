@@ -1,5 +1,5 @@
 ---
-applyTo: "tests/"
+applyTo: "tests/**"
 ---
 
 OpenDCDiag tests follow a rigid pattern and are declared with the
@@ -48,8 +48,16 @@ golden values, stores this in the test->data pointer for read-only consumption
 by the run function, and then frees this memory in the cleanup function.
 
 
-Mandatory step: Load `framework/sandstone.h` immediately into the review
-context.
+For the sandstone API reference, use the following order of preference:
+
+1. **If you can read files directly** (agentic/chat mode): load `framework/sandstone.h`
+   from the repository root as the authoritative API and architectural reference.
+2. **Otherwise** (web review / no file access): refer to
+   `.github/instructions/sandstone-api.instructions.md` and its companion
+   `sandstone-api-*.instructions.md` files as the authoritative contract for all API
+   usage checks in this review.
+
+Do not source both at the same time; pick one path and use it exclusively.
 
 Count how many rules this file contains, put this number in the context,
 and at the end, use this count to make sure no checks were missed. List this

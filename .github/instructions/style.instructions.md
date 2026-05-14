@@ -18,7 +18,7 @@ number when reporting out.
 - [ ]  **Anonymous namespaces** required around all test-internal structs/classes in C++.
 - [ ] Use a `testname_` prefix in C around all test-internal structs and functions
 - [ ] All code must compile **without warnings** (`-Wall -Wextra` are enabled; `-Werror=format-security` is
-    enforced, and `-Wno-unused-parameter` is used). 
+    enforced, and `-Wno-unused-parameter` is used).
     When doing code review, editing or creating new code, do a test build of the code
     to check for warnings.
 - [ ] All code must be cross-platform (Linux + Windows); use `_WIN32` / `__linux__` macros.
