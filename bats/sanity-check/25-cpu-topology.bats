@@ -492,6 +492,23 @@ selftest_cpuset_negated() {
     selftest_cpuset_negated \!p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]} ${cpuinfo[0]}
 }
 
+@test "cpuset=number (not all match) " {
+    if $is_windows; then
+        skip "taskset does not apply to Windows"
+    fi
+    run taskset -c 0 $SANDSTONE --cpuset=0,1 --dump-cpu-info
+    [[ $status = 64 ]]
+    [[ "$output" = *"error: Invalid CPU set parameter"* ]]
+}
+
+@test "cpuset=topology (not all match) " {
+    # Get the first logical processor
+    local -a cpuinfo=(`$SANDSTONE --dump-cpu-info | sed -n '/^[0-9]/{p;q;}'`)
+    run $SANDSTONE --cpuset=p${cpuinfo[1]}c${cpuinfo[2]}t${cpuinfo[3]},p${cpuinfo[1]}c16777216t3
+    [[ $status = 64 ]]
+    [[ "$output" = *"error: CPU selection"*"matched nothing" ]]
+}
+
 # Test if multiple --cpuset accumulate properly
 # e.g. --cpuset=p0 --cpuset=c0 should be the same as --cpuset=p0c0
 function selftest_cpuset_accumulate() {
