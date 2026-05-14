@@ -898,7 +898,7 @@ struct ProgramOptionsParser {
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
             if (maybe_int) {
-                opts.thread_count = maybe_int.value();
+                opts.device_count = maybe_int.value();
             } else {
                 return EX_USAGE;
             }
