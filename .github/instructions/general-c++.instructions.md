@@ -1,3 +1,7 @@
+---
+applyTo: "**/*.cpp,**/*.hpp,**/*.h,**/*.c"
+---
+
 # C++ coding guidelines
 
 These coding rules apply to all C++ code in the project.
