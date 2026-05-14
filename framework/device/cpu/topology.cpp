@@ -1480,9 +1480,11 @@ void apply_deviceset_param(const char *param)
                 ++match_count;
             }
 
-            if (match_count == 0)
-                fprintf(stderr, "%s: warning: CPU selection '%s' matched nothing\n",
+            if (match_count == 0) {
+                fprintf(stderr, "%s: error: CPU selection '%s' matched nothing\n",
                         program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
         }
     }
 
