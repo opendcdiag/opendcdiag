@@ -410,7 +410,7 @@ TEST(ProgramOptionsParser, saturation_works__thread_count)
 
         auto ret = opts.parse(2, argv, &cfg);
         EXPECT_EQ(ret, EXIT_SUCCESS);
-        EXPECT_EQ(opts.thread_count, 48);
+        EXPECT_EQ(opts.device_count, 48);
         sb.check_eq("unittests: warning: value out of range for option '-n / --threads': 49 (minimum is 1, maximum 48)");
     }
 
@@ -428,7 +428,7 @@ TEST(ProgramOptionsParser, saturation_works__thread_count)
 
         auto ret = opts.parse(2, argv, &cfg);
         EXPECT_EQ(ret, EXIT_SUCCESS);
-        EXPECT_EQ(opts.thread_count, 1);
+        EXPECT_EQ(opts.device_count, 1);
         sb.check_eq("unittests: warning: value out of range for option '-n / --threads': -123 (minimum is 1, maximum 1000)");
     }
 
@@ -446,7 +446,7 @@ TEST(ProgramOptionsParser, saturation_works__thread_count)
 
         auto ret = opts.parse(2, argv, &cfg);
         EXPECT_EQ(ret, EXIT_SUCCESS);
-        EXPECT_EQ(opts.thread_count, 24);
+        EXPECT_EQ(opts.device_count, 24);
         sb.check_eq(EMPTY_STR); // no messages printed
     }
 }
