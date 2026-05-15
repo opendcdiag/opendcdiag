@@ -396,7 +396,10 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
     MonotonicTimePoint now = std::chrono::steady_clock::now();
 
     size_t current_hwm = memfpt_current_high_water_mark();
-    if ((current_hwm == 0) != (hwm_at_start == 0) || current_hwm < hwm_at_start) {
+    if (current_hwm < hwm_at_start) {
+        // Also fires when current_hwm == 0 and hwm_at_start != 0 (tracking stopped).
+        // hwm_at_start == 0 is a valid zero baseline (freshly forked child had no
+        // private pages yet), so current_hwm >= 0 == hwm_at_start is not an error.
         log_warning("High water mark memory footprinting failed (%zu kB at start, %zu kB now)",
                     hwm_at_start, current_hwm);
     } else if (current_hwm) {
