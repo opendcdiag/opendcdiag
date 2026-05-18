@@ -1423,9 +1423,9 @@ static int slices_for_test(const struct test *test)
         return 1;
     }
 
-    const std::vector<DeviceRange> &plan = sApp->slice_plans.plans[type];
+    const SlicePlans::Slices &plan = sApp->slice_plans.plans[type];
     for (size_t i = 0; i < plan.size(); ++i)
-        sApp->main_thread_data(i)->device_range = plan[i];
+        sApp->main_thread_data(i)->device_range = plan[i].device_range;
 
     return plan.size();
 }

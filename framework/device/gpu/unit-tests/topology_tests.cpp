@@ -214,12 +214,11 @@ TEST(Topology, SlicePlansCreation)
     device_info = gpu_info.data();
     topo_global = build_topology();
 
-    auto expect_plan = [](const auto& actual, const std::vector<std::pair<int, int>>& expected) {
+    auto expect_plan = [](const auto& actual, const std::vector<DeviceRange>& expected) {
         ASSERT_EQ(actual.size(), expected.size());
-        auto expected_it = expected.begin();
-        for (size_t i = 0; i < actual.size(); ++i, ++expected_it) {
-            EXPECT_EQ(actual[i].starting_device, expected_it->first);
-            EXPECT_EQ(actual[i].device_count, expected_it->second);
+        for (size_t i = 0; i < actual.size(); ++i) {
+            EXPECT_EQ(actual[i].device_range.starting_device, expected[i].starting_device);
+            EXPECT_EQ(actual[i].device_range.device_count, expected[i].device_count);
         }
     };
 
