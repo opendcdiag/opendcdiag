@@ -351,6 +351,9 @@ private:
     std::string &append_to;
     int indent;
     int prefix_len;
+
+    void append_with_comment(std::string_view value, std::string_view comment);
+    void append_with_comment(const char *fmtvalue, const char *fmtcomment, ...);
 };
 
 static std::string format_yaml(const std::map<std::string, YamlFormatter::SimpleValue> &values, int indent)
