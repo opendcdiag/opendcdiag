@@ -2289,6 +2289,8 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
             result += std::to_string(s.device_range.starting_device);
             result += ", count: ";
             result += std::to_string(s.device_range.device_count);
+            result += ", threads: ";
+            result += std::to_string(s.thread_range.thread_count);
             result += " }";
         }
         return result;
