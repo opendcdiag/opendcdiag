@@ -163,3 +163,11 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
         heuristic = plan;
     }
 }
+
+void slice_plan_init_for_threads(SlicePlans::SlicesArray& plans)
+{
+    for (auto &plan : plans) {
+        for (auto &slice : plan)
+            slice.thread_range = { slice.device_range.starting_device, slice.device_range.device_count }; // 1:1 for now...
+    }
+}
