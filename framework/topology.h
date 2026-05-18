@@ -217,6 +217,7 @@ struct SlicePlans
 };
 
 void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice);
+void slice_plan_init_for_threads(SlicePlans::SlicesArray& plans);
 
 template <typename EnabledDevices>
 EnabledDevices detect_devices();

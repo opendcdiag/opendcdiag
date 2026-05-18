@@ -958,6 +958,12 @@ static void slice_plan_init(int max_cores_per_slice)
     slice_plan_init_for_device(sApp->slice_plans.plans, max_cores_per_slice);
 }
 
+static void thread_plan_init()
+{
+    sApp->thread_count = device_count();
+    slice_plan_init_for_threads(sApp->slice_plans.plans);
+}
+
 int main(int argc, char **argv)
 {
     // initialize the main application
@@ -1052,8 +1058,9 @@ int main(int argc, char **argv)
 
     if (unsigned(opts.device_count) < unsigned(sApp->device_count))
         restrict_topology({ 0, opts.device_count });
-    sApp->thread_count = sApp->device_count; // TODO: Temporary 1:1
+
     slice_plan_init(opts.max_cores_per_slice);
+    thread_plan_init();
     commit_shmem();
 
     if (std::to_underlying(sApp->shmem->cfg.reschedule_mode) > std::to_underlying(RescheduleMode::none) && device_count() < 2) {

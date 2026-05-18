@@ -1220,7 +1220,7 @@ TestResult child_run(/*nonconst*/ struct test *test, int child_number)
         sApp->select_main_thread(child_number);
         pin_to_logical_processors(sApp->main_thread_data()->device_range, "control");
         restrict_topology(sApp->main_thread_data()->device_range);
-        sApp->thread_count = sApp->device_count; // TODO: Update when thread_count and device_count are decoupled
+        sApp->thread_count = sApp->main_thread_data()->thread_range.thread_count;
         signals_init_child();
         debug_init_child();
     }
@@ -1420,12 +1420,15 @@ static int slices_for_test(const struct test *test)
     }();
     if (type == SlicePlans::FullSystem) {
         sApp->main_thread_data()->device_range = { 0, sApp->device_count };
+        sApp->main_thread_data()->thread_range = { 0, sApp->thread_count };
         return 1;
     }
 
     const SlicePlans::Slices &plan = sApp->slice_plans.plans[type];
-    for (size_t i = 0; i < plan.size(); ++i)
+    for (size_t i = 0; i < plan.size(); ++i) {
         sApp->main_thread_data(i)->device_range = plan[i].device_range;
+        sApp->main_thread_data(i)->thread_range = plan[i].thread_range;
+    }
 
     return plan.size();
 }
@@ -1472,6 +1475,10 @@ static void run_one_test_children(ChildrenList &children, const struct test *tes
 
 static void run_one_test_init_in_parent(ChildrenList &children, const struct test *test)
 {
+    // Set up device/thread ranges so logging can iterate over them
+    sApp->main_thread_data()->device_range = { 0, sApp->device_count };
+    sApp->main_thread_data()->thread_range = { 0, sApp->thread_count };
+
     TestResult res;
     init_per_thread_data();
     int ret = test->test_init(const_cast<struct test *>(test));
@@ -1501,6 +1508,9 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
 
 static void run_one_test_in_parent(ChildrenList &children, const struct test *test)
 {
+    // Set up device/thread ranges so logging can iterate over them
+    sApp->main_thread_data()->device_range = { 0, sApp->device_count };
+    sApp->main_thread_data()->thread_range = { 0, sApp->thread_count };
     auto state = run_one_test_inner(const_cast<struct test*>(test));
     children.results.emplace_back(ChildExitStatus{ state });
 }
