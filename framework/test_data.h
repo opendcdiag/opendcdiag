@@ -19,6 +19,13 @@ struct DeviceRange
     int device_count;
 };
 
+struct ThreadRange
+{
+    // a contiguous range
+    int starting_thread;
+    int thread_count;
+};
+
 enum class LogicalProcessor : int { None = -1 };
 
 enum ThreadState : int {
@@ -83,6 +90,7 @@ struct Common
 struct alignas(64) Main : Common
 {
     DeviceRange device_range;
+    ThreadRange thread_range;
 };
 
 struct alignas(64) TestCommon : Common

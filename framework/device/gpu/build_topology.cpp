@@ -55,7 +55,7 @@ Topology build_topology()
 
 void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
 {
-    std::vector plan = { DeviceRange{ 0, thread_count() } };
+    SlicePlans::Slices plan = { SlicePlans::Slice{ DeviceRange{ 0, thread_count() }, {} } };
     plans[SlicePlans::IsolateSockets] = plan;
 
     auto& isolate_numa = plans[SlicePlans::IsolateNuma];
@@ -77,12 +77,12 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
             }
 
             // end of contiguous range
-            isolate_numa.push_back(DeviceRange{ range_start, prev_gpu - range_start + 1 });
+            isolate_numa.push_back(SlicePlans::Slice{ DeviceRange{ range_start, prev_gpu - range_start + 1 }, {} });
             range_start = prev_gpu = gpu;
         }
 
         // include open tailing range
-        isolate_numa.push_back(DeviceRange{ range_start, prev_gpu - range_start + 1 });
+        isolate_numa.push_back(SlicePlans::Slice{ DeviceRange{ range_start, prev_gpu - range_start + 1 }, {} });
     }
 
     if (isolate_numa.empty()) [[unlikely]] {
@@ -147,7 +147,7 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
 
             if (!contiguous || range_count + g.count > max_devices_per_slice) {
                 // commit the slice
-                heuristic.push_back({ range_start, range_count });
+                heuristic.push_back(SlicePlans::Slice{ DeviceRange{ range_start, range_count }, {} });
                 range_start = g.start;
                 range_count = g.count;
             } else {
@@ -156,7 +156,7 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
             }
         }
         // end of devices for this NUMA node, close the slice
-        heuristic.push_back({ range_start, range_count });
+        heuristic.push_back(SlicePlans::Slice{ DeviceRange{ range_start, range_count }, {} });
     }
 
     if (heuristic.empty()) [[unlikely]] {

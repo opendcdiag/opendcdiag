@@ -353,7 +353,7 @@ static void init_shmem()
 static void commit_shmem()
 {
     // the most detailed plan is the last
-    const std::vector<DeviceRange> &plan = sApp->slice_plans.plans.end()[-1];
+    const SlicePlans::Slices &plan = sApp->slice_plans.plans.end()[-1];
     size_t main_thread_count = plan.size();
     sApp->shmem->main_thread_count = main_thread_count;
     sApp->shmem->total_thread_count = thread_count();
@@ -951,13 +951,13 @@ skip_wait:
 
 static void slice_plan_init(int max_cores_per_slice)
 {
-    for (std::vector<DeviceRange> &plan : sApp->slice_plans.plans) {
+    for (SlicePlans::Slices &plan : sApp->slice_plans.plans) {
         plan.clear();
     }
 
     if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::no_fork || max_cores_per_slice < 0) {
         // set to full system
-        std::vector plan = { DeviceRange{ 0, thread_count() } };
+        SlicePlans::Slices plan = { SlicePlans::Slice{ DeviceRange{ 0, device_count() }, {} } };
         sApp->slice_plans.plans.fill(plan);
         return;
     }

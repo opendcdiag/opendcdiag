@@ -63,8 +63,8 @@ void expect_plan(const SlicePlans::Slices &actual, const std::vector<std::pair<i
 {
     ASSERT_EQ(actual.size(), expected.size());
     for (size_t i = 0; i < actual.size(); ++i) {
-        EXPECT_EQ(actual[i].starting_device, expected[i].first);
-        EXPECT_EQ(actual[i].device_count, expected[i].second);
+        EXPECT_EQ(actual[i].device_range.starting_device, expected[i].first);
+        EXPECT_EQ(actual[i].device_range.device_count, expected[i].second);
     }
 }
 }

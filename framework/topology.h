@@ -207,7 +207,11 @@ struct SlicePlans
         IsolateNuma,
         Heuristic,
     };
-    using Slices = std::vector<DeviceRange>;
+    struct Slice {
+        DeviceRange device_range;
+        ThreadRange thread_range;
+    };
+    using Slices = std::vector<Slice>;
     using SlicesArray = std::array<Slices, 3>;
     SlicesArray plans;
 };

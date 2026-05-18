@@ -51,14 +51,14 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
         }
 
         // set up proper plans
-        std::vector<DeviceRange> &isolate_socket = plans[SlicePlans::IsolateSockets];
-        std::vector<DeviceRange> &isolate_numa = plans[SlicePlans::IsolateNuma];
-        std::vector<DeviceRange> &split = plans[SlicePlans::Heuristic];
-        auto push_to = [](std::vector<DeviceRange> &to, auto start, auto end) {
+        auto &isolate_socket = plans[SlicePlans::IsolateSockets];
+        auto &isolate_numa = plans[SlicePlans::IsolateNuma];
+        auto &split = plans[SlicePlans::Heuristic];
+        auto push_to = [](SlicePlans::Slices &to, auto start, auto end) {
             int start_cpu = start[0].threads.front().cpu();
             int end_cpu = end[-1].threads.back().cpu();
             assert(end_cpu >= start_cpu);
-            to.push_back(DeviceRange{ start_cpu, end_cpu + 1 - start_cpu });
+            to.push_back(SlicePlans::Slice{ DeviceRange{ start_cpu, end_cpu + 1 - start_cpu }, {} });
         };
 
         for (const Topology::Package &p : topology.packages) {
@@ -99,12 +99,12 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
 
     if (max_cores_per_slice == 0) {
         // set to full system
-        std::vector plan = { DeviceRange{ 0, device_count() } };
+        SlicePlans::Slices plan = { SlicePlans::Slice{ DeviceRange{ 0, device_count() }, {} } };
         plans.fill(plan);
     } else {
         // dumb plan, not *cores*
         int slice_count = (max_cpu - 1) / max_cores_per_slice + 1;
-        std::vector<DeviceRange> plan;
+        SlicePlans::Slices plan;
         plan.reserve(slice_count);
 
         int slice_size = max_cpu / slice_count;
@@ -112,8 +112,8 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
             ++slice_size;       // round up the slice size
         int cpu = 0;
         for ( ; cpu < max_cpu - slice_size; cpu += slice_size)
-            plan.push_back(DeviceRange{ cpu, slice_size });
-        plan.push_back(DeviceRange{ cpu, max_cpu - cpu });
+            plan.push_back(SlicePlans::Slice{ DeviceRange{ cpu, slice_size }, {} });
+        plan.push_back(SlicePlans::Slice{ DeviceRange{ cpu, max_cpu - cpu }, {} });
         plans.fill(plan);
     }
 }
