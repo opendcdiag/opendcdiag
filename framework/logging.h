@@ -47,6 +47,10 @@ public:
         void *base = nullptr;
         size_t size = 0;            // actual size, not rounded up to page
     public:
+        struct sentinel {
+            const char *end_ptr;
+        };
+
         struct const_iterator {
             const LogMessage *ptr;
 
@@ -54,7 +58,6 @@ public:
             using value_type = LogMessage;
             using iterator_category = std::forward_iterator_tag;
 
-            friend auto operator<=>(const_iterator, const_iterator) = default;
             const LogMessage &operator*() const { return *ptr; }
             const LogMessage *operator->() const { return ptr; }
             // pre-increment
@@ -62,6 +65,20 @@ public:
                 ptr = reinterpret_cast<const LogMessage*>(ptr->payload + ptr->msglen);
                 return *this;
             }
+
+            friend auto operator<=>(const_iterator, const_iterator) = default;
+            friend bool operator==(const_iterator it, sentinel end) noexcept
+            {
+                // the log file may be incomplete if the child crashed while
+                // writing, so we need to check whether this message is fully
+                // present or not.
+                auto msgend = reinterpret_cast<const char *>(it.ptr + 1);
+                if (msgend >= end.end_ptr)
+                    return true;            // header incomplete
+                return msgend + it.ptr->msglen >= end.end_ptr;  // payload incomplete
+            }
+            friend bool operator!=(const_iterator it, sentinel end) noexcept
+            { return !(it == end); }
         };
 
         LogMessagesFile() noexcept {}
@@ -75,8 +92,8 @@ public:
         bool empty() const { return size == 0; }
         const_iterator begin() const
         { return { static_cast<const LogMessage *>(base) }; }
-        const_iterator end() const
-        { return { reinterpret_cast<const LogMessage *>(bytes() + size) }; }
+        sentinel end() const
+        { return { bytes() + size }; }
 
         size_t size_bytes() const { return size; }
         const char *bytes() const { return static_cast<const char *>(base); }
