@@ -132,7 +132,7 @@ public:
     static void print_fixed_for_device();
 
 #ifdef SANDSTONE_DEVICE_CPU
-    static std::string thread_id_header_for_cpu(LogicalProcessor lp, int thread, LogLevelVerbosity verbosity);
+    static std::string thread_id_header_for_cpu(LogicalProcessor lp, int device, LogLevelVerbosity verbosity);
 #endif
 
     const struct test *test;
@@ -182,7 +182,7 @@ private:
     inline void maybe_print_messages_header(int fd);
     void print_fixed();
     void print_thread_messages();
-    void print_thread_header(int fd, PerThreadData::Common *data, int device, LogLevelVerbosity verbosity);
+    void print_thread_header(int fd, PerThreadData::Common *data, int thread, int device, LogLevelVerbosity verbosity);
     inline bool want_slice_resource_usage(int slice);
     void maybe_print_slice_resource_usage(int fd, int slice);
     inline int print_test_knobs(int fd, const LogMessagesFile &msgs);

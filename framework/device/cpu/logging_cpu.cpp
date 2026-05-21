@@ -80,7 +80,7 @@ void KeyValuePairLogger::print(int tc)
     logging_flush();
 }
 
-void KeyValuePairLogger::print_thread_header(int fd, int device, const char *prefix)
+void KeyValuePairLogger::print_thread_header(int fd, int thread, int device, const char *prefix)
 {
     if (device < 0) {
         device = ~device;
@@ -94,51 +94,51 @@ void KeyValuePairLogger::print_thread_header(int fd, int device, const char *pre
 
     const cpu_info_t *info = device_info + device;
     const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
-    PerThreadData::Test *thr = sApp->test_thread_data(device);
+    PerThreadData::Test *thr = sApp->test_thread_data(thread);
     if (std::string time = format_duration(thr->fail_time); time.size()) {
-        dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, device, time.c_str());
-        dprintf(fd, "%s_thread_%d_loop_count = %u\n", prefix, device,
+        dprintf(fd, "%s_thread_%d_fail_time = %s\n", prefix, thread, time.c_str());
+        dprintf(fd, "%s_thread_%d_loop_count = %u\n", prefix, thread,
                 thr->inner_loop_count_at_fail);
     } else {
-        dprintf(fd, "%s_thread_%d_loop_count = %u\n", prefix, device,
+        dprintf(fd, "%s_thread_%d_loop_count = %u\n", prefix, thread,
                 thr->inner_loop_count);
     }
-    dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, device, info->cpu_number);
-    dprintf(fd, "%s_messages_thread_%d_family_model_stepping = %02x-%02x-%02x\n", prefix, device,
+    dprintf(fd, "%s_messages_thread_%d_cpu = %d\n", prefix, thread, info->cpu_number);
+    dprintf(fd, "%s_messages_thread_%d_family_model_stepping = %02x-%02x-%02x\n", prefix, thread,
             sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping);
     dprintf(fd, "%s_messages_thread_%d_topology = phys %d, core %d, thr %d\n",
-            prefix, device, info->package_id, info->core_id, info->thread_id);
-    dprintf(fd, "%s_messages_thread_%d_microcode =", prefix, device);
+            prefix, thread, info->package_id, info->core_id, info->thread_id);
+    dprintf(fd, "%s_messages_thread_%d_microcode =", prefix, thread );
     if (info->microcode)
         dprintf(fd, " 0x%" PRIx64, info->microcode);
     dprintf(fd, "\n%s_messages_thread_%d_ppin =",
-            prefix, device);
+            prefix, thread);
     if (pkg && pkg->ppin)
         dprintf(fd, " 0x%" PRIx64, pkg->ppin);
-    dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, device);
+    dprintf(fd, "\n%s_messages_thread_%d = \\\n", prefix, thread);
 }
 
 void KeyValuePairLogger::print_thread_messages()
 {
-    auto doprint = [this](PerThreadData::Common *data, int i) {
+    auto doprint = [this](PerThreadData::Common *data, int thread, int device=-1) {
         LogMessagesFile r = maybe_mmap_log(data);
 
         if (r.empty() && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
             return;           /* nothing to be printed, on any level */
 
-        print_thread_header(file_log_fd, i, timestamp_prefix.c_str());
+        print_thread_header(file_log_fd, thread, device, timestamp_prefix.c_str());
         LogLevelVerbosity lowest_level =
                 print_one_thread_messages_tdata(file_log_fd, data, r, LogLevelVerbosity::Max);
 
         if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, i, test->id);
+            print_thread_header(real_stdout_fd, thread, device, test->id);
             print_one_thread_messages_tdata(real_stdout_fd, data, r, sApp->shmem->cfg.verbosity);
         }
 
         munmap_and_truncate_log(data, r);
     };
     for_each_main_thread(doprint, slices.size());
-    for_each_test_thread(doprint);
+    for_each_test_thread(doprint, slices.size());
 }
 
 void KeyValuePairLogger::print_child_stderr()
@@ -272,20 +272,20 @@ void TapFormatLogger::maybe_print_yaml_marker(int fd)
         IGNORE_RETVAL(write(fd, fail_info.c_str(), fail_info.size()));
 }
 
-void TapFormatLogger::print_thread_header(int fd, int device, LogLevelVerbosity verbosity)
+void TapFormatLogger::print_thread_header(int fd, int thread, int device, LogLevelVerbosity verbosity)
 {
     maybe_print_yaml_marker(fd);
-    if (device < 0) {
-        device = ~device;
-        if (device == 0)
+    if (thread < 0) {
+        int slice = ~thread;
+        if (slice == 0)
             writeln(fd, "  Main thread:");
         else
-            dprintf(fd, "  Main thread %d:", device);
+            dprintf(fd, "  Main thread %d:", slice);
         return;
     }
 
     const cpu_info_t *info = device_info + device;
-    std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", device,
+    std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", thread,
             info->cpu_number, info->package_id, info->core_id, info->thread_id);
     if (const char *type = native_device_type(info))
         line += stdprintf(", core_type: %s", type);
@@ -309,7 +309,7 @@ void TapFormatLogger::print_thread_header(int fd, int device, LogLevelVerbosity 
     writeln(fd, line);
 
     if (verbosity > 1) {
-        PerThreadData::Test *thr = sApp->test_thread_data(device);
+        PerThreadData::Test *thr = sApp->test_thread_data(thread);
         if (std::string time = format_duration(thr->fail_time); time.size())
             writeln(fd, "  - failed: { time: ", time,
                     ", loop-count: ", std::to_string(thr->inner_loop_count_at_fail),
@@ -321,25 +321,25 @@ void TapFormatLogger::print_thread_header(int fd, int device, LogLevelVerbosity 
 
 void TapFormatLogger::print_thread_messages()
 {
-    auto doprint = [this](PerThreadData::Common *data, int i) {
+    auto doprint = [this](PerThreadData::Common *data, int thread, int device=-1) {
         LogMessagesFile r = maybe_mmap_log(data);
 
         if (r.empty() && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
             return;             /* nothing to be printed, on any level */
 
-        print_thread_header(file_log_fd, i, LogLevelVerbosity::Max);
+        print_thread_header(file_log_fd, thread, device, LogLevelVerbosity::Max);
         LogLevelVerbosity lowest_level =
                 print_one_thread_messages_tdata(file_log_fd, data, r, LogLevelVerbosity::Max);
 
         if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, i, sApp->shmem->cfg.verbosity);
+            print_thread_header(real_stdout_fd, thread, device, sApp->shmem->cfg.verbosity);
             print_one_thread_messages_tdata(real_stdout_fd, data, r, sApp->shmem->cfg.verbosity);
         }
 
         munmap_and_truncate_log(data, r);
     };
     for_each_main_thread(doprint, slices.size());
-    for_each_test_thread(doprint);
+    for_each_test_thread(doprint, slices.size());
 }
 
 void TapFormatLogger::print_child_stderr()
@@ -430,16 +430,16 @@ std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerb
     return full_cpu_info(LogicalProcessor(info->cpu_number), verbosity, info);
 }
 
-std::string AbstractLogger::thread_id_header_for_cpu(LogicalProcessor lp, int thread, LogLevelVerbosity verbosity)
+std::string AbstractLogger::thread_id_header_for_cpu(LogicalProcessor lp, int device, LogLevelVerbosity verbosity)
 {
     cpu_info_t *info = nullptr;
 
     // is this the correct info?
-    if (cpu_info[thread].cpu_number == int(lp)) {
-        info = cpu_info + thread;
+    if (cpu_info[device].cpu_number == int(lp)) {
+        info = cpu_info + device;
     } else {
         // see if we can find the full information about this CPU
-        for (int i = 0; !info && i < sApp->thread_count; ++i) {
+        for (int i = 0; !info && i < device_count(); ++i) {
             if (cpu_info[i].cpu_number == int(lp))
                 info = cpu_info + i;
         }

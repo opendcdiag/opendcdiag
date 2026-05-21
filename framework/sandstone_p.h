@@ -459,7 +459,7 @@ inline void SandstoneApplication::select_main_thread(int slice)
 {
     assert(current_fork_mode() != ForkMode::no_fork || slice == 0);
     main_thread_data_ptr += slice;
-    test_thread_data_ptr += main_thread_data_ptr->device_range.starting_device;
+    test_thread_data_ptr += main_thread_data_ptr->thread_range.starting_thread;
 }
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_slices = INT_MAX)
@@ -469,10 +469,22 @@ template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_
         l(sApp->main_thread_data(i), -1 - i);
 }
 
-template <typename Lambda> static void for_each_test_thread(Lambda &&l)
+template <typename Lambda> static void for_each_test_thread(Lambda &&l, int max_slices = INT_MAX)
 {
-    for (int i = 0; i < thread_count(); i++)
-        l(sApp->test_thread_data(i), i);
+    if constexpr (requires { l(sApp->test_thread_data(0), 0, 0); }) {
+        int slices = sApp->is_main_process() ? std::min(sApp->shmem->main_thread_count, max_slices) : 1;
+        for (int s = 0; s < slices; s++) {
+            auto main_thread = sApp->main_thread_data(s);
+            for (int i = 0; i < main_thread->thread_range.thread_count; i++) {
+                int thread = main_thread->thread_range.starting_thread + i;
+                int device = main_thread->device_range.starting_device + i;
+                l(sApp->test_thread_data(thread), thread, device);
+            }
+        }
+    } else {
+        for (int i = 0; i < thread_count(); i++)
+            l(sApp->test_thread_data(i), i);
+    }
 }
 
 struct Pipe

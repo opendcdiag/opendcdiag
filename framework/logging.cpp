@@ -1662,7 +1662,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
 
     case TestResult::TimedOut:
         // find stuck threads and insert error message
-        for_each_test_thread([](PerThreadData::Test *data, int i) {
+        for_each_test_thread([](PerThreadData::Test *data, int thread, int device=-1) {
             ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
             if (thr_state != thread_running)
                 return;
@@ -1670,10 +1670,10 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
             // if the thread hasn't failed prior to getting stuck an, mark
             // the failure as the original processor where it was run.
             bool had_failed = data->has_failed();
-            log_message(i, SANDSTONE_LOG_ERROR "Thread is stuck");
+            log_message(thread, SANDSTONE_LOG_ERROR "Thread is stuck");
             if (!had_failed)
-                data->failing_cpu = LogicalProcessor(device_info[i].cpu_number);
-        });
+                data->failing_cpu = LogicalProcessor(device_info[device].cpu_number);
+        }, slices.size());
         return;
 
     case TestResult::CoreDumped:
@@ -1687,12 +1687,12 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
 
     // scan the threads for their state
     int sc = 0;
-    auto message_checker = [&](PerThreadData::Common *data, int i) {
+    auto message_checker = [&](PerThreadData::Common *data, int thread) {
         ThreadState thr_state = data->thread_state.load(std::memory_order_relaxed);
         if (data->has_failed()) {
             earliest_fail = std::min(earliest_fail, data->fail_time);
             testResult = TestResult::Failed;
-        } else if (i >= 0) {
+        } else if (thread >= 0) {
             // thread passed test. Don't count main thread results.
             ++pc;
             if (thr_state == thread_skipped) ++sc;
@@ -1831,16 +1831,16 @@ void YamlLogger::maybe_print_messages_header(int fd)
     }
 }
 
-void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int device, LogLevelVerbosity verbosity)
+void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int thread, int device, LogLevelVerbosity verbosity)
 {
     maybe_print_messages_header(fd);
-    if (device < 0) {
-        device = ~device;
-        if (device == 0)
+    if (thread < 0) {
+        int slice = ~thread;
+        if (slice == 0)
             writeln(fd, indent_spaces(), "  - thread: main");
         else
-            writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(device));
-        maybe_print_slice_resource_usage(fd, device);
+            writeln(fd, indent_spaces(), "  - thread: main ", std::to_string(slice));
+        maybe_print_slice_resource_usage(fd, slice);
         return;
     }
 
@@ -1861,7 +1861,8 @@ void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int de
 #  endif
     };
 #endif
-    dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), device);
+    assert(device >= 0); // All worker threads should have a valid device index
+    dprintf(fd, "%s  - thread: %d\n", indent_spaces().data(), thread);
 
     auto thr = static_cast<PerThreadData::Test *>(data);
     bool has_failed = thr->has_failed();
@@ -2191,7 +2192,7 @@ void YamlLogger::print_fixed()
 void YamlLogger::print_thread_messages()
 {
     // print the thread messages
-    auto doprint = [this](PerThreadData::Common *data, int s_tid) {
+    auto doprint = [this](PerThreadData::Common *data, int s_tid, int device=-1) {
         LogMessagesFile r = maybe_mmap_log(data);
         bool want_print = data->has_failed() || sApp->shmem->cfg.verbosity >= 3;
         ssize_t min_size = 0;
@@ -2208,7 +2209,7 @@ void YamlLogger::print_thread_messages()
             return;             /* nothing to be printed, on any level */
         }
 
-        print_thread_header(file_log_fd, data, s_tid, LogLevelVerbosity::Max);
+        print_thread_header(file_log_fd, data, s_tid, device, LogLevelVerbosity::Max);
         LogLevelVerbosity lowest_level =
                 print_one_thread_messages(file_log_fd, r, LogLevelVerbosity::Max);
 
@@ -2216,7 +2217,7 @@ void YamlLogger::print_thread_messages()
             // print to stdout
             bool has_messages = lowest_level <= sApp->shmem->cfg.verbosity;
             if (want_print || has_messages)
-                print_thread_header(real_stdout_fd, data, s_tid, sApp->shmem->cfg.verbosity);
+                print_thread_header(real_stdout_fd, data, s_tid, device, sApp->shmem->cfg.verbosity);
             if (has_messages)
                 print_one_thread_messages(real_stdout_fd, r, sApp->shmem->cfg.verbosity);
         }
@@ -2224,7 +2225,7 @@ void YamlLogger::print_thread_messages()
         munmap_and_truncate_log(data, r);
     };
     for_each_main_thread(doprint, slices.size());
-    for_each_test_thread(doprint);
+    for_each_test_thread(doprint, slices.size());
 }
 
 void YamlLogger::print()
