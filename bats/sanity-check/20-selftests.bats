@@ -342,9 +342,10 @@ selftest_pass() {
     test_yaml_regexp "/tests/1/result" skip
 }
 
-@test "selftest_pass has main thread at -vvv" {
+@test "selftest_pass has main thread and loop-count at -vvv" {
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
+    # Also confirm loop-count is printed for silent threads.
     declare -A yamldump
     sandstone_selftest -vvv -e selftest_pass
     [[ "$status" -eq 0 ]]
@@ -353,6 +354,9 @@ selftest_pass() {
     if ! $is_windows; then
         test_yaml_regexp "/tests/0/threads/0/resource-usage" '\{.*\}'
     fi
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        test_yaml_numeric "/tests/0/threads/$i/loop-count" 'value >= 0'
+    done
 }
 
 @test "selftest_preinit" {

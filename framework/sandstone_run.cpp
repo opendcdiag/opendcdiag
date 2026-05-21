@@ -778,11 +778,6 @@ static uintptr_t thread_runner(int thread_number)
     this_thread->effective_freq_mhz = CPUTimeFreqStamp::EffectiveFrequencyMHz(before, after);
 #endif
 
-    if (sApp->shmem->cfg.verbosity >= 3)
-        log_message(thread_number, SANDSTONE_LOG_INFO "inner loop count for thread %d = %u\n",
-                    thread_number, this_thread->inner_loop_count);
-
-
     // our caller doesn't care what we return, but the returned value helps if
     // you're running strace
     return ret;
