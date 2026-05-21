@@ -2212,9 +2212,13 @@ void YamlLogger::print_thread_messages()
         LogLevelVerbosity lowest_level =
                 print_one_thread_messages(file_log_fd, r, LogLevelVerbosity::Max);
 
-        if (lowest_level <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd) {
-            print_thread_header(real_stdout_fd, data, s_tid, sApp->shmem->cfg.verbosity);
-            print_one_thread_messages(real_stdout_fd, r, sApp->shmem->cfg.verbosity);
+        if (file_log_fd != real_stdout_fd) {
+            // print to stdout
+            bool has_messages = lowest_level <= sApp->shmem->cfg.verbosity;
+            if (want_print || has_messages)
+                print_thread_header(real_stdout_fd, data, s_tid, sApp->shmem->cfg.verbosity);
+            if (has_messages)
+                print_one_thread_messages(real_stdout_fd, r, sApp->shmem->cfg.verbosity);
         }
 
         munmap_and_truncate_log(data, r);
