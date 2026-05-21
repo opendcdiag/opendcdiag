@@ -161,7 +161,7 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
 
     // copy the context's fixed portions
     CrashContext *ctx = preallocatedContext;
-    ctx->header.thread_num = thread_num + sApp->main_thread_data()->device_range.starting_device;
+    ctx->header.thread_num = thread_num + sApp->main_thread_data()->thread_range.starting_thread;
     ctx->exceptionRecord = *info->ExceptionRecord;
     ptrdiff_t context_size = sizeof(*ctx);
     if (CopyContext(&ctx->fixedContext, CrashContext::DesiredContextFlags, info->ContextRecord))

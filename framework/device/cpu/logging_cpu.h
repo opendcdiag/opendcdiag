@@ -24,7 +24,7 @@ private:
     std::string timestamp_prefix;
 
     void prepare_line_prefix();
-    void print_thread_header(int fd, int device, const char *prefix);
+    void print_thread_header(int fd, int thread, int device, const char *prefix);
     void print_thread_messages();
     void print_child_stderr();
 };
@@ -45,7 +45,7 @@ private:
     static const char *quality_string(const struct test *test);
     void maybe_print_yaml_marker(int fd);
     void print_thread_messages();
-    void print_thread_header(int fd, int device, LogLevelVerbosity verbosity);
+    void print_thread_header(int fd, int thread, int device, LogLevelVerbosity verbosity);
     void print_child_stderr();
     std::string format_status_code();
 };
