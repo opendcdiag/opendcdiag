@@ -1857,7 +1857,7 @@ void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int de
                          // see win32/cpu_affinity.cpp
                          unsigned(lp) / 64u, unsigned(lp) % 64u);
 #  else
-        return stdprintf("{ logical: %d }", lp);
+        return stdprintf("{ logical: %d }", std::to_underlying(lp));
 #  endif
     };
 #endif
