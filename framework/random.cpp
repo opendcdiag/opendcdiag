@@ -685,10 +685,13 @@ extern "C" {
 #pragma GCC diagnostic ignored "-Wunreachable-code-return"
 #endif
 
+// allow for GPU builds - oneAPI can call it internally
+#if !SANDSTONE_DEVICE_GPU
 void srand(unsigned)
 {
     abort();
 }
+#endif
 void srandom(unsigned)
 {
     abort();
