@@ -391,7 +391,7 @@ static std::string full_cpu_info(LogicalProcessor lp, LogLevelVerbosity verbosit
                      // see win32/cpu_affinity.cpp
                      unsigned(lp) / 64u, unsigned(lp) % 64u);
 #else
-    line = stdprintf("{ logical: %*d", thread_core_spacing().logical, int(lp));
+    line = stdprintf("{ logical: %*d", thread_core_spacing().logical, std::to_underlying(lp));
 #endif
 
     if (info) {
