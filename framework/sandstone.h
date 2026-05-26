@@ -150,8 +150,9 @@ typedef enum TestQuality {
 /// used in a test's test_init function to indicate that a test should be skipped.
 #define EXIT_SKIP               -255
 
+/// force the alignment so the compiler won't try to (un)helpfully overalign it.
 #define DECLARE_TEST_INNER2(test_id, test_description) \
-    __attribute__((aligned(alignof(void*)), used, section(SANDSTONE_SECTION_PREFIX "tests"))) \
+    __attribute__((aligned(alignof(struct test)), used, section(SANDSTONE_SECTION_PREFIX "tests"))) \
     struct test _test_ ## test_id = {                   \
         .compiler_minimum_device = device_compiler_features,   \
         .id = SANDSTONE_STRINGIFY(test_id),             \
