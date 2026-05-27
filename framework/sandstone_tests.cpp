@@ -16,7 +16,7 @@
 
 void SandstoneTestSet::load_all_tests()
 {
-    std::span<struct test> known_tests = cfg.is_selftest ? selftests : regular_tests;
+    std::span<struct test> known_tests = test_source();
     for (struct test &t : known_tests) {
         all_tests.push_back(&t);
         if (!SandstoneConfig::RestrictedCommandLine) {
@@ -68,11 +68,13 @@ std::vector<struct test *> SandstoneTestSet::lookup(const char *name)
     return res;
 }
 
-SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags) : cfg(cfg), flags(flags) {
+SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags)
+    : cfg(cfg), flags(flags)
+{
     load_all_tests(); /* initialize the catalog */
     if (!(flags & enable_all_tests)) return;
-    std::span<struct test> source = !cfg.is_selftest ? regular_tests : selftests;
-    for (struct test &test : source) {
+
+    for (struct test &test : test_source()) {
         if ((test.flags & test_is_optional) && !sApp->include_optional)
             continue;
         if (test.quality_level < sApp->requested_quality)

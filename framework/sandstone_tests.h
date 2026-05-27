@@ -136,6 +136,18 @@ private:
     unsigned int flags;
 
     void load_all_tests();
+    std::span<struct test> test_source() const
+    {
+#ifndef NO_SELF_TESTS
+        if (!SandstoneConfig::RestrictedCommandLine && cfg.is_selftest)
+            return selftests;
+#endif
+        return regular_tests;
+    }
+    bool is_selftest() const
+    {
+        return test_source().begin() != regular_tests.begin();
+    }
 };
 
 }
