@@ -373,7 +373,7 @@ void dump_device_state(std::string &out, int thread)
             return EXIT_SUCCESS;
         }
 
-        out += "GPU runtime state:\n";
+        out += "gpu_runtime_state:\n";
 
         // Try to ask API for the state
         append_device_state(out, zes_handle);
@@ -397,7 +397,7 @@ void dump_device_state(std::string &out, int thread)
     });
 
     if (!dumped) {
-        out += "GPU runtime state: unavailable\n";
+        out += "gpu_runtime_state: unavailable\n";
     }
 }
 
