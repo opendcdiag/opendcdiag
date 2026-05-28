@@ -989,7 +989,9 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
         dump_device_state(log, thread);
 
         if (log.size()) {
+#ifdef __x86_64__
             log.insert(0, "Registers:\n");
+#endif
             log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
         }
     }
