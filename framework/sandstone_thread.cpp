@@ -38,7 +38,7 @@ struct SandstoneTestThreadAttributes
 #ifndef _WIN32
 unsigned char *SandstoneTestThreadAttributes::allocate_stack_block()
 {
-    size_t size = thread_count() * (THREAD_STACK_SIZE + GuardSize);
+    size_t size = thread_count() * (THREAD_STACK_SIZE + GuardSize) + GuardSize;
     void *map = mmap(nullptr, size, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (map == MAP_FAILED)
         return nullptr;
