@@ -98,6 +98,7 @@ enum {
 #endif
     version_option,
     weighted_testrun_option,
+    thread_ratio_option,
     alpha_option,
     beta_option,
 
@@ -175,6 +176,7 @@ static struct option long_options[]  = {
     { "test-time", required_argument, nullptr, 't' },   // repeated below
     { "force-test-time", no_argument, nullptr, force_test_time_option },
     { "test-option", required_argument, nullptr, 'O'},
+    { "thread-ratio", required_argument, nullptr, thread_ratio_option },
     { "threads", required_argument, nullptr, 'n' },
     { "time", required_argument, nullptr, 't' },        // repeated above
     { "timeout", required_argument, nullptr, timeout_option },
@@ -499,6 +501,7 @@ struct ProgramOptionsParser {
             case max_logdata_option:
             case max_messages_option:
             case reschedule_option:
+            case thread_ratio_option:
                 opts_map.insert_or_assign(opt, optarg);
                 break;
 
@@ -902,6 +905,16 @@ struct ProgramOptionsParser {
             }
         }
 
+        if (auto value = string_opt_for(thread_ratio_option)) {
+            std::string str_value(value);
+            if (!validate_thread_ratio(str_value, opts.thread_ratio, app_cfg->device_count)) {
+                fprintf(ERR_STREAM, "%s: invalid value for --thread-ratio: %s\n"
+                        "Value must be a fraction (0.0-1.0 or 0%%-100%%) or a signed delta (-N threads).\n",
+                        argv[0], value);
+                return EX_USAGE;
+            }
+        }
+
         if (auto value = string_opt_for(reschedule_option)) {
             std::string_view str_value(value);
             if (str_value == "queue") {
@@ -1168,6 +1181,34 @@ struct ProgramOptionsParser {
         static_assert(!SandstoneConfig::RestrictedCommandLine || SandstoneConfig::HasBuiltinTestList,
                 "Restricted command-line build must have a built-in test list");
         return EXIT_SUCCESS;
+    }
+
+    bool validate_thread_ratio(std::string str_value, ThreadRatio& thread_ratio, const int device_count) {
+        bool isValid = false;
+        char *end = nullptr;
+        if (str_value.starts_with('-')) {
+            // delta mode: -N threads relative to device count
+            // Not using ParseIntArgument so we have a single error usage message
+            long val = strtol(str_value.c_str(), &end, 10);
+            if (*end != '\0') {
+                isValid = false;
+            } else if (val < 0 && val > -(device_count - 1)) {
+                thread_ratio = int(val);
+                isValid = true;
+            }
+        } else {
+            // parse as fraction (e.g. 0.5, 50%, .75)
+            float val = strtof(str_value.c_str(), &end);
+            if (*end == '%') {
+                val /= 100;
+                ++end;
+            }
+            if (*end == '\0' && val > 0 && val <= 1) {
+                thread_ratio = val;
+                isValid = true;
+            }
+        }
+        return isValid;
     }
 };
 } /* anonymous namespace */

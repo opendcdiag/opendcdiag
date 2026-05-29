@@ -118,10 +118,26 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
     }
 }
 
-void slice_plan_init_for_threads(SlicePlans::SlicesArray& plans)
+int slice_plan_init_for_threads(SlicePlans::SlicesArray& plans, ThreadRatio ratio_type)
 {
+    int max_thread_count = 1;
+
     for (auto &plan : plans) {
-        for (auto &slice : plan)
-            slice.thread_range = { slice.device_range.starting_device, slice.device_range.device_count }; // 1:1 for now...
+        int thread_offset = 0;
+        for (auto &slice : plan) {
+            int n = slice.device_range.device_count;
+            int thread_count;
+            if (auto *delta = std::get_if<int>(&ratio_type)) {
+                thread_count = n + *delta;
+            } else {
+                thread_count = static_cast<int>(n * std::get<float>(ratio_type));
+            }
+            slice.thread_range = { thread_offset, thread_count > 0 ? thread_count : 1 };
+            thread_offset += thread_count;
+        }
+        if (thread_offset > max_thread_count)
+            max_thread_count = thread_offset;
     }
+
+    return max_thread_count;
 }
