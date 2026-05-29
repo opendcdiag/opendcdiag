@@ -775,7 +775,7 @@ static int selftest_datacomparefailrare_run(struct test *, int)
         for (T &value : expected)
             value = frandom_scale(1);
     } else {
-        memset_random(expected.data(), sizeof(expected));
+        memset_random(expected);
     }
 
     std::array actual = expected;

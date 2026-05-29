@@ -32,6 +32,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <span>
 using std::atomic_int;
 extern "C" {
 #else
@@ -603,6 +604,21 @@ int num_packages() __attribute__((pure));
 extern int8_t sandstone_verbosity_level() __attribute__((pure));
 
 #ifdef __cplusplus
+}
+
+template <typename T, size_t E> inline void memset_random(std::span<T, E> span)
+{
+    memset_random(span.data(), span.size_bytes());
+}
+
+template <typename T, size_t N> inline void memset_random(std::array<T, N> &arr)
+{
+    memset_random(std::span(arr));
+}
+
+template <typename T> inline void memset_random(std::vector<T> &vec)
+{
+    memset_random(std::span(vec));
 }
 
 extern void log_thread_context(std::string_view msg);
