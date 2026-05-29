@@ -989,11 +989,7 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
         dump_device_state(log, thread);
 
         if (log.size()) {
-#ifndef SANDSTONE_DEVICE_GPU
-            // Don't inject the "Registers" header for GPU builds, because
-            // it doesn't dump any registers.
             log.insert(0, "Registers:\n");
-#endif
             log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
         }
     }
