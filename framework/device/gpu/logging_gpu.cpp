@@ -94,9 +94,9 @@ void append_xe_devcoredump(std::string &out, const gpu_info_t &info)
     if (ec) {
         return;
     }
-
-    out += std::format("  xe_devcoredump_path: {} (mtime: {:%FT%T}Z)\n",
-                       devcoredump_data.string(), mtime);
+    out += "  xe_devcoredump:\n";
+    out += std::format("    path: {}\n", devcoredump_data.string());
+    out += std::format("    mtime: {:%FT%T}Z\n", mtime);
 }
 
 void append_device_state(std::string &out, zes_device_handle_t zes_handle)
@@ -105,8 +105,8 @@ void append_device_state(std::string &out, zes_device_handle_t zes_handle)
     if (zesDeviceGetState(zes_handle, &state) != ZE_RESULT_SUCCESS) {
         return;
     }
-
-    out += std::format("  dev_state: reset=0x{:x} repaired={}\n",
+    out += "  dev_state:\n";
+    out += std::format("    reset: 0x{:x}\n    repaired: {}\n",
                        state.reset, static_cast<uint32_t>(state.repaired));
 }
 
@@ -129,12 +129,17 @@ void append_processes_state(std::string &out, zes_device_handle_t zes_handle)
             return;
         }
     }
+    if (count == 0) {
+        out += "  procs: []\n";
+        return;
+    }
 
-    out += std::format("  procs: {}\n", count);
+    out += "  procs:\n";
     for (uint32_t i = 0; i < count && i < procs.size(); ++i) {
         const auto &proc = procs[i];
-        out += std::format("    pid={}: mem={} shared={} engines=0x{:x}\n",
-                           proc.processId, proc.memSize, proc.sharedSize, proc.engines);
+        out += std::format("  - pid: {}\n", proc.processId);
+        out += std::format("    resources: {{ mem: {}, shared: {}, engines: 0x{:x} }}\n",
+                            proc.memSize, proc.sharedSize, proc.engines);
     }
 }
 
@@ -145,7 +150,7 @@ void append_pci_state(std::string &out, zes_device_handle_t zes_handle)
         return;
     }
 
-    out += std::format("  pci: status={} qual=0x{:x} stab=0x{:x} speed(gen={}, width={}, bw={})\n",
+    out += std::format("  pci: {{ status: {}, qual: 0x{:x}, stab: 0x{:x}, speed: {{ gen: {}, width: {}, bw: {} }} }}\n",
                        static_cast<uint32_t>(state.status), state.qualityIssues,
                        state.stabilityIssues, state.speed.gen, state.speed.width,
                        state.speed.maxBandwidth);
@@ -158,7 +163,7 @@ void append_ecc_state(std::string &out, zes_device_handle_t zes_handle)
         return;
     }
 
-    out += std::format("  ecc: current={} pending={} action={}\n",
+    out += std::format("  ecc: {{ current: {}, pending: {}, action: {} }}\n",
                        static_cast<uint32_t>(state.currentState),
                        static_cast<uint32_t>(state.pendingState),
                        static_cast<uint32_t>(state.pendingAction));
@@ -166,6 +171,8 @@ void append_ecc_state(std::string &out, zes_device_handle_t zes_handle)
 
 void append_memory_state(std::string &out, zes_device_handle_t zes_handle)
 {
+    out += "  mem:";
+    std::string meminfo = "";
     for_each_handle<zes_mem_handle_t>(zes_handle, [&](zes_mem_handle_t res_handle) {
         zes_mem_properties_t props = { .stype = ZES_STRUCTURE_TYPE_MEM_PROPERTIES };
         if (zesMemoryGetProperties(res_handle, &props) != ZE_RESULT_SUCCESS) {
@@ -177,16 +184,25 @@ void append_memory_state(std::string &out, zes_device_handle_t zes_handle)
             return EXIT_SUCCESS;
         }
 
-        out += std::format("  mem[type={} loc={} subdev={}]: health={} free={} size={}\n",
+        meminfo += std::format("  - id: {{ type: {}, loc: {}, subdev: {} }}\n",
                            static_cast<uint32_t>(props.type), static_cast<uint32_t>(props.location),
-                           props.onSubdevice ? static_cast<int32_t>(props.subdeviceId) : -1,
-                           static_cast<uint32_t>(state.health), state.free, state.size);
+                           props.onSubdevice ? static_cast<int32_t>(props.subdeviceId) : -1);
+        meminfo += std::format("    health: {}\n", static_cast<uint32_t>(state.health));
+        meminfo += std::format("    free: {}\n", state.free);
+        meminfo += std::format("    size: {}\n",  state.size);
         return EXIT_SUCCESS;
     });
+    if (meminfo.size()) {
+        out += "\n" + meminfo;
+    } else {
+        out  += " []\n";
+    }
 }
 
 void append_fabric_state(std::string &out, zes_device_handle_t zes_handle)
 {
+    out += "  fabrics:";
+    std::string fabric_info = "";
     for_each_handle<zes_fabric_port_handle_t>(zes_handle, [&](zes_fabric_port_handle_t res_handle) {
         zes_fabric_port_properties_t props = { .stype = ZES_STRUCTURE_TYPE_FABRIC_PORT_PROPERTIES };
         if (zesFabricPortGetProperties(res_handle, &props) != ZE_RESULT_SUCCESS) {
@@ -198,19 +214,26 @@ void append_fabric_state(std::string &out, zes_device_handle_t zes_handle)
             return EXIT_SUCCESS;
         }
 
-        out += std::format("  fabric[{}:{}:{}]: status={} qual=0x{:x} fail=0x{:x} rx={}x{} tx={}x{}\n",
-                           props.portId.fabricId, props.portId.attachId, props.portId.portNumber,
+        fabric_info += std::format("  - id: {{ fabric_id: {}, attach_id: {}, port_id: {} }}\n",
+                           props.portId.fabricId, props.portId.attachId, props.portId.portNumber);
+        fabric_info += std::format("    info: {{ status: {}, qual: 0x{:x}, fail: 0x{:x}, rx: {}x{}, tx: {}x{} }}\n",
                            static_cast<uint32_t>(state.status), state.qualityIssues, state.failureReasons,
                            state.rxSpeed.bitRate, state.rxSpeed.width,
                            state.txSpeed.bitRate, state.txSpeed.width);
         return EXIT_SUCCESS;
     });
+    if (fabric_info.size()) {
+        out += "\n" + fabric_info;
+    } else {
+        out += " []\n";
+    }
 }
 
 void append_psu_state(std::string &out, zes_device_handle_t zes_handle)
 {
     uint32_t count = 0;
     if (zesDeviceEnumPsus(zes_handle, &count, nullptr) != ZE_RESULT_SUCCESS || count == 0) {
+        out += "  psus: []\n";
         return;
     }
 
@@ -219,6 +242,7 @@ void append_psu_state(std::string &out, zes_device_handle_t zes_handle)
         return;
     }
 
+    out += "  psus:\n";
     for (auto psu_handle : psu_handles) {
         zes_psu_properties_t props = { .stype = ZES_STRUCTURE_TYPE_PSU_PROPERTIES };
         if (zesPsuGetProperties(psu_handle, &props) != ZE_RESULT_SUCCESS) {
@@ -230,8 +254,9 @@ void append_psu_state(std::string &out, zes_device_handle_t zes_handle)
             continue;
         }
 
-        out += std::format("  psu[subdev={}]: volt={} fan_failed={} temp={} current={}mA\n",
-                           props.onSubdevice ? static_cast<int32_t>(props.subdeviceId) : -1,
+        out += std::format("  - subdev: {}\n",
+                           props.onSubdevice ? static_cast<int32_t>(props.subdeviceId) : -1);
+        out += std::format("    values: {{ volt: {}, fan_failed: {}, temp: {}, current: {}mA }}\n",
                            static_cast<uint32_t>(state.voltStatus), state.fanFailed,
                            state.temperature, state.current);
     }
@@ -241,6 +266,7 @@ void append_fan_state(std::string &out, zes_device_handle_t zes_handle)
 {
     uint32_t count = 0;
     if (zesDeviceEnumFans(zes_handle, &count, nullptr) != ZE_RESULT_SUCCESS || count == 0) {
+        out += "  fans: []\n";
         return;
     }
 
@@ -248,7 +274,7 @@ void append_fan_state(std::string &out, zes_device_handle_t zes_handle)
     if (zesDeviceEnumFans(zes_handle, &count, fan_handles.data()) != ZE_RESULT_SUCCESS) {
         return;
     }
-
+    out += "  fans:\n";
     for (auto fan_handle : fan_handles) {
         zes_fan_properties_t props = { .stype = ZES_STRUCTURE_TYPE_FAN_PROPERTIES };
         if (zesFanGetProperties(fan_handle, &props) != ZE_RESULT_SUCCESS) {
@@ -263,14 +289,15 @@ void append_fan_state(std::string &out, zes_device_handle_t zes_handle)
             continue;
         }
 
-        out += std::format("  fan[subdev={}]: rpm={} pct={} max_rpm={}\n",
-                           props.onSubdevice ? static_cast<int32_t>(props.subdeviceId) : -1,
-                           rpm, pct, props.maxRPM);
+        out += std::format("  - subdev: {}\n", props.onSubdevice ? static_cast<int32_t>(props.subdeviceId) : -1);
+        out += std::format("    values: {{ rpm: {}, pct: {}, max_rpm: {} }}\n", rpm, pct, props.maxRPM);
     }
 }
 
 void append_engine_state(std::string &out, zes_device_handle_t zes_handle)
 {
+    out += "  engines:";
+    std::string engines = "";
     for_each_handle<zes_engine_handle_t>(zes_handle, [&](zes_engine_handle_t res_handle) {
         zes_engine_properties_t props = { .stype = ZES_STRUCTURE_TYPE_ENGINE_PROPERTIES };
         if (zesEngineGetProperties(res_handle, &props) != ZE_RESULT_SUCCESS) {
@@ -282,14 +309,22 @@ void append_engine_state(std::string &out, zes_device_handle_t zes_handle)
             return EXIT_SUCCESS;
         }
 
-        out += std::format("  eng[{}]: active={} ts={}\n",
-                           to_string(props.type), stats.activeTime, stats.timestamp);
+        engines += std::format("  - engine: {}\n", to_string(props.type));
+        engines += std::format("    active: {}\n", stats.activeTime);
+        engines += std::format("    ts: {}\n", stats.timestamp);
         return EXIT_SUCCESS;
     });
+    if (engines.size()) {
+        out += "\n" + engines;
+    } else {
+        out += " []\n";
+    }
 }
 
 void append_frequency_state(std::string &out, zes_device_handle_t zes_handle)
 {
+    out += "  freqs:";
+    std::string frequencies = "";
     for_each_handle<zes_freq_handle_t>(zes_handle, [&](zes_freq_handle_t res_handle) {
         zes_freq_properties_t props = { .stype = ZES_STRUCTURE_TYPE_FREQ_PROPERTIES };
         if (zesFrequencyGetProperties(res_handle, &props) != ZE_RESULT_SUCCESS) {
@@ -301,15 +336,22 @@ void append_frequency_state(std::string &out, zes_device_handle_t zes_handle)
             return EXIT_SUCCESS;
         }
 
-        out += std::format("  freq[domain={}]: actual={:.1f} request={:.1f} tdp={:.1f} throttle=0x{:x}\n",
-                           static_cast<uint32_t>(props.type), state.actual, state.request,
-                           state.tdp, state.throttleReasons);
+        frequencies += std::format("  - domain: {}\n", static_cast<uint32_t>(props.type));
+        frequencies += std::format("    values: {{ actual: {:.1f}, request: {:.1f}, tdp: {:.1f}, throttle: 0x{:x} }}\n",
+                            state.actual, state.request, state.tdp, state.throttleReasons);
         return EXIT_SUCCESS;
     });
+    if (frequencies.size()) {
+        out += "\n" + frequencies;
+    } else {
+        out += " []\n";
+    }
 }
 
 void append_temperature_state(std::string &out, zes_device_handle_t zes_handle)
 {
+    out += "  temps:";
+    std::string temps = "";
     for_each_handle<zes_temp_handle_t>(zes_handle, [&](zes_temp_handle_t res_handle) {
         zes_temp_properties_t props = { .stype = ZES_STRUCTURE_TYPE_TEMP_PROPERTIES };
         if (zesTemperatureGetProperties(res_handle, &props) != ZE_RESULT_SUCCESS) {
@@ -321,13 +363,20 @@ void append_temperature_state(std::string &out, zes_device_handle_t zes_handle)
             return EXIT_SUCCESS;
         }
 
-        out += std::format("  temp[sensor={}]: {:.1f}C\n", static_cast<uint32_t>(props.type), temp);
+        temps += std::format("  - sensor: {}\n    value: {:.1f}C\n", static_cast<uint32_t>(props.type), temp);
         return EXIT_SUCCESS;
     });
+    if (temps.size()) {
+        out += "\n" + temps;
+    } else {
+        out += " []\n";
+    }
 }
 
 void append_ras_state(std::string &out, zes_device_handle_t zes_handle)
 {
+    out += "  ras:";
+    std::string ras = "";
     for_each_handle<zes_ras_handle_t>(zes_handle, [&](zes_ras_handle_t res_handle) {
         zes_ras_properties_t props = { .stype = ZES_STRUCTURE_TYPE_RAS_PROPERTIES };
         if (zesRasGetProperties(res_handle, &props) != ZE_RESULT_SUCCESS) {
@@ -347,9 +396,14 @@ void append_ras_state(std::string &out, zes_device_handle_t zes_handle)
             return EXIT_SUCCESS;
         }
 
-        out += std::format("  ras[{}]: total={}\n", to_string(props.type), total);
+        ras += std::format("  - counter: {}\n    value: {}\n", to_string(props.type), total);
         return EXIT_SUCCESS;
     });
+    if (ras.size()) {
+        out += "\n" + ras;
+    } else {
+        out += " []\n";
+    }
 }
 }
 
@@ -373,7 +427,7 @@ void dump_device_state(std::string &out, int thread)
             return EXIT_SUCCESS;
         }
 
-        out += "GPU runtime state:\n";
+        out += "gpu_runtime_state:\n";
 
         // Try to ask API for the state
         append_device_state(out, zes_handle);
@@ -397,7 +451,7 @@ void dump_device_state(std::string &out, int thread)
     });
 
     if (!dumped) {
-        out += "GPU runtime state: unavailable\n";
+        out += "gpu_runtime_state: unavailable\n";
     }
 }
 
