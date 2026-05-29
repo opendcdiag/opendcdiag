@@ -23,6 +23,7 @@ struct ProgramOptions {
     const char* seed = nullptr;
     int max_cores_per_slice = 0;
     int device_count = -1;
+    ThreadRatio thread_ratio = 1.0f;
     bool fatal_errors = false;
     enum class ListMode : uint8_t {
         // action must be list_tests for these

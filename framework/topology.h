@@ -13,6 +13,7 @@
 #include <limits>
 #include <span>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <assert.h>
@@ -32,6 +33,8 @@ struct DeviceScheduler
     virtual void reschedule_to_next_device() = 0;
     virtual void finish_reschedule() = 0;
 };
+
+using ThreadRatio = std::variant<int, float>;
 
 void make_rescheduler(RescheduleMode mode);
 
@@ -217,7 +220,7 @@ struct SlicePlans
 };
 
 void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice);
-void slice_plan_init_for_threads(SlicePlans::SlicesArray& plans);
+int slice_plan_init_for_threads(SlicePlans::SlicesArray& plans, ThreadRatio thread_ratio);
 
 template <typename EnabledDevices>
 EnabledDevices detect_devices();
