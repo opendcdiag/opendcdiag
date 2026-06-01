@@ -1897,9 +1897,14 @@ selftest_crash_common() {
     # Ensure we can use this option even if gdb isn't found
     # (can't use run_sandstone_yaml here because we empty $PATH)
     if ! $is_windows; then
+        local marker="Registers:"
+        if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+            marker="gpu_runtime_state:"
+        fi
+
         run env PATH=/ $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 --on-crash=context -o -
         [[ $status -eq 1 ]]     # instead of 64 (EX_USAGE)
-        [[ "$output" = *"level: info"*"Registers:"* ]]
+        [[ "$output" = *"level: info"*"$marker"* ]]
         ! [[ "$output" = *Backtrace:* ]]
 
         # And that we get a context even without the option
@@ -1907,7 +1912,7 @@ selftest_crash_common() {
         opts=(${opts/--on-crash=*})     # remove --on-crash
         SANDSTONE="${opts[@]}"          # rejoin with spaces
         run env PATH=/ $SANDSTONE -Y --selftests -e selftest_sigsegv --retest-on-failure=0 -o -
-        [[ "$output" = *"level: info"*"Registers:"* ]]
+        [[ "$output" = *"level: info"*"$marker"* ]]
         ! [[ "$output" = *Backtrace:* ]]
     fi
 }
