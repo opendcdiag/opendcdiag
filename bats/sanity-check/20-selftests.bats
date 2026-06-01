@@ -2132,3 +2132,69 @@ selftest_interrupt_common() {
     test_yaml_regexp "/tests/2/test" selftest_test_optional_include_optional
     test_yaml_regexp "/tests/3/test" selftest_test_optional_beta_include_optional
 }
+
+thread_ratio_expected_threads() {
+    local count=$1
+    local ratio=$2
+    local threads
+    if [[ "$ratio" == -* ]]; then
+        threads=$(( count + ratio ))
+    else
+        threads=$(awk "BEGIN { printf \"%d\", int($count * $ratio) }")
+    fi
+    (( threads = threads > 0 ? threads : 1 ))
+    echo "$threads"
+}
+
+check_thread_ratio_plans() {
+    local ratio=$1
+
+    # fullsocket
+    local fs_count=${yamldump[/test-plans/fullsocket/0/count]}
+    local expected=$(thread_ratio_expected_threads "$fs_count" "$ratio")
+    test_yaml_numeric "/test-plans/fullsocket/0/threads" "value == $expected"
+
+    # isolate_numa slices
+    local slice_count=${yamldump[/test-plans/isolate_numa@len]}
+    for ((i = 0; i < slice_count; i++)); do
+        local count=${yamldump[/test-plans/isolate_numa/$i/count]}
+        expected=$(thread_ratio_expected_threads "$count" "$ratio")
+        test_yaml_numeric "/test-plans/isolate_numa/$i/threads" "value == $expected"
+    done
+
+    # heuristic slices
+    slice_count=${yamldump[/test-plans/heuristic@len]}
+    for ((i = 0; i < slice_count; i++)); do
+        local count=${yamldump[/test-plans/heuristic/$i/count]}
+        expected=$(thread_ratio_expected_threads "$count" "$ratio")
+        test_yaml_numeric "/test-plans/heuristic/$i/threads" "value == $expected"
+    done
+
+    # Verify each test thread is pinned to a logical CPU within its slice's range
+    local thread_idx=$slice_count
+    for ((i = 0; i < slice_count; i++)); do
+        local start=${yamldump[/test-plans/heuristic/$i/starting_cpu]}
+        local count=${yamldump[/test-plans/heuristic/$i/count]}
+        local threads=${yamldump[/test-plans/heuristic/$i/threads]}
+
+        for ((t = 0; t < threads; t++)); do
+            test_yaml_numeric "/tests/0/threads/$thread_idx/id/logical" \
+                "value >= $start && value < $(( start + count ))"
+            thread_idx=$(( thread_idx + 1 ))
+        done
+    done
+}
+
+@test "thread_ratio delta YAML pass output" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_pass -vvv --max-cores-per-slice=2 --thread-ratio=-1
+    test_yaml_regexp "/exit" pass
+    check_thread_ratio_plans -1
+}
+
+@test "thread_ratio 70% YAML pass output" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_pass -vvv --max-cores-per-slice=2 --thread-ratio=70%
+    test_yaml_regexp "/exit" pass
+    check_thread_ratio_plans 0.70
+}
