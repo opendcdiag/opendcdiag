@@ -123,7 +123,7 @@ selftest_crash_context_common() {
         test_yaml_regexp "/tests/0/threads/$threadidx/messages/0/text" ".*Received signal $signum \((Segmentation fault|Access violation)\) code=[0-9]+.* RIP = 0x.*"
     fi
 
-    if [[ `uname -m` = x86_64 ]]; then
+    if [[ `uname -m` = x86_64 ]] && [[ "$SANDSTONE_DEVICE_TYPE" != "GPU" ]]; then
         # OpenDCDiag's built-in register dumper is only implemented for x86-64.
         # Scan messages to find the one containing "Registers:".
         local msgcount=$((yamldump[/tests/0/threads/$threadidx/messages@len]))
