@@ -479,6 +479,7 @@ static void list_tests(const ProgramOptions& opts)
             break;
         case ProgramOptions::ListMode::RawGroups:
             printf("@%s\n", g.definition->id);
+            break;
         case ProgramOptions::ListMode::RawTests:
             break;      // nothing
         }
