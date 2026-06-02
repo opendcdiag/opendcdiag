@@ -342,7 +342,7 @@ selftest_pass() {
     test_yaml_regexp "/tests/1/result" skip
 }
 
-@test "selftest_pass has main thread and loop-count at -vvv" {
+@test "selftest_pass YAML has main thread and loop-count at -vvv" {
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
     # Also confirm loop-count is printed for silent threads.
@@ -356,6 +356,38 @@ selftest_pass() {
     fi
     for ((i = 1; i <= MAX_PROC; ++i)); do
         test_yaml_numeric "/tests/0/threads/$i/loop-count" 'value >= 0'
+    done
+}
+
+@test "selftest_pass TAP has main thread and loop-count at -vvv" {
+    # Verify that at least 1 main thread exists with runtime
+    # and resource-usage when running at -vvv verbosity.
+    # Also confirm loop-count is printed for silent threads.
+    run $SANDSTONE --selftests --retest-on-failure=0 --on-crash=kill -o /dev/null \
+        -e selftest_pass --output-format=tap -vvv
+    [[ "$status" -eq 0 ]]
+
+    tap_output=$(echo "$output" | sed 's/\r$//')
+    [[ "$tap_output" = *"Main thread:"* ]]
+
+    for ((i = 0; i < MAX_PROC; ++i)); do
+        [[ "$tap_output" = *"Thread $i on CPU"* ]]
+        echo "$tap_output" | grep -A1 "Thread $i on CPU" | grep -q "loop-count:"
+    done
+}
+
+@test "selftest_pass Key-value has main thread and loop-count at -vvv" {
+    # Verify that at least 1 main thread exists with runtime
+    # and resource-usage when running at -vvv verbosity.
+    # Also confirm loop-count is printed for silent threads.
+    run $SANDSTONE --selftests --retest-on-failure=0 --on-crash=kill -o /dev/null \
+        -e selftest_pass --output-format=key-value -vvv
+    [[ "$status" -eq 0 ]]
+    key_val_output=$(echo "$output" | sed 's/\r$//')
+
+    for ((i = 0; i < MAX_PROC; ++i)); do
+        [[ "$key_val_output" = *"selftest_pass_messages_thread_${i}_cpu = $i"* ]]
+        [[ "$key_val_output" = *"selftest_pass_thread_${i}_loop_count = "* ]]
     done
 }
 
