@@ -56,7 +56,7 @@ tests_common_incdirs = [
 # fill with tests
 tests_set_base.add(
     files(
-
+        'ze_memcpy/ze_memcpy.cpp',
     )
 )
 
