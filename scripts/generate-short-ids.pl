@@ -29,7 +29,7 @@ sub find_dirs($@) {
     return @result;
 }
 
-my $declare_test_rx = qr/^DECLARE_TEST\((\w+)/;
+my $declare_test_rx = qr/^DECLARE_TEST\s*\((\w+)/;
 my $me = $0;
 unless (scalar @ARGV) {
 print "$0 <output> [secret] <test-dir...>
