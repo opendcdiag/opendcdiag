@@ -478,7 +478,12 @@ template <typename Lambda> static void for_each_test_thread(Lambda &&l, int max_
             for (int i = 0; i < main_thread->thread_range.thread_count; i++) {
                 int thread = main_thread->thread_range.starting_thread + i;
                 int device = main_thread->device_range.starting_device + i;
-                l(sApp->test_thread_data(thread), thread, device);
+                int data_idx = sApp->is_main_process() ? thread : i;
+                int device_idx = sApp->is_main_process() ? device : i;
+
+                assert(data_idx < sApp->thread_count);
+                assert(device_idx < sApp->device_count);
+                l(sApp->test_thread_data(data_idx), thread, device);
             }
         }
     } else {
