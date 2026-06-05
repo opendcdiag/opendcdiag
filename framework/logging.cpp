@@ -544,7 +544,8 @@ void logging_init_global(void)
         data->log_fd = open_new_log();
     };
     for_each_main_thread(logopener);
-    for_each_test_thread(logopener);
+    for (int i = 0; i < thread_count(); i++)
+        logopener(sApp->test_thread_data(i), i);
 
 #ifdef __GLIBC__
     setenv("LIBC_FATAL_STDERR_", "1", true);
@@ -588,7 +589,8 @@ int logging_close_global(int exitcode)
         close(data->log_fd);
     };
     for_each_main_thread(logcloser);
-    for_each_test_thread(logcloser);
+    for (int i = 0; i < thread_count(); i++)
+        logcloser(sApp->test_thread_data(i), i);
 #endif
 
     /* leak all file descriptors without closing, the application
@@ -1699,7 +1701,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
         }
     };
     for_each_main_thread(message_checker, slices.size());
-    for_each_test_thread(message_checker);
+    for_each_test_thread(message_checker, slices.size());
 
     if (testResult == TestResult::Passed && pc == sc)
         testResult = TestResult::Skipped;       // all threads skipped
