@@ -392,7 +392,7 @@ selftest_pass() {
     key_val_output=$(echo "$output" | sed 's/\r$//')
 
     for ((i = 0; i < MAX_PROC; ++i)); do
-        [[ "$key_val_output" = *"selftest_pass_messages_thread_${i}_cpu = $i"* ]]
+        [[ "$key_val_output" = *"selftest_pass_messages_thread_${i}_cpu = "* ]]
         [[ "$key_val_output" = *"selftest_pass_thread_${i}_loop_count = "* ]]
     done
 }
@@ -2208,16 +2208,28 @@ check_thread_ratio_plans() {
         test_yaml_numeric "/test-plans/heuristic/$i/threads" "value == $expected"
     done
 
-    # Verify each test thread is pinned to a logical CPU within its slice's range
+    # Verify each test thread is pinned to the expected logical CPU.
+    # Thread t within a slice must be on the t-th device's logical CPU.
+    # We look up logical CPUs from cpu-info because they are not necessarily
+    # contiguous (e.g. device 1 could be logical CPU 120).
     local thread_idx=$slice_count
     for ((i = 0; i < slice_count; i++)); do
         local start=${yamldump[/test-plans/heuristic/$i/starting_cpu]}
-        local count=${yamldump[/test-plans/heuristic/$i/count]}
         local threads=${yamldump[/test-plans/heuristic/$i/threads]}
 
+        # Build array of logical CPUs for this slice's devices
+        local -a valid_cpus=()
+        local count=${yamldump[/test-plans/heuristic/$i/count]}
+        for ((d = start; d < start + count; d++)); do
+            valid_cpus+=("${yamldump[/cpu-info/$d/logical]}")
+        done
+
         for ((t = 0; t < threads; t++)); do
-            test_yaml_numeric "/tests/0/threads/$thread_idx/id/logical" \
-                "value >= $start && value < $(( start + count ))"
+            local logical=${yamldump[/tests/0/threads/$thread_idx/id/logical]}
+            if (( logical != valid_cpus[t] )); then
+                echo "Thread $thread_idx: expected logical CPU ${valid_cpus[$t]}, got $logical" >&2
+                return 1
+            fi
             thread_idx=$(( thread_idx + 1 ))
         done
     done
