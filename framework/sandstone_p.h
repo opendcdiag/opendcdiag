@@ -471,23 +471,22 @@ template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_
 
 template <typename Lambda> static void for_each_test_thread(Lambda &&l, int max_slices = INT_MAX)
 {
-    int slices = sApp->is_main_process() ? std::min(sApp->shmem->main_thread_count, max_slices) : 1;
+    bool is_main_process = sApp->is_main_process();
+    int slices = is_main_process ? std::min(sApp->shmem->main_thread_count, max_slices) : 1;
     for (int s = 0; s < slices; s++) {
         auto main_thread = sApp->main_thread_data(s);
 
         for (int i = 0; i < main_thread->thread_range.thread_count; i++) {
-            int thread = main_thread->thread_range.starting_thread + i;
-            int data_idx = sApp->is_main_process() ? thread : i;
-            assert(data_idx < sApp->thread_count);
+            int thread = is_main_process ? main_thread->thread_range.starting_thread + i : i;
+            assert(thread < sApp->thread_count);
 
             if constexpr (requires { l(sApp->test_thread_data(0), 0, 0); }) {
-                int device = main_thread->device_range.starting_device + i;
-                int device_idx = sApp->is_main_process() ? device : i;
-                assert(device_idx < sApp->device_count);
+                int device = is_main_process ? main_thread->device_range.starting_device + i : i;
+                assert(device < sApp->device_count);
 
-                l(sApp->test_thread_data(data_idx), thread, device_idx);
+                l(sApp->test_thread_data(thread), thread, device);
             } else
-                l(sApp->test_thread_data(data_idx), thread);
+                l(sApp->test_thread_data(thread), thread);
         }
     }
 }
