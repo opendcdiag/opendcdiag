@@ -5,7 +5,7 @@
  * Copyright 2026 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  *
- * @test @b ze_matmul
+ * @test @b ze_matmul_elemwise
  * @parblock
  * Test runs matrix multiplication kernel (elementwise). Each workgroup
  * operates on the same data. Matrix is of size of maxTotalGroupSize.
@@ -188,7 +188,7 @@ int ze_matmul_cleanup(struct test* test)
 
 } // end anonymous namespace
 
-DECLARE_TEST(ze_matmul, "Level zero elementwise matrix multiply")
+DECLARE_TEST(ze_matmul_elemwise, "Level zero elementwise matrix multiply")
     .test_init = ze_matmul_init,
     .test_run = ze_matmul_run,
     .test_cleanup = ze_matmul_cleanup,
