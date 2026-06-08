@@ -50,7 +50,10 @@ runs:
             yq \
             zlib1g-dev \
             libze1 \
-            libze-dev
+            libze-dev \
+            intel-ocloc \
+            libigdfcl2 \
+            libigc2
         echo "::endgroup::"
     - uses: actions/checkout@v6
     - name: meson setup
