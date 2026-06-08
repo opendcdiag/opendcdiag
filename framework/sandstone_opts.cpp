@@ -923,8 +923,9 @@ struct ProgramOptionsParser {
             std::string str_value(value);
             if (!validate_thread_ratio(str_value, opts.thread_ratio, app_cfg->device_count)) {
                 fprintf(ERR_STREAM, "%s: invalid value for --thread-ratio: %s\n"
-                        "Value must be a fraction (0.0-1.0 or 0%%-100%%) or a signed delta (-N threads).\n",
-                        argv[0], value);
+                    "Value must be a fraction (0.0-1.0 or 0%%-100%%) or a signed delta (-N threads). "
+                    "For signed deltas, N must be less than the number of visible devices (%d).\n",
+                        argv[0], value, app_cfg->device_count);
                 return EX_USAGE;
             }
         }
@@ -1210,7 +1211,7 @@ struct ProgramOptionsParser {
             long val = strtol(str_value.c_str(), &end, 10);
             if (*end != '\0') {
                 isValid = false;
-            } else if (val < 0 && val > -(device_count - 1)) {
+            } else if (val < 0 && val >= -(device_count - 1)) {
                 thread_ratio = int(val);
                 isValid = true;
             }
