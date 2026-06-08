@@ -360,6 +360,9 @@ selftest_pass() {
 }
 
 @test "selftest_pass TAP has main thread and loop-count at -vvv" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        skip "TAP skipped for GPU"
+    fi
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
     # Also confirm loop-count is printed for silent threads.
@@ -377,6 +380,9 @@ selftest_pass() {
 }
 
 @test "selftest_pass Key-value has main thread and loop-count at -vvv" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        skip "Key-value skipped for GPU"
+    fi
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
     # Also confirm loop-count is printed for silent threads.
@@ -2218,6 +2224,9 @@ check_thread_ratio_plans() {
 }
 
 @test "thread_ratio delta YAML pass output" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        skip "thread_ratio skipped for GPU"
+    fi
     declare -A yamldump
     sandstone_selftest -e selftest_pass -vvv --max-cores-per-slice=2 --thread-ratio=-1
     test_yaml_regexp "/exit" pass
@@ -2225,6 +2234,9 @@ check_thread_ratio_plans() {
 }
 
 @test "thread_ratio 70% YAML pass output" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        skip "thread_ratio skipped for GPU"
+    fi
     declare -A yamldump
     sandstone_selftest -e selftest_pass -vvv --max-cores-per-slice=2 --thread-ratio=70%
     test_yaml_regexp "/exit" pass
