@@ -56,23 +56,24 @@ tests_common_incdirs = [
 # fill with tests
 tests_set_base.add(
     files(
+        'ze_matmul/ze_matmul.cpp',
         'ze_memcpy/ze_memcpy.cpp',
     )
 )
 
 # fill with OpenCL kernels if used by tests
-level_zero_kernel_sources = files(
-
+level_zero_kernel_sources_ocl = files(
+    'ze_matmul/matmul.cl',
 )
 
 tests_config_base = tests_set_base.apply(tests_config)
-# level_zero_kernels_headers = level_zero_kernels_generator.process(level_zero_kernel_sources)
+level_zero_kernels_headers_ocl = level_zero_kernels_generator_ocl.process(level_zero_kernel_sources_ocl)
 
 tests_base_a = static_library(
     'tests_base',
     sources : [
         tests_config_base.sources(),
-        # level_zero_kernels_headers,
+        level_zero_kernels_headers_ocl,
     ],
     build_by_default: false,
     include_directories : [
