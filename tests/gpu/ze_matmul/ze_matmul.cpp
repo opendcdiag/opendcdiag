@@ -132,14 +132,14 @@ int ze_matmul_run(struct test* test, int thread)
     uint32_t groupSizeX = data->rows;
     uint32_t groupSizeY = data->cols;
     uint32_t groupSizeZ = 1;
-    ZE_CHECK(zeKernelSetGroupSize(ze_kernel, groupSizeX, groupSizeY, groupSizeZ));
+    ZE_CHECK(zeKernelSetGroupSize(ze_kernel.get(), groupSizeX, groupSizeY, groupSizeZ));
 
     // Push arguments
-    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel, 0, sizeof(a_device.get()), &a_device.get()));     // a
-    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel, 1, sizeof(b_device.get()), &b_device.get()));     // b
-    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel, 2, sizeof(out_device.get()), &out_device.get())); // out
-    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel, 3, sizeof(data->cols), &data->cols));  // cols
-    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel, 4, sizeof(INTERNAL_LOOP_COUNT), &INTERNAL_LOOP_COUNT));  // internal_loops_n
+    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel.get(), 0, sizeof(a_device.get()), &a_device.get()));     // a
+    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel.get(), 1, sizeof(b_device.get()), &b_device.get()));     // b
+    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel.get(), 2, sizeof(out_device.get()), &out_device.get())); // out
+    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel.get(), 3, sizeof(data->cols), &data->cols));  // cols
+    ZE_CHECK(zeKernelSetArgumentValue(ze_kernel.get(), 4, sizeof(INTERNAL_LOOP_COUNT), &INTERNAL_LOOP_COUNT));  // internal_loops_n
 
     // Copy data
     ZE_CHECK(zeCommandListAppendMemoryCopy(cmd_list.get(), a_device.get(), data->a.get(), data->size_bytes, nullptr, 0, nullptr)); // host -> device
@@ -148,7 +148,7 @@ int ze_matmul_run(struct test* test, int thread)
     ZE_CHECK(zeCommandListAppendBarrier(cmd_list.get(), nullptr, 0, nullptr));
 
     // Launch kernel on the GPU
-    ZE_CHECK(zeCommandListAppendLaunchCooperativeKernel(cmd_list.get(), ze_kernel, &dispatch, nullptr, 0, nullptr));
+    ZE_CHECK(zeCommandListAppendLaunchCooperativeKernel(cmd_list.get(), ze_kernel.get(), &dispatch, nullptr, 0, nullptr));
 
     // Calc golden
     ZE_CHECK(zeCommandListAppendBarrier(cmd_list.get(), nullptr, 0, nullptr));
@@ -164,7 +164,7 @@ int ze_matmul_run(struct test* test, int thread)
         ZE_CHECK(zeCommandListAppendMemoryCopy(cmd_list.get(), out_device.get(), out_initial.get(), data->size_bytes * data->group_count, nullptr, 0, nullptr));
         ZE_CHECK(zeCommandListAppendBarrier(cmd_list.get(), nullptr, 0, nullptr));
 
-        ZE_CHECK(zeCommandListAppendLaunchCooperativeKernel(cmd_list.get(), ze_kernel, &dispatch, nullptr, 0, nullptr));
+        ZE_CHECK(zeCommandListAppendLaunchCooperativeKernel(cmd_list.get(), ze_kernel.get(), &dispatch, nullptr, 0, nullptr));
         ZE_CHECK(zeCommandListAppendBarrier(cmd_list.get(), nullptr, 0, nullptr));
         ZE_CHECK(zeCommandListAppendMemoryCopy(cmd_list.get(), output.get(), out_device.get(), data->size_bytes * data->group_count, nullptr, 0, nullptr));
 
