@@ -132,8 +132,9 @@ int slice_plan_init_for_threads(SlicePlans::SlicesArray& plans, ThreadRatio rati
             } else {
                 thread_count = static_cast<int>(n * std::get<float>(ratio_type));
             }
-            slice.thread_range = { thread_offset, thread_count > 0 ? thread_count : 1 };
-            thread_offset += thread_count;
+            thread_count = std::max(thread_count, 1);
+            slice.thread_range = { thread_offset, thread_count};
+            thread_offset += slice.thread_range.thread_count;
         }
         if (thread_offset > max_thread_count)
             max_thread_count = thread_offset;
