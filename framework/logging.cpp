@@ -2282,13 +2282,16 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                        thread_id_header_for_device(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
     }
 
-#if SANDSTONE_DEVICE_CPU
     auto make_plan_string = [](const SlicePlans::Slices &plan) {
         std::string result;
         for (SlicePlans::Slice s : plan) {
             if (result.size())
                 result += ", ";
+#if SANDSTONE_DEVICE_CPU
             result += "{ starting_cpu: ";
+#else
+            result += "{ starting_device: ";
+#endif
             result += std::to_string(s.device_range.starting_device);
             result += ", count: ";
             result += std::to_string(s.device_range.device_count);
@@ -2308,7 +2311,6 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                    make_plan_string(isolatenuma).c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "  heuristic: [ %s ]\n",
                    make_plan_string(heuristic).c_str());
-#endif
 }
 
 void YamlLogger::print_tests_header(TestHeaderTime mode)
