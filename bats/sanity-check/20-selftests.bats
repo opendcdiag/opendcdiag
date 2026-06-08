@@ -2184,8 +2184,22 @@ thread_ratio_expected_threads() {
     echo "$threads"
 }
 
+visible_device_count() {
+    local count
+    count=$($SANDSTONE --dump-device-info | grep -c '^[0-9]')
+    echo "$count"
+}
+
 check_thread_ratio_plans() {
     local ratio=$1
+    local logical_id_key=logical
+    local start_id_key=starting_cpu
+    local device_info_key=cpu-info
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+        logical_id_key=logical_cpu
+        start_id_key=starting_device
+        device_info_key=device-info
+    fi
 
     # fullsocket
     local fs_count=${yamldump[/test-plans/fullsocket/0/count]}
@@ -2208,24 +2222,24 @@ check_thread_ratio_plans() {
         test_yaml_numeric "/test-plans/heuristic/$i/threads" "value == $expected"
     done
 
-    # Verify each test thread is pinned to the expected logical CPU.
+    # Verify each test thread is pinned to the expected device's CPU.
     # Thread t within a slice must be on the t-th device's logical CPU.
-    # We look up logical CPUs from cpu-info because they are not necessarily
+    # We look up logical CPUs from device-info because they are not necessarily
     # contiguous (e.g. device 1 could be logical CPU 120).
     local thread_idx=$slice_count
     for ((i = 0; i < slice_count; i++)); do
-        local start=${yamldump[/test-plans/heuristic/$i/starting_cpu]}
+        local start=${yamldump[/test-plans/heuristic/$i/$start_id_key]}
         local threads=${yamldump[/test-plans/heuristic/$i/threads]}
 
         # Build array of logical CPUs for this slice's devices
         local -a valid_cpus=()
         local count=${yamldump[/test-plans/heuristic/$i/count]}
         for ((d = start; d < start + count; d++)); do
-            valid_cpus+=("${yamldump[/cpu-info/$d/logical]}")
+            valid_cpus+=("${yamldump[/$device_info_key/$d/$logical_id_key]}")
         done
 
         for ((t = 0; t < threads; t++)); do
-            local logical=${yamldump[/tests/0/threads/$thread_idx/id/logical]}
+            local logical=${yamldump[/tests/0/threads/$thread_idx/id/$logical_id_key]}
             if (( logical != valid_cpus[t] )); then
                 echo "Thread $thread_idx: expected logical CPU ${valid_cpus[$t]}, got $logical" >&2
                 return 1
@@ -2238,6 +2252,9 @@ check_thread_ratio_plans() {
 @test "thread_ratio delta YAML pass output" {
     if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
         skip "thread_ratio skipped for GPU"
+    fi
+    if [[ $(visible_device_count) -le 1 ]]; then
+        skip "thread_ratio delta skipped: requires at least 2 visible devices"
     fi
     declare -A yamldump
     sandstone_selftest -e selftest_pass -vvv --max-cores-per-slice=2 --thread-ratio=-1
