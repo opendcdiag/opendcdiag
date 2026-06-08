@@ -29,6 +29,10 @@ These coding rules apply to all C++ code in the project.
 - [ ] Use "std::<element>" instead of "<element>" even when code uses
     "using namespace std".
 
+- [ ] Ensure every standard-library symbol used in a translation unit has its
+    required direct header included in that file (do not rely on transitive
+    includes), e.g. use `<limits>` when using `std::numeric_limits`.
+
 
 ## Language standard
 
@@ -78,3 +82,13 @@ These coding rules apply to all C++ code in the project.
     changed for valid purposes.
 
 - [ ] Range based for loops are preferred whenever possible
+
+- [ ] Verify local project headers resolve with the project's configured include
+    paths. In reviews, flag includes that reference internal headers via paths
+    not present in include directories or by non-project-relative forms that do
+    not resolve.
+
+- [ ] Do not request include-path rewrites when both forms resolve under the
+    active build include paths (for example, rewriting `<foo.h>` to
+    `<dir/foo.h>`). Only request changes when resolution fails, ambiguity causes
+    a real risk, or a project rule explicitly requires one form.

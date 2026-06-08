@@ -71,3 +71,12 @@ Unless explicitly listed otherwise, any violations found based on this section a
 This section has several subsections for clarity purposes but should be
 considered integral part of this overall section.
 
+## Includes and buildability
+
+- [ ] Verify includes in test files resolve with project include paths used by the
+   build system. Flag internal header includes that cannot be found from those
+   include directories.
+
+- [ ] Verify each used standard-library or C-library symbol has its required
+   direct include in the same file (no reliance on transitive includes).
+
