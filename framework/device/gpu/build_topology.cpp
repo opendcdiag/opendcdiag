@@ -55,7 +55,7 @@ Topology build_topology()
 
 void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
 {
-    SlicePlans::Slices plan = { SlicePlans::Slice{ DeviceRange{ 0, thread_count() }, {} } };
+    SlicePlans::Slices plan = { SlicePlans::Slice{ DeviceRange{ 0, device_count() }, {} } };
     plans[SlicePlans::IsolateSockets] = plan;
 
     auto& isolate_numa = plans[SlicePlans::IsolateNuma];
