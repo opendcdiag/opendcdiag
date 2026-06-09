@@ -159,10 +159,13 @@ $defs:
           type: integer
         count:
           type: integer
+        threads:
+          type: integer
       minItems: 1
       required:
         - count
         - starting_cpu
+        - threads
 
   test-entry:
     type: object
