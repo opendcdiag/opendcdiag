@@ -540,6 +540,12 @@
               },
               "remark": {
                 "type": "string"
+              },
+              "details": {
+                "type": [
+                  "object",
+                  "array"
+                ]
               }
             },
             "required": [
@@ -550,6 +556,12 @@
               "mask",
               "offset",
               "type"
+            ]
+          },
+          "details": {
+            "type": [
+              "map",
+              "array"
             ]
           }
         },
