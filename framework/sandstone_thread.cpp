@@ -10,6 +10,10 @@
 
 #include <sys/mman.h>
 
+#if defined(__linux__) && !defined(MADV_GUARD_INSTALL)
+#  define MADV_GUARD_INSTALL    102     /* since 6.13 */
+#endif
+
 namespace {
 struct SandstoneTestThreadAttributes
 {
@@ -38,12 +42,31 @@ struct SandstoneTestThreadAttributes
 #ifndef _WIN32
 unsigned char *SandstoneTestThreadAttributes::allocate_stack_block()
 {
-    size_t size = thread_count() * (THREAD_STACK_SIZE + GuardSize);
+    size_t size = thread_count() * (THREAD_STACK_SIZE + GuardSize) + GuardSize;
     void *map = mmap(nullptr, size, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (map == MAP_FAILED)
         return nullptr;
 
     auto ptr = static_cast<unsigned char *>(map);
+
+#ifdef MADV_GUARD_INSTALL
+    // check if MADV_GUARD_INSTALL works
+    if (madvise(map, GuardSize, MADV_GUARD_INSTALL) == 0) {
+        // yes, let's use it
+        // we mark the entire region we've allocated as read-writable, then
+        // mark specific regions as guards
+        IGNORE_RETVAL(mprotect(map, size, PROT_READ | PROT_WRITE));
+
+        for (int i = 0; i < thread_count(); ++i) {
+            ptr += GuardSize + THREAD_STACK_SIZE;
+            // and mark the above this thread's stack (below the next's) as a guard
+            IGNORE_RETVAL(madvise(ptr, GuardSize, MADV_GUARD_INSTALL));
+        }
+
+        return ptr;
+    }
+#endif
+
     for (int i = 0; i < thread_count(); ++i) {
         ptr += GuardSize;
         IGNORE_RETVAL(mprotect(ptr, THREAD_STACK_SIZE, PROT_READ | PROT_WRITE));
