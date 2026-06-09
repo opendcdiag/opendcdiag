@@ -227,12 +227,16 @@
           },
           "count": {
             "type": "integer"
+          },
+          "threads": {
+            "type": "integer"
           }
         },
         "minItems": 1,
         "required": [
           "count",
-          "starting_cpu"
+          "starting_cpu",
+          "threads"
         ]
       }
     },
@@ -321,6 +325,9 @@
                 ]
               },
               "id": {
+                "$ref": "#/$defs/cpu-info"
+              },
+              "previous-cpu": {
                 "$ref": "#/$defs/cpu-info"
               },
               "context": {
