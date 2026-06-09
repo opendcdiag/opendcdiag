@@ -78,6 +78,9 @@
         "fullsocket": {
           "$ref": "#/$defs/test-plan-entry"
         },
+        "isolate_numa": {
+          "$ref": "#/$defs/test-plan-entry"
+        },
         "heuristic": {
           "$ref": "#/$defs/test-plan-entry"
         }
