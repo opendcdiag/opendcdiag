@@ -370,6 +370,10 @@ $defs:
                 - string
             remark:
               type: string
+            details:
+              type:
+                - object
+                - array
           required:
             - actual
             - address
@@ -378,6 +382,10 @@ $defs:
             - mask
             - offset
             - type
+        details:
+          type:
+            - map
+            - array
       required:
         - level
 
