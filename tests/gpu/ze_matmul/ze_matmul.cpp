@@ -53,11 +53,18 @@ int ze_matmul_init(struct test* test)
     auto data = new ze_matmul_data;
 
     // TODO: to be put in the common part for each L0 test
-    for_each_ze_device_within_topo([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu& indices) {
+    int ret = for_each_ze_device_within_topo([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu&) {
+        if (!device_handle || !driver)
+            return EXIT_FAILURE;
         data->ze_handles.emplace_back(device_handle);
         data->ze_driver = driver;
         return EXIT_SUCCESS;
     });
+    if (ret != EXIT_SUCCESS) {
+        log_error("Devices enumeration failure");
+        delete data;
+        return EXIT_FAILURE;
+    }
 
     // We assume homogenous topology
     const auto& info = device_info[0];
