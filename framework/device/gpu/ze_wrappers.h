@@ -9,20 +9,40 @@
 #include "sandstone.h"
 
 #include "level_zero/ze_api.h"
+#include "ze_utils.h"
 
 #include <memory>
 #include <utility>
 
 extern bool logging_in_test;
 
-/// For now we just log the error, but ultimately I imagine that we will throw, which
-/// will be caught by the Test class init()/run()/cleanup() functions.
+/// Use for non-critical paths (like cleanup): log the failure but do not mark test failed.
 #define ZE_CHECK_AND_LOG(...) \
     do { \
         assert(logging_in_test); \
         auto result = (__VA_ARGS__); \
         if (result != ZE_RESULT_SUCCESS) { \
-            log_debug("L0 API call failed with status 0x%x", result); \
+            log_warning("L0 API call failed with status %s", to_string(result)); \
+        } \
+    } while (0)
+
+/// Use for critical setup paths (like constructors/factories): log_error marks thread failed,
+/// but the macro still continues. Caller must validate the handle and return on failure.
+#define ZE_CHECK_AND_FAIL(...) \
+    do { \
+        assert(logging_in_test); \
+        auto result = (__VA_ARGS__); \
+        if (result != ZE_RESULT_SUCCESS) { \
+            log_error("L0 API call failed with status %s", to_string(result)); \
+        } \
+    } while (0)
+
+/// Macro for call sites. Returns failure if constructed handle is null. Error should've
+/// already been printed by ZE_CHECK_AND_LOG/FAIL macros, so here we just return.
+#define CHECK_NULL(handle) \
+    do { \
+        if (!(handle)) { \
+            return EXIT_FAILURE; \
         } \
     } while (0)
 
@@ -49,7 +69,7 @@ public:
     ) :
         context{context}
     {
-        ZE_CHECK_AND_LOG(zeMemAllocDevice(context, &desc, size, alignment, device, &data));
+        ZE_CHECK_AND_FAIL(zeMemAllocDevice(context, &desc, size, alignment, device, &data));
     }
 
     ZeDeviceDataPtr(ZeDeviceDataPtr&& other) noexcept :
@@ -79,6 +99,8 @@ public:
     void*& get() noexcept { return data; }
     const void* get() const noexcept { return data; }
 
+    explicit operator bool() const noexcept { return data != nullptr; }
+
 private:
     void* data = nullptr;
     ze_context_handle_t context{};
@@ -88,7 +110,7 @@ class ZeCmdListPtr : public NonCopyable
 {
 public:
     ZeCmdListPtr(ze_context_handle_t context, ze_device_handle_t device, const ze_command_list_desc_t& desc) {
-        ZE_CHECK_AND_LOG(zeCommandListCreate(context, device, &desc, &cmd_list));
+        ZE_CHECK_AND_FAIL(zeCommandListCreate(context, device, &desc, &cmd_list));
     }
 
     ZeCmdListPtr(ZeCmdListPtr&& other) noexcept:
@@ -113,6 +135,8 @@ public:
 
     // zeCommandQueueExecuteCommandLists takes _ze_command_list_handle_t** as argument
     ze_command_list_handle_t& get() noexcept { return cmd_list; }
+
+    explicit operator bool() const noexcept { return cmd_list != nullptr; }
 
 private:
     ze_command_list_handle_t cmd_list{};
@@ -159,8 +183,8 @@ inline ZeHostDataPtr ze_alloc_host(ze_context_handle_t context, size_t size,
         size_t alignment = 1)
 {
     ZeHostDataPtrDeleter deleter{context};
-    void* data;
-    ZE_CHECK_AND_LOG(zeMemAllocHost(context, &desc, size, alignment, &data));
+    void* data = nullptr;
+    ZE_CHECK_AND_FAIL(zeMemAllocHost(context, &desc, size, alignment, &data));
     return {data, deleter};
 }
 
@@ -179,16 +203,16 @@ inline ZeCmdListPtr ze_create_cmd_list(ze_context_handle_t context, ze_device_ha
 inline ZeCmdQueuePtr ze_create_cmd_queue(ze_context_handle_t context, ze_device_handle_t device, const ze_command_queue_desc_t& desc)
 {
     ZeCmdQueueDeleter deleter{};
-    ze_command_queue_handle_t cmd_queue;
-    ZE_CHECK_AND_LOG(zeCommandQueueCreate(context, device, &desc, &cmd_queue));
+    ze_command_queue_handle_t cmd_queue{};
+    ZE_CHECK_AND_FAIL(zeCommandQueueCreate(context, device, &desc, &cmd_queue));
     return {cmd_queue, deleter};
 }
 
 inline ZeFencePtr ze_create_fence(ze_command_queue_handle_t cmd_queue, const ze_fence_desc_t& desc)
 {
     ZeFenceDeleter deleter{};
-    ze_fence_handle_t fence;
-    ZE_CHECK_AND_LOG(zeFenceCreate(cmd_queue, &desc, &fence));
+    ze_fence_handle_t fence{};
+    ZE_CHECK_AND_FAIL(zeFenceCreate(cmd_queue, &desc, &fence));
     return {fence, deleter};
 }
 
@@ -196,7 +220,7 @@ inline ZeContextPtr ze_create_context(ze_driver_handle_t driver, const ze_contex
 {
     ZeContextDeleter deleter{};
     ze_context_handle_t context{};
-    ZE_CHECK_AND_LOG(zeContextCreate(driver, &desc, &context));
+    ZE_CHECK_AND_FAIL(zeContextCreate(driver, &desc, &context));
     return {context, deleter};
 }
 
