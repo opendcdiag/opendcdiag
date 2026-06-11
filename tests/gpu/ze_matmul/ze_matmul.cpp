@@ -84,8 +84,22 @@ int ze_matmul_init(struct test* test)
     assert(data->group_count > 0 && data->group_count <= std::numeric_limits<uint32_t>::max());
 
     data->context = ze_create_context(data->ze_driver);
+    if (!data->context) {
+        delete data;
+        return EXIT_FAILURE;
+    }
+
     data->a = ze_alloc_host(data->context.get(), data->size_bytes);
+    if (!data->a) {
+        delete data;
+        return EXIT_FAILURE;
+    }
+
     data->b = ze_alloc_host(data->context.get(), data->size_bytes);
+    if (!data->b) {
+        delete data;
+        return EXIT_FAILURE;
+    }
     memset_random(data->a.get(), data->size_bytes);
     memset_random(data->b.get(), data->size_bytes);
 
@@ -104,7 +118,9 @@ int ze_matmul_run(struct test* test, int thread)
     auto device = data->ze_handles[thread];
 
     auto cmd_queue = ze_create_cmd_queue(data->context.get(), device, {.stype = ZE_STRUCTURE_TYPE_COMMAND_QUEUE_DESC, .ordinal = 0, .index = 0, .mode = ZE_COMMAND_QUEUE_MODE_ASYNCHRONOUS,});
+    CHECK_NULL(cmd_queue);
     auto cmd_list = ze_create_cmd_list(data->context.get(), device, {.stype = ZE_STRUCTURE_TYPE_COMMAND_LIST_DESC, .commandQueueGroupOrdinal = 0});
+    CHECK_NULL(cmd_list);
 
     auto ze_kernel = get_ze_kernel(data->context.get(), device, matmul::kernel_source, matmul::kernel_size, "mxm");
     if (!ze_kernel) {
@@ -120,14 +136,14 @@ int ze_matmul_run(struct test* test, int thread)
     dispatch.groupCountZ = 1;
 
     // Prepare buffers
-    auto a_device = ze_alloc_device(data->context.get(), data->size_bytes, device);    // in
-    auto b_device = ze_alloc_device(data->context.get(), data->size_bytes, device);    // in
-    auto out_device = ze_alloc_device(data->context.get(), data->size_bytes * data->group_count, device);  // out; for golden & output
-    auto out_initial = ze_alloc_host(data->context.get(), data->size_bytes * data->group_count);
-    auto golden = ze_alloc_host(data->context.get(), data->size_bytes * data->group_count);
+    auto a_device = ze_alloc_device(data->context.get(), data->size_bytes, device); CHECK_NULL(a_device);    // in
+    auto b_device = ze_alloc_device(data->context.get(), data->size_bytes, device); CHECK_NULL(b_device);   // in
+    auto out_device = ze_alloc_device(data->context.get(), data->size_bytes * data->group_count, device); CHECK_NULL(out_device);  // out; for golden & output
+    auto out_initial = ze_alloc_host(data->context.get(), data->size_bytes * data->group_count); CHECK_NULL(out_initial);
+    auto golden = ze_alloc_host(data->context.get(), data->size_bytes * data->group_count); CHECK_NULL(golden);
     memset(out_initial.get(), 0xfe, data->size_bytes * data->group_count);
     memset(golden.get(), 1, data->size_bytes * data->group_count);
-    auto output = ze_alloc_host(data->context.get(), data->size_bytes * data->group_count);
+    auto output = ze_alloc_host(data->context.get(), data->size_bytes * data->group_count); CHECK_NULL(output);
 
     uint32_t groupSizeX = data->rows;
     uint32_t groupSizeY = data->cols;

@@ -45,7 +45,15 @@ int ze_memcpy_init(struct test* test)
     });
 
     data->context = ze_create_context(data->ze_driver);
+    if (!data->context) {
+        delete data;
+        return EXIT_FAILURE;
+    }
     data->golden = ze_alloc_host(data->context.get(), SIZE_BYTES);
+    if (!data->golden) {
+        delete data;
+        return EXIT_FAILURE;
+    }
     memset_random(data->golden.get(), SIZE_BYTES);
 
     test->data = data;
@@ -62,12 +70,15 @@ int ze_memcpy_run(struct test* test, int thread)
     }
     auto device = data->ze_handles[thread];
 
-    auto output = ze_alloc_host(data->context.get(), SIZE_BYTES);
-    auto buffer_device = ze_alloc_device(data->context.get(), SIZE_BYTES, device);
+    auto output = ze_alloc_host(data->context.get(), SIZE_BYTES); CHECK_NULL(output);
+    auto buffer_device = ze_alloc_device(data->context.get(), SIZE_BYTES, device); CHECK_NULL(buffer_device);
 
     auto cmd_queue = ze_create_cmd_queue(data->context.get(), device, { .stype = ZE_STRUCTURE_TYPE_COMMAND_QUEUE_DESC, .mode = ZE_COMMAND_QUEUE_MODE_ASYNCHRONOUS });
+    CHECK_NULL(cmd_queue);
     auto cmd_list = ze_create_cmd_list(data->context.get(), device, { .stype = ZE_STRUCTURE_TYPE_COMMAND_LIST_DESC });
+    CHECK_NULL(cmd_list);
     auto fence = ze_create_fence(cmd_queue.get(), { .stype = ZE_STRUCTURE_TYPE_FENCE_DESC });
+    CHECK_NULL(fence);
 
     TEST_LOOP(test, 128) {
         ZE_CHECK(zeCommandListAppendMemoryCopy(cmd_list.get(), buffer_device.get(), data->golden.get(), SIZE_BYTES, nullptr, 0, nullptr));
