@@ -21,9 +21,9 @@ extern bool logging_in_test;
             if (!sApp->shmem) { \
                 fprintf(stderr, "L0 API call failed with status %s\n", to_string(result)); \
             } else if (logging_in_test) { \
-                log_debug("L0 API call failed with status %s", to_string(result)); \
+                log_error("L0 API call failed with status %s", to_string(result)); \
             } else { \
-                logging_printf(LOG_LEVEL_VERBOSE(1), "L0 API call failed with status %s\n", to_string(result)); \
+                logging_printf(LOG_LEVEL_QUIET, "L0 API call failed with status %s\n", to_string(result)); \
             } \
             return EXIT_FAILURE; \
         } \
