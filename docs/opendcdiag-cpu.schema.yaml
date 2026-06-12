@@ -54,6 +54,8 @@ properties:
     properties:
       fullsocket:
         $ref: '#/$defs/test-plan-entry'
+      isolate_numa:
+        $ref: '#/$defs/test-plan-entry'
       heuristic:
         $ref: '#/$defs/test-plan-entry'
     required:
@@ -157,10 +159,13 @@ $defs:
           type: integer
         count:
           type: integer
+        threads:
+          type: integer
       minItems: 1
       required:
         - count
         - starting_cpu
+        - threads
 
   test-entry:
     type: object
@@ -365,6 +370,10 @@ $defs:
                 - string
             remark:
               type: string
+            details:
+              type:
+                - object
+                - array
           required:
             - actual
             - address
@@ -373,6 +382,10 @@ $defs:
             - mask
             - offset
             - type
+        details:
+          type:
+            - map
+            - array
       required:
         - level
 

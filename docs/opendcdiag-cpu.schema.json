@@ -78,6 +78,9 @@
         "fullsocket": {
           "$ref": "#/$defs/test-plan-entry"
         },
+        "isolate_numa": {
+          "$ref": "#/$defs/test-plan-entry"
+        },
         "heuristic": {
           "$ref": "#/$defs/test-plan-entry"
         }
@@ -224,12 +227,16 @@
           },
           "count": {
             "type": "integer"
+          },
+          "threads": {
+            "type": "integer"
           }
         },
         "minItems": 1,
         "required": [
           "count",
-          "starting_cpu"
+          "starting_cpu",
+          "threads"
         ]
       }
     },
@@ -318,6 +325,9 @@
                 ]
               },
               "id": {
+                "$ref": "#/$defs/cpu-info"
+              },
+              "previous-cpu": {
                 "$ref": "#/$defs/cpu-info"
               },
               "context": {
@@ -530,6 +540,12 @@
               },
               "remark": {
                 "type": "string"
+              },
+              "details": {
+                "type": [
+                  "object",
+                  "array"
+                ]
               }
             },
             "required": [
@@ -540,6 +556,12 @@
               "mask",
               "offset",
               "type"
+            ]
+          },
+          "details": {
+            "type": [
+              "map",
+              "array"
             ]
           }
         },
