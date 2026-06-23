@@ -833,6 +833,24 @@ function selftest_log_yaml_common() {
     fi
 }
 
+@test "selftest_logs_random --random-control=no-thread-mixin" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logs_random --random-control=no-thread-mixin
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # All threads must produce the same random output
+    local first="${yamldump[/tests/0/threads/0/messages/0/text]}"
+    [[ -n "$first" ]]
+    for ((i = 1; i < yamldump[/tests/0/threads@len]; ++i)); do
+        local other="${yamldump[/tests/0/threads/$i/messages/0/text]}"
+        if [[ "$first" != "$other" ]]; then
+            echo "Thread $i output ($other) differs from thread 0 ($first)" >&2
+            false
+        fi
+    done
+}
+
 test_random() {
     if ! $is_debug; then
         skip "Test only works with Debug builds (to mock the topology)"

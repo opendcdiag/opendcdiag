@@ -68,6 +68,7 @@ enum {
     output_format_option,
     quality_option,
     quick_run_option,
+    random_control_option,
     raw_list_test_ids,
     raw_list_tests,
     raw_list_group_members,
@@ -161,6 +162,7 @@ static struct option long_options[]  = {
     { "quality", required_argument, nullptr, quality_option },
     { "quick", no_argument, nullptr, quick_run_option },
     { "quiet", no_argument, nullptr, 'q' },
+    { "random-control", required_argument, nullptr, random_control_option },
     { "retest-on-failure", required_argument, nullptr, retest_on_failure_option },
     { "reschedule", required_argument, nullptr, reschedule_option },
     { "rng-state", required_argument, nullptr, 's' },
@@ -294,6 +296,10 @@ Common command-line options are:
  -s <STATE>, --rng-state=<STATE>
      Specify the random generator state to reload. The seed is in the form:
      Engine:engine-specific-data
+ --random-control=<CONTROLS>
+     Comma-separated list of controls that modify RNG behavior. Available controls:
+       no-thread-mixin  Skip the per-device topology mixin when seeding each thread's
+                        RNG. All threads will start with the same RNG state.
  -v, -q, --verbose, --quiet
      Set logging output verbosity level. Default is quiet.
  --version
@@ -510,6 +516,7 @@ struct ProgramOptionsParser {
             case max_logdata_option:
             case max_messages_option:
             case reschedule_option:
+            case random_control_option:
             case thread_ratio_option:
                 opts_map.insert_or_assign(opt, optarg);
                 break;
@@ -945,6 +952,25 @@ struct ProgramOptionsParser {
             } else {
                 fprintf(ERR_STREAM, "%s: unknown reschedule mode: %s\n", argv[0], value);
                 return EX_USAGE;
+            }
+        }
+
+        if (auto value = string_opt_for(random_control_option)) {
+            std::string_view sv(value);
+            while (!sv.empty()) {
+                auto comma = sv.find(',');
+                auto token = sv.substr(0, comma);
+                if (token == "no-thread-mixin") {
+                    opts.shmem_cfg.random_control_flags |=
+                        uint32_t(TestConfig::RandomControl::no_thread_mixin);
+                } else {
+                    fprintf(ERR_STREAM, "%s: unknown --random-control value: '%.*s'\n",
+                            argv[0], int(token.size()), token.data());
+                    return EX_USAGE;
+                }
+                if (comma == std::string_view::npos)
+                    break;
+                sv = sv.substr(comma + 1);
             }
         }
 

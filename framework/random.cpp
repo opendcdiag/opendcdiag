@@ -562,7 +562,9 @@ uint32_t random_seed_low32()
 void random_init_thread(int thread_num)
 {
     // nothing should be modifying the global engine now
-    sApp->random_engine->seedThread(rng_for_thread(thread_num), mixin_from_device_info(thread_num));
+    bool skip_mixin = sApp->shmem->cfg.random_control_flags & uint32_t(TestConfig::RandomControl::no_thread_mixin);
+    uint32_t mixin = skip_mixin ? 0 : mixin_from_device_info(thread_num);
+    sApp->random_engine->seedThread(rng_for_thread(thread_num), mixin);
 }
 
 template <typename FP> static inline FP random_template(FP scale)

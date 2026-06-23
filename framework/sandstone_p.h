@@ -240,11 +240,16 @@ struct TestConfig
     };
     static constexpr auto DefaultOutputFormat = SANDSTONE_DEFAULT_LOGGING;
 
+    enum class RandomControl : uint32_t {
+        no_thread_mixin = 1u << 0,  // skip per-device mixin: all threads seeded identically
+    };
+
     // test execution
     bool selftest = false;
     bool ud_on_failure = false;
     bool use_strict_runtime = false;
     RescheduleMode reschedule_mode = RescheduleMode::unset;
+    uint32_t random_control_flags = 0;
 
     // logging parameters
     LogLevelVerbosity verbosity = LogLevelVerbosity::Error;
