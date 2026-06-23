@@ -300,6 +300,8 @@ Common command-line options are:
      Comma-separated list of controls that modify RNG behavior. Available controls:
        no-thread-mixin  Skip the per-device topology mixin when seeding each thread's
                         RNG. All threads will start with the same RNG state.
+       fixed-seed       Do not advance the global seed between tests. Every test
+                        will start from the same seed.
  -v, -q, --verbose, --quiet
      Set logging output verbosity level. Default is quiet.
  --version
@@ -963,6 +965,9 @@ struct ProgramOptionsParser {
                 if (token == "no-thread-mixin") {
                     opts.shmem_cfg.random_control_flags |=
                         uint32_t(TestConfig::RandomControl::no_thread_mixin);
+                } else if (token == "fixed-seed") {
+                    opts.shmem_cfg.random_control_flags |=
+                        uint32_t(TestConfig::RandomControl::fixed_seed);
                 } else {
                     fprintf(ERR_STREAM, "%s: unknown --random-control value: '%.*s'\n",
                             argv[0], int(token.size()), token.data());

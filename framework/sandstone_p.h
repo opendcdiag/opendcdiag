@@ -242,6 +242,7 @@ struct TestConfig
 
     enum class RandomControl : uint32_t {
         no_thread_mixin = 1u << 0,  // skip per-device mixin: all threads seeded identically
+        fixed_seed      = 1u << 1,  // do not advance seed between tests
     };
 
     // test execution
