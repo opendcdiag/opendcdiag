@@ -153,6 +153,7 @@ static device_features_t detect_cpu()
         if (eax) {
             __cpuid_count(7, 1, eax, ebx, ecx, edx);
             features |= parse_register(Leaf07_01EAX, eax);
+            features |= parse_register(Leaf07_01ECX, ecx);
             features |= parse_register(Leaf07_01EDX, edx);
         }
     }
@@ -170,6 +171,25 @@ static device_features_t detect_cpu()
     __cpuid(0x80000001, eax, ebx, ecx, edx);
     features |= parse_register(Leaf80000001ECX, ecx);
 
+    if (max_level >= 0x1d && features & cpu_feature_ace) {
+        // extract the version number from CPUID
+        __cpuid_count(0x1d, 2, eax, ebx, ecx, edx);
+
+        int acever = ecx & 0xff;
+#ifdef cpu_feature_ace1
+        if (acever >= 1)
+            features |= cpu_feature_ace1;
+#endif
+#ifdef cpu_feature_ace2
+        if (acever >= 2)
+            features |= cpu_feature_ace2;
+#endif
+#ifdef cpu_feature_ace3
+        if (acever >= 3)
+            features |= cpu_feature_ace3;
+#endif
+        assert(acever < 4 && "Internal error: update code above!");
+    }
     if (max_level >= 0x24 && features & cpu_feature_avx10_1) {
         // extract the version number from CPUID
         __cpuid_count(0x24, 0, eax, ebx, ecx, edx);
