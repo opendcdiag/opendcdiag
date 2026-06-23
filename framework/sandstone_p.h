@@ -247,6 +247,7 @@ struct TestConfig
 
     enum class RandomControl : uint32_t {
         uniform_thread_seed     = 1u << 0,  // all threads seeded uniformly
+        fixed_seed              = 1u << 1,  // do not advance seed between tests
     };
 
     // test execution

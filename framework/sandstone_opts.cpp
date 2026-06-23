@@ -300,6 +300,8 @@ Common command-line options are:
      Comma-separated list of controls that modify RNG behavior. Available controls:
        uniform-thread-seed  Uniformly initialize the random generator in each thread
                             to the same state.
+       fixed-seed           Do not advance the global seed between tests. Every test
+                            will start from the same seed.
  -v, -q, --verbose, --quiet
      Set logging output verbosity level. Default is quiet.
  --version
@@ -963,6 +965,14 @@ struct ProgramOptionsParser {
                 if (token == "uniform-thread-seed") {
                     opts.shmem_cfg.random_control_flags |=
                         uint32_t(TestConfig::RandomControl::uniform_thread_seed);
+                } else if (token == "fixed-seed") {
+                    opts.shmem_cfg.random_control_flags |=
+                        uint32_t(TestConfig::RandomControl::fixed_seed);
+                } else if (token == "fixed-uniform-seed" || token == "uniform-fixed-seed") {
+                    // shorthand forms
+                    opts.shmem_cfg.random_control_flags |=
+                            uint32_t(TestConfig::RandomControl::fixed_seed) |
+                            uint32_t(TestConfig::RandomControl::uniform_thread_seed);
                 } else {
                     fprintf(ERR_STREAM, "%s: unknown --random-control value: '%.*s'\n",
                             argv[0], int(token.size()), token.data());

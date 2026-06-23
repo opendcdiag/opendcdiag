@@ -551,7 +551,8 @@ std::string random_format_seed()
 
 void random_advance_seed()
 {
-    rand();
+    if (!(sApp->shmem->cfg.random_control_flags & uint32_t(TestConfig::RandomControl::fixed_seed)))
+        rand();
 }
 
 uint32_t random_seed_low32()
