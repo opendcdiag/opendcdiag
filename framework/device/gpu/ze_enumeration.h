@@ -9,14 +9,19 @@
 #include "multi_slice_gpu.h"
 #include "ze_check.h"
 
-#include "level_zero/ze_api.h"
-#include "level_zero/zes_api.h"
+#include <level_zero/ze_api.h>
+#include <level_zero/zes_api.h>
 
 #include <functional>
+#include <vector>
 
 #define CHECK_SANDSTONE(...) \
-    if ((__VA_ARGS__) != EXIT_SUCCESS) \
-        return EXIT_FAILURE;
+    do { \
+        int ret = (__VA_ARGS__); \
+        if (ret != EXIT_SUCCESS) { \
+            return ret; \
+        } \
+    } while (0)
 
 /// Functions containing boilerplate code for drivers, devices and subdevices enumeration. Contains level-zero drivers
 /// initialization, so can be called as a standalone function anytime. Calls passed function for each found Intel device.

@@ -7,16 +7,17 @@
 #define INC_ZE_WRAPPERS_H
 
 #include "sandstone.h"
-
-#include "level_zero/ze_api.h"
 #include "ze_utils.h"
 
+#include <level_zero/ze_api.h>
+
+#include <cassert>
 #include <memory>
 #include <utility>
 
 extern bool logging_in_test;
 
-/// Use for non-critical paths (like cleanup): log the failure but do not mark test failed.
+/// Use for non-critical paths (like cleanup): log the failure but do not mark test as skipped.
 #define ZE_CHECK_AND_LOG(...) \
     do { \
         assert(logging_in_test); \
@@ -26,23 +27,23 @@ extern bool logging_in_test;
         } \
     } while (0)
 
-/// Use for critical setup paths (like constructors/factories): log_error marks thread failed,
-/// but the macro still continues. Caller must validate the handle and return on failure.
-#define ZE_CHECK_AND_FAIL(...) \
+/// Use for critical setup paths (like constructors/factories): log_skip marks thread as skipped,
+/// but the macro still continues. Caller must validate the handle and return on null (see CHECK_NULL below).
+#define ZE_CHECK_AND_SKIP(...) \
     do { \
         assert(logging_in_test); \
         auto result = (__VA_ARGS__); \
         if (result != ZE_RESULT_SUCCESS) { \
-            log_error("L0 API call failed with status %s", to_string(result)); \
+            log_skip(RuntimeSkipCategory, "L0 API call failed with status %s", to_string(result)); \
         } \
     } while (0)
 
-/// Macro for call sites. Returns failure if constructed handle is null. Error should've
-/// already been printed by ZE_CHECK_AND_LOG/FAIL macros, so here we just return.
+/// Macro for call sites. Returns skip if constructed handle is null. Error should've
+/// already been printed by ZE_CHECK_AND_LOG/SKIP macros, so here we just return.
 #define CHECK_NULL(handle) \
     do { \
         if (!(handle)) { \
-            return EXIT_FAILURE; \
+            return EXIT_SKIP; \
         } \
     } while (0)
 
@@ -69,7 +70,7 @@ public:
     ) :
         context{context}
     {
-        ZE_CHECK_AND_FAIL(zeMemAllocDevice(context, &desc, size, alignment, device, &data));
+        ZE_CHECK_AND_SKIP(zeMemAllocDevice(context, &desc, size, alignment, device, &data));
     }
 
     ZeDeviceDataPtr(ZeDeviceDataPtr&& other) noexcept :
@@ -110,7 +111,7 @@ class ZeCmdListPtr : public NonCopyable
 {
 public:
     ZeCmdListPtr(ze_context_handle_t context, ze_device_handle_t device, const ze_command_list_desc_t& desc) {
-        ZE_CHECK_AND_FAIL(zeCommandListCreate(context, device, &desc, &cmd_list));
+        ZE_CHECK_AND_SKIP(zeCommandListCreate(context, device, &desc, &cmd_list));
     }
 
     ZeCmdListPtr(ZeCmdListPtr&& other) noexcept:
@@ -184,7 +185,7 @@ inline ZeHostDataPtr ze_alloc_host(ze_context_handle_t context, size_t size,
 {
     ZeHostDataPtrDeleter deleter{context};
     void* data = nullptr;
-    ZE_CHECK_AND_FAIL(zeMemAllocHost(context, &desc, size, alignment, &data));
+    ZE_CHECK_AND_SKIP(zeMemAllocHost(context, &desc, size, alignment, &data));
     return {data, deleter};
 }
 
@@ -204,7 +205,7 @@ inline ZeCmdQueuePtr ze_create_cmd_queue(ze_context_handle_t context, ze_device_
 {
     ZeCmdQueueDeleter deleter{};
     ze_command_queue_handle_t cmd_queue{};
-    ZE_CHECK_AND_FAIL(zeCommandQueueCreate(context, device, &desc, &cmd_queue));
+    ZE_CHECK_AND_SKIP(zeCommandQueueCreate(context, device, &desc, &cmd_queue));
     return {cmd_queue, deleter};
 }
 
@@ -212,7 +213,7 @@ inline ZeFencePtr ze_create_fence(ze_command_queue_handle_t cmd_queue, const ze_
 {
     ZeFenceDeleter deleter{};
     ze_fence_handle_t fence{};
-    ZE_CHECK_AND_FAIL(zeFenceCreate(cmd_queue, &desc, &fence));
+    ZE_CHECK_AND_SKIP(zeFenceCreate(cmd_queue, &desc, &fence));
     return {fence, deleter};
 }
 
@@ -220,7 +221,7 @@ inline ZeContextPtr ze_create_context(ze_driver_handle_t driver, const ze_contex
 {
     ZeContextDeleter deleter{};
     ze_context_handle_t context{};
-    ZE_CHECK_AND_FAIL(zeContextCreate(driver, &desc, &context));
+    ZE_CHECK_AND_SKIP(zeContextCreate(driver, &desc, &context));
     return {context, deleter};
 }
 

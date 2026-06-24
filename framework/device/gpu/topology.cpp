@@ -308,19 +308,25 @@ GpusSet detect_devices<GpusSet>()
         enabled_devices.emplace(indices, ZeDeviceCtx{ .driver = driver, .ze_handle = device_handle });
         return EXIT_SUCCESS;
     });
-    ret += for_each_zes_device([&](zes_device_handle_t device_handle, ze_driver_handle_t, const MultiSliceGpu& indices) {
+    if (ret != EXIT_SUCCESS) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: gpu enumeration failed!\n",
+                program_invocation_name);
+        return enabled_devices;
+    }
+
+    ret = for_each_zes_device([&](zes_device_handle_t device_handle, ze_driver_handle_t, const MultiSliceGpu& indices) {
         if (!enabled_devices.count(indices)) {
             return EXIT_FAILURE;
         }
         enabled_devices.at(indices).zes_handle = device_handle; // matching indices must mean the exact same device
         return EXIT_SUCCESS;
     });
-
     if (ret != EXIT_SUCCESS) [[unlikely]] {
         fprintf(stderr, "%s: internal error: gpu enumeration failed!\n",
                 program_invocation_name);
         return enabled_devices;
     }
+
     if (enabled_devices.empty()) [[unlikely]] {
         fprintf(stderr, "%s: internal error: gpu devices set appears to be empty!\n",
                 program_invocation_name);
