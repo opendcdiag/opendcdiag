@@ -5,8 +5,8 @@
 
 #include "ze_utils.h"
 
-#include "level_zero/ze_api.h"
-#include "level_zero/zes_api.h"
+#include <level_zero/ze_api.h>
+#include <level_zero/zes_api.h>
 
 const char* to_string(ze_result_t value)
 {

@@ -8,8 +8,12 @@
 #include "multi_slice_gpu.h"
 #include "topology_gpu.h"
 
-#include "level_zero/ze_api.h"
-#include "level_zero/zes_api.h"
+#include <level_zero/ze_api.h>
+#include <level_zero/zes_api.h>
+
+#include <functional>
+#include <unordered_map>
+#include <vector>
 
 /// ZE API allows for nested enumeration of devices and their subdevices,
 /// depending on the ZE_FLAT_DEVICE_HIERARCHY env var value.
@@ -26,6 +30,10 @@ int for_each_ze_device(const std::function<int(ze_device_handle_t, ze_driver_han
 
     // Always pick the last ("newest") one.
     auto ze_driver = drivers.back();
+    if (!ze_driver) {
+        LOG_RUNTIME_SKIP_OR_PRINT("Could not initialize driver handle");
+        return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+    }
     int gpu_number = 0;
     uint32_t n_devices = 0;
     ZE_CHECK(zeDeviceGet(ze_driver, &n_devices, nullptr));
@@ -33,6 +41,10 @@ int for_each_ze_device(const std::function<int(ze_device_handle_t, ze_driver_han
     ZE_CHECK(zeDeviceGet(ze_driver, &n_devices, devices.data()));
 
     for (int i = 0; i < (int)devices.size(); i++) {
+        if (!devices[i]) {
+            LOG_RUNTIME_SKIP_OR_PRINT("Could not initialize device handle");
+            return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+        }
         ze_device_properties_t device_properties = { .stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES };
         ZE_CHECK(zeDeviceGetProperties(devices[i], &device_properties));
         if (device_properties.type == ZE_DEVICE_TYPE_GPU) {
@@ -65,12 +77,20 @@ int for_each_zes_device(const std::function<int(zes_device_handle_t, ze_driver_h
 
     int gpu_number = 0;
     for (auto zes_driver: zes_drivers) {
+        if (!zes_driver) {
+            LOG_RUNTIME_SKIP_OR_PRINT("Could not initialize driver handle");
+            return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+        }
         uint32_t n_zes_devices = 0;
         ZE_CHECK(zesDeviceGet(zes_driver, &n_zes_devices, nullptr));
         std::vector<zes_device_handle_t> zes_devices(n_zes_devices);
         ZE_CHECK(zesDeviceGet(zes_driver, &n_zes_devices, zes_devices.data()));
 
         for (int i = 0; i < (int)zes_devices.size(); i++) {
+            if (!zes_devices[i]) {
+                LOG_RUNTIME_SKIP_OR_PRINT("Could not initialize device handle");
+                return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+            }
             zes_device_properties_t device_prop = { .stype = ZES_STRUCTURE_TYPE_DEVICE_PROPERTIES };
             ZE_CHECK(zesDeviceGetProperties(zes_devices[i], &device_prop));
             if (device_prop.core.type == ZE_DEVICE_TYPE_GPU) {
@@ -103,7 +123,8 @@ int find_and_call_func(
     if (it != map.cend()) {
         return func(it->second, ze_driver, indices);
     }
-    return EXIT_FAILURE;
+    LOG_RUNTIME_SKIP_OR_PRINT("Could not find func for device");
+    return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
 }
 
 // XXX depending on API version, ze_device_handle_t and zes_device_handle_t can be the exact same type,
@@ -112,7 +133,7 @@ template <typename DeviceType, bool IsSysmanAPI = false>
 int for_each_device_within_topo_internal(const std::function<int(DeviceType, ze_driver_handle_t, const MultiSliceGpu&)>& func)
 {
     // Collect all handles for easier lookup.
-    ze_driver_handle_t ze_driver;
+    ze_driver_handle_t ze_driver{};
     std::unordered_map<MultiSliceGpu, DeviceType> dev_handles;
     auto emplace_map = [&](DeviceType dev_handle, ze_driver_handle_t driver, const MultiSliceGpu& indices) {
         ze_driver = driver;
@@ -126,15 +147,15 @@ int for_each_device_within_topo_internal(const std::function<int(DeviceType, ze_
     } else {
         ret = for_each_ze_device(emplace_map);
     }
-    if (ze_driver == nullptr || ret != EXIT_SUCCESS) {
-        return EXIT_FAILURE;
+    if (ret != EXIT_SUCCESS) {
+        return ret;
     }
 
     ret = for_each_topo_device([&](const gpu_info_t& info) {
         return find_and_call_func(info, ze_driver, dev_handles, func);
     });
     if (ret != EXIT_SUCCESS) {
-        return EXIT_FAILURE;
+        return ret;
     }
 
     return EXIT_SUCCESS;

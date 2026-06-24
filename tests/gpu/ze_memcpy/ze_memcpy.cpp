@@ -39,27 +39,24 @@ int ze_memcpy_init(struct test* test)
 
     // TODO: to be put in the common part for each L0 test
     int ret = for_each_ze_device_within_topo([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu&) {
-        if (!device_handle || !driver)
-            return EXIT_FAILURE;
         data->ze_handles.emplace_back(device_handle);
         data->ze_driver = driver;
         return EXIT_SUCCESS;
     });
     if (ret != EXIT_SUCCESS) {
-        log_error("Devices enumeration failure");
         delete data;
-        return EXIT_FAILURE;
+        return ret;
     }
 
     data->context = ze_create_context(data->ze_driver);
     if (!data->context) {
         delete data;
-        return EXIT_FAILURE;
+        return EXIT_SKIP;
     }
     data->golden = ze_alloc_host(data->context.get(), SIZE_BYTES);
     if (!data->golden) {
         delete data;
-        return EXIT_FAILURE;
+        return EXIT_SKIP;
     }
     memset_random(data->golden.get(), SIZE_BYTES);
 

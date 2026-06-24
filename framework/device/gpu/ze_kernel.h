@@ -9,8 +9,9 @@
 #include "ze_check.h"
 #include "ze_utils.h"
 
-#include "level_zero/ze_api.h"
+#include <level_zero/ze_api.h>
 
+#include <cassert>
 #include <memory>
 
 struct ZeKernelDeleter
@@ -51,21 +52,28 @@ inline ZeKernelPtr get_ze_kernel(ze_context_handle_t context, ze_device_handle_t
     auto ret = zeModuleCreate(context, device, &desc, &ze_module, &build_log);
     if (ret != ZE_RESULT_SUCCESS) {
         auto create_ret = ret;
+        // Gather the build log first, then emit a single log_skip message.
+        const char *build_log_str = nullptr;
+        std::unique_ptr<char[]> owned_log;
+        if (build_log) {
+            size_t log_size = 0;
+            ret = zeModuleBuildLogGetString(build_log, &log_size, nullptr);
+            if (ret == ZE_RESULT_SUCCESS && log_size > 0) {
+                owned_log.reset(new char[log_size + 1]);
+                size_t buffer_size = log_size;
+                ret = zeModuleBuildLogGetString(build_log, &buffer_size, owned_log.get());
+                if (ret == ZE_RESULT_SUCCESS) {
+                    owned_log[log_size] = '\0';
+                    build_log_str = owned_log.get();
+                }
+            }
+        }
 
-        // try to print log
-        size_t log_size = 0;
-        ret = zeModuleBuildLogGetString(build_log, &log_size, nullptr);
-        if (ret != ZE_RESULT_SUCCESS) {
-            destroy_log();
-            return nullptr; // give up
+        if (build_log_str) {
+            log_skip(RuntimeSkipCategory, "L0 API call zeModuleCreate failed with %s; build log: %s", to_string(create_ret), build_log_str);
+        } else {
+            log_skip(RuntimeSkipCategory, "L0 API call zeModuleCreate failed with %s", to_string(create_ret));
         }
-        std::unique_ptr<char[]> string_log(new char[log_size]);
-        ret = zeModuleBuildLogGetString(build_log, &log_size, string_log.get());
-        if (ret != ZE_RESULT_SUCCESS) {
-            destroy_log();
-            return nullptr;
-        }
-        log_debug("zeModuleCreate ret: %s (0x%x) zeModuleCreate log: %s", to_string(create_ret), create_ret, string_log.get());
         destroy_log();
         return nullptr;
     }
@@ -77,7 +85,7 @@ inline ZeKernelPtr get_ze_kernel(ze_context_handle_t context, ze_device_handle_t
     ret = zeKernelCreate(ze_module, &kernelDesc, &ze_kernel);
     if (ret != ZE_RESULT_SUCCESS) {
         IGNORE_RETVAL(zeModuleDestroy(ze_module));
-        log_debug("L0 API call zeKernelCreate failed with %s (0x%x)", to_string(ret), ret);
+        log_skip(RuntimeSkipCategory, "L0 API call zeKernelCreate failed with %s", to_string(ret));
         return nullptr; // isn't ze_kernel a nullptr anyway?
     }
 

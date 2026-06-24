@@ -54,16 +54,13 @@ int ze_matmul_init(struct test* test)
 
     // TODO: to be put in the common part for each L0 test
     int ret = for_each_ze_device_within_topo([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu&) {
-        if (!device_handle || !driver)
-            return EXIT_FAILURE;
         data->ze_handles.emplace_back(device_handle);
         data->ze_driver = driver;
         return EXIT_SUCCESS;
     });
     if (ret != EXIT_SUCCESS) {
-        log_error("Devices enumeration failure");
         delete data;
-        return EXIT_FAILURE;
+        return ret;
     }
 
     // We assume homogenous topology
@@ -91,21 +88,21 @@ int ze_matmul_init(struct test* test)
     assert(data->group_count > 0 && data->group_count <= std::numeric_limits<uint32_t>::max());
 
     data->context = ze_create_context(data->ze_driver);
-    if (!data->context) {
+    if (!data->context) { // can't call CHECK_NULL, because we have to also delete data.
         delete data;
-        return EXIT_FAILURE;
+        return EXIT_SKIP;
     }
 
     data->a = ze_alloc_host(data->context.get(), data->size_bytes);
     if (!data->a) {
         delete data;
-        return EXIT_FAILURE;
+        return EXIT_SKIP;
     }
 
     data->b = ze_alloc_host(data->context.get(), data->size_bytes);
     if (!data->b) {
         delete data;
-        return EXIT_FAILURE;
+        return EXIT_SKIP;
     }
     memset_random(data->a.get(), data->size_bytes);
     memset_random(data->b.get(), data->size_bytes);
@@ -130,10 +127,7 @@ int ze_matmul_run(struct test* test, int thread)
     CHECK_NULL(cmd_list);
 
     auto ze_kernel = get_ze_kernel(data->context.get(), device, matmul::kernel_source, matmul::kernel_size, "mxm");
-    if (!ze_kernel) {
-        log_skip(RuntimeSkipCategory, "Kernel instantiation failure");
-        return EXIT_SKIP;
-    }
+    CHECK_NULL(ze_kernel);
 
     // Kernel thread-dispatch
     ze_group_count_t dispatch;

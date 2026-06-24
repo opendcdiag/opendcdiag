@@ -6,8 +6,8 @@
 #ifndef INC_ZE_UTILS_H
 #define INC_ZE_UTILS_H
 
-#include "level_zero/ze_api.h"
-#include "level_zero/zes_api.h"
+#include <level_zero/ze_api.h>
+#include <level_zero/zes_api.h>
 
 /// Functions converting resource type to a human readable string.
 const char* to_string(ze_result_t value);
