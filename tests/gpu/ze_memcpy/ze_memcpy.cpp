@@ -18,6 +18,7 @@
 #include <ze_enumeration.h>
 #include <ze_wrappers.h>
 
+#include <memory>
 #include <limits>
 #include <vector>
 
@@ -35,7 +36,7 @@ struct ze_memcpy_data {
 
 int ze_memcpy_init(struct test* test)
 {
-    auto data = new ze_memcpy_data;
+    auto data = std::make_unique<ze_memcpy_data>();
 
     // TODO: to be put in the common part for each L0 test
     int ret = for_each_ze_device_within_topo([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu&) {
@@ -44,23 +45,16 @@ int ze_memcpy_init(struct test* test)
         return EXIT_SUCCESS;
     });
     if (ret != EXIT_SUCCESS) {
-        delete data;
         return ret;
     }
 
     data->context = ze_create_context(data->ze_driver);
-    if (!data->context) {
-        delete data;
-        return EXIT_SKIP;
-    }
+    CHECK_NULL(data->context);
     data->golden = ze_alloc_host(data->context.get(), SIZE_BYTES);
-    if (!data->golden) {
-        delete data;
-        return EXIT_SKIP;
-    }
+    CHECK_NULL(data->golden);
     memset_random(data->golden.get(), SIZE_BYTES);
 
-    test->data = data;
+    test->data = data.release();
     return EXIT_SUCCESS;
 }
 
