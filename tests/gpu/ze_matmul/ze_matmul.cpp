@@ -23,6 +23,7 @@
 #include "matmul_source.h" // auto generated file
 
 #include <algorithm>
+#include <memory>
 #include <limits>
 #include <vector>
 
@@ -50,7 +51,7 @@ struct ze_matmul_data
 
 int ze_matmul_init(struct test* test)
 {
-    auto data = new ze_matmul_data;
+    auto data = std::make_unique<ze_matmul_data>();
 
     // TODO: to be put in the common part for each L0 test
     int ret = for_each_ze_device_within_topo([&](ze_device_handle_t device_handle, ze_driver_handle_t driver, const MultiSliceGpu&) {
@@ -59,7 +60,6 @@ int ze_matmul_init(struct test* test)
         return EXIT_SUCCESS;
     });
     if (ret != EXIT_SUCCESS) {
-        delete data;
         return ret;
     }
 
@@ -69,7 +69,6 @@ int ze_matmul_init(struct test* test)
     data->max_group_size = info.compute_properties.maxTotalGroupSize;
     if (data->max_group_size % 16 != 0) {
         log_skip(RuntimeSkipCategory, "Cannot construct matrix");
-        delete data;
         return EXIT_SKIP;
     }
 
@@ -88,26 +87,16 @@ int ze_matmul_init(struct test* test)
     assert(data->group_count > 0 && data->group_count <= std::numeric_limits<uint32_t>::max());
 
     data->context = ze_create_context(data->ze_driver);
-    if (!data->context) { // can't call CHECK_NULL, because we have to also delete data.
-        delete data;
-        return EXIT_SKIP;
-    }
-
+    CHECK_NULL(data->context);
     data->a = ze_alloc_host(data->context.get(), data->size_bytes);
-    if (!data->a) {
-        delete data;
-        return EXIT_SKIP;
-    }
-
+    CHECK_NULL(data->a);
     data->b = ze_alloc_host(data->context.get(), data->size_bytes);
-    if (!data->b) {
-        delete data;
-        return EXIT_SKIP;
-    }
+    CHECK_NULL(data->b);
+
     memset_random(data->a.get(), data->size_bytes);
     memset_random(data->b.get(), data->size_bytes);
 
-    test->data = data;
+    test->data = data.release();
     return EXIT_SUCCESS;
 }
 
