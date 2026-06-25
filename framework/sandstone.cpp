@@ -186,6 +186,8 @@ ShortDuration test_timeout(ShortDuration regular_duration)
     return result;
 }
 
+bool logging_in_test = false;
+
 static void preinit_tests()
 {
     struct GroupReplacementEntry {
@@ -215,7 +217,9 @@ static void preinit_tests()
 
         if (test->test_preinit) {
             sApp->main_thread_data()->init();
+            logging_in_test = true;
             preinit_ret = test->test_preinit(test);
+            logging_in_test = false;
             assert(preinit_ret <= EXIT_SUCCESS && "preinit functions cannot fail");
             test->test_preinit = nullptr;   // don't rerun in case the test is re-added
             truncate_log = true;

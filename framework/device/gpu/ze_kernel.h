@@ -60,6 +60,8 @@ inline void maybe_destroy_log(ze_module_build_log_handle_t build_log)
     }
 }
 
+extern bool logging_in_test;
+
 /// Function returning an RAII wrapper owning a level-zero kernel (and its module) created from compiled binary source.
 inline ZeKernelPtr get_ze_kernel(ze_context_handle_t context, ze_device_handle_t device, const uint8_t* source, const size_t source_size, const char* name)
 {

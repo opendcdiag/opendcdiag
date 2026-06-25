@@ -617,6 +617,8 @@ extern "C" initfunc group_kvm_init(void) noexcept;
 #endif
 
 /* logging.cpp */
+extern bool logging_in_test;
+
 void log_message_yaml(int thread_num, char levelchar, const char *yaml);
 void log_message_preformatted(int thread_num, LogLevelVerbosity level, std::string_view msg);
 int logging_stdout_fd(void);
@@ -644,6 +646,7 @@ void logging_init(const struct test *test);
 void logging_init_child_preexec();
 void logging_finish();
 TestResult logging_print_results(std::span<const ChildExitStatus> status, const struct test *test);
+int log_skip_or_print(SkipCategory cat, const char *fmt, ...) ATTRIBUTE_PRINTF(2, 3);
 
 /* random.cpp */
 void random_init_global(const char *argument);

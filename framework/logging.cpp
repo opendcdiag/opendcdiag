@@ -2373,3 +2373,23 @@ TestResult logging_print_results(std::span<const ChildExitStatus> status, const 
 
     return AbstractLogger(test, status).testResult;
 }
+
+/// Logs a skip reason during test execution; outside tests, prints a quiet message instead.
+/// Returns either EXIT_SKIP when logging_in_test, EXIT_FAILURE otherwise.
+int log_skip_or_print(SkipCategory cat, const char *fmt, ...)
+{
+    va_list va;
+    va_start(va, fmt);
+    std::string msg = create_filtered_message_string(fmt, va);
+    va_end(va);
+
+    if (!sApp->shmem) {
+        fprintf(stderr, "%s\n", msg.c_str());
+    } else if (logging_in_test) {
+        log_skip(cat, "%s", msg.c_str());
+    } else {
+        logging_printf(LOG_LEVEL_QUIET, "%s\n", msg.c_str());
+    }
+
+    return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+}

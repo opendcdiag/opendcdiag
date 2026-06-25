@@ -1123,6 +1123,20 @@ static void wait_for_children(ChildrenList &children, const struct test *test)
     }
 }
 
+extern bool logging_in_test;
+
+static TestResult prepare_test_common(struct test *test)
+{
+    logging_in_test = true;
+    return prepare_test_for_device(test);
+}
+
+static void finish_test_common(struct test *test)
+{
+    finish_test_for_device(test);
+    logging_in_test = false;
+}
+
 static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
 {
     TestResult state = [&] {
@@ -1131,7 +1145,8 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
         init_per_thread_data();
 
-        TestResult state = prepare_test_for_device(test);
+        TestResult state = prepare_test_common(test);
+        auto finish_test = scopeExit([&] { finish_test_common(test); }); // we can return early
         if (state != TestResult::Passed) {
             return state;
         }
@@ -1199,7 +1214,6 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
             }
         }
 
-        finish_test_for_device(test);
         sApp->test_tests_finish(test);
         return state;
     }();
