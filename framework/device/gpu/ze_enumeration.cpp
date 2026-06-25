@@ -31,8 +31,7 @@ int for_each_ze_device(const std::function<int(ze_device_handle_t, ze_driver_han
     // Always pick the last ("newest") one.
     auto ze_driver = drivers.back();
     if (!ze_driver) {
-        LOG_RUNTIME_SKIP_OR_PRINT("Could not initialize driver handle");
-        return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+        return log_skip_or_print(RuntimeSkipCategory, "Could not initialize driver handle");
     }
     int gpu_number = 0;
     uint32_t n_devices = 0;
@@ -42,8 +41,7 @@ int for_each_ze_device(const std::function<int(ze_device_handle_t, ze_driver_han
 
     for (int i = 0; i < (int)devices.size(); i++) {
         if (!devices[i]) {
-            LOG_RUNTIME_SKIP_OR_PRINT("Could not initialize device handle");
-            return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+            return log_skip_or_print(RuntimeSkipCategory, "Could not initialize device handle");
         }
         ze_device_properties_t device_properties = { .stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES };
         ZE_CHECK(zeDeviceGetProperties(devices[i], &device_properties));
@@ -78,8 +76,7 @@ int for_each_zes_device(const std::function<int(zes_device_handle_t, ze_driver_h
     int gpu_number = 0;
     for (auto zes_driver: zes_drivers) {
         if (!zes_driver) {
-            LOG_RUNTIME_SKIP_OR_PRINT("Could not initialize driver handle");
-            return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+            return log_skip_or_print(RuntimeSkipCategory, "Could not initialize driver handle");
         }
         uint32_t n_zes_devices = 0;
         ZE_CHECK(zesDeviceGet(zes_driver, &n_zes_devices, nullptr));
@@ -88,8 +85,7 @@ int for_each_zes_device(const std::function<int(zes_device_handle_t, ze_driver_h
 
         for (int i = 0; i < (int)zes_devices.size(); i++) {
             if (!zes_devices[i]) {
-                LOG_RUNTIME_SKIP_OR_PRINT("Could not initialize device handle");
-                return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+                return log_skip_or_print(RuntimeSkipCategory, "Could not initialize device handle");
             }
             zes_device_properties_t device_prop = { .stype = ZES_STRUCTURE_TYPE_DEVICE_PROPERTIES };
             ZE_CHECK(zesDeviceGetProperties(zes_devices[i], &device_prop));
@@ -123,8 +119,7 @@ int find_and_call_func(
     if (it != map.cend()) {
         return func(it->second, ze_driver, indices);
     }
-    LOG_RUNTIME_SKIP_OR_PRINT("Could not find func for device");
-    return logging_in_test ? EXIT_SKIP : EXIT_FAILURE;
+    return log_skip_or_print(RuntimeSkipCategory, "Could not find func for device");
 }
 
 // XXX depending on API version, ze_device_handle_t and zes_device_handle_t can be the exact same type,
