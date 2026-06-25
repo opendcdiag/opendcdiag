@@ -487,7 +487,10 @@ static void print_amx_tiles_palette1(std::string &f, const Fxsave *state, const 
         const uint8_t *tiledata = base + reg * info.bytes_per_tile;
         for (int row = 0; row < tileconfig->rows[reg]; ++row) {
             const uint8_t *rowdata = tiledata + row * info.bytes_per_row;
-            append_format(f, " {}: {{", row);
+            if (row == 0)
+                append_format(f, " {:2}: {{", row);
+            else
+                append_format(f, "         {:2}: {{", row);
             for (int i = 0; i < tileconfig->colsb[reg]; ++i)
                 append_format(f, " {:02x}", rowdata[i]);
             f += " }\n";
