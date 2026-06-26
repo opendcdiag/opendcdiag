@@ -169,12 +169,6 @@ static void merge_test_result(ChildExitStatus &current, const ChildExitStatus& i
     current.endtime = MonotonicTimePoint::clock::now();
 }
 
-static inline __attribute__((always_inline, noreturn)) void ud2()
-{
-    __builtin_trap();
-    __builtin_unreachable();
-}
-
 static void __attribute__((noreturn)) report_fail_common()
 {
     logging_mark_thread_failed(thread_num);
