@@ -21,9 +21,11 @@
 #include "logging.h"
 #include "device/logging_device.h"
 
+#include <exception>
 #include <limits>
 #include <string>
 #include <string_view>
+#include <typeinfo>
 #include <unordered_set>
 
 #include <assert.h>
@@ -116,6 +118,7 @@ enum class AbstractLogger::LogTypes : uint8_t
 };
 using LogTypes = AbstractLogger::LogTypes;
 
+static void terminate_handler() noexcept;
 static SandstoneApplication::OutputFormat current_output_format()
 {
     if (SandstoneConfig::NoLogging)
@@ -405,6 +408,7 @@ void logging_init_global_child()
     logging_printf(LOG_LEVEL_QUIET, "# stdout is expected to be connected to " _PATH_DEVNULL
                    " so you should never see this message\n");
 #endif
+    std::set_terminate(terminate_handler);
 }
 
 static bool should_log_to_file()
@@ -550,6 +554,7 @@ void logging_init_global(void)
 #ifdef __GLIBC__
     setenv("LIBC_FATAL_STDERR_", "1", true);
 #endif
+    std::set_terminate(terminate_handler);
 }
 
 int logging_close_global(int exitcode)
@@ -783,6 +788,39 @@ void logging_printf(LogLevelVerbosity level, const char *fmt, ...)
         log_message_to_syslog(msg.c_str());
 }
 #endif /* SANDSTONE_NO_LOGGING */
+
+static void terminate_handler() noexcept
+{
+    if (sApp->shmem->cfg.ud_on_failure)
+        ud2();
+    logging_mark_thread_failed(thread_num);
+    // the rest of the setting up the error state is done by log_message below
+
+    std::string msg;
+    if (current_output_format() == SandstoneApplication::OutputFormat::no_output) {
+        msg = SANDSTONE_LOG_ERROR;
+    } else if (std::exception_ptr ex = std::current_exception()) {
+        // get some information about the current exception
+        msg = SANDSTONE_LOG_ERROR "Caught C++ exception of type ";
+
+        try {
+            throw;  // rethrow
+        } catch (std::exception &e) {
+            msg += typeid(e).name();
+            if (std::string_view what = e.what(); what.size()) {
+                msg += ": ";
+                msg += what;
+            }
+        } catch (...) {
+            msg += "<unknown>";
+        }
+    }
+    if (msg.empty())
+        msg = SANDSTONE_LOG_ERROR "std::terminate() called without an exception";
+
+    log_message_preformatted(thread_num, msg);
+    abort();
+}
 
 static std::string kernel_info()
 {
