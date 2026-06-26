@@ -661,7 +661,8 @@ int log_skip_or_print(SkipCategory cat, const char *fmt, ...) ATTRIBUTE_PRINTF(2
 
 /* random.cpp */
 void random_init_global(const char *argument);
-void random_advance_seed();
+void random_advance_seed() noexcept;
+void random_restore_seed() noexcept;
 std::string random_format_seed();
 void random_init_thread(int thread_num);
 uint32_t random_seed_low32();
