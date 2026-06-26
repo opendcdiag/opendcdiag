@@ -27,6 +27,9 @@
 #include <string_view>
 #include <typeinfo>
 #include <unordered_set>
+#if __has_include(<cxxabi.h>)
+#  include <cxxabi.h>
+#endif
 
 #include <assert.h>
 #include <errno.h>
@@ -802,17 +805,30 @@ static void terminate_handler() noexcept
     } else if (std::exception_ptr ex = std::current_exception()) {
         // get some information about the current exception
         msg = SANDSTONE_LOG_ERROR "Caught C++ exception of type ";
+        bool appended_name = [&] {
+            int status = -1;
+#if __has_include(<cxxabi.h>)
+            const std::type_info *ti = ex.__cxa_exception_type();
+            char *demangled = abi::__cxa_demangle(ti->name(), nullptr, nullptr, &status);
+            if (status == 0)
+                msg += demangled;
+            free(demangled);
+#endif
+            return status == 0;
+        }();
 
         try {
             throw;  // rethrow
         } catch (std::exception &e) {
-            msg += typeid(e).name();
+            if (!appended_name)
+                msg += typeid(e).name();
             if (std::string_view what = e.what(); what.size()) {
                 msg += ": ";
                 msg += what;
             }
         } catch (...) {
-            msg += "<unknown>";
+            if (!appended_name)
+                msg += "<unknown>";
         }
     }
     if (msg.empty())
