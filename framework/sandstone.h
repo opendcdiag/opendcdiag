@@ -819,84 +819,187 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
     _memcmp_or_fail_cb((actual), (expected), (size), NULL, NULL)
 #endif
 
-// Static C++ test runner to instantiate appropriate test class or always skipping one
 #ifdef __cplusplus
-template<class T>
+/**
+ * @brief Static C++ test runner to instantiate appropriate test class
+ *
+ * The runner handles two modes of operation:
+ * - N is provided - the runner will run TEST_LOOP with N iterations with the
+ *   context built by per_cpu_context().
+ *   The context is supported but optional, if per_cpu_context() is not defined,
+ *   the runner will run() N-loops without context;
+ * - N is not provided - the runner will call run() once, and it is the class's
+ *   duty to run TEST_LOOP properly (including context handling if needed).
+ *
+ * @warning All init()/run()/cleanup() static functions must be added to the test
+ * declaration to properly handle test class lifecycle.
+ */
+template<class T, uint32_t N = 0>
 class TestRunner
 {
 public:
+    // prevent instantiation of the runner class itself
     TestRunner(void) = delete;
+    ~TestRunner(void) = delete;
 
     // test context
     static int init(struct test *test)
     {
         assert((test->data == nullptr) && (!!"Test runner already initialized"));
-        T* t = new T(test);
+        T* t;
+        if constexpr (requires { new T(test); }) {
+            t = new T(test);
+        } else {
+            t = new T();
+        }
         test->data = t;
-        return t->init(test);
+        int ret;
+        if constexpr (requires { t->init(test); }) {
+            ret = t->init(test);
+        } else if constexpr (requires { t->init(); }) {
+            ret = t->init();
+        } else {
+            ret = EXIT_SUCCESS;
+        }
+        // if initialization hasn't succeeded, the cleanup() won't be called.
+        // It is required to release the resources here
+        if (ret != EXIT_SUCCESS) {
+            test->data = nullptr;
+            delete t;
+        }
+        return ret;
     }
 
     static int run(struct test *test, int cpu)
     {
         assert((test->data != nullptr) && (!!"Test runner not initialized"));
         T* t = static_cast<T*>(test->data);
-        return t->run(test, cpu);
+        int ret = EXIT_SKIP;
+
+        if constexpr (N != 0) {
+            if constexpr (requires { t->per_cpu_context(test, cpu); }) {
+                auto context = t->per_cpu_context(test, cpu);
+                if constexpr (requires { t->run(context); }) {
+                    TEST_LOOP(test, N) {
+                        ret = t->run(context);
+                        if (ret != EXIT_SUCCESS) {
+                            break;
+                        }
+                    }
+                } else {
+                    static_assert(false, "Test class must have run(context) method if per_cpu_context() is defined");
+                }
+            } else if constexpr (requires { t->per_cpu_context(cpu); }) {
+                auto context = t->per_cpu_context(cpu);
+                if constexpr (requires { t->run(context); }) {
+                    TEST_LOOP(test, N) {
+                        ret = t->run(context);
+                        if (ret != EXIT_SUCCESS) {
+                            break;
+                        }
+                    }
+                } else {
+                    static_assert(false, "Test class must have run(context) method if per_cpu_context() is defined");
+                }
+            } else if constexpr (requires { t->per_cpu_context(); }) {
+                auto context = t->per_cpu_context();
+                if constexpr (requires { t->run(context); }) {
+                    TEST_LOOP(test, N) {
+                        ret = t->run(context);
+                        if (ret != EXIT_SUCCESS) {
+                            break;
+                        }
+                    }
+                } else {
+                    static_assert(false, "Test class must have run(context) method if per_cpu_context() is defined");
+                }
+            } else {
+                if constexpr (requires { t->run(test, cpu); }) {
+                    TEST_LOOP(test, N) {
+                        ret = t->run(test, cpu);
+                        if (ret != EXIT_SUCCESS) {
+                            break;
+                        }
+                    }
+                } else if constexpr (requires { t->run(cpu); }) {
+                    TEST_LOOP(test, N) {
+                        ret = t->run(cpu);
+                        if (ret != EXIT_SUCCESS) {
+                            break;
+                        }
+                    }
+                } else if constexpr (requires { t->run(); }) {
+                    TEST_LOOP(test, N) {
+                        ret = t->run();
+                        if (ret != EXIT_SUCCESS) {
+                            break;
+                        }
+                    }
+                } else {
+                    static_assert(false, "Test class must have run(test, cpu) or run(cpu) or run() method");
+                }
+            }
+        } else {
+            // N is not provided to the runner, it is the class's duty to run TEST_LOOP properly.
+            // The context is not supported in this mode, it is expected to be handled by run() itself
+            if constexpr (requires { t->run(test, cpu); }) {
+                ret = t->run(test, cpu);
+            } else if constexpr (requires { t->run(cpu); }) {
+                ret = t->run(cpu);
+            } else if constexpr (requires { t->run(); }) {
+                ret = t->run();
+            } else {
+                static_assert(false, "Test class must have run(test, cpu) or run(cpu) or run() method");
+            }
+        }
+        return ret;
     }
 
     static int cleanup(struct test *test)
     {
         assert((test->data != nullptr) && (!!"Test runner not initialized"));
         T* t = static_cast<T*>(test->data);
-        int ret = t->cleanup(test);
+        int ret;
+        if constexpr (requires { t->cleanup(test); }) {
+            ret = t->cleanup(test);
+        } else if constexpr (requires { t->cleanup(); }) {
+            ret = t->cleanup();
+        } else {
+            ret = EXIT_SUCCESS;
+        }
         test->data = nullptr;
         delete t;
         return ret;
     }
 };
 
+// TestRunner idiom, N (number of iterations) is the first argument
+template<uint32_t N, class T>
+using TestRunnerN = TestRunner<T, N>;
+
 class CpuNotSupported
 {
 public:
-    CpuNotSupported(struct test* test)
-    {}
-
-    int init(struct test *test)
-    {
-        log_skip(CpuNotSupportedSkipCategory, "Not supported on this OS");
+    int init() {
+        log_skip(CpuNotSupportedSkipCategory, "Not supported on this platform");
         return EXIT_SKIP;
     }
 
-    int run(struct test *test, int cpu)
-    {
+    int run() {
         __builtin_unreachable();
-    }
-
-    int cleanup(struct test *test)
-    {
-        return EXIT_SUCCESS;
     }
 };
 
 class OsNotSupported
 {
 public:
-    OsNotSupported(struct test* test)
-    {}
-
-    int init(struct test *test)
-    {
+    int init() {
         log_skip(OsNotSupportedSkipCategory, "Not supported on this OS");
         return EXIT_SKIP;
     }
 
-    int run(struct test *test, int cpu)
-    {
+    int run() {
         __builtin_unreachable();
-    }
-
-    int cleanup(struct test *test)
-    {
-        return EXIT_SUCCESS;
     }
 };
 #endif // __cplusplus
