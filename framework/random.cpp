@@ -87,7 +87,7 @@ struct RandomEngineWrapper
     EngineType engine_type;
 
     RandomEngineWrapper(EngineType type)
-        : per_thread(thread_count() + 1), engine_type(type)
+        : per_thread(thread_count() + 2), engine_type(type)
     {}
 
     virtual ~RandomEngineWrapper();
@@ -101,6 +101,15 @@ struct RandomEngineWrapper
     virtual uint64_t generate64(thread_rng *thread_buffer) = 0;
     virtual long int generateInt(thread_rng *thread_buffer) = 0;
     virtual __uint128_t generate128(thread_rng *thread_buffer) = 0;
+
+    /*virtual*/ void saveEngineState()
+    {
+        per_thread[per_thread.size() - 1] = per_thread[0];
+    }
+    /*virtual*/ void restoreEngineState()
+    {
+        per_thread[0] = per_thread[per_thread.size() - 1];
+    }
 };
 RandomEngineWrapper::~RandomEngineWrapper() {}
 
@@ -539,6 +548,9 @@ void random_init_global(const char *seed_from_user)
         read_from_seed(sseq);
         sApp->random_engine->seedGlobalEngine(sseq);
     }
+
+    // save the engine state
+    sApp->random_engine->saveEngineState();
 }
 
 std::string random_format_seed()
@@ -549,10 +561,15 @@ std::string random_format_seed()
     return result;
 }
 
-void random_advance_seed()
+void random_advance_seed() noexcept
 {
     if (!(sApp->shmem->cfg.random_control_flags & uint32_t(TestConfig::RandomControl::fixed_seed)))
         rand();
+}
+
+void random_restore_seed() noexcept
+{
+    sApp->random_engine->restoreEngineState();
 }
 
 uint32_t random_seed_low32()
