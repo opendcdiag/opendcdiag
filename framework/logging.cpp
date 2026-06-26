@@ -682,7 +682,7 @@ static void log_message_preformatted(int thread_num, std::string_view msg)
     LogLevelVerbosity level = status_level(msg[0]);
     bool is_error = msg[0] == 'E';
     if (is_error)
-        logging_mark_thread_failed(thread_num);
+        assert(sApp->thread_data(thread_num)->has_failed());
 
     log_message_preformatted(thread_num, level, msg);
     if (is_error)
@@ -1018,24 +1018,27 @@ void logging_finish()
 {
 }
 
-static inline void assert_log_message(const char *fmt)
+// returns true if we are done and no logging is required
+static inline bool message_common_check(int thread_num, const char *fmt)
 {
     assert(fmt);
     assert(fmt[0] == 'd' || fmt[0] == 'I' || fmt[0] == 'W' || fmt[0] == 'E');
     assert(fmt[1] == '>');
     assert(fmt[2] == ' ');
-    (void)fmt;  // for release builds
+
+    if (!SandstoneConfig::Debug && *fmt == 'd')
+        return true;       /* no Debug in non-debug build */
+    if (*fmt == 'E')
+        logging_mark_thread_failed(thread_num);
+    return current_output_format() == SandstoneApplication::OutputFormat::no_output;
 }
 
 #undef log_platform_message
 void log_platform_message(const char *fmt, ...)
 {
-    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+    if (message_common_check(thread_num, fmt))
         return;
 
-    assert_log_message(fmt);
-    if (!SandstoneConfig::Debug && *fmt == 'd')
-        return;         /* no Debug in non-debug build */
     va_list va;
     va_start(va, fmt);
     std::string msg = create_filtered_message_string(fmt, va);
@@ -1070,12 +1073,9 @@ void log_message_skip(int thread_num, SkipCategory category, const char *fmt, ..
 #undef log_message
 void log_message(int thread_num, const char *fmt, ...)
 {
-    if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
+    if (message_common_check(thread_num, fmt))
         return;
 
-    assert_log_message(fmt);
-    if (!SandstoneConfig::Debug && *fmt == 'd')
-        return;         /* no Debug in non-debug build */
     va_list va;
     va_start(va, fmt);
     std::string msg = create_filtered_message_string(fmt, va);
