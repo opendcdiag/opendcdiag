@@ -70,7 +70,14 @@ jobs:
           for t; do
             builddir/opendcdiag --quick --selftests -e "$t" -o -
           done
-          builddir/opendcdiag --quick --selftests -e selftest_failinit && exit 1 || [[ $? = 1 ]]
+          set selftest_failinit selftest_logerror
+          for t; do
+            if builddir/opendcdiag --quick --retest-on-failure=0 --selftests -e "$t" -o -; then
+              exit 1
+            else
+              [[ $? = 1 ]]
+            fi
+          done
       - name: run selftests
         if: ${{ matrix.selftests }}
         shell: bash
