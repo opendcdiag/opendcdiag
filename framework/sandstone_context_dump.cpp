@@ -582,6 +582,18 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
         dump_xsave_internal(f, xsave_area, xsave_size, mask);
 }
 
+void dump_context(std::string &out, SandstoneMachineContext mc, const void *xsave_area,
+                  size_t xsave_size)
+{
+    // interleave output so r16-r31 EGPRs appear next to the base ones
+    dump_gprs_only(out, mc);
+    XSave mask = get_xsave_mask(xsave_area, xsave_size, XSave(-1));
+    if (mask & XSave::ApxState)
+        dump_xsave_internal(out, xsave_area, xsave_size, XSave::ApxState);
+    dump_gprs_other(out, mc);
+    dump_xsave_internal(out, xsave_area, xsave_size, XSave(mask & ~XSave::ApxState));
+}
+
 // C API
 char *dump_gprs(SandstoneMachineContext mc)
 {

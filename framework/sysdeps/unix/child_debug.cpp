@@ -983,8 +983,7 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
         std::string log;
 
 #ifdef __x86_64__
-        dump_gprs(log, &ctx.mc);
-        dump_xsave(log, ctx.xsave_buffer.data(), ctx.xsave_buffer.size(), -1);
+        dump_context(log, &ctx.mc, ctx.xsave_buffer.data(), ctx.xsave_buffer.size());
 #endif
         dump_device_state(log, thread);
 
