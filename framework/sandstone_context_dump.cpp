@@ -203,7 +203,7 @@ static void print_segment(std::string &f, const char *name, uint16_t value)
 }
 
 #if defined(__linux__)
-void dump_gprs(std::string &f, SandstoneMachineContext mc)
+static void dump_gprs_only(std::string &f, SandstoneMachineContext mc)
 {
     static constexpr struct {
         char name[4];
@@ -228,6 +228,9 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, mc->gregs[reg.idx]);
+}
+static void dump_gprs_other(std::string &f, SandstoneMachineContext mc)
+{
     print_rip(f, mc->gregs[REG_RIP]);
     print_eflags(f, mc->gregs[REG_EFL]);
 
@@ -239,7 +242,7 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     }
 }
 #elif defined(__FreeBSD__)
-void dump_gprs(std::string &f, SandstoneMachineContext mc)
+static void dump_gprs_only(std::string &f, SandstoneMachineContext mc)
 {
     using register_t = decltype(mc->mc_rax);
     static constexpr struct {
@@ -265,13 +268,16 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, mc->*(reg.ptr));
+}
+static void dump_gprs_other(std::string &f, SandstoneMachineContext mc)
+{
     print_rip(f, mc->mc_rip);
     print_eflags(f, mc->mc_rflags);
     print_segment(f, "fs", mc->mc_fs);
     print_segment(f, "gs", mc->mc_gs);
 }
 #elif defined(__APPLE__) || defined(__MACH__)
-void dump_gprs(std::string &f, SandstoneMachineContext mc)
+static void dump_gprs_only(std::string &f, SandstoneMachineContext mc)
 {
     auto *state = &mc->__ss;
     using ThreadState = std::decay_t<decltype(*state)>;
@@ -299,13 +305,17 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, state->*(reg.ptr));
+}
+static void dump_gprs_other(std::string &f, SandstoneMachineContext mc)
+{
+    auto *state = &mc->__ss;
     print_rip(f, state->__rip);
     print_eflags(f, state->__rflags);
     print_segment(f, "fs", state->__fs);
     print_segment(f, "gs", state->__gs);
 }
 #elif defined(_WIN32)
-void dump_gprs(std::string &f, SandstoneMachineContext mc)
+static void dump_gprs_only(std::string &f, SandstoneMachineContext mc)
 {
     static constexpr struct {
         char name[4];
@@ -330,6 +340,9 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, mc->*(reg.ptr));
+}
+static void dump_gprs_other(std::string &f, SandstoneMachineContext mc)
+{
     print_rip(f, mc->Rip);
     print_eflags(f, mc->EFlags);
     print_segment(f, "fs", mc->SegFs);
@@ -545,6 +558,12 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
 
     if (mask & XSave::AmxState)
         print_amx_state(f, state, mask);
+}
+
+void dump_gprs(std::string &out, SandstoneMachineContext mc)
+{
+    dump_gprs_only(out, mc);
+    dump_gprs_other(out, mc);
 }
 
 // C API
