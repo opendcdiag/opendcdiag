@@ -521,8 +521,14 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
         // sanity check it
         uint64_t xgetbv0 = XSave::X87 | XSave::SseState;
 
+#if defined(__AVX__) || defined(__APX_F__)
+        // OSXSAVE is definitely active
+        uint32_t ecx = bit_OSXSAVE;
+#else
+        // need to check if OSXSAVE is active
         uint32_t eax, ebx, ecx, edx;
         __cpuid(1, eax, ebx, ecx, edx);
+#endif
         if (bit_OSXSAVE & ecx) {
             xgetbv0 = do_xgetbv();
         }
