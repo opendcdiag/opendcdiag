@@ -4,8 +4,6 @@
  */
 
 #include "sandstone_context_dump.h"
-#include "sandstone_utils.h"
-#include "sandstone.h"
 
 #ifdef __x86_64__
 #include "amx_common.h"
@@ -14,7 +12,9 @@
 
 #include <algorithm>
 #include <array>
+#include <format>
 #include <limits>
+#include <span>
 
 #ifdef __unix__
 #  include <dlfcn.h>
@@ -149,6 +149,33 @@ static constexpr char rounding_modes[][9] = {
     "nearest", "down", "up", "truncate"
 };
 
+struct FlagBits
+{
+    uint64_t value;
+    std::span<const char4> names;
+};
+
+template <>
+struct std::formatter<FlagBits>
+{
+    constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+    auto format(const FlagBits &fb, std::format_context &ctx) const
+    {
+        auto out = ctx.out();
+        bool any = false;
+        for (size_t i = 0; i < fb.names.size(); ++i) {
+            if ((fb.value >> i & 1) && fb.names[i][0]) {
+                if (!any) {
+                    *out++ = ' ';
+                    any = true;
+                }
+                out = std::format_to(out, "{} ", std::string_view(fb.names[i]));
+            }
+        }
+        return out;
+    }
+};
+
 static ptrdiff_t xsave_offset(XSave bit)
 {
     int n = __bsfd(bit);
@@ -157,49 +184,40 @@ static ptrdiff_t xsave_offset(XSave bit)
     return ebx;
 };
 
-template <int N, typename T>
-static void print_flag_description(std::string &f, uint64_t value, T (&array)[N])
+template <typename... Args>
+static void append_format(std::string &f, std::format_string<Args...> fmt, Args &&... args)
 {
-    for (size_t i = 0; i < std::size(array); ++i) {
-        uint64_t bit = UINT64_C(1) << i;
-        const char *name = array[i];
-        if ((value & bit) && *name) {
-            f += name;
-            f += ' ';
-        }
-    }
+    std::format_to(std::back_inserter(f), fmt, std::forward<Args>(args)...);
 }
 
 static void print_gpr(std::string &f, const char *name, int64_t value)
 {
-    f += stdprintf(" %-5s = 0x%016" PRIx64, name, value);
+    append_format(f, " {:<5} = 0x{:016x}", name, uint64_t(value));
     if (value <= 4096 && value >= -4096)
-        f += stdprintf(" (%d)", int(value));
+        append_format(f, " ({})", int(value));
     f += '\n';
 }
 
 static void print_rip(std::string &f, uintptr_t rip)
 {
-    f += stdprintf(" %-5s = 0x%016tx", "rip", rip);
+    append_format(f, " {:<5} = 0x{:016x}", "rip", rip);
 #ifdef __unix__
     uint8_t *ptr = reinterpret_cast<uint8_t *>(rip);
     Dl_info dli;
     if (dladdr(ptr, &dli) && dli.dli_sname)
-        f += stdprintf(" <%s+%#tx>", dli.dli_sname, ptr - static_cast<uint8_t *>(dli.dli_saddr));
+        append_format(f, " <{}+{:#x}>", dli.dli_sname, ptr - static_cast<uint8_t *>(dli.dli_saddr));
 #endif
     f += '\n';
 }
 
 static void print_eflags(std::string &f, uint64_t value)
 {
-    f += stdprintf(" flags = 0x%08" PRIx64 " [ ", value);
-    print_flag_description(f, value, eflags);
-    f += "]\n";
+    append_format(f, " flags = 0x{:08x} [{}]\n", value, FlagBits{value, eflags});
 }
 
 static void print_segment(std::string &f, const char *name, uint16_t value)
 {
-    f += stdprintf(" %-5s = 0x%x\n", name, value);
+    append_format(f, " {:<5} = 0x{:x}\n", name, value);
 }
 
 #if defined(__linux__)
@@ -361,9 +379,8 @@ static void print_egprs(std::string &f, const Fxsave *state)
 static void print_x87mmx_registers(std::string &f, const Fxsave *state)
 {
     int fptop = (state->fsw >> 11) & 7;
-    f += stdprintf(" fcw   = %#x\n fsw   = %#x [ ", state->fcw, state->fsw);
-    print_flag_description(f, state->fsw, fsw);
-    f += stdprintf("top=%d ]\n ftw   = %#x\n", fptop, state->ftw);
+    append_format(f, " fcw   = {:#x}\n fsw   = {:#x} [{}top={} ]\n ftw   = {:#x}\n",
+            state->fcw, state->fsw, FlagBits{state->fsw, fsw}, fptop, state->ftw);
 
     if (state->ftw == 0)
         return;                 // no tags, nothing to display, so save space
@@ -374,7 +391,7 @@ static void print_x87mmx_registers(std::string &f, const Fxsave *state)
         effective = i;
 
         auto st = state->st + effective;
-        f += stdprintf(" st(%zu) = %04x%016" PRIx64 " (%La)\n",
+        append_format(f, " st({}) = {:04x}{:016x} ({:a})\n",
                 i, st->as_hex.high16, st->as_hex.low64, st->as_float);
     }
 }
@@ -383,15 +400,14 @@ static void print_xmm_register(std::string &f, const xmmreg &ptr)
 {
     uint64_t low = uint64_t(ptr.u);
     uint64_t high = uint64_t(ptr.u >> 8 * sizeof(low));
-    f += stdprintf("%016" PRIx64 ":%016" PRIx64 " ", high, low);
+    append_format(f, "{:016x}:{:016x} ", high, low);
 }
 
 static void print_avx_registers(std::string &f, const Fxsave *state, XSave mask)
 {
     // start with the MXCSR
-    f += stdprintf(" mxcsr = 0x%08x [ ", state->mxcsr);
-    print_flag_description(f, state->mxcsr, mxcsr);
-    f += stdprintf("RC=%s ]\n", rounding_modes[(state->mxcsr & _MM_ROUND_MASK) / _MM_ROUND_DOWN]);
+    append_format(f, " mxcsr = 0x{:08x} [{}RC={} ]\n", state->mxcsr,
+            FlagBits{state->mxcsr, mxcsr}, rounding_modes[(state->mxcsr & _MM_ROUND_MASK) / _MM_ROUND_DOWN]);
 
     char nameprefix = 'x';
     auto base = reinterpret_cast<const uint8_t *>(state);
@@ -420,7 +436,7 @@ static void print_avx_registers(std::string &f, const Fxsave *state, XSave mask)
     }
 
     for (int i = 0; i < int(std::size(state->xmm)); ++i) {
-        f += stdprintf(" %cmm%-2d = ", nameprefix, i);
+        append_format(f, " {}mm{:<2} = ", nameprefix, i);
         if (zmmhstate) {
             print_xmm_register(f, zmmhstate[i].xmm[1]);
             print_xmm_register(f, zmmhstate[i].xmm[0]);
@@ -432,13 +448,13 @@ static void print_avx_registers(std::string &f, const Fxsave *state, XSave mask)
     }
     for (int i = 0; hizmmstate && i < 16; ++i) {
         nameprefix = 'z';
-        f += stdprintf(" %cmm%-2d = ", nameprefix, i + 16);
+        append_format(f, " {}mm{:<2} = ", nameprefix, i + 16);
         for (int j = std::size(hizmmstate->xmm) - 1; j >= 0; --j)
             print_xmm_register(f, hizmmstate[i].xmm[j]);
         f += '\n';
     }
     for (int i = 0; opmaskstate && i < 8; ++i)
-        f += stdprintf("    k%d = 0x%016" PRIx64 "\n", i, uint64_t(opmaskstate[i]));
+        append_format(f, "    k{} = 0x{:016x}\n", i, uint64_t(opmaskstate[i]));
 }
 
 static void print_amx_tiles_palette1(std::string &f, const Fxsave *state, const amx_tileconfig *tileconfig)
@@ -459,19 +475,22 @@ static void print_amx_tiles_palette1(std::string &f, const Fxsave *state, const 
 
     auto base = reinterpret_cast<const uint8_t *>(state) + offset;
     for (int reg = 0; reg < info.max_names; ++reg) {
-        f += stdprintf(" tmm%-2d =", reg);
+        append_format(f, " tmm{:<2} =", reg);
         if (tileconfig->rows[reg] == 0) {
-            f += stdprintf(" <0 rows>\n");
+            f += " <0 rows>\n";
             continue;
         }
 
         const uint8_t *tiledata = base + reg * info.bytes_per_tile;
         for (int row = 0; row < tileconfig->rows[reg]; ++row) {
             const uint8_t *rowdata = tiledata + row * info.bytes_per_row;
-            f += stdprintf(" %d: {", row);
+            if (row == 0)
+                append_format(f, " {:2}: {{", row);
+            else
+                append_format(f, "         {:2}: {{", row);
             for (int i = 0; i < tileconfig->colsb[reg]; ++i)
-                f += stdprintf(" %02x", rowdata[i]);
-            f += stdprintf(" }\n");
+                append_format(f, " {:02x}", rowdata[i]);
+            f += " }\n";
         }
     }
 }
@@ -484,9 +503,9 @@ static void print_amx_state(std::string &f, const Fxsave *state, XSave mask)
 
     auto base = reinterpret_cast<const uint8_t *>(state);
     auto tileconfig = reinterpret_cast<const amx_tileconfig *>(base + offset);
-    f += stdprintf(" xtilecfg = palette: %u, start_row: %u\n", tileconfig->palette, tileconfig->start_row);
+    append_format(f, " xtilecfg = palette: {}, start_row: {}\n", tileconfig->palette, tileconfig->start_row);
     for (size_t i = 0; i < std::size(tileconfig->colsb); ++i)
-        f += stdprintf("            tile%-2zu { colsb: %u, rows: %u }\n",
+        append_format(f, "            tile{:<2} {{ colsb: {}, rows: {} }}\n",
                 i, tileconfig->colsb[i], tileconfig->rows[i]);
 
     if (mask & XSave::Xtiledata) {
