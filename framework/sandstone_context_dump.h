@@ -32,6 +32,8 @@ extern char *dump_xsave(const void *xsave_area, size_t xsave_size, int xsave_dum
 
 void dump_gprs(std::string &out, SandstoneMachineContext);
 void dump_xsave(std::string &out, const void *xsave_area, size_t xsave_size, int xsave_dump_mask);
+void dump_context(std::string &out, SandstoneMachineContext, const void *xsave_area,
+                  size_t xsave_size);
 #endif  // __cplusplus
 
 #endif  // SANDSTONE_CONTEXT_DUMP_H
