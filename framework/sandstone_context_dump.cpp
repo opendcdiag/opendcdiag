@@ -19,6 +19,7 @@
 #include <string_view>
 #include <utility>
 
+#include <assert.h>
 #ifdef __unix__
 #  include <dlfcn.h>
 #endif
@@ -535,18 +536,17 @@ static inline uint64_t __attribute__((target("xsave"))) do_xgetbv()
     return _xgetbv(0);
 }
 
-void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
+static XSave get_xsave_mask(const void *xsave_area, size_t xsave_size, XSave mask)
 {
     // sanity check the state
-    XSave mask = XSave(xsave_dump_mask);
     if (xsave_size < Fxsave::size)
-        return;         // too small to be FXSAVE state
+        return {};      // too small to be FXSAVE state
 
     auto state = static_cast<const Fxsave *>(xsave_area);
 
     if (xsave_size > Fxsave::size) {
         if (xsave_size < Fxsave::size + 64)
-            return;     // XSAVE extended header missing
+            return {};  // XSAVE extended header missing
 
         // get the bit vector of saved features
         uint64_t xsave_bv;
@@ -569,11 +569,20 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
         }
 
         if (xsave_bv & ~xgetbv0)
-            return;     // bit vector contains invalid bits
+            return {};  // bit vector contains invalid bits
     } else {
         // only the legacy state
         mask = XSave(mask & (XSave::X87 | XSave::SseState));
     }
+    return mask;
+}
+
+static void dump_xsave_internal(std::string &f, const void *xsave_area, size_t xsave_size, XSave mask)
+{
+    if (!mask)
+        return;
+    assert(xsave_size >= Fxsave::size);
+    auto state = static_cast<const Fxsave *>(xsave_area);
 
     if (mask & XSave::ApxState)
         print_egprs(f, state);
@@ -592,6 +601,13 @@ void dump_gprs(std::string &out, SandstoneMachineContext mc)
 {
     dump_gprs_only(out, mc);
     dump_gprs_other(out, mc);
+}
+
+void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
+{
+    XSave mask = get_xsave_mask(xsave_area, xsave_size, XSave(xsave_dump_mask));
+    if (mask)
+        dump_xsave_internal(f, xsave_area, xsave_size, mask);
 }
 
 // C API
