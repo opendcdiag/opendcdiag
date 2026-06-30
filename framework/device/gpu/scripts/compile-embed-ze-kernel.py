@@ -36,6 +36,9 @@ def compile_bin(source_file, device, language):
     ocloc_args = ['ocloc', '-file', source_file, '-device', device, '-o', out_filename]
     if language == 'CMC':
         ocloc_args += ['-options', '-cmc']
+    else:
+        # Use OpenCL C 3.0
+        ocloc_args += ['-options', '-cl-std=CL3.0']
     ocloc_proc = subprocess.Popen(ocloc_args, stdout=subprocess.PIPE)
     stdout = ocloc_proc.communicate()[0]
     if ocloc_proc.returncode != 0:
