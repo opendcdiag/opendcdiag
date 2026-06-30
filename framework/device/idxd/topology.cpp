@@ -39,60 +39,43 @@ void print_temperature_of_device()
 {
 }
 
-namespace {
-struct AccfgCtx
+int AccfgCtx::init()
 {
-    accfg_ctx* ctx = nullptr;
-
-    AccfgCtx() = default;
-
-    ~AccfgCtx() {
-        if (ctx) accfg_unref(ctx);
+    if (accfg_new(&ctx) < 0) {
+        return log_skip_or_print(RuntimeSkipCategory, "Failed to initialize accfg_ctx");
     }
-
-    // non-copyable
-    AccfgCtx(const AccfgCtx&) = delete;
-    AccfgCtx& operator=(const AccfgCtx&) = delete;
-
-    int init() {
-        if (accfg_new(&ctx) < 0)
-            return log_skip_or_print(RuntimeSkipCategory, "Failed to initialize libaccel-config");
-        return EXIT_SUCCESS;
-    }
-
-    accfg_ctx* get() const { return ctx; }
-};
-} // end anonymous namespace
+    return EXIT_SUCCESS;
+}
 
 /// Collect all WQs visible in the system. Do not create any hierarchy of them at this point.
 template <>
 WorkQueueSet detect_devices<WorkQueueSet>()
 {
-    WorkQueueSet visible_wqs;
+    WorkQueueSet res;
 
-    AccfgCtx ctx;
-    if (auto ret = ctx.init(); ret) {
-        return visible_wqs;
+    if (auto ret = res.ctx.init(); ret) {
+        return res;
     }
 
     accfg_device* device;
-    accfg_device_foreach(ctx.get(), device) {
+    accfg_device_foreach(res.ctx.get(), device) {
         auto device_type = accfg_device_get_type(device);
         auto device_id   = accfg_device_get_id(device);
 
         accfg_wq* wq;
         accfg_wq_foreach(device, wq) {
-            auto& v = visible_wqs.emplace_back();
+            auto& v = res.visible_wqs.emplace_back();
+            v.device_handle = device;
             v.device_type = device_type;
             v.device_id   = device_id;
             v.wq_id       = accfg_wq_get_id(wq);
         }
     }
 
-    sApp->device_count = visible_wqs.size();
+    sApp->device_count = res.visible_wqs.size();
     sApp->user_thread_data.resize(sApp->device_count);
 
-    return visible_wqs;
+    return res;
 }
 
 void create_mock_topology(const char *topo)
