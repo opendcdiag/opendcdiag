@@ -158,3 +158,29 @@ jobs:
         shell: bash
         run: |
           ./builddir/unittests
+
+  build-idxd:
+    name: Build binary for IDXD
+    needs: [ lint, git-sanity ]
+    runs-on: ubuntu-24.04
+    container: debian:sid
+    strategy:
+      matrix:
+        include:
+        - { name: GCC, unittests: "unittests" }
+        - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
+    steps:
+      - name: Checkout the PR merge point
+        uses: actions/checkout@v6
+      - name: Build for IDXD
+        uses: ./.github/actions/build-idxd
+        with:
+            name: ${{ matrix.name }}
+            env: ${{ matrix.env }}
+            meson_args: ${{ matrix.meson_args }}
+            unittests: ${{ matrix.unittests }}
+      - name: run unittests
+        if: ${{ matrix.unittests }}
+        shell: bash
+        run: |
+          ./builddir/unittests

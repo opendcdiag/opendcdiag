@@ -12,6 +12,8 @@
 #include <device/cpu/cpu_device.h>
 #elif SANDSTONE_DEVICE_GPU
 #include <device/gpu/gpu_device.h>
+#elif SANDSTONE_DEVICE_IDXD
+#include <device/idxd/idxd_device.h>
 #endif
 
 #endif /* INC_DEVICE_H */
