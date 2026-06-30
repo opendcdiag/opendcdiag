@@ -56,6 +56,8 @@ if device_type == 'cpu'
     )
 elif device_type == 'gpu'
     framework_config.set10('SANDSTONE_DEVICE_GPU', true)
+elif device_type == 'idxd'
+    framework_config.set10('SANDSTONE_DEVICE_IDXD', true)
 else
     error('Unknown device type: ' + device_type)
 endif

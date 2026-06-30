@@ -1,0 +1,73 @@
+name: Build for IDXD
+
+inputs:
+  name:
+    description: Name of target
+    type: string
+    required: true
+  env:
+    description: Environment for the build
+    type: string
+    required: false
+    default: ''
+  meson_args:
+    description: Meson arguments for the build
+    type: string
+    required: true
+  unittests:
+    description: Unittests
+    type: string
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: setup environment
+      shell: bash
+      run: printf '%s\n' ${{ inputs.env }} | tee -a ${GITHUB_ENV}
+    - name: Install distro packages
+      shell: bash
+      run: |
+        DEBIAN_FRONTEND=noninteractive apt-get -y update
+        echo "::group::Installing build dependencies"
+        DEBIAN_FRONTEND=noninteractive apt-get -y install \
+            bats \
+            ca-certificates \
+            ${CC-g++} \
+            elfutils \
+            file \
+            gawk \
+            git \
+            jq \
+            libboost-dev \
+            libeigen3-dev \
+            libgtest-dev \
+            libhwloc-dev \
+            libssl-dev \
+            libzstd-dev \
+            meson \
+            ninja-build \
+            python3-yaml \
+            yq \
+            zlib1g-dev
+        echo "::endgroup::"
+    - uses: actions/checkout@v6
+    - name: meson setup
+      shell: bash
+      run: meson setup builddir -Ddevice_type=idxd -Dbuildtype=debugoptimized ${{ inputs.meson_args }}
+    - name: ninja build
+      shell: bash
+      run: ninja -C builddir
+    - uses: actions/upload-artifact@v4
+      with:
+        name: linux-${{ inputs.name }}-binary-idxd
+        path: builddir/opendcdiag
+        retention-days: 3
+    - name: confirm opendcdiag runs
+      shell: bash
+      run: |
+        builddir/opendcdiag --version
+    - name: ninja build unittests
+      if: ${{ inputs.unittests }}
+      shell: bash
+      run: ninja -C builddir unittests

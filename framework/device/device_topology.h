@@ -12,6 +12,8 @@
 #include <device/cpu/topology_cpu.h>
 #elif SANDSTONE_DEVICE_GPU
 #include <device/gpu/topology_gpu.h>
+#elif SANDSTONE_DEVICE_IDXD
+#include <device/idxd/topology_idxd.hpp>
 #endif
 
 #endif /* INC_DEVICE_TOPOLOGY_H */

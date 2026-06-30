@@ -12,6 +12,8 @@
 #include <device/cpu/test_data_cpu.h>
 #elif SANDSTONE_DEVICE_GPU
 #include <device/gpu/test_data_gpu.h>
+#elif SANDSTONE_DEVICE_IDXD
+#include <device/idxd/test_data_idxd.h>
 #endif
 
 #endif /* INC_TEST_DATA_DEVICE_H */
