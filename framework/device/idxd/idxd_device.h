@@ -6,7 +6,18 @@
 #ifndef INC_IDXD_DEVICE_H
 #define INC_IDXD_DEVICE_H
 
+#include <accel-config/libaccel_config.h>
+
 #include <stdint.h>
+
+
+struct bdf_t
+{
+    uint16_t domain;
+    uint8_t bus;
+    uint8_t device : 5;
+    uint8_t function : 3;
+};
 
 // Work Queue is an atomic piece of a programmable accelerator HW,
 // therefore device_info should store WQs, not DSA/IAX devices.
@@ -21,9 +32,20 @@ struct wq_info_t
     /// Package ID in the system.
     int16_t package_id;
 
-    /// ...
-    /// ...
-    /// ...
+    /// PCI location.
+    struct bdf_t bdf;
+
+    /// WQ unique index within a device.
+    int wq_id;
+
+    /// Device that this WQ belongs to.
+    int device_id;
+
+    /// Device type that this WQ belongs to (DSA/IAX).
+    enum accfg_device_type dev_type;
+
+    /// Device version (V1/V2/V3).
+    enum accfg_device_version dev_version;
 
 #ifdef __cplusplus
     int wq() const;        ///! Internal WQ number
