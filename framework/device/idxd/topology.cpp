@@ -8,6 +8,8 @@
 #include "idxd_device.h"
 #include "topology_idxd.hpp"
 
+#include <accel-config/libaccel_config.h>
+
 struct wq_info_t *device_info = nullptr;
 
 int num_packages()
@@ -37,16 +39,60 @@ void print_temperature_of_device()
 {
 }
 
+namespace {
+struct AccfgCtx
+{
+    accfg_ctx* ctx = nullptr;
+
+    AccfgCtx() = default;
+
+    ~AccfgCtx() {
+        if (ctx) accfg_unref(ctx);
+    }
+
+    // non-copyable
+    AccfgCtx(const AccfgCtx&) = delete;
+    AccfgCtx& operator=(const AccfgCtx&) = delete;
+
+    int init() {
+        if (accfg_new(&ctx) < 0)
+            return log_skip_or_print(RuntimeSkipCategory, "Failed to initialize libaccel-config");
+        return EXIT_SUCCESS;
+    }
+
+    accfg_ctx* get() const { return ctx; }
+};
+} // end anonymous namespace
+
+/// Collect all WQs visible in the system. Do not create any hierarchy of them at this point.
 template <>
 WorkQueueSet detect_devices<WorkQueueSet>()
 {
-    WorkQueueSet enabled_devices;
+    WorkQueueSet visible_wqs;
 
-    // ...
-    // ...
-    // ...
+    AccfgCtx ctx;
+    if (auto ret = ctx.init(); ret) {
+        return visible_wqs;
+    }
 
-    return enabled_devices;
+    accfg_device* device;
+    accfg_device_foreach(ctx.get(), device) {
+        auto device_type = accfg_device_get_type(device);
+        auto device_id   = accfg_device_get_id(device);
+
+        accfg_wq* wq;
+        accfg_wq_foreach(device, wq) {
+            auto& v = visible_wqs.emplace_back();
+            v.device_type = device_type;
+            v.device_id   = device_id;
+            v.wq_id       = accfg_wq_get_id(wq);
+        }
+    }
+
+    sApp->device_count = visible_wqs.size();
+    sApp->user_thread_data.resize(sApp->device_count);
+
+    return visible_wqs;
 }
 
 void create_mock_topology(const char *topo)
