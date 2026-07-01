@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -71,6 +72,7 @@ public:
     using Thread = struct wq_info_t;
 
     struct Device;
+    struct Group;
     struct WorkQueue
     {
         /// Immutable part.
@@ -100,28 +102,31 @@ public:
 
         accfg_op_config op_config = {}; // for effective op check: this_device->op_cap[i] & op_config[i]
 
-        // TODO: experimental: set to true only if: state is enabled, ownership allows using it, and mode allows using it.
-        // later we can add a function iterating over all targetable wqs or something...
-        // this variable is derived, not set manually
+        // this variable is derived from others, not set manually (ENABLED state + USER mode)
         bool targetable = false;
 
         const Device* this_device = nullptr;
+        const Group*  this_group = nullptr;
     };
 
     struct Engine
     {
+        std::string name;
         int id = -1;
     };
 
     struct Group
     {
+        std::string name;
         int id = -1;
         std::vector<WorkQueue> wqs;
-        std::vector<Engine> engines; // TODO: I wonder if num_engines would suffice, since we cannot target them to test.
+        std::vector<Engine> engines;
     };
 
     struct Device
     {
+        std::string name;
+        int numa_node = -1; // rather useless, but keep for legacy reasons.
         int id = -1;
         accfg_device_type dev_type = accfg_device_type::ACCFG_DEVICE_TYPE_UNKNOWN;
 
@@ -138,7 +143,16 @@ public:
     //   - std::vector<DsaDevice> and std::vector<IaxDevice>
     //   - one std::vector<Device> and a type member to Device?
     std::vector<Device> devices;
+
+    std::vector<const WorkQueue*> targetable_wqs(
+        std::optional<accfg_device_type> device_type = std::nullopt,
+        std::optional<accfg_wq_mode> mode = std::nullopt) const;
+
+    static const Topology &topology();
 };
+
+Topology build_topology();
+Topology build_topology(const AccfgCtx&);
 
 struct HardwareInfo
 {};
