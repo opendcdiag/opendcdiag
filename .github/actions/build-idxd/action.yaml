@@ -49,7 +49,9 @@ runs:
             ninja-build \
             python3-yaml \
             yq \
-            zlib1g-dev
+            zlib1g-dev \
+            uuid-dev \
+            libaccel-config-dev
         echo "::endgroup::"
     - uses: actions/checkout@v6
     - name: meson setup
