@@ -56,6 +56,7 @@ tests_common_incdirs = [
 # fill with tests
 tests_set_base.add(
     files(
+        'event_monitor/event_monitor.cpp',
         'ze_matmul/ze_matmul.cpp',
         'ze_memcpy/ze_memcpy.cpp',
     )
