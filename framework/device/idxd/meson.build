@@ -8,6 +8,7 @@ target_deps += [
 ]
 
 framework_files += files(
+    'build_topology.cpp',
     'idxd_device.cpp',
     'topology.cpp',
     'logging_idxd.cpp',
