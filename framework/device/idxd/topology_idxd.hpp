@@ -6,11 +6,14 @@
 #ifndef INC_TOPOLOGY_IDXD_HPP
 #define INC_TOPOLOGY_IDXD_HPP
 
+#include <accel-config/libaccel_config.h>
+
 #include <vector>
 
 /// Immutable and unique id of a queue: device_id and wq_id, as in qw<device_id>.<wq_id>.
 struct WorkQueueId
 {
+    accfg_device_type device_type;
     int device_id;
     int wq_id;
 };
