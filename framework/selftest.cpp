@@ -296,6 +296,17 @@ static int selftest_logs_reschedule_cleanup(struct test *test)
     free (reschedule_sem);
     return EXIT_SUCCESS;
 }
+
+static int selftest_random_preinit(struct test *test)
+{
+    // use (but not print) 4 ints
+    int r1 = random();
+    int r2 = random();
+    int r3 = random();
+    int r4 = random();
+    return (r1 + r2 + r3 + r4) ? EXIT_SUCCESS : EXIT_SUCCESS;
+}
+
 static int selftest_logs_random_init(struct test *test)
 {
     // print 4 ints
@@ -1448,6 +1459,15 @@ static struct test selftests_array[] = {
     .test_init = selftest_preinit_init,
     .test_run = selftest_pass_run,
     .desired_duration = INT_MAX,        // we change to -1 in the preinit
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_preinit_random",
+    .description = "Uses the random generator in the preinit function",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_preinit = selftest_random_preinit,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
 {

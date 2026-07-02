@@ -796,11 +796,11 @@ function selftest_log_yaml_common() {
 
 @test "selftest_logs_random_init" {
     declare -A yamldump
-    sandstone_selftest -e selftest_logs_random_init -s Constant:1234
+    sandstone_selftest -e selftest_logs_random_init -e selftest_preinit_random -s Constant:1234
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1234 1234 1234 1234"
 
-    sandstone_selftest -e selftest_logs_random_init -s LCG:1348219713
+    sandstone_selftest -e selftest_logs_random_init -e selftest_preinit_random -s LCG:1348219713
     [[ "$status" -eq 0 ]]
     test_yaml_expr "/tests/0/state/seed" = "LCG:1348219713"
     test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 421843888 386376794 2046232626 184745881"
@@ -818,7 +818,8 @@ function selftest_log_yaml_common() {
     [[ "$output" = *'  Constant'* ]]
     [[ "$output" = *'  LCG'* ]]
     if [[ "$output" = *'  AES'* ]]; then
-        sandstone_selftest -e selftest_logs_random_init -s AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
+        sandstone_selftest -e selftest_logs_random_init \
+            -s AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308
         [[ "$status" -eq 0 ]]
         test_yaml_regexp "/tests/0/state/seed" "AES:87608d752b11fb972c8f0b4c19cdecf7789f728ad4ee0468d370f4b3e6321308"
         test_yaml_regexp "/tests/0/threads/0/messages/0/text" "I> 1242137224 1378217084 1525375882 474233533"
@@ -831,6 +832,107 @@ function selftest_log_yaml_common() {
         [[ "$status" -eq 0 ]]
         test_yaml_regexp "/tests/0/state/seed" "AES:[0-9a-f]+"
     fi
+}
+
+@test "selftest_logs_random seed advances between tests" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logs_random_init -e selftest_logs_random
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # By default, seeds must differ between tests
+    local seed0="${yamldump[/tests/0/state/seed]}"
+    local seed1="${yamldump[/tests/1/state/seed]}"
+    [[ -n "$seed0" ]]
+    if [[ "$seed0" == "$seed1" ]]; then
+        echo "Seeds are identical ('$seed0') but should differ" >&2
+        false
+    fi
+}
+
+@test "selftest_logs_random --random-control=fixed-seed" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logs_random_init -e selftest_logs_random \
+        --random-control=fixed-seed
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # Both tests must have started with the same seed
+    local seed0="${yamldump[/tests/0/state/seed]}"
+    local seed1="${yamldump[/tests/1/state/seed]}"
+    [[ -n "$seed0" ]]
+    if [[ "$seed0" != "$seed1" ]]; then
+        echo "Seeds differ: test 0 had '$seed0', test 1 had '$seed1'" >&2
+        false
+    fi
+}
+
+@test "selftest_timedpass --random-control=fixed-seed does not advance seed between fractures" {
+    declare -A yamldump
+    # Use a duration long enough to force at least two fractures (auto-fracture runs 40 inner
+    # loops of 10 ms each = ~400 ms per fracture; 900 ms gives at least two fractures)
+    sandstone_selftest -e selftest_timedpass -t 900 --random-control=fixed-seed
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # We need at least 2 fractures to verify the behavior
+    if [[ "${yamldump[/tests@len]}" -lt 2 ]]; then
+        skip "Only one fracture produced; cannot verify fixed-seed behavior across fractures"
+    fi
+
+    # All fractures of selftest_timedpass must have started with the same seed
+    local ref_seed="${yamldump[/tests/0/state/seed]}"
+    [[ -n "$ref_seed" ]]
+    for ((i = 1; i < yamldump[/tests@len]; ++i)); do
+        [[ "${yamldump[/tests/$i/test]}" == "selftest_timedpass" ]] || break
+        local this_seed="${yamldump[/tests/$i/state/seed]}"
+        if [[ "$this_seed" != "$ref_seed" ]]; then
+            echo "Fracture $i seed ('$this_seed') differs from fracture 0 ('$ref_seed')" >&2
+            false
+        fi
+    done
+}
+
+@test "selftest_logs_random --random-control=no-thread-mixin" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_logs_random --random-control=no-thread-mixin
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # All threads must produce the same random output
+    local first="${yamldump[/tests/0/threads/0/messages/0/text]}"
+    [[ -n "$first" ]]
+    for ((i = 1; i < yamldump[/tests/0/threads@len]; ++i)); do
+        local other="${yamldump[/tests/0/threads/$i/messages/0/text]}"
+        if [[ "$first" != "$other" ]]; then
+            echo "Thread $i output ($other) differs from thread 0 ($first)" >&2
+            false
+        fi
+    done
+}
+
+@test "selftest_logs_random --random-control=no-thread-mixin,fixed-seed" {
+    local -r SEED=LCG:1348219713
+    declare -A yamldump
+    sandstone_selftest -e selftest_logs_random_init -e selftest_logs_random \
+        -s $SEED --random-control=no-thread-mixin,fixed-seed
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+
+    # Both tests must report the exact seed we passed with -s
+    test_yaml_expr "/tests/0/state/seed" = "$SEED"
+    test_yaml_expr "/tests/1/state/seed" = "$SEED"
+
+    # All threads in the second test must produce the same random output
+    local first="${yamldump[/tests/1/threads/0/messages/0/text]}"
+    [[ -n "$first" ]]
+    for ((i = 1; i < yamldump[/tests/1/threads@len]; ++i)); do
+        local other="${yamldump[/tests/1/threads/$i/messages/0/text]}"
+        if [[ "$first" != "$other" ]]; then
+            echo "Thread $i output ($other) differs from thread 0 ($first)" >&2
+            false
+        fi
+    done
 }
 
 test_random() {
