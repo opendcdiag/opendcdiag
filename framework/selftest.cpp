@@ -867,9 +867,7 @@ static void cause_sigill()
 #ifndef __APX_F__
     if (cpu_has_feature(cpu_feature_apx_f)) {
         // force-init the APX state
-        // encodes to:   movl  $0x12345678, %r17d
-        asm (".byte 0xd5, 0x10\n"
-             "movl  %0, %%ecx" : : "i" (0x12345678));
+        asm ("movl %0, %%r17d" : : "i" (0x12345678));
     }
 #endif
 #ifndef __clang__

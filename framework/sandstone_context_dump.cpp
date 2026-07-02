@@ -16,6 +16,7 @@
 #include <array>
 #include <limits>
 
+#include <assert.h>
 #ifdef __unix__
 #  include <dlfcn.h>
 #endif
@@ -203,7 +204,7 @@ static void print_segment(std::string &f, const char *name, uint16_t value)
 }
 
 #if defined(__linux__)
-void dump_gprs(std::string &f, SandstoneMachineContext mc)
+static void dump_gprs_only(std::string &f, SandstoneMachineContext mc)
 {
     static constexpr struct {
         char name[4];
@@ -228,6 +229,9 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, mc->gregs[reg.idx]);
+}
+static void dump_gprs_other(std::string &f, SandstoneMachineContext mc)
+{
     print_rip(f, mc->gregs[REG_RIP]);
     print_eflags(f, mc->gregs[REG_EFL]);
 
@@ -239,7 +243,7 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     }
 }
 #elif defined(__FreeBSD__)
-void dump_gprs(std::string &f, SandstoneMachineContext mc)
+static void dump_gprs_only(std::string &f, SandstoneMachineContext mc)
 {
     using register_t = decltype(mc->mc_rax);
     static constexpr struct {
@@ -265,13 +269,16 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, mc->*(reg.ptr));
+}
+static void dump_gprs_other(std::string &f, SandstoneMachineContext mc)
+{
     print_rip(f, mc->mc_rip);
     print_eflags(f, mc->mc_rflags);
     print_segment(f, "fs", mc->mc_fs);
     print_segment(f, "gs", mc->mc_gs);
 }
 #elif defined(__APPLE__) || defined(__MACH__)
-void dump_gprs(std::string &f, SandstoneMachineContext mc)
+static void dump_gprs_only(std::string &f, SandstoneMachineContext mc)
 {
     auto *state = &mc->__ss;
     using ThreadState = std::decay_t<decltype(*state)>;
@@ -299,13 +306,17 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, state->*(reg.ptr));
+}
+static void dump_gprs_other(std::string &f, SandstoneMachineContext mc)
+{
+    auto *state = &mc->__ss;
     print_rip(f, state->__rip);
     print_eflags(f, state->__rflags);
     print_segment(f, "fs", state->__fs);
     print_segment(f, "gs", state->__gs);
 }
 #elif defined(_WIN32)
-void dump_gprs(std::string &f, SandstoneMachineContext mc)
+static void dump_gprs_only(std::string &f, SandstoneMachineContext mc)
 {
     static constexpr struct {
         char name[4];
@@ -330,6 +341,9 @@ void dump_gprs(std::string &f, SandstoneMachineContext mc)
     };
     for (auto reg : registers)
         print_gpr(f, reg.name, mc->*(reg.ptr));
+}
+static void dump_gprs_other(std::string &f, SandstoneMachineContext mc)
+{
     print_rip(f, mc->Rip);
     print_eflags(f, mc->EFlags);
     print_segment(f, "fs", mc->SegFs);
@@ -500,18 +514,17 @@ static inline uint64_t __attribute__((target("xsave"))) do_xgetbv()
     return _xgetbv(0);
 }
 
-void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
+static XSave get_xsave_mask(const void *xsave_area, size_t xsave_size, XSave mask)
 {
     // sanity check the state
-    XSave mask = XSave(xsave_dump_mask);
     if (xsave_size < Fxsave::size)
-        return;         // too small to be FXSAVE state
+        return {};      // too small to be FXSAVE state
 
     auto state = static_cast<const Fxsave *>(xsave_area);
 
     if (xsave_size > Fxsave::size) {
         if (xsave_size < Fxsave::size + 64)
-            return;     // XSAVE extended header missing
+            return {};  // XSAVE extended header missing
 
         // get the bit vector of saved features
         uint64_t xsave_bv;
@@ -528,11 +541,20 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
         }
 
         if (xsave_bv & ~xgetbv0)
-            return;     // bit vector contains invalid bits
+            return {};  // bit vector contains invalid bits
     } else {
         // only the legacy state
         mask = XSave(mask & (XSave::X87 | XSave::SseState));
     }
+    return mask;
+}
+
+static void dump_xsave_internal(std::string &f, const void *xsave_area, size_t xsave_size, XSave mask)
+{
+    if (!mask)
+        return;
+    assert(xsave_size >= Fxsave::size);
+    auto state = static_cast<const Fxsave *>(xsave_area);
 
     if (mask & XSave::ApxState)
         print_egprs(f, state);
@@ -545,6 +567,31 @@ void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int x
 
     if (mask & XSave::AmxState)
         print_amx_state(f, state, mask);
+}
+
+void dump_gprs(std::string &out, SandstoneMachineContext mc)
+{
+    dump_gprs_only(out, mc);
+    dump_gprs_other(out, mc);
+}
+
+void dump_xsave(std::string &f, const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
+{
+    XSave mask = get_xsave_mask(xsave_area, xsave_size, XSave(xsave_dump_mask));
+    if (mask)
+        dump_xsave_internal(f, xsave_area, xsave_size, mask);
+}
+
+void dump_context(std::string &out, SandstoneMachineContext mc, const void *xsave_area,
+                  size_t xsave_size)
+{
+    // interleave output so r16-r31 EGPRs appear next to the base ones
+    dump_gprs_only(out, mc);
+    XSave mask = get_xsave_mask(xsave_area, xsave_size, XSave(-1));
+    if (mask & XSave::ApxState)
+        dump_xsave_internal(out, xsave_area, xsave_size, XSave::ApxState);
+    dump_gprs_other(out, mc);
+    dump_xsave_internal(out, xsave_area, xsave_size, XSave(mask & ~XSave::ApxState));
 }
 
 // C API

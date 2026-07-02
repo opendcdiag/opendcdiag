@@ -192,7 +192,7 @@ static LONG WINAPI handler(EXCEPTION_POINTERS *info)
 }
 
 #ifdef __x86_64__
-static void print_non_gprs(std::string &log, PCONTEXT ctx)
+static void print_context(std::string &log, PCONTEXT ctx)
 {
     // Windows doesn't store the XSAVE state in a contiguous block, so
     // we have to put it back together.
@@ -229,7 +229,7 @@ static void print_non_gprs(std::string &log, PCONTEXT ctx)
         }
     }
 
-    dump_xsave(log, xsave_area, xsave_size, -1);
+    dump_context(log, ctx, xsave_area, xsave_size);
 }
 #endif
 
@@ -368,8 +368,7 @@ void debug_crashed_child(std::span<const pid_t> children)
 
         std::string log;
 #ifdef __x86_64__
-        dump_gprs(log, &ctx->fixedContext);
-        print_non_gprs(log, &ctx->fixedContext);
+        print_context(log, &ctx->fixedContext);
 #endif
 
         if (log.size()) {
