@@ -1589,14 +1589,37 @@ function selftest_logerror_common() {
     fail_callback_common
 }
 
+function selftest_cxxthrow_common() {
+    if $is_asan; then
+        skip "Crashing tests skipped with ASAN"
+    fi
+    sandstone_selftest --on-crash=kill -e "$BATS_TEST_DESCRIPTION"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" "crash"
+    local seenmessage=false
+    for ((i = 0; i < ${yamldump[/tests/0/threads@len]}; ++i)); do
+        local cpu=${yamldump[/tests/0/threads/$i/thread]}
+        [[ "$cpu" = [0-9]* ]] || continue   # skip main thread
+        # All threads attempt to throw, but not all of them may have done so
+        if [[ -n "${yamldump[/tests/0/threads/$i/messages@len]}" ]]; then
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/level" error
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/text" 'E> Caught C\+\+ exception of type.*'
+            seenmessage=true
+        fi
+    done
+    $seenmessage
+}
 @test "selftest_cxxthrow" {
     declare -A yamldump
-    selftest_logerror_common selftest_cxxthrow 'Caught C\+\+ exception: .*'
+    selftest_cxxthrow_common
 }
-
 @test "selftest_cxxthrow_with_cb" {
     declare -A yamldump
-    selftest_logerror_common selftest_cxxthrow_with_cb 'Caught C\+\+ exception: .*'
+    # Because this is a crash, we could race between one thread doing abort() and
+    # another running the callbacks. Therefore, we run just one.
+    MAX_PROC=1
+    selftest_cxxthrow_common
     fail_callback_common
 }
 

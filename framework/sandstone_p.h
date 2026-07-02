@@ -96,6 +96,11 @@ int open_memfd(enum MemfdCloexecFlag);
 */
 void dump_device_info();
 
+static inline __attribute__((always_inline, noreturn)) void ud2()
+{
+    __builtin_trap();
+    __builtin_unreachable();
+}
 #ifdef __cplusplus
 }
 

@@ -169,12 +169,6 @@ static void merge_test_result(ChildExitStatus &current, const ChildExitStatus& i
     current.endtime = MonotonicTimePoint::clock::now();
 }
 
-static inline __attribute__((always_inline, noreturn)) void ud2()
-{
-    __builtin_trap();
-    __builtin_unreachable();
-}
-
 static void __attribute__((noreturn)) report_fail_common()
 {
     logging_mark_thread_failed(thread_num);
@@ -729,7 +723,7 @@ static uintptr_t thread_runner(int thread_number)
     random_init_thread(thread_number);
     int ret = EXIT_FAILURE;
 
-    auto cleanup = scopeExit([&] {
+    auto cleanup = [&] {
         // let SIGQUIT handler know we're done
         ThreadState new_state = thread_failed;
         if (!this_thread->has_failed()) {
@@ -753,25 +747,23 @@ static uintptr_t thread_runner(int thread_number)
         // If rescheduling, do cleanup
         if (device_scheduler)
             device_scheduler->finish_reschedule();
-    });
-
-    // indicate to SIGQUIT handler that we're running
-    this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
+    };
 
 #if SANDSTONE_DEVICE_CPU
     CPUTimeFreqStamp before;
     before.Snapshot(thread_number);
 #endif
-    test_start();
 
-    try {
+    {
+        auto e = scopeExit(std::move(cleanup));
+        // indicate to SIGQUIT handler that we're running
+        this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
+
+        test_start();
         ret = test_run_wrapper_function(current_test, thread_number);
-    } catch (std::exception &e) {
-        log_error("Caught C++ exception: \"%s\" (type '%s')", e.what(), typeid(e).name());
-        // no rethrow
-    }
 
-    cleanup.run_now();
+        // cleanup resets thread_state
+    }
 
 #if SANDSTONE_DEVICE_CPU
     CPUTimeFreqStamp after;
