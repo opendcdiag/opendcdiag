@@ -290,8 +290,9 @@ void TapFormatLogger::print_thread_header(int fd, int thread, int device, LogLev
     }
 
     const cpu_info_t *info = device_info + device;
-    std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d", thread,
-            info->cpu_number, info->package_id, info->core_id, info->thread_id);
+    std::string line = stdprintf("  Thread %d on CPU %d (pkg %d, core %d, thr %d, numa %d, module %d",
+            thread, info->cpu_number, info->package_id, info->core_id,
+            info->thread_id, info->numa_id, info->module_id);
     if (const char *type = native_device_type(info))
         line += stdprintf(", core_type: %s", type);
 
