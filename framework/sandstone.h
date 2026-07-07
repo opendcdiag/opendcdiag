@@ -153,22 +153,29 @@ typedef enum TestQuality {
 #define EXIT_SKIP               -255
 
 /// force the alignment so the compiler won't try to (un)helpfully overalign it.
-#define DECLARE_TEST_INNER2(test_id, test_id_str, test_short_id, test_description)  \
+#define DECLARE_TEST_SECTION(test_id, test_short_id) \
     __attribute__((alias("_test_" SANDSTONE_STRINGIFY(test_id)))) extern struct test _testid_ ## test_short_id; \
-    __attribute__((aligned(alignof(struct test)), used, section(SANDSTONE_SECTION_PREFIX "tests"))) \
+    __attribute__((aligned(alignof(struct test)), used, section(SANDSTONE_SECTION_PREFIX "tests")))
+
+#define DECLARE_TEST_STRUCT(test_id, test_id_str, test_short_id, test_description) \
     struct test _test_ ## test_id = {                                   \
         .compiler_minimum_device = device_compiler_features,            \
         .shortid = 0x ## test_short_id,                                 \
         .id = SANDSTONE_STRINGIFY(test_id_str),                         \
         .description = test_description,
+
 #if SANDSTONE_NO_TEST_NAMES
 #  define DECLARE_TEST_INNER(test_id, test_short_id, test_description)  \
-    DECLARE_TEST_INNER2(test_id, test_short_id, test_short_id, NULL)
+    DECLARE_TEST_STRUCT(test_id, test_short_id, test_short_id, NULL)
 #else
 #  define DECLARE_TEST_INNER(test_id, test_short_id, test_description)  \
-    DECLARE_TEST_INNER2(test_id, test_id, test_short_id, test_description)
+    DECLARE_TEST_STRUCT(test_id, test_id, test_short_id, test_description)
 #endif
 #define DECLARE_TEST(test_id, test_description)                         \
+    DECLARE_TEST_SECTION(test_id, TEST_ID_ ## test_id)                  \
+    DECLARE_TEST_INNER(test_id, TEST_ID_ ## test_id, test_description)
+
+#define DECLARE_MANUAL_TEST(test_id, test_description)                  \
     DECLARE_TEST_INNER(test_id, TEST_ID_ ## test_id, test_description)
 
 #define DECLARE_TEST_GROUPS(...)                                      \

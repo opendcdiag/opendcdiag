@@ -327,7 +327,7 @@ static bool shouldTestTheTest(const struct test *the_test)
     if (!sApp->test_tests_enabled())
         return false;
     if constexpr (InterruptMonitor::InterruptMonitorWorks)
-        if (the_test == &mce_test)
+        if (the_test == &_test_mce_check)
             return false;
 
     // check some flags in the_test
