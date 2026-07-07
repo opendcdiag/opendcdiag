@@ -33,7 +33,7 @@ void SandstoneTestSet::load_all_tests()
 
     /* add "special" tests */
     special_tests = special_tests_for_device();
-    special_tests.push_back(&mce_test); // mce always added last
+    special_tests.push_back(&_test_mce_check); // mce always added last
 }
 
 /* Looks up a name or a pattern among all "known" tests. Returns all the

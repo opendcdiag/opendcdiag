@@ -25,7 +25,7 @@ extern "C" {
 extern struct test __start_tests;
 extern struct test __stop_tests;
 
-extern struct test mce_test;
+extern struct test _test_mce_check;
 
 struct test_set_cfg {
     bool ignore_unknown_tests;  /* whether an error should be reported if

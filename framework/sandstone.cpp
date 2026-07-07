@@ -1141,7 +1141,7 @@ int main(int argc, char **argv)
     /* Add device-specific monitoring tests to the set. They will be kept last by
      * SandstoneTestSet in case randomization is requested. */
     for (auto special_test : test_set->get_special_tests()) {
-        if (special_test != &mce_test || (special_test == &mce_test && !sApp->ignore_mce_errors))
+        if (special_test != &_test_mce_check || (special_test == &_test_mce_check && !sApp->ignore_mce_errors))
             test_set->add(special_test);
     }
 
@@ -1158,12 +1158,12 @@ int main(int argc, char **argv)
             sApp->shmem->cfg.verbosity = LOG_LEVEL_VERBOSE(1);
     }
 
-    if (InterruptMonitor::InterruptMonitorWorks && test_set->contains(&mce_test)) {
+    if (InterruptMonitor::InterruptMonitorWorks && test_set->contains(&_test_mce_check)) {
         if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::exec_each_test) {
-            test_set->remove(&mce_test);
+            test_set->remove(&_test_mce_check);
         } else if (InterruptMonitor::get_mce_interrupt_counts().empty()) {
             logging_printf(LOG_LEVEL_QUIET, "# WARNING: Cannot detect MCE events - you may be running in a VM - MCE checking disabled\n");
-            test_set->remove(&mce_test);
+            test_set->remove(&_test_mce_check);
         }
     }
 
