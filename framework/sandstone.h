@@ -350,6 +350,10 @@ struct kvm_config;
 typedef struct kvm_config kvm_config_t;
 typedef const kvm_config_t *(*kvmconfigfunc)(void);
 
+#if SANDSTONE_DEVICE_IDXD
+struct idxd_config_t;
+#endif
+
 struct test {
     /* metadata */
     /// filled in by the DECLARE_TEST macro
@@ -411,6 +415,12 @@ struct test {
 
     /// flags for this test. See enum for possible values
     test_flags flags;
+
+#if SANDSTONE_DEVICE_IDXD
+    /// IDXD configuration required for the test. Can be nullptr if any configuration suffices.
+    /// It should be defined at the stage of test declaration and is applied in prepare_test_for_device().
+    struct idxd_config_t* idxd_config;
+#endif
 
     /* private fields for test use only */
 
