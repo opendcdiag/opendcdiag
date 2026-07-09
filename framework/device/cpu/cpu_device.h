@@ -170,8 +170,8 @@ struct cpu_info_t
     int16_t core_id;
     /// Module ID inside of a package, -1 if not known.
     int16_t module_id;
-    /// Tile ID inside of a package, -1 if not known. May combine with the die ID.
-    int16_t tile_id;
+    /// Die ID inside of a package, -1 if not known.
+    int16_t die_id;
     /// The core type, if known. See enum definition.
     NativeCoreType native_core_type;
     /// NUMA node ID in the system, -1 if not known.

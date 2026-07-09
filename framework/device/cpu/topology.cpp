@@ -68,8 +68,8 @@ private:
         Die = 5,
         DieGrp = 6,
     };
-    // we only want up to Tile
-    static constexpr Domain Package = Domain(Domain::Tile + 1);
+    // we only want up to Die
+    static constexpr Domain Package = Domain(Domain::Die + 1);
 
     bool is_hybrid = false;
     int8_t topology_leaf = -1;
@@ -361,7 +361,7 @@ static bool cpu_compare(const cpu_info_t &cpu1, const cpu_info_t &cpu2)
     static_assert(offsetof(cpu_info_t, cpu_number) + 14 == offsetof(cpu_info_t, package_id));
     static_assert(offsetof(cpu_info_t, cpu_number) + 12 == offsetof(cpu_info_t, numa_id));
     static_assert(offsetof(cpu_info_t, cpu_number) + 11 == offsetof(cpu_info_t, native_core_type));
-    static_assert(offsetof(cpu_info_t, cpu_number) + 9 == offsetof(cpu_info_t, tile_id));
+    static_assert(offsetof(cpu_info_t, cpu_number) + 9 == offsetof(cpu_info_t, die_id));
     static_assert(offsetof(cpu_info_t, cpu_number) + 7 == offsetof(cpu_info_t, module_id));
     static_assert(offsetof(cpu_info_t, cpu_number) + 5 == offsetof(cpu_info_t, core_id));
     static_assert(offsetof(cpu_info_t, cpu_number) + 4 == offsetof(cpu_info_t, thread_id));
@@ -462,7 +462,7 @@ bool TopologyDetector::create_mock_topology(const char *topo)
         ++cpu_count;
 
         info->package_id = info->core_id = info->thread_id = 0;
-        info->numa_id = info->module_id = info->tile_id = -1;
+        info->numa_id = info->module_id = info->die_id = -1;
         info->native_core_type = core_type_unknown;
 
         // mock cache too (8 kB L1, 32 kB L2, 256 kB L3)
@@ -726,6 +726,12 @@ bool TopologyDetector::detect_topology_via_os(Topology::Thread *info, int cpufd)
         info->module_id = info->core_id;
     }
 
+    f = fopenat(cpufd, "topology/die_id");
+    if (f) {
+        IGNORE_RETVAL(fscanf(f, "%hd", &info->die_id));
+        fclose(f);
+    }
+
     f = fopenat(cpufd, "topology/thread_siblings_list");
     if (!f)
         return false;
@@ -853,6 +859,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
     unsigned char *end = ptr + length;
 
     int pkg_id = 0;
+    int die_id = 0;
     int module_id = 0;
     int core_id = 0;
     for ( ; ptr < end; ptr += lpi->Size) {
@@ -865,8 +872,18 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
                              }
                 );
             ++pkg_id;
+            die_id = 0;
             module_id = 0;
             core_id = 0;
+            break;
+
+        case RelationProcessorDie:
+            for_each_proc_in(lpi->Processor.GroupCount, lpi->Processor.GroupMask,
+                             [&](cpu_info_t *info) {
+                                 info->die_id = die_id;
+                             }
+                 );
+            ++die_id;
             break;
 
         case RelationProcessorModule:
@@ -1106,11 +1123,11 @@ bool TopologyDetector::setup_cpuid_detection()
         case Domain::Logical:
         case Domain::Core:
         case Domain::Module:
-        case Domain::Tile:
+        case Domain::Die:
             width(domain) = a;
             break;
 
-        case Domain::Die:
+        case Domain::Tile:
         case Domain::DieGrp:
             // ignore
             break;
@@ -1175,9 +1192,9 @@ bool TopologyDetector::detect_topology_via_cpuid(Topology::Thread *info)
         // if neither CPUID nor cache provide module information, we assume module == core
         info->module_id = info->core_id;
     }
-    if (width(Domain::Tile)) {
-        info->tile_id = extract(next, width(Package));
-        next = width(Domain::Tile);
+    if (width(Domain::Die)) {
+        info->die_id = extract(next, width(Package));
+        next = width(Domain::Die);
     }
 
     return true;
@@ -1525,7 +1542,7 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
         // -1 to indicate unknown yet
         info->package_id = -1;
         info->numa_id = -1;
-        info->tile_id = -1;
+        info->die_id = -1;
         info->module_id = -1;
         info->core_id = -1;
         info->thread_id = -1;
