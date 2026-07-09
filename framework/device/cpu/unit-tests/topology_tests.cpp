@@ -24,7 +24,7 @@ std::vector<cpu_info_t> make_cpu_info_entries()
         cpu_info[i].thread_id = 0;
         cpu_info[i].core_id = i;
         cpu_info[i].module_id = i;
-        cpu_info[i].tile_id = -1;
+        cpu_info[i].die_id = -1;
         cpu_info[i].native_core_type = core_type_performance;
         cpu_info[i].package_id = 0;
         cpu_info[i].numa_id = (i < 8) ? 0 : 1;

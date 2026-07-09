@@ -407,8 +407,8 @@ static std::string full_cpu_info(LogicalProcessor lp, LogLevelVerbosity verbosit
 
     if (info) {
         line += stdprintf(", package: %d, numa_node: %d, ", info->package_id, info->numa_id);
-        if (info->tile_id >= 0)
-            line += stdprintf("tile: %d, ", info->tile_id);
+        if (info->die_id >= 0)
+            line += stdprintf("die: %d, ", info->die_id);
         line += stdprintf("module: %*d, core: %*d, thread: %d",
                           thread_core_spacing().core, info->module_id,
                           thread_core_spacing().core, info->core_id, info->thread_id);
