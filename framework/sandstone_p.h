@@ -662,7 +662,7 @@ uint32_t random_seed_low32();
 /* sandstone.cpp */
 TestResult run_one_test(int *tc, const struct test *test, PerThreadFailures &per_thread_fails);
 TestResult prepare_test_for_device(struct test* test);
-void finish_test_for_device(struct test* test);
+TestResult finish_test_for_device(struct test* test);
 int cleanup_global(int exit_code, PerThreadFailures per_thread_failures);
 bool wallclock_deadline_has_expired(MonotonicTimePoint deadline);
 ShortDuration test_timeout(ShortDuration regular_duration);
