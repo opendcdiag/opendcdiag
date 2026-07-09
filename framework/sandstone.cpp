@@ -1042,6 +1042,16 @@ int main(int argc, char **argv)
         }
     }
 
+#if SANDSTONE_DEVICE_IDXD
+        // TODO: it's possible to apply config even when running with --help/version.
+        // It's a consequence of pre-existing detect/setup_devices happening before taking opts.action.
+        if (opts.idxd_default_config) {
+            if (int ret = apply_global_idxd_config()) {
+                return ret;
+            }
+        }
+#endif
+
     if (!opts.deviceset.empty() && any_device) {
         for (auto& d : opts.deviceset) {
             apply_deviceset_param(d);
