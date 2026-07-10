@@ -54,7 +54,7 @@ properties:
     properties:
       fullsocket:
         $ref: '#/$defs/test-plan-entry'
-      isolate_numa:
+      core_groups:
         $ref: '#/$defs/test-plan-entry'
       heuristic:
         $ref: '#/$defs/test-plan-entry'

@@ -2336,7 +2336,7 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                        thread_id_header_for_device(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
     }
 
-    auto make_plan_string = [](const SlicePlans::Slices &plan) {
+    auto print_plan = [](const char *name, const SlicePlans::Slices &plan) {
         std::string result;
         for (SlicePlans::Slice s : plan) {
             if (result.size())
@@ -2353,18 +2353,18 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
             result += std::to_string(s.thread_range.thread_count);
             result += " }";
         }
-        return result;
+        logging_printf(LOG_LEVEL_VERBOSE(1), "  %s: [ %s ]\n", name, result.c_str());
     };
     const SlicePlans::Slices &fullsocket = sApp->slice_plans.plans[SlicePlans::IsolateSockets];
-    const SlicePlans::Slices &isolatenuma = sApp->slice_plans.plans[SlicePlans::IsolateNuma];
     const SlicePlans::Slices &heuristic = sApp->slice_plans.plans[SlicePlans::Heuristic];
     logging_printf(LOG_LEVEL_VERBOSE(1), "test-plans:\n");
-    logging_printf(LOG_LEVEL_VERBOSE(1), "  fullsocket: [ %s ]\n",
-                   make_plan_string(fullsocket).c_str());
-    logging_printf(LOG_LEVEL_VERBOSE(1), "  isolate_numa: [ %s ]\n",
-                   make_plan_string(isolatenuma).c_str());
-    logging_printf(LOG_LEVEL_VERBOSE(1), "  heuristic: [ %s ]\n",
-                   make_plan_string(heuristic).c_str());
+    print_plan("fullsocket", fullsocket);
+#ifdef SANDSTONE_DEVICE_CPU
+    print_plan("core_groups", sApp->slice_plans.plans[SlicePlans::IsolateCoreGroup]);
+#elif defined(SANDSTONE_DEVICE_GPU)
+    print_plan("isolate_numa", sApp->slice_plans.plans[SlicePlans::IsolateNuma]);
+#endif
+    print_plan("heuristic", heuristic);
 }
 
 void YamlLogger::print_tests_header(TestHeaderTime mode)

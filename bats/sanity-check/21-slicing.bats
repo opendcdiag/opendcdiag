@@ -130,7 +130,7 @@ function cpuset_unique_modules() {
 
     # did we see different NUMA domains?
     local domains=(`query_jq -r '[ ."cpu-info"[].numa_node ] | unique | .[]'`)
-    test_yaml_numeric "/test-plans/isolate_numa@len" "value == ${#domains[@]}"
+    test_yaml_numeric "/test-plans/core_groups@len" "value == ${#domains[@]}"
 
     if [[ "${#domains[@]}" == 1 ]]; then
         skip "Test only works with Debug builds (to mock the topology) or in systems with different NUMA domains"
@@ -140,8 +140,8 @@ function cpuset_unique_modules() {
     for ((i = 0, idx = 0; i < ${#domains[@]}; ++i)); do
         local d=${domains[$i]}
         local cpucount=`query_jq -r '[ ."cpu-info"[] | select(.numa_node == '$d') ] | length'`
-        test_yaml_numeric "/test-plans/isolate_numa/$i/starting_cpu" "value == $idx"
-        test_yaml_numeric "/test-plans/isolate_numa/$i/count" "value == $cpucount"
+        test_yaml_numeric "/test-plans/core_groups/$i/starting_cpu" "value == $idx"
+        test_yaml_numeric "/test-plans/core_groups/$i/count" "value == $cpucount"
         idx=$((idx + cpucount))
     done
 }
@@ -203,8 +203,8 @@ function cpuset_unique_modules() {
                          '[."cpu-info"[] | select(.core_type == $c and .numa_node == $n)] | length'`
             echo "$core_type-core CPUs in NUMA node $node:" "$count"
 
-            test_yaml_expr "/test-plans/isolate_numa/$slice/starting_cpu" = $starting_cpu
-            test_yaml_expr "/test-plans/isolate_numa/$slice/count" = $count
+            test_yaml_expr "/test-plans/core_groups/$slice/starting_cpu" = $starting_cpu
+            test_yaml_expr "/test-plans/core_groups/$slice/count" = $count
             test_yaml_expr "/test-plans/heuristic/$slice/starting_cpu" = $starting_cpu
             test_yaml_expr "/test-plans/heuristic/$slice/count" = $count
 
@@ -214,7 +214,7 @@ function cpuset_unique_modules() {
     done
 
     # Confirm we've reviewed all CPUs and plans
-    test_yaml_expr "/test-plans/isolate_numa@len" = $slice
+    test_yaml_expr "/test-plans/core_groups@len" = $slice
     test_yaml_expr "/test-plans/heuristic@len" = $slice
     test_yaml_expr "/test-plans/fullsocket/0/count" = $starting_cpu
 }

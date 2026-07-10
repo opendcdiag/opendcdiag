@@ -1413,8 +1413,13 @@ static int slices_for_test(const struct test *test)
         case test_schedule_isolate_socket:
             return SlicePlans::IsolateSockets;
 
+#ifdef SANDSTONE_DEVICE_CPU
+        case test_schedule_isolate_coregroup:
+            return SlicePlans::IsolateCoreGroup;
+#elif defined(SANDSTONE_DEVICE_GPU)
         case test_schedule_isolate_numa_domain:
             return SlicePlans::IsolateNuma;
+#endif
 
         case test_schedule_default:
             break;

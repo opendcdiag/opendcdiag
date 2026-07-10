@@ -279,11 +279,19 @@ typedef enum test_flag {
     /// system, with all cores.
     test_schedule_isolate_socket    = 3,
 
+#ifdef SANDSTONE_DEVICE_CPU
+    /// Asks the framework to run one child process per core group in each
+    /// socket in the system. Core groups can be:
+    /// - NUMA domains
+    /// - core types (efficiency/performance)
+    test_schedule_isolate_coregroup = 4,
+    test_schedule_isolate_numa_domain [[deprecated("use test_schedule_isolate_coregroup")]]
+        = test_schedule_isolate_coregroup,
+#elif defined(SANDSTONE_DEVICE_GPU)
     /// Asks the framework to run one child process per NUMA domain in each
-    /// socket in the system, with all cores. Note: on hybrid systems with
-    /// different core types, each core type is considered a different "NUMA"
-    /// domain.
+    /// socket in the system, with all devices.
     test_schedule_isolate_numa_domain = 4,
+#endif
 
     test_schedule_mask              = 0x0f,
 

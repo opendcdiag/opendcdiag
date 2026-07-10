@@ -52,7 +52,7 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
 
         // set up proper plans
         auto &isolate_socket = plans[SlicePlans::IsolateSockets];
-        auto &isolate_numa = plans[SlicePlans::IsolateNuma];
+        auto &isolate_coregroup = plans[SlicePlans::IsolateCoreGroup];
         auto &split = plans[SlicePlans::Heuristic];
         auto push_to = [](SlicePlans::Slices &to, auto start, auto end) {
             int start_cpu = start[0].threads.front().cpu();
@@ -67,12 +67,12 @@ void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_pe
 
             push_to(isolate_socket, p.cores.begin(), p.cores.end());
 
-            // if we have to split, we'll try to split along NUMA node lines
-            for (const Topology::NumaNode &n : p.numa_domains) {
+            // if we have to split, we'll try to split along the group lines (whatever they are)
+            for (const Topology::CoreGrouping &n : p.groups) {
                 if (n.cores.size() == 0)
                     continue;   // untested node (shouldn't happen!)
 
-                push_to(isolate_numa, n.cores.begin(), n.cores.end());
+                push_to(isolate_coregroup, n.cores.begin(), n.cores.end());
 
                 auto begin = n.cores.begin();
                 const auto end = n.cores.end();

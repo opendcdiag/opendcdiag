@@ -1650,11 +1650,11 @@ static Topology build_topology()
             }
 
             // We consider different core types in a heterogeneous system to be a
-            // different "NUMA" nodes.
+            // different core groups
             if (info->numa_id != groupfirst->numa_id
                     || info->native_core_type != groupfirst->native_core_type) {
                 // start of a new NUMA or "NUMA" node inside of this Package
-                populate_core_group(&pkg->numa_domains.emplace_back(), groupfirst, info);
+                populate_core_group(&pkg->groups.emplace_back(), groupfirst, info);
                 groupfirst = info;
             }
         }
@@ -1663,12 +1663,12 @@ static Topology build_topology()
         pkg->cores.reserve(core_count + 1);
         populate_core_group(pkg, first, info);
 
-        // populate the last NUMA node/core type group, which may be the only one too
-        Topology::NumaNode *numa = &pkg->numa_domains.emplace_back();
-        if (pkg->numa_domains.size() == 1)
-            numa->CoreGrouping::operator=(*pkg);    // just copy the Package
+        // populate the last core group, which may be the only one too
+        Topology::CoreGrouping *lastgroup = &pkg->groups.emplace_back();
+        if (pkg->groups.size() == 1)
+            lastgroup->CoreGrouping::operator=(*pkg);    // just copy the Package
         else
-            populate_core_group(numa, groupfirst, info);
+            populate_core_group(lastgroup, groupfirst, info);
     }
 
     return Topology(std::move(packages));
