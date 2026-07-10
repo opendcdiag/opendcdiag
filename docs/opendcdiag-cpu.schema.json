@@ -176,6 +176,9 @@
         "numa_node": {
           "type": "integer"
         },
+        "die": {
+          "type": "integer"
+        },
         "module": {
           "type": "integer"
         },

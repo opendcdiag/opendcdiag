@@ -283,6 +283,7 @@ typedef enum test_flag {
     /// Asks the framework to run one child process per core group in each
     /// socket in the system. Core groups can be:
     /// - NUMA domains
+    /// - CPU dies or die groups
     /// - core types (efficiency/performance)
     test_schedule_isolate_coregroup = 4,
     test_schedule_isolate_numa_domain [[deprecated("use test_schedule_isolate_coregroup")]]

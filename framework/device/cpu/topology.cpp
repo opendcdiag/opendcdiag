@@ -483,6 +483,9 @@ bool TopologyDetector::create_mock_topology(const char *topo)
             case 'n':
                 parse_int_and_advance(&info->numa_id);
                 break;
+            case 'd':
+                parse_int_and_advance(&info->die_id);
+                break;
             case 'm':
                 parse_int_and_advance(&info->module_id);
                 break;
@@ -1649,11 +1652,12 @@ static Topology build_topology()
                 last_core_id = info->core_id;
             }
 
-            // We consider different core types in a heterogeneous system to be a
-            // different core groups
-            if (info->numa_id != groupfirst->numa_id
-                    || info->native_core_type != groupfirst->native_core_type) {
-                // start of a new NUMA or "NUMA" node inside of this Package
+            bool is_new_group = info->numa_id != groupfirst->numa_id;
+            if (!is_new_group)
+                is_new_group = info->die_id != groupfirst->die_id;
+            if (!is_new_group)
+                is_new_group = info->native_core_type != groupfirst->native_core_type;
+            if (is_new_group) {
                 populate_core_group(&pkg->groups.emplace_back(), groupfirst, info);
                 groupfirst = info;
             }
