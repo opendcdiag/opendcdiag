@@ -2229,13 +2229,20 @@ check_thread_ratio_plans() {
     local expected=$(thread_ratio_expected_threads "$fs_count" "$ratio")
     test_yaml_numeric "/test-plans/fullsocket/0/threads" "value == $expected"
 
-    # isolate_numa slices
-    local slice_count=${yamldump[/test-plans/isolate_numa@len]}
-    for ((i = 0; i < slice_count; i++)); do
-        local count=${yamldump[/test-plans/isolate_numa/$i/count]}
-        expected=$(thread_ratio_expected_threads "$count" "$ratio")
-        test_yaml_numeric "/test-plans/isolate_numa/$i/threads" "value == $expected"
-    done
+    local next_plan=
+    if [[ "$SANDSTONE_DEVICE_TYPE" == "CPU" ]]; then
+        next_plan=core_groups
+    elif [[ "$SANDSTONE_DEVICE_TYPE" == "GPU" ]]; then
+        next_plan=isolate_numa
+    fi
+    if [[ -n "$next_plan" ]]; then
+        local slice_count=${yamldump[/test-plans/$next_plan@len]}
+        for ((i = 0; i < slice_count; i++)); do
+            local count=${yamldump[/test-plans/$next_plan/$i/count]}
+            expected=$(thread_ratio_expected_threads "$count" "$ratio")
+            test_yaml_numeric "/test-plans/$next_plan/$i/threads" "value == $expected"
+        done
+    fi
 
     # heuristic slices
     slice_count=${yamldump[/test-plans/heuristic@len]}

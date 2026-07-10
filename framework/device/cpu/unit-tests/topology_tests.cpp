@@ -47,13 +47,13 @@ Topology make_two_numa_topology()
         package.cores.push_back(make_core(&device_info[i]));
     }
 
-    Topology::NumaNode numa0;
+    Topology::CoreGrouping numa0;
     numa0.cores.insert(numa0.cores.end(), package.cores.begin(), package.cores.begin() + 8);
-    package.numa_domains.push_back(std::move(numa0));
+    package.groups.push_back(std::move(numa0));
 
-    Topology::NumaNode numa1;
+    Topology::CoreGrouping numa1;
     numa1.cores.insert(numa1.cores.end(), package.cores.begin() + 8, package.cores.end());
-    package.numa_domains.push_back(std::move(numa1));
+    package.groups.push_back(std::move(numa1));
 
     topo.packages.push_back(std::move(package));
     return topo;
@@ -86,7 +86,7 @@ TEST(Topology, SlicePlansCreationMax3)
     expect_plan(plans.plans[SlicePlans::IsolateSockets], {
         { 0, 16 },
     });
-    expect_plan(plans.plans[SlicePlans::IsolateNuma], {
+    expect_plan(plans.plans[SlicePlans::IsolateCoreGroup], {
         { 0, 8 }, { 8, 8 },
     });
     expect_plan(plans.plans[SlicePlans::Heuristic], {

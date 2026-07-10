@@ -6,6 +6,7 @@
 #ifndef INC_TOPOLOGY_H
 #define INC_TOPOLOGY_H
 
+#include <sandstone_config.h>
 #include "test_data.h"
 
 #include <bit>
@@ -225,7 +226,11 @@ struct SlicePlans
     {
         FullSystem = -1,
         IsolateSockets,
+#ifdef SANDSTONE_DEVICE_CPU
+        IsolateCoreGroup,
+#elif defined(SANDSTONE_DEVICE_GPU)
         IsolateNuma,
+#endif
         Heuristic,
     };
     struct Slice {

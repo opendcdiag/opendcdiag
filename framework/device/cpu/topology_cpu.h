@@ -39,19 +39,10 @@ public:
         // std::vector<Module> modules;
     };
 
-    struct NumaNode : CoreGrouping
-    {
-        int id() const
-        {
-            return cores.size() ? cores.front().threads.front().numa_id : -1;
-        }
-    };
-
     struct Package : CoreGrouping
     {
-        // We consider different core types in a heterogeneous system to be a
-        // different "NUMA" nodes.
-        std::vector<NumaNode> numa_domains;
+        // any grouping inside of a package (see build_topology() for rules)
+        std::vector<CoreGrouping> groups;
         int id() const
         {
             return cores.size() ? cores.front().threads.front().package_id : -1;
