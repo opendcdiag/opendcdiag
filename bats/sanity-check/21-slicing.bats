@@ -130,16 +130,50 @@ function cpuset_unique_modules() {
 
     # did we see different NUMA domains?
     local domains=(`query_jq -r '[ ."cpu-info"[].numa_node ] | unique | .[]'`)
-    test_yaml_numeric "/test-plans/core_groups@len" "value == ${#domains[@]}"
-
-    if [[ "${#domains[@]}" == 1 ]]; then
-        skip "Test only works with Debug builds (to mock the topology) or in systems with different NUMA domains"
+    local dies=`query_jq -r '[ ."cpu-info"[].die ] | unique | length'`
+    local core_types=`query_jq -r '[ ."cpu-info"[].core_type ] | unique | length'`
+    if [[ "${#domains[@]}" = 1 ]] || (( dies * core_types != 1 )); then
+        skip "Test only works with Debug builds (to mock the topology) or in systems with different NUMA domains and a single die"
     fi
+    test_yaml_numeric "/test-plans/core_groups@len" "value == ${#domains[@]}"
 
     local i idx
     for ((i = 0, idx = 0; i < ${#domains[@]}; ++i)); do
         local d=${domains[$i]}
         local cpucount=`query_jq -r '[ ."cpu-info"[] | select(.numa_node == '$d') ] | length'`
+        test_yaml_numeric "/test-plans/core_groups/$i/starting_cpu" "value == $idx"
+        test_yaml_numeric "/test-plans/core_groups/$i/count" "value == $cpucount"
+        idx=$((idx + cpucount))
+    done
+}
+
+@test "slicing CPU dies" {
+    declare -A yamldump
+
+    # attempt to run on one socket with multiple CPU dies (same NUMA node)
+    MAX_PROC=`nproc`
+    if (( `nproc` >= 8 )); then
+        export SANDSTONE_MOCK_TOPOLOGY='d0c0 d0c1 d0c2 d0c3 d1c64 d1c65 d1c66 d1c67'
+    elif (( MAX_PROC >= 4 )); then
+        export SANDSTONE_MOCK_TOPOLOGY='d0c0 d0c1 d1c64 d1c65'
+    else
+        skip "Test needs at least 4 different CPUs to test"
+    fi
+    sandstone_yq --cpuset=p0 --disable=\* --max-cores-per-slice=$MAX_PROC
+
+    # did we see different CPU dies?
+    local domains=`query_jq -r '[ ."cpu-info"[].numa_node ] | unique | length'`
+    local dies=(`query_jq -r '[ ."cpu-info"[].die ] | unique | .[]'`)
+    local core_types=`query_jq -r '[ ."cpu-info"[].core_type ] | unique | length'`
+    if [[ "${#dies[@]}" = 1 ]] || (( domains * core_types != 1 )); then
+        skip "Test only works with Debug builds (to mock the topology) or in systems with multiple CPU dies in a single NUMA domain"
+    fi
+
+    test_yaml_numeric "/test-plans/core_groups@len" "value == ${#dies[@]}"
+    local i idx
+    for ((i = 0, idx = 0; i < ${#dies[@]}; ++i)); do
+        local d=${dies[$i]}
+        local cpucount=`query_jq -r '[ ."cpu-info"[] | select(.die == '$d') ] | length'`
         test_yaml_numeric "/test-plans/core_groups/$i/starting_cpu" "value == $idx"
         test_yaml_numeric "/test-plans/core_groups/$i/count" "value == $cpucount"
         idx=$((idx + cpucount))
@@ -189,6 +223,12 @@ function cpuset_unique_modules() {
     echo "Found core types:" ${core_types[@]}
     if [[ ${#core_types[@]} -eq 0 ]]; then
         skip "Test only works with Debug builds (to mock the topology) or on systems reporting core type"
+    fi
+
+    local domains=`query_jq -r '[ ."cpu-info"[].numa_node ] | unique | length'`
+    local dies=`query_jq -r '[ ."cpu-info"[].die ] | unique | length'`
+    if (( domains * dies != 1 )); then
+        skip "Test only works with Debug builds (to mock the topology) or on systems with a single die and NUMA domain"
     fi
 
     local starting_cpu=0 slice=0
