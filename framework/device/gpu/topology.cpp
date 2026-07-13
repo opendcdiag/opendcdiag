@@ -533,7 +533,7 @@ void setup_devices<GpusSet>(const GpusSet &enabled_devices)
 
     auto enabled_cpus = ambient_logical_processor_set().to_vector();
     if (enabled_cpus.size() < enabled_devices.size()) {
-        fprintf(stderr, "%s: error: not enough CPUs available (%ld CPUs vs %ld GPUs)\n",
+        fprintf(stderr, "%s: error: not enough CPUs available (%zu CPUs vs %zu GPUs)\n",
                 program_invocation_name, enabled_cpus.size(), enabled_devices.size());
         exit(EX_USAGE);
     }
