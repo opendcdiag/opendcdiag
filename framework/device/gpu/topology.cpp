@@ -340,21 +340,6 @@ GpusSet detect_devices<GpusSet>()
 }
 
 namespace {
-/// Processes 'sparse' LogicalProcessorSet and returns a vector of enabled logical cpus.
-std::vector<int> to_vector(const LogicalProcessorSet& set)
-{
-    std::vector<int> res;
-
-    [[maybe_unused]] int i = 0;
-    for (LogicalProcessor lp = set.next(); lp != LogicalProcessor::None; ++i) {
-        auto& next_cpu = res.emplace_back(std::to_underlying(lp));
-        lp = set.next(LogicalProcessor(next_cpu + 1));
-    }
-    assert(i == set.count());
-
-    return res;
-}
-
 /// Reads affinity for given PCI device and constructs a vector of all local logical cpus.
 std::vector<int> find_numa_local_cpus(const ze_pci_address_ext_t& bdf)
 {
@@ -546,7 +531,7 @@ void setup_devices<GpusSet>(const GpusSet &enabled_devices)
     gpu_info_t* info = device_info;
     [[maybe_unused]] const gpu_info_t* cend = device_info + device_count();
 
-    auto enabled_cpus = to_vector(ambient_logical_processor_set());
+    auto enabled_cpus = ambient_logical_processor_set().to_vector();
     if (enabled_cpus.size() < enabled_devices.size()) {
         fprintf(stderr, "%s: error: not enough CPUs available (%ld CPUs vs %ld GPUs)\n",
                 program_invocation_name, enabled_cpus.size(), enabled_devices.size());
