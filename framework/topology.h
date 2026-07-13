@@ -13,6 +13,7 @@
 #include <limits>
 #include <span>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -168,6 +169,23 @@ public:
 
         if (it != std::end(array))
             std::fill(it, std::end(array), 0);      // clear to the end
+    }
+
+    // Processes 'sparse' LogicalProcessorSet and returns a vector of processors.
+    std::vector<int> to_vector() const
+    {
+        const int expected = count();
+        std::vector<int> res;
+        res.reserve(expected);
+
+        for (LogicalProcessor lp = next(); lp != LogicalProcessor::None; ) {
+            const int next_cpu = std::to_underlying(lp);
+            res.emplace_back(next_cpu);
+            lp = next(LogicalProcessor(next_cpu + 1));
+        }
+        assert(int(res.size()) == count());
+
+        return res;
     }
 
 private:
