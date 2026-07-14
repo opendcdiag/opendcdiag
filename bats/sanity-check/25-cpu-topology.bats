@@ -129,6 +129,41 @@ test_fail_socket1() {
     ); done
 }
 
+@test "cache-info" {
+    declare -A yamldump
+    run_sandstone_yaml --disable=\*
+
+    # cache-info must be present
+    test_yaml_expr "/cache-info" != None
+
+    # Validate whichever cache levels were reported. We don't assume any
+    # particular sizes (unknown target machine), only that the structure is
+    # present and the reported sizes are non-zero.
+    local level
+    for level in L1 L2 L3; do
+        [[ -n "${yamldump[/cache-info/$level]:+1}" ]] || continue
+
+        if [[ -n "${yamldump[/cache-info/$level/size/unified]:+1}" ]]; then
+            test_yaml_numeric "/cache-info/$level/size/unified" "value > 0"
+        else
+            test_yaml_numeric "/cache-info/$level/size/instruction" "value > 0"
+            test_yaml_numeric "/cache-info/$level/size/data" "value > 0"
+        fi
+    done
+
+    # The last level must break down into one or more instances, each with a
+    # non-zero size, a valid starting CPU and a non-zero thread count.
+    if [[ -n "${yamldump[/cache-info/L3]:+1}" ]]; then
+        test_yaml_numeric "/cache-info/L3/breakdown@len" "value >= 1"
+        local i
+        for ((i=0; i < ${yamldump[/cache-info/L3/breakdown@len]}; ++i)); do
+            test_yaml_numeric "/cache-info/L3/breakdown/$i/size" "value > 0"
+            test_yaml_numeric "/cache-info/L3/breakdown/$i/starting_cpu" "value >= 0"
+            test_yaml_numeric "/cache-info/L3/breakdown/$i/count" "value > 0"
+        done
+    fi
+}
+
 @test "NUMA node parsing when first block skipped" {
     declare -A yamldump
     if ! [[ /sys/devices/system/node ]]; then
