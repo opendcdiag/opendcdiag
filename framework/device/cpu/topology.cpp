@@ -469,6 +469,7 @@ bool TopologyDetector::create_mock_topology(const char *topo)
         info->cache[0] = { 0x2000, 0x2000 };
         info->cache[1] = { 0x8000, 0x8000 };
         info->cache[2] = { 0x40000, 0x40000 };
+        info->cache[2].is_unified = true;
 
         char c = topo[0] | 0x20;  // lowercased (if a letter); numbers unchanged
         // parse the different fields of the topology
@@ -581,13 +582,13 @@ bool TopologyDetector::detect_cache_via_os(Topology::Thread *info, int cpufd)
             IGNORE_RETVAL(fscanf(f, "%255s", buf));
             fclose(f);
 
-            if (strcmp(buf, "Instruction") == 0)
+            bool is_instruction = strcmp(buf, "Instruction") == 0;
+            bool is_data = strcmp(buf, "Data") == 0;
+            info->cache[level - 1].is_unified = !is_instruction && !is_data;
+            if (!is_data)
                 info->cache[level - 1].cache_instruction = size;
-            else if (strcmp(buf, "Data") == 0)
+            if (!is_instruction)
                 info->cache[level - 1].cache_data = size;
-            else
-                info->cache[level - 1].cache_instruction =
-                        info->cache[level - 1].cache_data = size;
         }
     }
     return true;
@@ -921,6 +922,8 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
                                  if (cache.Type == CacheUnified
                                          || cache.Type == CacheData)
                                      info->cache[level].cache_data = cache.CacheSize;
+                                 if (cache.Type == CacheUnified)
+                                     info->cache[level].is_unified = true;
                              }
                 );
             break;
@@ -1057,6 +1060,7 @@ bool TopologyDetector::detect_cache_via_cpuid(Topology::Thread *info,
                 info->cache[level - 1].cache_data =
                     info->cache[level - 1].cache_instruction =
                     size;
+                info->cache[level - 1].is_unified = true;
                 break;
             default: /* at this point it's > 3, i.e. a reserved value. */
                 return 1;

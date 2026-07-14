@@ -146,12 +146,11 @@ typedef uint8_t NativeCoreType;                 // C17 or older
 /// data, only data is valid; if unified, both are set to the same value. In all
 /// the cases the value is the cache size in bytes.  A field is valid if it
 /// contains a value >= 0.  Fields with negative values are invalid.
-/// TODO: consider changing this, with L1D & L1I being the same size, they are
-/// indistinguishable from a unified cache.
 struct cache_info_t
 {
     int cache_instruction;
     int cache_data;
+    bool is_unified;
 };
 
 /// cpu_info_t contains information about a logical CPU
