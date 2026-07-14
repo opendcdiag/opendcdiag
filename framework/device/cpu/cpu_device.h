@@ -150,7 +150,9 @@ struct cache_info_t
 {
     int cache_instruction;
     int cache_data;
+    int16_t id;
     bool is_unified;
+    int8_t _reserved;
 };
 
 /// cpu_info_t contains information about a logical CPU

@@ -469,7 +469,6 @@ bool TopologyDetector::create_mock_topology(const char *topo)
         info->cache[0] = { 0x2000, 0x2000 };
         info->cache[1] = { 0x8000, 0x8000 };
         info->cache[2] = { 0x40000, 0x40000 };
-        info->cache[2].is_unified = true;
 
         char c = topo[0] | 0x20;  // lowercased (if a letter); numbers unchanged
         // parse the different fields of the topology
@@ -589,6 +588,18 @@ bool TopologyDetector::detect_cache_via_os(Topology::Thread *info, int cpufd)
                 info->cache[level - 1].cache_instruction = size;
             if (!is_instruction)
                 info->cache[level - 1].cache_data = size;
+
+            int id = -1;
+            if ((f = fopenat(cachefd, "id"))) {
+                IGNORE_RETVAL(fscanf(f, "%d", &id));
+                fclose(f);
+            } else if ((f = fopenat(cachefd, "shared_cpu_list"))) {
+                // fallback: the lowest CPU sharing this cache is a stable
+                // instance id that every sharer computes identically
+                IGNORE_RETVAL(fscanf(f, "%d", &id));
+                fclose(f);
+            }
+            info->cache[level - 1].id = id;
         }
     }
     return true;
@@ -866,6 +877,8 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
     int die_id = 0;
     int module_id = 0;
     int core_id = 0;
+    constexpr int cache_levels = sizeof(cpu_info_t::cache) / sizeof(cpu_info_t::cache[0]);
+    int cache_id[cache_levels] = {};
     for ( ; ptr < end; ptr += lpi->Size) {
         lpi = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(ptr);
         switch (lpi->Relationship) {
@@ -911,11 +924,12 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
 
         case RelationCache: {
             auto &cache = *reinterpret_cast<CACHE_RELATIONSHIP_2 *>(&lpi->Cache);
+            int level = cache.Level - 1;
+            if (level >= cache_levels)
+                break;
+            int id = cache_id[level]++;    // one id per physical cache instance
             for_each_proc_in(cache.GroupCount, cache.GroupMasks,
                              [&](cpu_info_t *info) {
-                                 int level = cache.Level - 1;
-                                 if (level >= std::size(info->cache))
-                                     return;
                                  if (cache.Type == CacheUnified
                                          || cache.Type == CacheInstruction)
                                      info->cache[level].cache_instruction = cache.CacheSize;
@@ -924,6 +938,7 @@ bool TopologyDetector::detect_topology_via_os(LOGICAL_PROCESSOR_RELATIONSHIP rel
                                      info->cache[level].cache_data = cache.CacheSize;
                                  if (cache.Type == CacheUnified)
                                      info->cache[level].is_unified = true;
+                                 info->cache[level].id = id;
                              }
                 );
             break;
@@ -1046,8 +1061,14 @@ bool TopologyDetector::detect_cache_via_cpuid(Topology::Thread *info,
         sets = c + 1; /* entire ecx plus 1 */
 
         size = ways * parts * line_sz * sets;
+
+        /* eax 11 bits 25:14 plus 1 = maximum IDs sharing this cache */
+        uint32_t max_cpus_sharing = ((a >> 14) & ((1 << 11) - 1)) + 1;
         if (level == 2 && max_cpus_sharing_l2)
-            *max_cpus_sharing_l2 = ((a >> 14) & ((1 << 11) - 1)) + 1; /* eax 11 bits 25:14 plus 1 */
+            *max_cpus_sharing_l2 = max_cpus_sharing;
+
+        /* drop the low APIC ID bits that address within the sharing domain */
+        info->cache[level - 1].id = info->hwid >> std::bit_width(max_cpus_sharing - 1);
 
         switch (a & 0xf) { /* first four eax bits are type */
             case 1: /* data */
@@ -1162,12 +1183,13 @@ bool TopologyDetector::detect_topology_via_cpuid(Topology::Thread *info)
     uint32_t a, b, c, apicid;
     uint32_t max_cpus_sharing_l2 = 0;
 
-    if (!detect_cache_via_cpuid(info, &max_cpus_sharing_l2))
-        return false;
-
     // get this processor's APIC ID
     assert(topology_leaf > 0);
     __cpuid_count(topology_leaf, 0, a, b, c, apicid);
+    info->hwid = apicid;
+
+    if (!detect_cache_via_cpuid(info, &max_cpus_sharing_l2))
+        return false;
 
     // process the widths
     auto extract = [&](uint32_t start, uint32_t end) {
@@ -1178,7 +1200,6 @@ bool TopologyDetector::detect_topology_via_cpuid(Topology::Thread *info)
         return value;
     };
 
-    info->hwid = apicid;
     info->package_id = extract(width(Package), -1);
     info->thread_id = extract(0, width(Domain::Logical));
     info->core_id = extract(width(Domain::Logical), width(Package));
@@ -1555,7 +1576,8 @@ void TopologyDetector::detect(const LogicalProcessorSet &enabled_cpus)
         info->thread_id = -1;
         info->hwid = -1;
 
-        std::fill(std::begin(info->cache), std::end(info->cache), cache_info_t{-1, -1});
+        std::fill(std::begin(info->cache), std::end(info->cache),
+                  cache_info_t{ -1, -1, -1, false, 0 });
     }
     // replicate device_info[0] over the entire range
     std::fill_n(&device_info[1], count - 1, device_info[0]);
