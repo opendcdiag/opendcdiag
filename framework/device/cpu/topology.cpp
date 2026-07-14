@@ -1645,6 +1645,34 @@ static void populate_core_group(Topology::CoreGrouping *group, const Topology::T
 
     fill_in_threads(group->cores, &Topology::Thread::core_id);
     // fill_in_threads(group->modules, &Topology::Thread::module_id);
+
+    // Attribute a share of each L3 instance to this grouping: a grouping may
+    // span several instances (summed) or only part of one (SNC, hybrid P/E),
+    // so each instance contributes in_group/total of its size.
+    constexpr int l3 = sizeof(cpu_info_t::cache) / sizeof(cpu_info_t::cache[0]) - 1;
+    std::map<int, int> in_group;
+    for (const Topology::Thread *t = begin; t != end; ++t) {
+        const cache_info_t &c = t->cache[l3];
+        if (c.cache_instruction >= 0 || c.cache_data >= 0)
+            ++in_group[c.id];
+    }
+    for (auto [id, count] : in_group) {
+        int total = 0;
+        size_t size = 0;
+        // Count the instance's threads across the whole system, not just this
+        // (possibly restricted) topology, so a grouping that covers only part
+        // of an instance is attributed its true fraction.
+        for (const cpu_info_t &info : std::span(sApp->shmem->device_info, sApp->shmem->total_device_count)) {
+            const cache_info_t &c = info.cache[l3];
+            if (c.id != id || (c.cache_instruction < 0 && c.cache_data < 0))
+                continue;
+            ++total;
+            size = c.is_unified ? c.cache_data
+                    : std::max(c.cache_instruction, 0) + std::max(c.cache_data, 0);
+        }
+        if (total > 0)
+            group->l3_cache_size += size * count / total;
+    }
 }
 
 static Topology build_topology()

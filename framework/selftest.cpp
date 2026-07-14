@@ -31,6 +31,7 @@
 #include "sandstone_kvm.h"
 #endif // _WIN32
 #include "sandstone_p.h"
+#include "topology.h"
 
 #include <exception>
 #include <unordered_map>
@@ -215,6 +216,31 @@ static int selftest_logformattedyaml_run(struct test *test, int cpu)
     log_yaml(SANDSTONE_LOG_INFO, "Some details from the test", map);
     return EXIT_SUCCESS;
 }
+
+#if SANDSTONE_DEVICE_CPU
+static int selftest_logs_l3cachesize_init(struct test *)
+{
+    const Topology &topology = Topology::topology();
+
+    size_t aggregate = 0;
+    std::string group_sizes;
+    for (const Topology::Package &pkg : topology.packages) {
+        for (const Topology::CoreGrouping &group : pkg.groups) {
+            if (group_sizes.size())
+                group_sizes += ", ";
+            group_sizes += std::to_string(group.l3_cache_size);
+        }
+        aggregate += pkg.l3_cache_size;
+    }
+
+    log_yaml(SANDSTONE_LOG_INFO,
+             stdprintf("L3 cache size for this topology\n"
+                       "l3-aggregate-size: %zu\n"
+                       "l3-group-sizes: [ %s ]\n\n",
+                       aggregate, group_sizes.c_str()).c_str());
+    return EXIT_SUCCESS;
+}
+#endif // SANDSTONE_DEVICE_CPU
 
 static int selftest_logs_options_init(struct test *test)
 {
@@ -1466,6 +1492,37 @@ static struct test selftests_array[] = {
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
+#if SANDSTONE_DEVICE_CPU
+{
+    .id = "selftest_logs_l3cachesize",
+    .description = "Reports the aggregate L3 cache size of the topology (heuristic scheduling)",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_logs_l3cachesize_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_logs_l3cachesize_coregroup",
+    .description = "Reports the aggregate L3 cache size of the topology (core-group scheduling)",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_logs_l3cachesize_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_schedule_isolate_coregroup,
+},
+{
+    .id = "selftest_logs_l3cachesize_socket",
+    .description = "Reports the aggregate L3 cache size of the topology (socket scheduling)",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_logs_l3cachesize_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_schedule_isolate_socket,
+},
+#endif // SANDSTONE_DEVICE_CPU
 {
     .id = "selftest_logdata",
     .description = "Logs data for later parsing",

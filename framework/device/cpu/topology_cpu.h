@@ -37,6 +37,9 @@ public:
     {
         std::vector<Core> cores;
         // std::vector<Module> modules;
+
+        /// Size in bytes of the last-level (L3) cache attributable to this grouping.
+        size_t l3_cache_size = 0;
     };
 
     struct Package : CoreGrouping
