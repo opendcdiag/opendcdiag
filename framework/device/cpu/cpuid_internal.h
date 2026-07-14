@@ -175,7 +175,7 @@ static device_features_t detect_cpu()
         // extract the version number from CPUID
         __cpuid_count(0x1d, 2, eax, ebx, ecx, edx);
 
-        int acever = ecx & 0xff;
+        int acever __attribute__((unused)) = ecx & 0xff;
 #ifdef cpu_feature_ace1
         if (acever >= 1)
             features |= cpu_feature_ace1;
