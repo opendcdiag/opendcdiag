@@ -8,6 +8,8 @@
 #include "logging_cpu.h"
 
 #include <cinttypes>
+#include <climits>
+#include <map>
 
 static constexpr const char *native_device_type(const cpu_info_t *info)
 {
@@ -483,6 +485,64 @@ void AbstractLogger::print_fixed_for_device()
     const double freq_avg = freqs / cpus_measured;
     if (std::isfinite(freq_avg) && freq_avg != 0.0)
         logging_printf(LOG_LEVEL_VERBOSE(1), "  avg-freq-mhz: %.1f\n", freq_avg);
+}
+
+void AbstractLogger::device_print_extra_info()
+{
+    constexpr int cache_levels = sizeof(cpu_info_t::cache) / sizeof(cpu_info_t::cache[0]);
+    std::span<const cpu_info_t> infos(device_info, sApp->device_count);
+
+    struct InstanceInfo {
+        int cache_instruction = -1;
+        int cache_data = -1;
+        // assumption: the instances are stored contiguously
+        int starting_cpu = INT_MAX;
+        int count = 0;
+        bool is_unified = false;
+    };
+
+    logging_printf(LOG_LEVEL_VERBOSE(1), "cache-info:\n");
+
+    for (int level = 0; level < cache_levels; ++level) {
+        // Group the logical processors by which physical cache instance they
+        // share at this level, so we can count the instances and their sizes.
+        std::map<int, InstanceInfo> instances;
+        for (const cpu_info_t &info : infos) {
+            const cache_info_t &c = info.cache[level];
+            if (c.cache_instruction < 0 && c.cache_data < 0)
+                continue;
+            InstanceInfo &inst = instances[c.id];
+            inst.cache_instruction = c.cache_instruction;
+            inst.cache_data = c.cache_data;
+            inst.is_unified = c.is_unified;
+            inst.starting_cpu = std::min(inst.starting_cpu, info.cpu_number);
+            ++inst.count;
+        }
+        if (instances.empty())
+            continue;
+
+        const InstanceInfo &rep = instances.begin()->second;
+        logging_printf(LOG_LEVEL_VERBOSE(1), "  L%d:\n", level + 1);
+        if (rep.is_unified)
+            logging_printf(LOG_LEVEL_VERBOSE(1), "    size: { unified: %d }\n", rep.cache_data);
+        else
+            logging_printf(LOG_LEVEL_VERBOSE(1), "    size: { instruction: %d, data: %d }\n",
+                           rep.cache_instruction, rep.cache_data);
+
+        if (level == cache_levels - 1) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "    breakdown:\n");
+            for (const auto &[id, inst] : instances) {
+                int size = inst.is_unified ? inst.cache_data
+                        : std::max(inst.cache_instruction, 0) + std::max(inst.cache_data, 0);
+                logging_printf(LOG_LEVEL_VERBOSE(1),
+                               "    - { size: %d, starting_cpu: %d, count: %d }\n",
+                               size, inst.starting_cpu, inst.count);
+            }
+        } else {
+            // unnecessary information (for now)
+            // logging_printf(LOG_LEVEL_VERBOSE(1), "    instances: %zu\n", instances.size());
+        }
+    }
 }
 
 #endif // !SANDSTONE_NO_LOGGING

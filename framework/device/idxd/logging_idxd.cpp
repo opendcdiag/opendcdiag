@@ -22,6 +22,11 @@ void AbstractLogger::print_fixed_for_device()
 
 }
 
+void AbstractLogger::device_print_extra_info()
+{
+
+}
+
 void dump_device_state(std::string&, int)
 {
 

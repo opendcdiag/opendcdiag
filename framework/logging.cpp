@@ -2336,6 +2336,8 @@ void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, 
                        thread_id_header_for_device(i, LOG_LEVEL_VERBOSE(2)).c_str(), i);
     }
 
+    device_print_extra_info();
+
     auto print_plan = [](const char *name, const SlicePlans::Slices &plan) {
         std::string result;
         for (SlicePlans::Slice s : plan) {

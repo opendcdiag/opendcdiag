@@ -130,6 +130,7 @@ public:
     static std::string thread_id_header_for_device(int device, LogLevelVerbosity verbosity);
     static void print_thread_header_for_device(int fd, PerThreadData::Test *thr);
     static void print_fixed_for_device();
+    static void device_print_extra_info();
 
 #ifdef SANDSTONE_DEVICE_CPU
     static std::string thread_id_header_for_cpu(LogicalProcessor lp, int device, LogLevelVerbosity verbosity);
@@ -199,6 +200,8 @@ inline std::string AbstractLogger::thread_id_header_for_device(int device, LogLe
 inline void AbstractLogger::print_thread_header_for_device(int fd, PerThreadData::Test *thr)
 { __builtin_unreachable(); }
 inline void AbstractLogger::print_fixed_for_device()
+{ __builtin_unreachable(); }
+inline void AbstractLogger::device_print_extra_info()
 { __builtin_unreachable(); }
 
 #  ifdef SANDSTONE_DEVICE_CPU
