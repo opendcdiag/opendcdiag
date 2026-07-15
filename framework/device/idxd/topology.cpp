@@ -47,7 +47,68 @@ constexpr unsigned IDXD_OPCODE_SCAN              = 0x50;
 constexpr unsigned IDXD_OPCODE_EXTRACT           = 0x52;
 constexpr unsigned IDXD_OPCODE_SELECT            = 0x53;
 constexpr unsigned IDXD_OPCODE_EXPAND            = 0x56;
-} // namespace
+
+unsigned feature_to_opcode(device_features_t feature)
+{
+    switch (feature) {
+    case device_feature_dsa_op_noop:
+    case device_feature_iax_op_noop:
+        return IDXD_OPCODE_NOOP;
+    case device_feature_dsa_op_batch:
+    case device_feature_iax_op_batch:
+        return IDXD_OPCODE_BATCH;
+    case device_feature_dsa_op_drain:
+    case device_feature_iax_op_drain:
+        return IDXD_OPCODE_DRAIN;
+
+    case device_feature_op_memmove:
+        return IDXD_OPCODE_MEMMOVE;
+    case device_feature_op_fill:
+        return IDXD_OPCODE_FILL;
+    case device_feature_op_compare:
+        return IDXD_OPCODE_COMPARE;
+    case device_feature_op_compare_pat:
+        return IDXD_OPCODE_COMPARE_PAT;
+    case device_feature_op_crc_gen:
+        return IDXD_OPCODE_CRC_GEN;
+    case device_feature_op_copy_with_crc_gen:
+        return IDXD_OPCODE_COPY_WITH_CRC_GEN;
+    case device_feature_op_dif_check:
+        return IDXD_OPCODE_DIF_CHECK;
+    case device_feature_op_dif_insert:
+        return IDXD_OPCODE_DIF_INSERT;
+    case device_feature_op_dif_strip:
+        return IDXD_OPCODE_DIF_STRIP;
+    case device_feature_op_dif_update:
+        return IDXD_OPCODE_DIF_UPDATE;
+    case device_feature_op_cache_flush:
+        return IDXD_OPCODE_CACHE_FLUSH;
+    case device_feature_op_crc64:
+        return IDXD_OPCODE_CRC64;
+
+    case device_feature_op_dual_cast:
+        return IDXD_OPCODE_DUAL_CAST;
+    case device_feature_op_create_delta:
+        return IDXD_OPCODE_CREATE_DELTA_REC;
+    case device_feature_op_apply_delta:
+        return IDXD_OPCODE_APPLY_DELTA_REC;
+    case device_feature_op_scan:
+        return IDXD_OPCODE_SCAN;
+    case device_feature_op_extract:
+        return IDXD_OPCODE_EXTRACT;
+    case device_feature_op_select:
+        return IDXD_OPCODE_SELECT;
+    case device_feature_op_expand:
+        return IDXD_OPCODE_EXPAND;
+    case device_feature_op_compress:
+        return IDXD_OPCODE_COMPRESS;
+    case device_feature_op_decompress:
+        return IDXD_OPCODE_DECOMPRESS;
+    default:
+        return ~0u;
+    }
+}
+} // end anonymous namespace
 
 int num_packages()
 {
@@ -95,6 +156,16 @@ int AccfgCtx::init()
         return log_skip_or_print(RuntimeSkipCategory, "Failed to initialize accfg_ctx");
     }
     return EXIT_SUCCESS;
+}
+
+bool has_opcode(const wq_info_t& info, unsigned opcode)
+{
+    return has_opcode(Topology::topology().devices[info.path.device].op_cap, opcode);
+}
+
+bool has_opcode(const wq_info_t& info, device_features_t feature)
+{
+    return has_opcode(Topology::topology().devices[info.path.device].op_cap, feature_to_opcode(feature));
 }
 
 static device_features_t detect_features(accfg_device* device)

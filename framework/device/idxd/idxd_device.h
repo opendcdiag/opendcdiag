@@ -81,6 +81,9 @@ inline bool has_opcode(const accfg_op_cap& op_cap, unsigned opcode)
     }
     return (op_cap.bits[idx] & (1u << bit)) != 0;
 }
+
+bool has_opcode(const wq_info_t& info, unsigned opcode);
+bool has_opcode(const wq_info_t& info, device_features_t feature);
 #endif
 
 #define device_has_feature(f)      ((device_compiler_features & (f)) == (f) || (device_features & (f)) == (f))
