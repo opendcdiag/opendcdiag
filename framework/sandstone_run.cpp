@@ -387,6 +387,16 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
     if (!shouldTestTheTest(the_test))
         return;
 
+    // check if the test has failed
+    bool has_failed = false;
+    auto failchecker = [&has_failed](PerThreadData::Common *data, int) {
+        if (data->has_failed())
+            has_failed = true;
+    };
+    for_each_main_thread(failchecker);
+    if (!has_failed)
+        for_each_test_thread(failchecker);
+
     MonotonicTimePoint now = std::chrono::steady_clock::now();
 
     size_t current_hwm = memfpt_current_high_water_mark();
@@ -407,15 +417,6 @@ inline void test_the_test_data<true>::test_tests_finish(const struct test *the_t
                             current_hwm, hwm_at_start, sApp->thread_count, per_thread_avg);
     }
 
-    // check if the test has failed
-    bool has_failed = false;
-    auto failchecker = [&has_failed](PerThreadData::Common *data, int) {
-        if (data->has_failed())
-            has_failed = true;
-    };
-    for_each_main_thread(failchecker);
-    if (!has_failed)
-        for_each_test_thread(failchecker);
     if (has_failed)
         return;                     // no point in reporting timing of failed tests
 
