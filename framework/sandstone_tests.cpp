@@ -17,23 +17,31 @@
 void SandstoneTestSet::load_all_tests()
 {
     std::span<struct test> known_tests = test_source();
+
+    auto add_to_all_group_map = [&](struct test &t) {
+        if (SandstoneConfig::RestrictedCommandLine)
+            return;
+        // only populate all_group_map if we're parsing command-line
+        for (auto ptr = t.groups; ptr && *ptr; ++ptr) {
+            all_group_map[(*ptr)->id].push_back(&t);
+        }
+    };
+
     for (struct test &t : known_tests) {
         all_tests.push_back(&t);
         if (is_selftest()) {
             // self tests don't have hardcoded test IDs, so add them now
             t.shortid = std::hash<std::string_view>()(t.id) & 0xffffff;
         }
-        if (!SandstoneConfig::RestrictedCommandLine) {
-            // only populate all_group_map if we're parsing command-line
-            for (auto ptr = t.groups; ptr && *ptr; ++ptr) {
-                all_group_map[(*ptr)->id].push_back(&t);
-            }
-        }
+        add_to_all_group_map(t);
     }
 
     /* add "special" tests */
     special_tests = special_tests_for_device();
     special_tests.push_back(&_test_mce_check); // mce always added last
+    for (struct test *t : special_tests) {
+        add_to_all_group_map(*t);
+    }
 }
 
 /* Looks up a name or a pattern among all "known" tests. Returns all the
