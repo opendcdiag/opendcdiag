@@ -86,12 +86,6 @@ void listener_runner(test_data* td)
 
 int listener_preinit(struct test* test)
 {
-    // the thread will be spawned by the main process. Forking from a multi-threaded process in unsafe.
-    if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::fork_each_test) {
-        log_skip(RuntimeSkipCategory, "event_monitor requires --fork-mode=exec/no");
-        return EXIT_SKIP;
-    }
-
     // events that we want to track
     static constexpr zes_event_type_flags_t event_types =
         ZES_EVENT_TYPE_FLAG_DEVICE_DETACH | ZES_EVENT_TYPE_FLAG_FREQ_THROTTLED |
