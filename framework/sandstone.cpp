@@ -8,6 +8,9 @@
 #include "sandstone_opts.hpp"
 #include "sandstone_system.h"
 #include "sandstone_tests.h"
+#if SANDSTONE_DEVICE_IDXD
+#  include "topology_idxd.hpp"
+#endif
 #if SANDSTONE_SSL_BUILD
 #  include "sandstone_ssl.h"
 #  include "sandstone_ssl_rand.h"
@@ -603,6 +606,9 @@ static int exec_mode_run(int argc, char **argv)
     int child_number = parse_int(argv[0]);
 
     attach_shmem(parse_int(argv[1]));
+#if SANDSTONE_DEVICE_IDXD
+    device_features = detect_features();
+#endif
     device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
     sApp->device_count = sApp->shmem->total_device_count;
