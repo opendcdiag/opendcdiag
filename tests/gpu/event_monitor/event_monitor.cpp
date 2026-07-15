@@ -157,6 +157,7 @@ int listener_postcleanup(struct test* test)
 } // unnamed namespace
 
 DECLARE_MANUAL_TEST(event_monitor, "Monitor GPU device events for hardware issues")
+    .groups = DECLARE_TEST_GROUPS(&group_special),
     .test_preinit = listener_preinit,
     .test_run = [](struct test*, int) { return EXIT_SUCCESS; },
     .test_postcleanup = listener_postcleanup,

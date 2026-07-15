@@ -126,6 +126,7 @@ static_assert(!InterruptMonitor::InterruptMonitorWorks);
 #endif
 
 DECLARE_MANUAL_TEST(mce_check, "Machine Check Exceptions/Events count")
+        .groups = DECLARE_TEST_GROUPS(&group_special),
 #if defined(__linux__) && defined(__x86_64__)
         .test_preinit = mce_check_preinit,
         .test_run = mce_check_run,
