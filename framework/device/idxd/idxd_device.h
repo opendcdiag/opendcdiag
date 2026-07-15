@@ -6,6 +6,8 @@
 #ifndef INC_IDXD_DEVICE_H
 #define INC_IDXD_DEVICE_H
 
+#include "idxd_features.h"
+
 #include <accel-config/libaccel_config.h>
 
 #include <stdint.h>
@@ -62,11 +64,18 @@ inline int wq_info_t::wq() const
 {
     return this - ::device_info;
 }
+
+inline bool has_opcode(const accfg_op_cap& op_cap, unsigned opcode)
+{
+    const unsigned idx = opcode / 32;
+    const unsigned bit = opcode % 32;
+    if (idx >= (sizeof(op_cap.bits) / sizeof(op_cap.bits[0]))) {
+        return false;
+    }
+    return (op_cap.bits[idx] & (1u << bit)) != 0;
+}
 #endif
 
-// Not used at the moment
-typedef unsigned __int128 device_features_t;
-static const device_features_t device_compiler_features = 0;
 #define device_has_feature(f)      ((device_compiler_features & (f)) == (f) || (device_features & (f)) == (f))
 
 #endif // INC_IDXD_DEVICE_H

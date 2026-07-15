@@ -143,4 +143,6 @@ public:
 struct HardwareInfo
 {};
 
+device_features_t detect_features();
+
 #endif // INC_TOPOLOGY_IDXD_HPP

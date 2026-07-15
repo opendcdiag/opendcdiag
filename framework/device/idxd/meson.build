@@ -12,3 +12,7 @@ framework_files += files(
     'topology.cpp',
     'logging_idxd.cpp',
 )
+
+unittests_sources += files(
+    'unit-tests/idxd_features_tests.cpp',
+)
