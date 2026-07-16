@@ -292,7 +292,7 @@ template struct EngineWrapper<std::minstd_rand>;
 static bool haveAes()
 {
 #if !defined(__x86_64__)
-    return cpu_has_feature(cpu_feature_aes);
+    return device_has_feature(cpu_feature_aes);
 #else
     uint32_t eax, ebx, ecx, edx;
     __cpuid(1, eax, ebx, ecx, edx);

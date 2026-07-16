@@ -865,15 +865,15 @@ static void cause_sigill()
     __m128i one = _mm_set1_epi32(-1);
 #if SANDSTONE_DEVICE_CPU
 #ifndef __APX_F__
-    if (cpu_has_feature(cpu_feature_apx_f)) {
+    if (device_has_feature(cpu_feature_apx_f)) {
         // force-init the APX state
         asm ("movl %0, %%r17d" : : "i" (0x12345678));
     }
 #endif
 #ifndef __clang__
-    if (cpu_has_feature(cpu_feature_avx)) {
+    if (device_has_feature(cpu_feature_avx)) {
         // init the AVX state (using inline assembly to avoid vzeroupper)
-        if (cpu_has_feature(cpu_feature_avx512f)) {
+        if (device_has_feature(cpu_feature_avx512f)) {
             // %gN: make zmm
             asm ("vpternlogd $0xff, %g0, %g0, %g0" : "=x" (one));
         } else {
@@ -882,7 +882,7 @@ static void cause_sigill()
         }
     }
 #endif
-    if (cpu_has_feature(cpu_feature_amx_tile)) {
+    if (device_has_feature(cpu_feature_amx_tile)) {
         // init the AMX state
         alignas(64) static struct amx_tileconfig cfg = {
             .palette = 1,
