@@ -85,6 +85,6 @@ inline int gpu_info_t::gpu() const
 // Not used at the moment
 typedef unsigned __int128 device_features_t;
 static const device_features_t device_compiler_features = 0;
-#define cpu_has_feature(f)      ((device_compiler_features & (f)) == (f) || (device_features & (f)) == (f))
+#define device_has_feature(f)      ((device_compiler_features & (f)) == (f) || (device_features & (f)) == (f))
 
 #endif // INC_GPU_DEVICE_H
