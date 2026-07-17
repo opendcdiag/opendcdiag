@@ -32,6 +32,8 @@
 #  endif
 #endif
 
+static constexpr int CurrentSchemaVersion = 0;
+
 void ulog_init(std::span<const char * const> args)
 {
 #if SANDSTONE_ULOG
@@ -126,6 +128,17 @@ void ulog_init(std::span<const char * const> args)
 #endif  // SANDSTONE_ULOG
 }
 
+/*
+    Current format:
+
+    |    Register number   | Use                           |
+    |----------------------|-------------------------------|
+    | Register 0 bits 0:7  | repetition count              |
+    | Register 0 bits 8:31 | Sandstone short test ID       |
+    | Register 1           | Current RNG seed              |
+    | Register 2 bits 0:3  | Schema version (current = 0)  |
+    | Register 2 bits 4:31 | reserved                      |
+ */
 void ulog_update(const struct test *test)
 {
 #if SANDSTONE_ULOG
@@ -138,6 +151,6 @@ void ulog_update(const struct test *test)
     int iteration = sApp->current_iteration_count;
     *sApp->ulog_addresses[0] = (test->shortid << 8) | (iteration < 0 ? uint8_t(-iteration) : 0);
     *sApp->ulog_addresses[1] = random_seed_low32();
-    *sApp->ulog_addresses[2] = 0;
+    *sApp->ulog_addresses[2] = CurrentSchemaVersion & 0xf;
 #endif // SANDSTONE_ULOG
 }
