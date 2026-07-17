@@ -38,9 +38,40 @@ void ulog_init(std::span<const char * const> args)
     if (args.empty())
         return;
 
-    if (args.size() != sApp->ulog_addresses.size()) {
+    // First pass: expand FILE=OFF1[,OFF2,...] into a flat list of (filename, offset) pairs.
+    struct FileOffset {
+        std::string filename;
+        ptrdiff_t offset;
+    };
+    std::vector<FileOffset> file_offsets;
+
+    for (const char *arg : args) {
+        const char *eq = strchr(arg, '=');
+        if (!eq) {
+            fprintf(stderr, "%s: --ulog: argument must be in the form FILE=OFFSET: '%s'\n",
+                    program_invocation_name, arg);
+            exit(EX_USAGE);
+        }
+
+        std::string filename(arg, eq - arg);
+        const char *p = eq + 1;
+        do {
+            char *endptr;
+            errno = 0;
+            ptrdiff_t offset = strtoll(p, &endptr, 0);
+            if (errno || endptr == p || (*endptr != '\0' && *endptr != ',') || offset < 0) {
+                fprintf(stderr, "%s: --ulog: invalid offset '%s'\n",
+                        program_invocation_name, p);
+                exit(EX_USAGE);
+            }
+            file_offsets.emplace_back(filename, offset);
+            p = *endptr == ',' ? endptr + 1 : nullptr;
+        } while (p);
+    }
+
+    if (file_offsets.size() != sApp->ulog_addresses.size()) {
         fprintf(stderr, "%s: --ulog requires exactly %zu file=offset arguments, got %zu\n",
-                program_invocation_name, sApp->ulog_addresses.size(), args.size());
+                program_invocation_name, sApp->ulog_addresses.size(), file_offsets.size());
         exit(EX_USAGE);
     }
 
@@ -57,26 +88,9 @@ void ulog_init(std::span<const char * const> args)
     std::vector<OpenFd> open_fds;
     std::vector<MappedPage> mapped_pages;
 
-    for (size_t i = 0; i < sApp->ulog_addresses.size(); ++i) {
-        const char *arg = args[i];
-        const char *eq = strchr(arg, '=');
-        if (!eq) {
-            fprintf(stderr, "%s: --ulog: argument must be in the form FILE=OFFSET: '%s'\n",
-                    program_invocation_name, arg);
-            exit(EX_USAGE);
-        }
-
-        std::string filename(arg, eq - arg);
-        const char *offset_str = eq + 1;
-
-        char *endptr;
-        errno = 0;
-        ptrdiff_t offset = strtoll(offset_str, &endptr, 0);
-        if (errno || endptr == offset_str || *endptr != '\0' || offset < 0) {
-            fprintf(stderr, "%s: --ulog: invalid offset '%s'\n",
-                    program_invocation_name, offset_str);
-            exit(EX_USAGE);
-        }
+    for (size_t i = 0; i < file_offsets.size(); ++i) {
+        const std::string &filename = file_offsets[i].filename;
+        ptrdiff_t offset = file_offsets[i].offset;
 
         // Open file (or reuse an already-opened fd for the same path)
         int fd = -1;

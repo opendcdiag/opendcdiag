@@ -73,6 +73,26 @@ function ulog_check_slots() {
     [[ "$output" == *"--ulog requires exactly 3"* ]]
 }
 
+@test "--ulog comma syntax wrong count" {
+    ulog_skip_if_unsupported
+    run $SANDSTONE --ulog file=0,4
+    [[ $status -eq 64 ]]
+    [[ "$output" == *"--ulog requires exactly 3"* ]]
+}
+
+@test "--ulog comma syntax" {
+    declare -A yamldump
+    ulog_skip_if_unsupported
+
+    local f
+    f=$(ulog_make_file)
+
+    # Three offsets in a single --ulog argument
+    sandstone_selftest -s LCG -e selftest_pass --ulog "$f=0,4,8"
+
+    ulog_check_slots selftest_pass "$f" 0 "$f" 4 "$f" 8
+}
+
 @test "--ulog missing equal sign" {
     ulog_skip_if_unsupported
     run $SANDSTONE --ulog noequal --ulog noequal --ulog noequal
@@ -82,7 +102,7 @@ function ulog_check_slots() {
 
 @test "--ulog invalid offset" {
     ulog_skip_if_unsupported
-    run $SANDSTONE --ulog file=abc --ulog file=abc --ulog file=abc
+    run $SANDSTONE --ulog file=0,abc,0
     [[ $status -eq 64 ]]
     [[ "$output" == *"invalid offset"* ]]
 }
@@ -90,7 +110,7 @@ function ulog_check_slots() {
 @test "--ulog nonexistent file" {
     ulog_skip_if_unsupported
     local f=/nonexistent/path/to/file
-    run $SANDSTONE --ulog $f=0 --ulog $f=0 --ulog $f=0
+    run $SANDSTONE --ulog $f=0,4,8
     [[ $status -ne 0 ]]
     [[ "$output" == *"cannot open"* ]]
 }
@@ -175,7 +195,7 @@ function ulog_same_file_common() {
     local name
     for name in $tests; do
         sandstone_selftest -e "$name" --quick --retest-on-failure=0 --timeout=2s \
-            --on-hang=kill --on-crash=kill --ulog "$f=0" --ulog "$f=4" --ulog "$f=8"
+            --on-hang=kill --on-crash=kill --ulog "$f=0,4,8"
         local v0
         v0=$(od -A n -t x4 -N 4 -j 0 "$f"); v0="${v0// /}"
         [[ "${v0:0:6}" == "${testids[$name]}" ]]
@@ -191,7 +211,7 @@ function ulog_same_file_common() {
     f=$(ulog_make_file)
 
     sandstone_selftest -e selftest_failinit --retest-on-failure=1 \
-        --ulog "$f=0" --ulog "$f=4" --ulog "$f=8"
+        --ulog "$f=0,4,8"
     [[ $status -eq 1 ]]
 
     local v0 shortid
