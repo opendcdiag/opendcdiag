@@ -93,7 +93,7 @@ void ulog_init(std::span<const char * const> args)
                         program_invocation_name, filename.c_str(), strerror(errno));
                 exit(EX_NOINPUT);
             }
-            open_fds.push_back({ std::move(filename), auto_fd(fd) });
+            open_fds.emplace_back(filename, auto_fd(fd));
         }
 
         // Map the region containing the offset (or reuse an already-mapped region).
@@ -123,7 +123,7 @@ void ulog_init(std::span<const char * const> args)
                         page_offset, strerror_for_mmap());
                 exit(EX_OSERR);
             }
-            mapped_pages.push_back({ fd, page_offset, page });
+            mapped_pages.emplace_back(fd, page_offset, page);
         }
 
         size_t offset_in_page = size_t(offset - page_offset);
