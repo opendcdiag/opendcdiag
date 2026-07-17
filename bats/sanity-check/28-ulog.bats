@@ -13,17 +13,6 @@ function setup_file() {
     run $SANDSTONE --ulog noequal --ulog noequal --ulog noequal
     if [[ "$output" != *"FILE=OFFSET"* ]]; then
         export ulog_skip_reason="--ulog not supported in this build"
-        return
-    fi
-
-    # MAP_SHARED_VALIDATE|MAP_SYNC requires a DAX-capable filesystem; tmpfs also
-    # works. Check by inspecting the filesystem type of the temp directory.
-    local probe_file fstype
-    probe_file=$(mktempfile ulog-probe-XXXXXX)
-    fstype=$(stat -f -c %T "$probe_file" 2>/dev/null)
-    rm -f "$probe_file"
-    if [[ -n "$fstype" && "$fstype" != "tmpfs" ]]; then
-        export ulog_skip_reason="--ulog mmap requires a DAX-capable or tmpfs filesystem (got: $fstype)"
     fi
 }
 

@@ -111,6 +111,12 @@ void ulog_init(std::span<const char * const> args)
         }
         if (!page) {
             page = mmap(nullptr, MmapGranularity, PROT_READ | PROT_WRITE, MAP_SHARED_VALIDATE | MAP_SYNC, fd, off_t(page_offset));
+            if (page == MAP_FAILED && errno == EOPNOTSUPP) {
+                page = mmap(nullptr, MmapGranularity, PROT_READ | PROT_WRITE, MAP_SHARED, fd, off_t(page_offset));
+                if (page != MAP_FAILED)
+                    fprintf(stderr, "# --ulog: MAP_SYNC not supported on '%s', falling back to MAP_SHARED\n",
+                            filename.c_str());
+            }
             if (page == MAP_FAILED) {
                 fprintf(stderr, "%s: --ulog: mmap of '%s' at offset 0x%tx failed: %s\n",
                         program_invocation_name, open_fds.back().path.c_str(),
