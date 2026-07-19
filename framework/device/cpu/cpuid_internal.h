@@ -2,6 +2,11 @@
  * Copyright 2022 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <assert.h>
 #include <errno.h>
@@ -259,7 +264,30 @@ static void check_missing_features(device_features_t features, device_features_t
 
 #undef cpuid_errmsg
 
-#else // ! x86-64
+#elif defined(__aarch64__) && defined(__linux__)
+
+#include <sys/auxv.h>
+
+static device_features_t detect_cpu()
+{
+    uint64_t hwcap = getauxval(AT_HWCAP);
+    uint64_t hwcap2 = getauxval(AT_HWCAP2);
+
+    // AT_HWCAP occupies bits 0-63 and AT_HWCAP2 bits 64-127. Do not narrow the
+    // shift: AT_HWCAP2 bit 31 (HWCAP2_WFXT) would then alias cpu_feature_hypervisor.
+    device_features_t features = (device_features_t)hwcap | ((device_features_t)hwcap2 << 64);
+
+    return features;
+}
+
+static void check_missing_features(device_features_t features, device_features_t minimum_cpu_features)
+{
+    (void) features;
+    (void) minimum_cpu_features;
+}
+
+#else
+
 static device_features_t detect_cpu()
 {
     return 0;
