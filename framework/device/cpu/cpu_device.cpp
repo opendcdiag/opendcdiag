@@ -2,6 +2,11 @@
  * Copyright 2025 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include "sandstone_p.h"
 #include "cpu_device.h"
@@ -13,6 +18,7 @@ extern constexpr const device_features_t minimum_cpu_features = device_compiler_
 std::string device_features_to_string(device_features_t f)
 {
     std::string result;
+#ifndef __aarch64__
     const char *comma = "";
     for (size_t i = 0; i < std::size(x86_locators); ++i) {
         if (f & CPU_FEATURE_CONSTANT(i)) {
@@ -21,6 +27,7 @@ std::string device_features_to_string(device_features_t f)
             comma = ",";
         }
     }
+#endif
     return result;
 }
 
@@ -28,6 +35,7 @@ void dump_device_info()
 {
     int i;
 
+#ifndef __aarch64__
     // find the best matching CPU
     const char *detected = "<unknown>";
     for (const auto &arch : x86_architectures) {
@@ -42,6 +50,43 @@ void dump_device_info()
     printf("Detected CPU: %s; family-model-stepping (hex): %02x-%02x-%02x; CPU features: %s\n",
            detected, sApp->hwinfo.family, sApp->hwinfo.model, sApp->hwinfo.stepping,
            device_features_to_string(device_features).c_str());
+#else
+    const char *vendor = "<unknown>";
+    const char *detected_cpu = "<unknown>";
+
+#ifdef __linux__
+    // Reading MIDR_EL1 from EL0 is emulated by the Linux kernel. Other OSes
+    // (e.g. XNU on Apple Silicon) do not guarantee this, so restrict the
+    // read to Linux, matching detect_cpu() in cpuid_internal.h.
+    uint64_t midr_el1 = 0;
+    uint8_t implementer = 0;
+    uint16_t part_num = 0;
+
+    asm("mrs %0, MIDR_EL1" : "=r"(midr_el1));
+
+    // Parse MIDR_EL1 fields
+    implementer = MIDR_EL1_IMPLEMENTER(midr_el1);
+    part_num = MIDR_EL1_PART_NUM(midr_el1);
+
+    // Find vendor and part
+    for (const auto &curr_vendor : aarch64_vendors) {
+        if (curr_vendor.id == implementer) {
+            vendor = curr_vendor.name;
+            for (size_t i = 0; i < curr_vendor.num_parts; ++i) {
+                if (part_num == curr_vendor.parts[i].part_num) {
+                    detected_cpu = curr_vendor.parts[i].name;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+#endif
+
+    printf("CPU Vendor   : %s\n", vendor);
+    printf("Detected CPU : %s\n", detected_cpu);
+    printf("CPU features : %s\n", device_features_to_string(device_features).c_str());
+#endif
     printf("# CPU\tPkgID\tCoreID\tThrdID\tModId\tDieId\tNUMAId\tApicId\tMicrocode\tPPIN\n");
     for (i = 0; i < device_count(); ++i) {
         printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t0x%" PRIx64, device_info[i].cpu_number,
