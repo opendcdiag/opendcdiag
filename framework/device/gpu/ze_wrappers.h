@@ -57,8 +57,55 @@ public:
     NonCopyable& operator=(NonCopyable&&) = default;
 };
 
+class ZeMemDataPtrBase : public NonCopyable
+{
+public:
+    ZeMemDataPtrBase() = default;
+
+    ZeMemDataPtrBase(ZeMemDataPtrBase&& other) noexcept :
+        NonCopyable{std::move(other)},
+        data{std::exchange(other.data, nullptr)},
+        context{std::exchange(other.context, nullptr)}
+    {}
+
+    ZeMemDataPtrBase& operator=(ZeMemDataPtrBase&& other) {
+        if (this != &other) {
+            maybe_free();
+            data = std::exchange(other.data, nullptr);
+            context = std::exchange(other.context, nullptr);
+        }
+        return *this;
+    }
+
+    ~ZeMemDataPtrBase() {
+        maybe_free();
+    }
+
+    // zeKernelSetArgumentValue requires ref
+    void*& get() noexcept { return data; }
+    const void* get() const noexcept { return data; }
+
+    explicit operator bool() const noexcept { return data != nullptr; }
+
+protected:
+    explicit ZeMemDataPtrBase(ze_context_handle_t context) :
+        context{context}
+    {}
+
+    void* data = nullptr;
+    ze_context_handle_t context{};
+
+private:
+    void maybe_free() {
+        if (data) {
+            ZE_CHECK_AND_LOG(zeMemFree(context, data));
+            data = nullptr;
+        }
+    }
+};
+
 /// Wrappers being classes. They require getters to return ref, which std::unique_ptr won't allow.
-class ZeDeviceDataPtr : public NonCopyable
+class ZeDeviceDataPtr : public ZeMemDataPtrBase
 {
 public:
     ZeDeviceDataPtr(
@@ -68,43 +115,19 @@ public:
         const ze_device_mem_alloc_desc_t& desc = { .stype = ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC },
         size_t alignment = 1
     ) :
-        context{context}
+        ZeMemDataPtrBase{context}
     {
         ZE_CHECK_AND_SKIP(zeMemAllocDevice(context, &desc, size, alignment, device, &data));
     }
 
     ZeDeviceDataPtr(ZeDeviceDataPtr&& other) noexcept :
-        NonCopyable{std::move(other)},
-        data{std::exchange(other.data, nullptr)},
-        context{std::exchange(other.context, nullptr)}
+        ZeMemDataPtrBase{std::move(other)}
     {}
 
     ZeDeviceDataPtr& operator=(ZeDeviceDataPtr&& other) {
-        if (this != &other) {
-            if (data) {
-                ZE_CHECK_AND_LOG(zeMemFree(context, data));
-            }
-            data = std::exchange(other.data, nullptr);
-            context = std::exchange(other.context, nullptr);
-        }
+        ZeMemDataPtrBase::operator=(std::move(other));
         return *this;
     }
-
-    ~ZeDeviceDataPtr() {
-        if (data) {
-            ZE_CHECK_AND_LOG(zeMemFree(context, data));
-        }
-    }
-
-    // zeKernelSetArgumentValue requires ref
-    void*& get() noexcept { return data; }
-    const void* get() const noexcept { return data; }
-
-    explicit operator bool() const noexcept { return data != nullptr; }
-
-private:
-    void* data = nullptr;
-    ze_context_handle_t context{};
 };
 
 class ZeCmdListPtr : public NonCopyable
@@ -143,12 +166,29 @@ private:
     ze_command_list_handle_t cmd_list{};
 };
 
-/// Wrappers being std::unique_ptrs with custom deleters.
-struct ZeHostDataPtrDeleter
+class ZeHostDataPtr : public ZeMemDataPtrBase
 {
-    ze_context_handle_t context;
-    void operator()(void* data) {
-        ZE_CHECK_AND_LOG(zeMemFree(context, data));
+public:
+    ZeHostDataPtr() = default;
+
+    ZeHostDataPtr(
+        ze_context_handle_t context,
+        size_t size,
+        const ze_host_mem_alloc_desc_t& desc = { .stype = ZE_STRUCTURE_TYPE_HOST_MEM_ALLOC_DESC },
+        size_t alignment = 1
+    ) :
+        ZeMemDataPtrBase{context}
+    {
+        ZE_CHECK_AND_SKIP(zeMemAllocHost(context, &desc, size, alignment, &data));
+    }
+
+    ZeHostDataPtr(ZeHostDataPtr&& other) noexcept :
+        ZeMemDataPtrBase{std::move(other)}
+    {}
+
+    ZeHostDataPtr& operator=(ZeHostDataPtr&& other) {
+        ZeMemDataPtrBase::operator=(std::move(other));
+        return *this;
     }
 };
 
@@ -173,7 +213,6 @@ struct ZeContextDeleter
     }
 };
 
-using ZeHostDataPtr = std::unique_ptr<void, ZeHostDataPtrDeleter>;
 using ZeCmdQueuePtr = std::unique_ptr<_ze_command_queue_handle_t, ZeCmdQueueDeleter>;
 using ZeFencePtr = std::unique_ptr<_ze_fence_handle_t, ZeFenceDeleter>;
 using ZeContextPtr = std::unique_ptr<_ze_context_handle_t, ZeContextDeleter>;
@@ -183,10 +222,7 @@ inline ZeHostDataPtr ze_alloc_host(ze_context_handle_t context, size_t size,
         const ze_host_mem_alloc_desc_t& desc = { .stype = ZE_STRUCTURE_TYPE_HOST_MEM_ALLOC_DESC },
         size_t alignment = 1)
 {
-    ZeHostDataPtrDeleter deleter{context};
-    void* data = nullptr;
-    ZE_CHECK_AND_SKIP(zeMemAllocHost(context, &desc, size, alignment, &data));
-    return {data, deleter};
+    return {context, size, desc, alignment};
 }
 
 inline ZeDeviceDataPtr ze_alloc_device(ze_context_handle_t context, size_t size, ze_device_handle_t device,
