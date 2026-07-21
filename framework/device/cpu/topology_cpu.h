@@ -62,6 +62,7 @@ public:
     std::string build_failure_mask(const struct test *test) const;
 
     static const Topology &topology();
+    static Topology build_topology(std::span<const Thread> threads);
     struct Data;
     Data clone() const;
 };
