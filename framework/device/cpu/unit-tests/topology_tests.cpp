@@ -88,6 +88,19 @@ void expect_plan(const SlicePlans::Slices &actual, const std::vector<std::pair<i
     }
 }
 
+// Saves and restores the mutable globals the framework stubs expose, so a test
+// that describes an unusual topology cannot leak state into later tests.
+struct TopologyStateGuard
+{
+    device_info_t *saved_device_info = device_info;
+    int saved_device_count = unittests_device_count;
+    ~TopologyStateGuard()
+    {
+        device_info = saved_device_info;
+        unittests_device_count = saved_device_count;
+    }
+};
+
 
 // Replicates TopologyDetector's ordering so tests can assert their storage is
 // laid out the way build_topology() requires.
@@ -334,4 +347,523 @@ TEST(BuildTopology, ManySinglecorePackages)
     for (int pkg = 0; pkg < packages; ++pkg)
         expected.push_back({ pkg, { { { pkg, 1 } } } });
     expect_topology(topo, storage.threads.data(), expected);
+}
+
+// ---- Grouped-core view tests ---------------------------------
+
+TEST(ViewTopology, EmptyYieldsNothing)
+{
+    TopologyStateGuard guard;
+    device_info = nullptr;
+
+    {
+        Topology topo;
+        auto cores = topo.cores();
+        static_assert(std::ranges::forward_range<decltype(cores)>);
+        static_assert(std::ranges::view<decltype(cores)>);
+        EXPECT_TRUE(cores.begin() == cores.begin());
+        EXPECT_FALSE(cores.begin() != cores.begin());
+        EXPECT_TRUE(cores.begin() == cores.end());          // range is empty
+        EXPECT_FALSE(cores.begin() != cores.end());
+        EXPECT_TRUE(cores.empty());
+        EXPECT_FALSE(cores);
+        for (auto it = cores.begin(); it != cores.end(); ++it) {
+            static_assert(std::forward_iterator<decltype(it)>);
+            // range was empty
+            FAIL();
+        }
+
+        EXPECT_TRUE(topo.modules().empty());
+        EXPECT_TRUE(topo.dies().empty());
+        EXPECT_TRUE(topo.numa_domains().empty());
+        EXPECT_FALSE(topo.modules());
+        EXPECT_FALSE(topo.dies());
+        EXPECT_FALSE(topo.numa_domains());
+    }
+    {
+        Topology::CoreGrouping group;
+        auto modules = group.modules();
+        static_assert(std::ranges::forward_range<decltype(modules)>);
+        static_assert(std::ranges::view<decltype(modules)>);
+        EXPECT_TRUE(modules.begin() == modules.begin());
+        EXPECT_FALSE(modules.begin() != modules.begin());
+        EXPECT_TRUE(modules.begin() == modules.end());          // range is empty
+        EXPECT_FALSE(modules.begin() != modules.end());
+        EXPECT_TRUE(modules.empty());
+        EXPECT_FALSE(modules);
+        for (auto it = modules.begin(); it != modules.end(); ++it) {
+            static_assert(std::forward_iterator<decltype(it)>);
+            // range was empty
+            FAIL();
+        }
+
+        EXPECT_TRUE(group.dies().empty());
+        EXPECT_TRUE(group.numa_domains().empty());
+        EXPECT_FALSE(group.dies());
+        EXPECT_FALSE(group.numa_domains());
+    }
+}
+
+// module/die/numa are all -1 here; the views group them like any other id (one
+// run of -1), whereas find_*_by_id(-1) returns empty.
+TEST(ViewTopology, NonEmptyBasics)
+{
+    static constexpr int core_count = 8;
+    TopologyStateGuard guard;
+    device_info = nullptr;
+
+    StorageBuilder storage;
+    for (int core = 0; core < core_count; ++core)
+        storage.add_core(0, -1, -1, -1, core, 2, core_type_unknown);
+    ASSERT_TRUE(std::ranges::is_sorted(storage.threads, detector_less));
+    ASSERT_EQ(storage.threads.size(), core_count * 2); // two threads per core
+    Topology topo = Topology::build_topology(storage.threads);
+
+    {
+        auto cores = topo.cores();
+        EXPECT_TRUE(cores.begin() == cores.begin());
+        EXPECT_FALSE(cores.begin() != cores.begin());
+        EXPECT_TRUE(cores.begin() != cores.end());
+        EXPECT_FALSE(cores.begin() == cores.end());
+        EXPECT_FALSE(cores.empty());
+        int core_counter = 0;
+        for (const Topology::Core &core : cores) {
+            EXPECT_EQ(core.id(), core_counter);
+            EXPECT_EQ(&core.threads.front(), &storage.threads[core_counter * 2]);
+            ++core_counter;
+        }
+        EXPECT_EQ(core_counter, core_count);
+
+        auto it = cores.begin();
+        auto copy = it;
+        EXPECT_EQ(it->id(), copy->id());
+        EXPECT_EQ(it++, copy++);
+        EXPECT_EQ(++it, ++copy);
+        EXPECT_EQ(it->id(), copy->id());
+        EXPECT_EQ(std::to_address(it), std::to_address(copy));  // they still point to the same Core
+        EXPECT_EQ(std::next(cores.begin(), core_count), cores.end());
+    }
+
+    // we should find exactly one of the following
+    auto check_view_has_one_element = [](const auto &view) {
+        using View = std::decay_t<decltype(view)>;
+        static_assert(std::ranges::forward_range<View>);
+        static_assert(std::ranges::view<View>);
+        EXPECT_TRUE(view);
+        EXPECT_FALSE(view.empty());
+        auto it = view.begin();
+        EXPECT_EQ(std::ranges::distance(it, view.end()), 1);
+        EXPECT_TRUE(it != view.end());
+        EXPECT_FALSE(it == view.end());
+        EXPECT_EQ(it->id(), -1);
+        EXPECT_EQ(std::next(it), view.end());
+        std::span cores = it->cores;
+        EXPECT_EQ(++it, view.end());
+
+        EXPECT_FALSE(cores.empty());
+        EXPECT_EQ(cores.size(), core_count);
+        EXPECT_EQ(cores.data()->threads.size(), 2);
+    };
+    check_view_has_one_element(topo.modules());
+    check_view_has_one_element(topo.dies());
+    check_view_has_one_element(topo.numa_domains());
+    check_view_has_one_element(topo.packages[0].modules());
+    check_view_has_one_element(topo.packages[0].dies());
+    check_view_has_one_element(topo.packages[0].numa_domains());
+}
+
+// 24 quad-core modules (still homogeneous)
+TEST(ViewTopology, ModulesWithinSinglePackage)
+{
+    static constexpr int module_count = 24;
+    static constexpr int cores_per_module = 4;
+    static constexpr int core_count = module_count * cores_per_module;
+    TopologyStateGuard guard;
+    device_info = nullptr;
+
+    StorageBuilder storage;
+    int module = 0;
+    for (int i = 0; i < module_count; ++i, module += 64) {
+        for (int j = 0; j < cores_per_module; ++j)
+            storage.add_core(5, -1, 0, module, module + j, 1, core_type_efficiency);
+    }
+    ASSERT_TRUE(std::ranges::is_sorted(storage.threads, detector_less));
+    ASSERT_EQ(storage.threads.size(), core_count);
+    Topology topo = Topology::build_topology(storage.threads);
+
+    {
+        auto modules = topo.modules();
+        EXPECT_TRUE(modules.begin() == modules.begin());
+        EXPECT_FALSE(modules.begin() != modules.begin());
+        EXPECT_TRUE(modules.begin() != modules.end());
+        EXPECT_FALSE(modules.begin() == modules.end());
+        EXPECT_FALSE(modules.empty());
+
+        int module_counter = 0;
+        for (auto module : modules) {
+            EXPECT_EQ(module.cores.size(), cores_per_module);
+            EXPECT_EQ(module.cores.front().id(), module_counter * 64);
+            EXPECT_EQ(&module.cores.front().threads.front(), &storage.threads[module_counter * cores_per_module]);
+            ++module_counter;
+        }
+        EXPECT_EQ(module_counter, module_count);
+
+        auto it = modules.begin();
+        auto copy = it;
+        EXPECT_EQ(it++, copy++);
+        EXPECT_EQ(++it, ++copy);
+        EXPECT_EQ(it->cores.data(), copy->cores.data());  // they still point to the same thing
+    }
+
+    // single one of each of the following
+    auto check_view_has_one_element = [](const auto &view, int id) {
+        EXPECT_TRUE(view);
+        EXPECT_FALSE(view.empty());
+        auto it = view.begin();
+        EXPECT_EQ(std::ranges::distance(it, view.end()), 1);
+        EXPECT_TRUE(it != view.end());
+        EXPECT_FALSE(it == view.end());
+        EXPECT_EQ(it->id(), id);
+        std::span cores = it->cores;
+        EXPECT_EQ(++it, view.end());
+
+        EXPECT_EQ(cores.size(), core_count);
+        EXPECT_FALSE(cores.empty());
+        EXPECT_EQ(cores.size(), core_count);
+        EXPECT_EQ(cores.data()->threads.size(), 1);
+    };
+    check_view_has_one_element(topo.dies(), 0);
+    check_view_has_one_element(topo.numa_domains(), -1);
+    check_view_has_one_element(topo.packages[0].dies(), 0);
+    check_view_has_one_element(topo.packages[0].numa_domains(), -1);
+}
+
+// Two packages, 4 dies / 2 NUMA domains each, 1 thread per core. die_id and
+// module_id repeat in package 1.
+TEST(ViewTopology, WholeSystemChainsAndResetsPerPackage)
+{
+    static constexpr int cores_per_die = 2;
+    static constexpr int dies_per_pkg = 4;
+    static constexpr int numa_domains_per_pkg = 2;
+    static constexpr int cores_per_numa_domain = cores_per_die * dies_per_pkg / numa_domains_per_pkg;
+    static constexpr int cores_per_pkg = cores_per_die * dies_per_pkg;
+    auto size = [](const auto &view) { return std::ranges::distance(view); };
+    TopologyStateGuard guard;
+    device_info = nullptr;
+
+    StorageBuilder storage;
+    for (int pkg = 0, numa = 0; pkg < 2; ++pkg) {
+        int core = 0;
+        for (int die = 0; die < dies_per_pkg; ++die) {
+            for (int c = 0; c < cores_per_die; ++c, ++core)
+                storage.add_core(pkg, numa, die, core, core * 2, 1, core_type_unknown);
+            numa += (die & 1);
+        }
+    }
+    ASSERT_TRUE(std::ranges::is_sorted(storage.threads, detector_less));
+    Topology topo = Topology::build_topology(storage.threads);
+    ASSERT_EQ(topo.packages.size(), 2u);
+    ASSERT_EQ(topo.packages[0].groups.size(), dies_per_pkg);
+    ASSERT_EQ(topo.packages[1].groups.size(), dies_per_pkg);
+
+    EXPECT_EQ(size(topo.cores()), cores_per_pkg * topo.packages.size());
+    EXPECT_EQ(size(topo.packages[0].cores), cores_per_pkg);
+    EXPECT_EQ(size(topo.packages[1].cores), cores_per_pkg);
+
+    {
+        int numa_id = 0;
+        auto sysnuma = topo.numa_domains();
+        auto pkgnuma = topo.packages[0].numa_domains();
+        EXPECT_FALSE(sysnuma.empty());
+        EXPECT_FALSE(pkgnuma.empty());
+        EXPECT_EQ(size(pkgnuma), numa_domains_per_pkg);
+        EXPECT_EQ(size(sysnuma), numa_domains_per_pkg * topo.packages.size());
+
+        // co-iteration on the first package:
+        auto sit = sysnuma.begin();
+        auto pit = pkgnuma.begin();
+        for ( ; pit != pkgnuma.end(); ++pit, ++sit, ++numa_id) {
+            EXPECT_NE(sit, sysnuma.end());
+            EXPECT_EQ(sit->id(), numa_id);
+            EXPECT_EQ(pit->id(), numa_id);
+
+            Topology::NumaDomain group = *sit;
+            EXPECT_EQ(&group.cores.front().threads.front(), &storage.threads[numa_id * cores_per_numa_domain]);
+            EXPECT_EQ(group.cores.size(), cores_per_numa_domain);
+            EXPECT_EQ(sit->cores.size(), cores_per_numa_domain);
+        }
+
+        // co-iteration on the second package:
+        // numa_ids are not repeated
+        pkgnuma = topo.packages[1].numa_domains();
+        EXPECT_FALSE(pkgnuma.empty());
+        EXPECT_EQ(size(pkgnuma), numa_domains_per_pkg);
+        for (pit = pkgnuma.begin(); pit != pkgnuma.end(); ++pit, ++sit, ++numa_id) {
+            EXPECT_NE(sit, sysnuma.end());
+            EXPECT_EQ(sit->id(), numa_id);
+            EXPECT_EQ(pit->id(), numa_id);
+
+            Topology::NumaDomain group = *sit;
+            EXPECT_EQ(&group.cores.front().threads.front(), &storage.threads[numa_id * cores_per_numa_domain]);
+            EXPECT_EQ(group.cores.size(), cores_per_numa_domain);
+            EXPECT_EQ(sit->cores.size(), cores_per_numa_domain);
+        }
+        EXPECT_EQ(sit, sysnuma.end());
+    }
+    {
+        int die_id = 0;
+        auto sysdie = topo.dies();
+        auto pkgdie = topo.packages[0].dies();
+        EXPECT_FALSE(sysdie.empty());
+        EXPECT_FALSE(pkgdie.empty());
+        EXPECT_EQ(size(pkgdie), dies_per_pkg);
+        EXPECT_EQ(size(sysdie), dies_per_pkg * topo.packages.size());
+
+        // co-iteration on the first package:
+        auto sit = sysdie.begin();
+        auto pit = pkgdie.begin();
+        for ( ; pit != pkgdie.end(); ++pit, ++sit, ++die_id) {
+            EXPECT_NE(sit, sysdie.end());
+            EXPECT_EQ(sit->id(), die_id);
+            EXPECT_EQ(pit->id(), die_id);
+
+            Topology::Die group = *sit;
+            EXPECT_EQ(&group.cores.front().threads.front(), &storage.threads[die_id * cores_per_die]);
+            EXPECT_EQ(group.cores.size(), cores_per_die);
+            EXPECT_EQ(sit->cores.size(), cores_per_die);
+        }
+
+        // co-iteration on the second package:
+        die_id = 0;         // die IDs are repeated
+        pkgdie = topo.packages[1].dies();
+        EXPECT_FALSE(pkgdie.empty());
+        EXPECT_EQ(size(pkgdie), dies_per_pkg);
+        for (pit = pkgdie.begin(); pit != pkgdie.end(); ++pit, ++sit, ++die_id) {
+            EXPECT_NE(sit, sysdie.end());
+            EXPECT_EQ(sit->id(), die_id);
+            EXPECT_EQ(pit->id(), die_id);
+
+            Topology::Die group = *sit;
+            EXPECT_EQ(&group.cores.front().threads.front(), &storage.threads[cores_per_pkg + die_id * cores_per_die]);
+            EXPECT_EQ(group.cores.size(), cores_per_die);
+            EXPECT_EQ(sit->cores.size(), cores_per_die);
+        }
+        EXPECT_EQ(sit, sysdie.end());
+    }
+}
+
+TEST(ViewTopology, SystemIteration)
+{
+    static constexpr int threads_per_core = 2;
+    static constexpr int cores_per_module = 4;
+    static constexpr int modules_per_die = 16;
+    static constexpr int cores_per_die = cores_per_module * modules_per_die;
+    static constexpr int dies_per_pkg = 4;
+    static constexpr int cores_per_pkg = cores_per_die * dies_per_pkg;
+    static constexpr int numa_domains_per_pkg = 2;
+    static constexpr int cores_per_numa_domain = cores_per_die * dies_per_pkg / numa_domains_per_pkg;
+    auto size = [](const auto &view) { return std::ranges::distance(view); };
+    TopologyStateGuard guard;
+    device_info = nullptr;
+
+    StorageBuilder storage;
+    for (int pkg = 0, numa = 0; pkg < 2; ++pkg) {
+        int core = 0;
+        int module = 0;
+        for (int die = 0; die < dies_per_pkg; ++die) {
+            for (int m = 0; m < modules_per_die; ++m, ++module) {
+                for (int c = 0; c < cores_per_module; ++c, ++core)
+                    storage.add_core(pkg, numa, die, module, core * threads_per_core,
+                                     threads_per_core, core_type_performance);
+            }
+            numa += (die & 1);
+        }
+    }
+    ASSERT_TRUE(std::ranges::is_sorted(storage.threads, detector_less));
+    Topology topo = Topology::build_topology(storage.threads);
+    ASSERT_EQ(topo.packages.size(), 2u);
+    ASSERT_EQ(topo.packages[0].groups.size(), dies_per_pkg);
+    ASSERT_EQ(topo.packages[1].groups.size(), dies_per_pkg);
+
+    const Topology::Thread *current_core = &storage.threads[0];
+    for (const Topology::Package &p : topo.packages) {
+        EXPECT_EQ(size(p.cores), cores_per_pkg);
+        EXPECT_EQ(size(p.numa_domains()), numa_domains_per_pkg);
+
+        for (const auto numa_domain : p.numa_domains()) {
+            EXPECT_EQ(size(numa_domain.cores), cores_per_numa_domain);
+            for (const auto die : numa_domain.dies()) {
+                EXPECT_EQ(size(die.cores), cores_per_die);
+                for (const auto module : die.modules()) {
+                    EXPECT_EQ(size(module.cores), cores_per_module);
+                    for (const auto core : module.cores) {
+                        EXPECT_EQ(core.id(), current_core->core_id);
+                        EXPECT_EQ(&core.threads.front(), current_core);
+                        current_core += threads_per_core;
+                    }
+
+                    // verify we don't exceed the module
+                    EXPECT_EQ(size(module.modules()), 1);
+                    EXPECT_EQ(size(module.dies()), 1);
+                    EXPECT_EQ(size(module.numa_domains()), 1);
+                }
+                // verify we don't exceed the die
+                EXPECT_EQ(size(die.dies()), 1);
+                EXPECT_EQ(size(die.numa_domains()), 1);
+            }
+            // verify we don't exceed the NUMA domain
+            EXPECT_EQ(size(numa_domain.numa_domains()), 1);
+        }
+    }
+
+    current_core = &storage.threads[0];
+    for (const Topology::Package &p : topo.packages) {
+        EXPECT_EQ(size(p.dies()), dies_per_pkg);
+        for (const auto die : p.dies()) {
+            EXPECT_EQ(size(die.cores), cores_per_die);
+            for (const auto module : die.modules()) {
+                EXPECT_EQ(size(module.cores), cores_per_module);
+                for (const auto core : module.cores) {
+                    EXPECT_EQ(core.id(), current_core->core_id);
+                    current_core += threads_per_core;
+                }
+
+                // verify we don't exceed the module
+                EXPECT_EQ(size(module.modules()), 1);
+                EXPECT_EQ(size(module.dies()), 1);
+                EXPECT_EQ(size(module.numa_domains()), 1);
+            }
+            // verify we don't exceed the die
+            EXPECT_EQ(size(die.dies()), 1);
+            EXPECT_EQ(size(die.numa_domains()), 1);
+        }
+    }
+
+    current_core = &storage.threads[0];
+    for (const Topology::Package &p : topo.packages) {
+        for (const Topology::CoreGrouping &g : p.groups) {
+            // there should be one die in each group (and half a NUMA domain)
+            EXPECT_EQ(g.cores.size(), cores_per_die);
+            EXPECT_EQ(size(g.modules()), modules_per_die);
+            for (const auto module : g.modules()) {
+                EXPECT_EQ(size(module.cores), cores_per_module);
+                for (const auto core : module.cores) {
+                    EXPECT_EQ(core.id(), current_core->core_id);
+                    current_core += threads_per_core;
+                }
+
+                // verify we don't exceed the module
+                EXPECT_EQ(size(module.modules()), 1);
+                EXPECT_EQ(size(module.dies()), 1);
+                EXPECT_EQ(size(module.numa_domains()), 1);
+            }
+
+            // verify we don't exceed the group
+            EXPECT_EQ(size(g.numa_domains()), 1);
+            EXPECT_EQ(size(g.dies()), 1);
+        }
+    }
+
+    current_core = &storage.threads[0];
+    for (const Topology::Package &p : topo.packages) {
+        EXPECT_EQ(size(p.modules()), modules_per_die * dies_per_pkg);
+        for (const auto module : p.modules()) {
+            EXPECT_EQ(size(module.cores), cores_per_module);
+            for (const auto core : module.cores) {
+                EXPECT_EQ(core.id(), current_core->core_id);
+                current_core += threads_per_core;
+            }
+
+            // verify we don't exceed the module
+            EXPECT_EQ(size(module.modules()), 1);
+            EXPECT_EQ(size(module.dies()), 1);
+            EXPECT_EQ(size(module.numa_domains()), 1);
+        }
+    }
+
+    current_core = &storage.threads[0];
+    for (const auto numa_domain : topo.numa_domains()) {
+        EXPECT_EQ(size(numa_domain.cores), cores_per_numa_domain);
+        for (const auto die : numa_domain.dies()) {
+            EXPECT_EQ(size(die.cores), cores_per_die);
+            for (const auto module : die.modules()) {
+                EXPECT_EQ(size(module.cores), cores_per_module);
+                for (const auto core : module.cores) {
+                    EXPECT_EQ(core.id(), current_core->core_id);
+                    current_core += threads_per_core;
+                }
+
+                // verify we don't exceed the module
+                EXPECT_EQ(size(module.modules()), 1);
+                EXPECT_EQ(size(module.dies()), 1);
+                EXPECT_EQ(size(module.numa_domains()), 1);
+            }
+            // verify we don't exceed the die
+            EXPECT_EQ(size(die.dies()), 1);
+            EXPECT_EQ(size(die.numa_domains()), 1);
+        }
+        // verify we don't exceed the NUMA domain
+        EXPECT_EQ(size(numa_domain.numa_domains()), 1);
+    }
+
+    current_core = &storage.threads[0];
+    for (const auto numa_domain : topo.numa_domains()) {
+        EXPECT_EQ(size(numa_domain.cores), cores_per_numa_domain);
+        for (const auto module : numa_domain.modules()) {
+            EXPECT_EQ(size(module.cores), cores_per_module);
+            for (const auto core : module.cores) {
+                EXPECT_EQ(core.id(), current_core->core_id);
+                current_core += threads_per_core;
+            }
+
+            // verify we don't exceed the module
+            EXPECT_EQ(size(module.modules()), 1);
+            EXPECT_EQ(size(module.dies()), 1);
+            EXPECT_EQ(size(module.numa_domains()), 1);
+        }
+        // verify we don't exceed the NUMA domain
+        EXPECT_EQ(size(numa_domain.numa_domains()), 1);
+    }
+
+    current_core = &storage.threads[0];
+    for (const auto die : topo.dies()) {
+        EXPECT_EQ(size(die.cores), cores_per_die);
+        for (const auto module : die.modules()) {
+            EXPECT_EQ(size(module.cores), cores_per_module);
+            for (const auto core : module.cores) {
+                EXPECT_EQ(core.id(), current_core->core_id);
+                current_core += threads_per_core;
+            }
+
+            // verify we don't exceed the module
+            EXPECT_EQ(size(module.modules()), 1);
+            EXPECT_EQ(size(module.dies()), 1);
+            EXPECT_EQ(size(module.numa_domains()), 1);
+        }
+        // verify we don't exceed the die
+        EXPECT_EQ(size(die.dies()), 1);
+        EXPECT_EQ(size(die.numa_domains()), 1);
+    }
+
+    current_core = &storage.threads[0];
+    for (const auto module : topo.modules()) {
+        EXPECT_EQ(size(module.cores), cores_per_module);
+        for (const auto core : module.cores) {
+            EXPECT_EQ(core.id(), current_core->core_id);
+            current_core += threads_per_core;
+        }
+
+        // verify we don't exceed the module
+        EXPECT_EQ(size(module.modules()), 1);
+        EXPECT_EQ(size(module.dies()), 1);
+        EXPECT_EQ(size(module.numa_domains()), 1);
+    }
+
+    auto cores = topo.cores();
+    EXPECT_EQ(size(cores), cores_per_pkg * topo.packages.size());
+    current_core = &storage.threads[0];
+    for (const auto core : cores) {
+        EXPECT_EQ(core.id(), current_core->core_id);
+        current_core += threads_per_core;
+    }
 }
