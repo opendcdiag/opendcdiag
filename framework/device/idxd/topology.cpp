@@ -10,7 +10,17 @@
 
 #include <accel-config/libaccel_config.h>
 
-struct wq_info_t *device_info = nullptr;
+#include <cassert>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <format>
+#include <map>
+#include <system_error>
+#include <optional>
+#include <vector>
+
+struct wq_info_t* device_info = nullptr;
 
 namespace {
 constexpr unsigned IDXD_OPCODE_NOOP              = 0x00;
@@ -46,6 +56,19 @@ int num_packages()
 
 void make_rescheduler(RescheduleMode mode)
 {
+}
+
+namespace {
+Topology& cached_topology()
+{
+    static Topology cached_topology = Topology();
+    return cached_topology;
+}
+}
+
+const Topology& Topology::topology()
+{
+    return cached_topology();
 }
 
 void apply_deviceset_param(const char *param)
@@ -216,9 +239,113 @@ void create_mock_topology(const char *topo)
 {
 }
 
-template <>
-void setup_devices<WorkQueueSet>(const WorkQueueSet &enabled_devices)
+namespace {
+/// TODO: copied from GPU
+int16_t detect_package_id_via_os(int cpu)
 {
+    int16_t res = -1;
+    if (cpu < 0) { [[unlikely]]
+        return res;
+    }
+    auto file = std::format("/sys/devices/system/cpu/cpu{}/topology/physical_package_id", cpu);
+
+    FILE* fp = fopen(file.c_str(), "r");
+    if (!fp) { [[unlikely]]
+        fprintf(stderr, "%s: internal error: unable to find physical_package_id file: %m\n",
+                program_invocation_name);
+        return res;
+    }
+    int val;
+    if (std::fscanf(fp, "%d", &val) == 1) {
+        res = static_cast<int16_t>(val);
+    }
+    fclose(fp);
+
+    return res;
+}
+
+bdf_t detect_bdf_via_os(accfg_device *device)
+{
+    bdf_t bdf = {};
+
+    const char* devname = accfg_device_get_devname(device);
+    if (!devname) [[unlikely]] {
+        return bdf;
+    }
+
+    const auto link_path = std::filesystem::path(std::format("/sys/bus/dsa/devices/{}/device", devname));
+    std::error_code ec;
+    const auto target_path = std::filesystem::read_symlink(link_path, ec);
+    if (ec) [[unlikely]] {
+        return bdf;
+    }
+
+    unsigned domain = 0;
+    unsigned bus = 0;
+    unsigned dev = 0;
+    unsigned fn = 0;
+    if (std::sscanf(target_path.filename().c_str(), "%x:%x:%x.%x", &domain, &bus, &dev, &fn) != 4) {
+        return {};
+    }
+
+    bdf.domain   = static_cast<uint16_t>(domain);
+    bdf.bus      = static_cast<uint8_t>(bus);
+    bdf.device   = static_cast<uint8_t>(dev);
+    bdf.function = static_cast<uint8_t>(fn);
+
+    return bdf;
+}
+} // end anonymous namespace
+
+/// Update device_info and initial topology based on current config of the WQs in the system.
+template <>
+void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
+{
+    device_info = sApp->shmem->device_info;
+
+    if (SandstoneConfig::Debug) {
+        if (const char* mock_topo = getenv("SANDSTONE_MOCK_TOPOLOGY"); mock_topo && *mock_topo) {
+            // create_mock_topology(mock_topo); // TODO: implement me
+            return;
+        }
+    }
+
+    assert(enabled_devices.visible_wqs.size() == device_count());
+
+    auto enabled_cpus = ambient_logical_processor_set().to_vector();
+    if (enabled_cpus.size() < enabled_devices.visible_wqs.size()) {
+        fprintf(stderr, "%s: error: not enough CPUs available (%zu CPUs vs %zu WQs)\n",
+                program_invocation_name, enabled_cpus.size(), enabled_devices.visible_wqs.size());
+        exit(EX_USAGE);
+    }
+
+    wq_info_t* info = device_info;
+    [[maybe_unused]] const wq_info_t* cend = device_info + device_count();
+
+    std::map<int, bdf_t> bdf_cache; // bdfs are unique per device
+
+    int cpu_ind = 0;
+    for (const auto &enabled : enabled_devices.visible_wqs) {
+        info->cpu_number = enabled_cpus[cpu_ind++];
+        info->package_id = detect_package_id_via_os(info->cpu_number);
+
+        auto it = bdf_cache.find(enabled.device_id);
+        if (it == bdf_cache.end()) {
+            it = bdf_cache.emplace(enabled.device_id, detect_bdf_via_os(enabled.device_handle)).first;
+        }
+        info->bdf = it->second;
+
+        info->device_id = enabled.device_id;
+        info->wq_id = enabled.wq_id;
+        info->dev_type = enabled.device_type;
+        info->dev_version = static_cast<accfg_device_version>(accfg_device_get_version(enabled.device_handle));
+        info->path = { -1, -1 };
+
+        info++;
+    }
+    assert(info == cend);
+
+    cached_topology() = build_topology(enabled_devices.ctx);
 }
 
 void restrict_topology(DeviceRange range)
@@ -227,10 +354,32 @@ void restrict_topology(DeviceRange range)
 
 void rebuild_topology()
 {
+    assert(device_info && sApp->device_count && "device_info must be filled at this point");
+    cached_topology() = build_topology();
 }
 
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
 {
+}
+
+std::vector<const Topology::WorkQueue*> Topology::targetable_wqs(
+        std::optional<accfg_device_type> device_type,
+        std::optional<accfg_wq_mode> mode) const
+{
+    std::vector<const WorkQueue*> result;
+    for (const Device &device : devices) {
+        if (device_type && device.dev_type != *device_type)
+            continue;
+
+        for (const Group &group : device.groups) {
+            for (const WorkQueue &wq : group.wqs) {
+                if (wq.targetable && (!mode || wq.mode == *mode))
+                    result.push_back(&wq);
+            }
+        }
+    }
+
+    return result;
 }
 
 void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
