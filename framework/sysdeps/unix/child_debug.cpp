@@ -583,12 +583,11 @@ static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
             size_t old_size = buf.size();
             buf.resize(old_size + more);
             ret = read(in, &buf[old_size], more);
+            buf.resize(old_size + std::max(ret, ssize_t(0)));
             if (ret < 0)
                 return false;
             if (ret == 0)
                 return ReadUntilEof;
-
-            buf.resize(old_size + ret);
 
             if constexpr (!ReadUntilEof) {
                 std::string_view n = needle;
