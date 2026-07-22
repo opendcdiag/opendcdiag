@@ -1,6 +1,10 @@
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
+# Changes from Qualcomm Technologies, Inc. are provided under the following license:
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
 # Usage model for the framework is that it is included by the application
 # (e.g., OpenDCDiag) using Meson's `subdir()` command. This allows for elevating
 # the framework's code to the directory level of the application.
@@ -335,20 +339,25 @@ framework_a = static_library(
 
 unittests_sources += files(
     'sandstone_chrono.cpp',
-    'sandstone_data.cpp',
-    'sandstone_utils.cpp',
-    'sandstone_opts.cpp',
     'test_knobs.cpp',
-    'Floats.cpp',
-    'unit-tests/sandstone_data_tests.cpp',
-    'unit-tests/sandstone_test_utils_tests.cpp',
-    'unit-tests/sandstone_utils_tests.c',
-    'unit-tests/sandstone_utils_tests.cpp',
-    'unit-tests/test_knob_tests.cpp',
+    'sandstone_data.cpp',
+    'sandstone_opts.cpp',
     'unit-tests/tests_dummy.cpp',
-    'unit-tests/topology_tests.cpp',
+    'unit-tests/test_knob_tests.cpp',
     'unit-tests/opts_parser_tests.cpp',
+    'unit-tests/sandstone_test_utils_tests.cpp',
+    'unit-tests/topology_tests.cpp',
 )
+
+if host_machine.cpu_family() != 'aarch64'
+    unittests_sources += files(
+        'sandstone_utils.cpp',
+        'Floats.cpp',
+        'unit-tests/sandstone_data_tests.cpp',
+        'unit-tests/sandstone_utils_tests.c',
+        'unit-tests/sandstone_utils_tests.cpp',
+    )
+endif
 
 unittests_flags += [
     '-DSANDSTONE_UNITTESTS',
