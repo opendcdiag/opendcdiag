@@ -76,6 +76,13 @@ if host_machine.cpu_family() == 'x86_64'
             + 'The application will randomly crash at runtime otherwise.',
         )
     endif
+elif host_machine.cpu_family() == 'aarch64'
+    if march_base == ''
+        march_base = 'armv8-a'
+    endif
+    march_flags = [
+        '-march=' + march_base,
+    ]
 endif
 
 debug_nasm_flags = ''
@@ -334,7 +341,7 @@ executable(
         framework_incdir,
     ],
     cpp_args: [
-        '-march=haswell',
+        march_flags,
         debug_c_flags,
         default_cpp_warn,
         '-USANDSTONE',
