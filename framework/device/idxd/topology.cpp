@@ -10,14 +10,22 @@
 
 #include <accel-config/libaccel_config.h>
 
+#include <algorithm>
 #include <cassert>
+#include <cerrno>
+#include <cstring>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <map>
+#include <set>
+#include <span>
+#include <string>
 #include <system_error>
 #include <optional>
+#include <utility>
 #include <vector>
 
 struct wq_info_t* device_info = nullptr;
@@ -71,8 +79,183 @@ const Topology& Topology::topology()
     return cached_topology();
 }
 
+namespace {
+int parse_int(char*& arg, const char* orig_arg) {
+    errno = 0;
+    char *endptr = arg;
+    long n = strtol(arg, &endptr, 0);
+    if (n == 0 && errno) {
+        fprintf(stderr, "%s: error: Invalid device set parameter: %s (%m)\n",
+                program_invocation_name, orig_arg);
+        exit(EX_USAGE);
+    }
+    if (n != int(n)) {
+        fprintf(stderr, "%s: error: Invalid device set parameter: %s (out of range)\n",
+                program_invocation_name, orig_arg);
+        exit(EX_USAGE);
+    }
+    arg = endptr;       // advance
+    return int(n);
+};
+
+/// Updates device_info and topology based on new_wq_info.
+void update_topology(std::span<const wq_info_t> new_wq_info)
+{
+    wq_info_t* end = std::copy(new_wq_info.begin(), new_wq_info.end(), device_info);
+    int new_device_count = new_wq_info.size();
+    if (int excess = sApp->device_count - new_device_count; excess > 0) {
+        // reset excess entries
+        std::fill_n(end, excess, wq_info_t{});
+    }
+
+    sApp->device_count = new_device_count;
+    cached_topology() = build_topology();
+}
+} // end anonymous namespace
+
+/// Supported modes:
+/// --deviceset=dsa0,iax2       -> target all WQ of specified devices
+/// --deviceset=wq0.1,wq1.2     -> target specific WQs, cpus are auto attached
+/// --deviceset=wq0.1c0,wq1.2c5 -> target specific WQs, with manually specified cpus
 void apply_deviceset_param(const char *param)
 {
+    if (SandstoneConfig::RestrictedCommandLine)
+        return;
+
+    struct WQMatch {
+        int device_id;
+        int wq_id;
+        bool operator()(const wq_info_t &wq)
+        { return wq.device_id == device_id && wq.wq_id == wq_id; }
+    };
+
+    std::span<wq_info_t> old_wq_info(device_info, sApp->device_count);
+    std::vector<wq_info_t> new_wq_info;
+    int total_matches = 0;
+
+    std::set<std::pair<uint32_t, uint32_t>> result; // set of unique wqs to disallow duplicate entries
+    new_wq_info.reserve(old_wq_info.size());
+
+    bool add = true;
+    if (*param == '!') {
+        // we're removing from the existing set
+        new_wq_info = { old_wq_info.begin(), old_wq_info.end() };
+        add = false;
+        ++param;
+    }
+
+    const auto apply_to_set = [&](const wq_info_t &wq) {
+        if (result.contains({wq.device_id, wq.wq_id})) { // we've got a duplicate
+            return;
+        }
+
+        if (add) {
+            new_wq_info.push_back(wq);
+        } else {
+            auto it = std::find_if(new_wq_info.begin(), new_wq_info.end(), WQMatch{wq.device_id, wq.wq_id} );
+            if (it == new_wq_info.end())
+                return;
+            new_wq_info.erase(it);
+        }
+        result.insert({wq.device_id, wq.wq_id});
+        ++total_matches;
+    };
+
+    LogicalProcessorSet enabled_cpus;
+    std::string p = param;
+    for (char *arg = strtok(p.data(), ","); arg; arg = strtok(nullptr, ",")) {
+        const char *orig_arg = arg;
+        if (strncmp(arg, "wq", 2) == 0) {
+            arg += 2;
+            int device_id = parse_int(arg, orig_arg);
+
+            if (*arg != '.') {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (expected 'wqX.Y' format)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            ++arg;
+            int wq_id = parse_int(arg, orig_arg);
+
+            auto it = std::find_if(old_wq_info.begin(), old_wq_info.end(), WQMatch{device_id, wq_id} );
+            if (it == old_wq_info.end()) {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (no such wq)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            if (*arg == 'c') {
+                ++arg;
+                int cpu_number = parse_int(arg, orig_arg);
+
+                // check if cpu is enabled in the system
+                if (enabled_cpus.size_bytes() == 0) {
+                    enabled_cpus = ambient_logical_processor_set();
+                }
+                if (!enabled_cpus.is_set(LogicalProcessor{cpu_number})) {
+                    fprintf(stderr, "%s: error: Invalid device set parameter: %s (no such cpu)\n",
+                            program_invocation_name, orig_arg);
+                    exit(EX_USAGE);
+                }
+
+                it->cpu_number = cpu_number;
+            }
+
+            if (*arg != '\0') {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (could not parse)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            apply_to_set(*it);
+        } else if (strncmp(arg, "dsa", 3) == 0 || strncmp(arg, "iax", 3) == 0) {
+            accfg_device_type dev_type = strncmp(arg, "dsa", 3) == 0 ? ACCFG_DEVICE_DSA : ACCFG_DEVICE_IAX;
+            arg += 3;
+            int device_id = parse_int(arg, orig_arg);
+            if (*arg != '\0') {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (could not parse)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            int matches_before = total_matches;
+            for (auto const &wq : old_wq_info) {
+                if (wq.dev_type == dev_type && wq.device_id == device_id) { // check for dev_type is most probably redundant
+                    apply_to_set(wq);
+                }
+            }
+
+            if (total_matches == matches_before) {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (no such device)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+        } else {
+            fprintf(stderr, "%s: error: Invalid device set parameter: %s (could not parse)\n",
+                    program_invocation_name, orig_arg);
+            exit(EX_USAGE);
+        }
+    }
+
+    if (total_matches == 0) {
+        fprintf(stderr, "%s: error: --deviceset matched nothing, this is probably not what you wanted.\n",
+                program_invocation_name);
+        exit(EX_USAGE);
+    }
+    if (!add && new_wq_info.size() == 0) {
+        fprintf(stderr, "%s: error: negated --deviceset matched everything, this is probably not "
+                        "what you wanted.\n", program_invocation_name);
+        exit(EX_USAGE);
+    }
+
+    assert(total_matches == result.size());
+    if (add)
+        assert(total_matches == int(new_wq_info.size()));
+    else
+        assert(total_matches == int(old_wq_info.size() - new_wq_info.size()));
+
+    update_topology(new_wq_info);
 }
 
 std::string build_failure_mask_for_topology(const struct test* test)
