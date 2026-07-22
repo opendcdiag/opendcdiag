@@ -616,6 +616,9 @@ function selftest_cpuset_accumulate() {
         skip "Not supported"
     fi
 
+    $is_debug || skip "Test only works with Debug builds to mock the topology"
+
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1 p1c0 p1c1'
     run $SANDSTONE --selftests -e selftest_logs_reschedule --reschedule=queue
     [[ $status == 64 ]] && false
 
@@ -645,6 +648,9 @@ function selftest_cpuset_accumulate() {
 }
 
 @test "selftest_fail_after_reschedule" {
+    $is_debug || skip "Test only works with Debug builds to mock the topology"
+
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1 p1c0 p1c1'
     run $SANDSTONE --selftests -e selftest_pass --reschedule=queue
     if [[ $status == 64 ]] || [[ "`uname -m`" != "x86_64" ]]; then
         skip "Not supported"
