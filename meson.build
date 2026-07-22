@@ -5,7 +5,9 @@ project(
     'OpenDCDiag',
     ['c', 'cpp'],
     default_options: [
+        'b_pie=true',
         'b_ndebug=if-release',
+        'b_staticpic=true',
         'c_std=gnu17',
         'cpp_std=gnu++23',
     ],
@@ -128,7 +130,6 @@ endforeach
 foreach lflag : [
     '-Wl,-z,relro',
     '-Wl,-z,noexecstack',
-    '-pie',
 ]
     if cc.links('int main() { return 0; }', args: [lflag], name: lflag)
         add_project_link_arguments(lflag, language: ['c', 'cpp'])
