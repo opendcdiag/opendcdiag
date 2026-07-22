@@ -129,7 +129,7 @@ void apply_deviceset_param(const char *param)
         ++param;
     }
 
-    static const auto apply_to_set = [&](const gpu_info_t &gpu) {
+    const auto apply_to_set = [&](const gpu_info_t &gpu) {
         if (result.contains(gpu.gpu_number)) { // we've got a duplicate
             return;
         }
