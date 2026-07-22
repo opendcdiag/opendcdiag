@@ -9,6 +9,7 @@
 
 #include "sandstone_test_utils.h"
 
+#ifdef __x86_64__
 
 class CodeBufferTestFixture : public ::testing::Test {
 public:
@@ -61,7 +62,7 @@ TEST_F(CodeBufferTestFixture, AllocatingBufferAtParticularAddress) {
     EXPECT_EQ((size_t) code_buffer.ptr(), 0x1234560000);
 }
 
-
+#endif // __x86_64__
 
 // ======================================================================
 // Weighted Test Picker Tests
