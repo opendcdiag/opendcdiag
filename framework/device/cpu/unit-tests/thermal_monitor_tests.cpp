@@ -46,7 +46,8 @@ namespace LinuxTesting {
     TEST_F(LinuxThermalFixture, CurrentMachine_TestUsingSingletomTemperaturesOnCurrentMachine) {
         ThermalMonitor therm{};
         auto temps = ThermalMonitor::get_all_socket_temperatures();
-        EXPECT_GE(temps.size(), 1);
+        if (temps.empty())
+            GTEST_SKIP() << "No package thermal zone exposed on this machine";
 
         int max_temp = *max_element(temps.begin(), temps.end());
         ASSERT_GT(max_temp, 10000);  // 10 degrees C
