@@ -1045,7 +1045,7 @@ int main(int argc, char **argv)
         }
     }
 
-    static auto check_and_exit_for_no_device = [&]() {
+    const auto check_and_exit_for_no_device = [&]() {
         if (!any_device) {
             fprintf(stderr, "%s: error: no devices found\n",
                     program_invocation_name);
