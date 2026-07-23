@@ -47,6 +47,9 @@ extern "C" {
 #define SANDSTONE_STRINGIFY(name)       SANDSTONE_STRINGIFY2(name)
 #define SANDSTONE_STRINGIFY2(name)      #name
 
+#define SANDSTONE_CONCAT(a, b)          SANDSTONE_CONCAT2(a, b)
+#define SANDSTONE_CONCAT2(a, b)         a ## b
+
 #define MAX_HWTHREADS_PER_CORE  4
 
 #ifdef __APPLE__
@@ -154,7 +157,7 @@ typedef enum TestQuality {
 
 /// force the alignment so the compiler won't try to (un)helpfully overalign it.
 #define DECLARE_TEST_SECTION(test_id, test_short_id) \
-    __attribute__((alias("_test_" SANDSTONE_STRINGIFY(test_id)))) extern struct test _testid_ ## test_short_id; \
+    __attribute__((alias("_test_" SANDSTONE_STRINGIFY(test_id)))) extern struct test SANDSTONE_CONCAT(_testid_, test_short_id); \
     __attribute__((aligned(alignof(struct test)), used, section(SANDSTONE_SECTION_PREFIX "tests")))
 
 #define DECLARE_TEST_STRUCT(test_id, test_id_str, test_short_id, test_description) \
