@@ -47,6 +47,9 @@ extern "C" {
 #define SANDSTONE_STRINGIFY(name)       SANDSTONE_STRINGIFY2(name)
 #define SANDSTONE_STRINGIFY2(name)      #name
 
+#define SANDSTONE_CONCAT(a, b)          SANDSTONE_CONCAT2(a, b)
+#define SANDSTONE_CONCAT2(a, b)         a ## b
+
 #define MAX_HWTHREADS_PER_CORE  4
 
 #ifdef __APPLE__
@@ -152,9 +155,12 @@ typedef enum TestQuality {
 /// used in a test's test_init function to indicate that a test should be skipped.
 #define EXIT_SKIP               -255
 
-/// force the alignment so the compiler won't try to (un)helpfully overalign it.
+/// The `_testid_<shortid>` symbol carries no data; it exists solely so the linker
+/// reports a multiple-definition error if two tests hash to the same short ID.
+/// Force the alignment so the compiler won't try to (un)helpfully overalign it.
 #define DECLARE_TEST_SECTION(test_id, test_short_id) \
-    __attribute__((alias("_test_" SANDSTONE_STRINGIFY(test_id)))) extern struct test _testid_ ## test_short_id; \
+    extern const char SANDSTONE_CONCAT(_testid_, test_short_id); \
+    __attribute__((used)) const char SANDSTONE_CONCAT(_testid_, test_short_id) = 0; \
     __attribute__((aligned(alignof(struct test)), used, section(SANDSTONE_SECTION_PREFIX "tests")))
 
 #define DECLARE_TEST_STRUCT(test_id, test_id_str, test_short_id, test_description) \
