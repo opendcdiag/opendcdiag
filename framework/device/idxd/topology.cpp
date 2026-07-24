@@ -10,7 +10,25 @@
 
 #include <accel-config/libaccel_config.h>
 
-struct wq_info_t *device_info = nullptr;
+#include <algorithm>
+#include <cassert>
+#include <cerrno>
+#include <cstring>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <format>
+#include <map>
+#include <set>
+#include <span>
+#include <string>
+#include <system_error>
+#include <optional>
+#include <utility>
+#include <vector>
+
+struct wq_info_t* device_info = nullptr;
 
 namespace {
 constexpr unsigned IDXD_OPCODE_NOOP              = 0x00;
@@ -48,8 +66,196 @@ void make_rescheduler(RescheduleMode mode)
 {
 }
 
+namespace {
+Topology& cached_topology()
+{
+    static Topology cached_topology = Topology();
+    return cached_topology;
+}
+}
+
+const Topology& Topology::topology()
+{
+    return cached_topology();
+}
+
+namespace {
+int parse_int(char*& arg, const char* orig_arg) {
+    errno = 0;
+    char *endptr = arg;
+    long n = strtol(arg, &endptr, 0);
+    if (n == 0 && errno) {
+        fprintf(stderr, "%s: error: Invalid device set parameter: %s (%m)\n",
+                program_invocation_name, orig_arg);
+        exit(EX_USAGE);
+    }
+    if (n != int(n)) {
+        fprintf(stderr, "%s: error: Invalid device set parameter: %s (out of range)\n",
+                program_invocation_name, orig_arg);
+        exit(EX_USAGE);
+    }
+    arg = endptr;       // advance
+    return int(n);
+};
+
+/// Updates device_info and topology based on new_wq_info.
+void update_topology(std::span<const wq_info_t> new_wq_info)
+{
+    wq_info_t* end = std::copy(new_wq_info.begin(), new_wq_info.end(), device_info);
+    int new_device_count = new_wq_info.size();
+    if (int excess = sApp->device_count - new_device_count; excess > 0) {
+        // reset excess entries
+        std::fill_n(end, excess, wq_info_t{});
+    }
+
+    sApp->device_count = new_device_count;
+    cached_topology() = build_topology();
+}
+} // end anonymous namespace
+
+/// Supported modes:
+/// --deviceset=dsa0,iax2       -> target all WQ of specified devices
+/// --deviceset=wq0.1,wq1.2     -> target specific WQs, cpus are auto attached
+/// --deviceset=wq0.1c0,wq1.2c5 -> target specific WQs, with manually specified cpus
 void apply_deviceset_param(const char *param)
 {
+    if (SandstoneConfig::RestrictedCommandLine)
+        return;
+
+    struct WQMatch {
+        int device_id;
+        int wq_id;
+        bool operator()(const wq_info_t &wq)
+        { return wq.device_id == device_id && wq.wq_id == wq_id; }
+    };
+
+    std::span<wq_info_t> old_wq_info(device_info, sApp->device_count);
+    std::vector<wq_info_t> new_wq_info;
+    int total_matches = 0;
+
+    std::set<std::pair<uint32_t, uint32_t>> result; // set of unique wqs to disallow duplicate entries
+    new_wq_info.reserve(old_wq_info.size());
+
+    bool add = true;
+    if (*param == '!') {
+        // we're removing from the existing set
+        new_wq_info = { old_wq_info.begin(), old_wq_info.end() };
+        add = false;
+        ++param;
+    }
+
+    const auto apply_to_set = [&](const wq_info_t &wq) {
+        if (result.contains({wq.device_id, wq.wq_id})) { // we've got a duplicate
+            return;
+        }
+
+        if (add) {
+            new_wq_info.push_back(wq);
+        } else {
+            auto it = std::find_if(new_wq_info.begin(), new_wq_info.end(), WQMatch{wq.device_id, wq.wq_id} );
+            if (it == new_wq_info.end())
+                return;
+            new_wq_info.erase(it);
+        }
+        result.insert({wq.device_id, wq.wq_id});
+        ++total_matches;
+    };
+
+    LogicalProcessorSet enabled_cpus;
+    std::string p = param;
+    for (char *arg = strtok(p.data(), ","); arg; arg = strtok(nullptr, ",")) {
+        const char *orig_arg = arg;
+        if (strncmp(arg, "wq", 2) == 0) {
+            arg += 2;
+            int device_id = parse_int(arg, orig_arg);
+
+            if (*arg != '.') {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (expected 'wqX.Y' format)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            ++arg;
+            int wq_id = parse_int(arg, orig_arg);
+
+            auto it = std::find_if(old_wq_info.begin(), old_wq_info.end(), WQMatch{device_id, wq_id} );
+            if (it == old_wq_info.end()) {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (no such wq)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            if (*arg == 'c') {
+                ++arg;
+                int cpu_number = parse_int(arg, orig_arg);
+
+                // check if cpu is enabled in the system
+                if (enabled_cpus.size_bytes() == 0) {
+                    enabled_cpus = ambient_logical_processor_set();
+                }
+                if (!enabled_cpus.is_set(LogicalProcessor{cpu_number})) {
+                    fprintf(stderr, "%s: error: Invalid device set parameter: %s (no such cpu)\n",
+                            program_invocation_name, orig_arg);
+                    exit(EX_USAGE);
+                }
+
+                it->cpu_number = cpu_number;
+            }
+
+            if (*arg != '\0') {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (could not parse)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            apply_to_set(*it);
+        } else if (strncmp(arg, "dsa", 3) == 0 || strncmp(arg, "iax", 3) == 0) {
+            accfg_device_type dev_type = strncmp(arg, "dsa", 3) == 0 ? ACCFG_DEVICE_DSA : ACCFG_DEVICE_IAX;
+            arg += 3;
+            int device_id = parse_int(arg, orig_arg);
+            if (*arg != '\0') {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (could not parse)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+
+            int matches_before = total_matches;
+            for (auto const &wq : old_wq_info) {
+                if (wq.dev_type == dev_type && wq.device_id == device_id) { // check for dev_type is most probably redundant
+                    apply_to_set(wq);
+                }
+            }
+
+            if (total_matches == matches_before) {
+                fprintf(stderr, "%s: error: Invalid device set parameter: %s (no such device)\n",
+                        program_invocation_name, orig_arg);
+                exit(EX_USAGE);
+            }
+        } else {
+            fprintf(stderr, "%s: error: Invalid device set parameter: %s (could not parse)\n",
+                    program_invocation_name, orig_arg);
+            exit(EX_USAGE);
+        }
+    }
+
+    if (total_matches == 0) {
+        fprintf(stderr, "%s: error: --deviceset matched nothing, this is probably not what you wanted.\n",
+                program_invocation_name);
+        exit(EX_USAGE);
+    }
+    if (!add && new_wq_info.size() == 0) {
+        fprintf(stderr, "%s: error: negated --deviceset matched everything, this is probably not "
+                        "what you wanted.\n", program_invocation_name);
+        exit(EX_USAGE);
+    }
+
+    assert(total_matches == result.size());
+    if (add)
+        assert(total_matches == int(new_wq_info.size()));
+    else
+        assert(total_matches == int(old_wq_info.size() - new_wq_info.size()));
+
+    update_topology(new_wq_info);
 }
 
 std::string build_failure_mask_for_topology(const struct test* test)
@@ -216,9 +422,113 @@ void create_mock_topology(const char *topo)
 {
 }
 
-template <>
-void setup_devices<WorkQueueSet>(const WorkQueueSet &enabled_devices)
+namespace {
+/// TODO: copied from GPU
+int16_t detect_package_id_via_os(int cpu)
 {
+    int16_t res = -1;
+    if (cpu < 0) { [[unlikely]]
+        return res;
+    }
+    auto file = std::format("/sys/devices/system/cpu/cpu{}/topology/physical_package_id", cpu);
+
+    FILE* fp = fopen(file.c_str(), "r");
+    if (!fp) { [[unlikely]]
+        fprintf(stderr, "%s: internal error: unable to find physical_package_id file: %m\n",
+                program_invocation_name);
+        return res;
+    }
+    int val;
+    if (std::fscanf(fp, "%d", &val) == 1) {
+        res = static_cast<int16_t>(val);
+    }
+    fclose(fp);
+
+    return res;
+}
+
+bdf_t detect_bdf_via_os(accfg_device *device)
+{
+    bdf_t bdf = {};
+
+    const char* devname = accfg_device_get_devname(device);
+    if (!devname) [[unlikely]] {
+        return bdf;
+    }
+
+    const auto link_path = std::filesystem::path(std::format("/sys/bus/dsa/devices/{}/device", devname));
+    std::error_code ec;
+    const auto target_path = std::filesystem::read_symlink(link_path, ec);
+    if (ec) [[unlikely]] {
+        return bdf;
+    }
+
+    unsigned domain = 0;
+    unsigned bus = 0;
+    unsigned dev = 0;
+    unsigned fn = 0;
+    if (std::sscanf(target_path.filename().c_str(), "%x:%x:%x.%x", &domain, &bus, &dev, &fn) != 4) {
+        return {};
+    }
+
+    bdf.domain   = static_cast<uint16_t>(domain);
+    bdf.bus      = static_cast<uint8_t>(bus);
+    bdf.device   = static_cast<uint8_t>(dev);
+    bdf.function = static_cast<uint8_t>(fn);
+
+    return bdf;
+}
+} // end anonymous namespace
+
+/// Update device_info and initial topology based on current config of the WQs in the system.
+template <>
+void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
+{
+    device_info = sApp->shmem->device_info;
+
+    if (SandstoneConfig::Debug) {
+        if (const char* mock_topo = getenv("SANDSTONE_MOCK_TOPOLOGY"); mock_topo && *mock_topo) {
+            // create_mock_topology(mock_topo); // TODO: implement me
+            return;
+        }
+    }
+
+    assert(enabled_devices.visible_wqs.size() == device_count());
+
+    auto enabled_cpus = ambient_logical_processor_set().to_vector();
+    if (enabled_cpus.size() < enabled_devices.visible_wqs.size()) {
+        fprintf(stderr, "%s: error: not enough CPUs available (%zu CPUs vs %zu WQs)\n",
+                program_invocation_name, enabled_cpus.size(), enabled_devices.visible_wqs.size());
+        exit(EX_USAGE);
+    }
+
+    wq_info_t* info = device_info;
+    [[maybe_unused]] const wq_info_t* cend = device_info + device_count();
+
+    std::map<int, bdf_t> bdf_cache; // bdfs are unique per device
+
+    int cpu_ind = 0;
+    for (const auto &enabled : enabled_devices.visible_wqs) {
+        info->cpu_number = enabled_cpus[cpu_ind++];
+        info->package_id = detect_package_id_via_os(info->cpu_number);
+
+        auto it = bdf_cache.find(enabled.device_id);
+        if (it == bdf_cache.end()) {
+            it = bdf_cache.emplace(enabled.device_id, detect_bdf_via_os(enabled.device_handle)).first;
+        }
+        info->bdf = it->second;
+
+        info->device_id = enabled.device_id;
+        info->wq_id = enabled.wq_id;
+        info->dev_type = enabled.device_type;
+        info->dev_version = static_cast<accfg_device_version>(accfg_device_get_version(enabled.device_handle));
+        info->path = { -1, -1 };
+
+        info++;
+    }
+    assert(info == cend);
+
+    cached_topology() = build_topology(enabled_devices.ctx);
 }
 
 void restrict_topology(DeviceRange range)
@@ -231,6 +541,28 @@ void rebuild_topology()
 
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
 {
+}
+
+std::vector<const Topology::WorkQueue*> Topology::targetable_wqs(
+        std::optional<accfg_device_type> device_type,
+        std::optional<accfg_wq_mode> mode,
+        std::optional<unsigned int> op) const
+{
+    std::vector<const WorkQueue*> result;
+    for (const Device &device : devices) {
+        if (device_type && device.dev_type != *device_type)
+            continue;
+        if (op && !has_opcode(device.op_cap, *op))
+            continue;
+        for (const Group &group : device.groups) {
+            for (const WorkQueue &wq : group.wqs) {
+                if (wq.targetable && (!mode || wq.mode == *mode))
+                    result.push_back(&wq);
+            }
+        }
+    }
+
+    return result;
 }
 
 void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
