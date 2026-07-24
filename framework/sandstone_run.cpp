@@ -67,12 +67,18 @@ using namespace std::chrono_literals;
 
 device_features_t device_features;
 
-static const struct test *current_test = nullptr;
+static const struct test *s_current_test = nullptr;
+
 #ifdef __llvm__
 thread_local int thread_num __attribute__((tls_model("initial-exec")));
 #else
 thread_local int thread_num = 0;
 #endif
+
+const struct test *current_test() noexcept
+{
+    return s_current_test;
+}
 
 static const char *path_to_exe()
 {
@@ -566,10 +572,10 @@ extern "C" void test_loop_iterate() noexcept;    // see below
 bool test_time_condition() noexcept
 {
     test_loop_iterate();
-    sApp->test_tests_iteration(current_test);
+    sApp->test_tests_iteration(current_test());
     sApp->test_thread_data(thread_num)->inner_loop_count++;
 
-    if (max_loop_count_exceeded(current_test))
+    if (max_loop_count_exceeded(current_test()))
         return 0;  // end the test if max loop count exceeded
 
     return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
@@ -685,7 +691,7 @@ int test_run_wrapper_function(const struct test *test, int thread_number)
 
 void test_loop_start() noexcept
 {
-    sApp->at_loop_start(current_test);
+    sApp->at_loop_start(current_test());
     using namespace AssemblyMarker;
     assembly_marker<TestLoop, Start>();
 }
@@ -718,7 +724,7 @@ void reschedule_internal(DeviceScheduler *scheduler)
 static uintptr_t thread_runner(int thread_number)
 {
     // convert from internal Sandstone numbering to the system one
-    pin_to_logical_processor(LogicalProcessor(device_info[thread_number].cpu_number), current_test->id);
+    pin_to_logical_processor(LogicalProcessor(device_info[thread_number].cpu_number), current_test()->id);
 
     PerThreadData::Test *this_thread = sApp->test_thread_data(thread_number);
     random_init_thread(thread_number);
@@ -761,7 +767,7 @@ static uintptr_t thread_runner(int thread_number)
         this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
 
         test_start();
-        ret = test_run_wrapper_function(current_test, thread_number);
+        ret = test_run_wrapper_function(current_test(), thread_number);
 
         // cleanup resets thread_state
     }
@@ -1128,8 +1134,8 @@ static void finish_test_common(struct test *test)
 
 static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
 {
-    current_test = test;
-    auto resetCurrentTest = scopeExit([&] { current_test = nullptr; });
+    s_current_test = test;
+    auto resetCurrentTest = scopeExit([&] { s_current_test = nullptr; });
 
     TestResult state = [&] {
         int ret = 0;
@@ -1486,8 +1492,8 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
     sApp->main_thread_data()->device_range = { 0, sApp->device_count };
     sApp->main_thread_data()->thread_range = { 0, sApp->thread_count };
 
-    current_test = test;
-    auto resetCurrentTest = scopeExit([&] { current_test = nullptr; });
+    s_current_test = test;
+    auto resetCurrentTest = scopeExit([&] { s_current_test = nullptr; });
 
     TestResult res;
     init_per_thread_data();
