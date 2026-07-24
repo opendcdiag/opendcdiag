@@ -83,7 +83,11 @@ static DWORD map_max_protection(int prot, int flags)
     DWORD flProtect = PAGE_NOACCESS;
     if (flags & MAP_PRIVATE) {
         if (flags & MAP_ANONYMOUS)
-            flProtect = PAGE_EXECUTE_WRITECOPY;
+            // Anonymous mappings are backed by the page file, not a real
+            // file, so we can grant full read/write/exec. This lets a
+            // later mprotect() / VirtualProtect() grant any combination
+            // of those permissions.
+            flProtect = PAGE_EXECUTE_READWRITE;
         else
             flProtect = priv_mapping[prot & PROT_MASK];
     } else {
