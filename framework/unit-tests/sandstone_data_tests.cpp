@@ -15,7 +15,7 @@ static constexpr bool UseF16C = false
 #endif
         ;
 
-#if __GNUC__ > 9 || __clang_major__ >= 9
+#if (__GNUC__ > 9 || __clang_major__ >= 9) && defined(__x86_64__)
 __attribute__((target("avx512vl,avx512bf16")))
 static inline BFloat16 tobf16_avx512(float f)
 {

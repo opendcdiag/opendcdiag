@@ -13,6 +13,8 @@
 #include <limits.h>
 #include <locale.h>
 #include <inttypes.h>
+
+#ifdef __x86_64__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuninitialized"
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
@@ -21,6 +23,7 @@
 
 #ifndef __F16C__
 #  error "Please compile with F16C support"
+#endif
 #endif
 
 TEST(SimpleStringUtils, GivenEmptyString_WhenConvertedToMilisecs_ThenReturnZero) {
@@ -181,6 +184,7 @@ TEST(DataCompare, Int128)
     EXPECT_EQ(format_type_helper(__int128_t(-1)), "ffffffffffffffffffffffffffffffff (-1)");
 }
 
+#ifdef __SIZEOF_FLOAT128__
 TEST(DataCompare, Float128)
 {
     using namespace SandstoneDataDetails;
@@ -198,6 +202,7 @@ TEST(DataCompare, Float128)
     EXPECT_EQ(format_type_helper(Float128::quiet_NaN()), "7fff8000000000000000000000000000");
     EXPECT_EQ(format_type_helper(Float128::signaling_NaN()), "7fff4000000000000000000000000000");
 }
+#endif
 
 TEST(DataCompare, Float80)
 {
