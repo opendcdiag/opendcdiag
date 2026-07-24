@@ -10,7 +10,17 @@
 
 #include <accel-config/libaccel_config.h>
 
-struct wq_info_t *device_info = nullptr;
+#include <cassert>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <format>
+#include <map>
+#include <system_error>
+#include <optional>
+#include <vector>
+
+struct wq_info_t* device_info = nullptr;
 
 namespace {
 constexpr unsigned IDXD_OPCODE_NOOP              = 0x00;
@@ -37,7 +47,68 @@ constexpr unsigned IDXD_OPCODE_SCAN              = 0x50;
 constexpr unsigned IDXD_OPCODE_EXTRACT           = 0x52;
 constexpr unsigned IDXD_OPCODE_SELECT            = 0x53;
 constexpr unsigned IDXD_OPCODE_EXPAND            = 0x56;
-} // namespace
+
+unsigned feature_to_opcode(device_features_t feature)
+{
+    switch (feature) {
+    case device_feature_dsa_op_noop:
+    case device_feature_iax_op_noop:
+        return IDXD_OPCODE_NOOP;
+    case device_feature_dsa_op_batch:
+    case device_feature_iax_op_batch:
+        return IDXD_OPCODE_BATCH;
+    case device_feature_dsa_op_drain:
+    case device_feature_iax_op_drain:
+        return IDXD_OPCODE_DRAIN;
+
+    case device_feature_op_memmove:
+        return IDXD_OPCODE_MEMMOVE;
+    case device_feature_op_fill:
+        return IDXD_OPCODE_FILL;
+    case device_feature_op_compare:
+        return IDXD_OPCODE_COMPARE;
+    case device_feature_op_compare_pat:
+        return IDXD_OPCODE_COMPARE_PAT;
+    case device_feature_op_crc_gen:
+        return IDXD_OPCODE_CRC_GEN;
+    case device_feature_op_copy_with_crc_gen:
+        return IDXD_OPCODE_COPY_WITH_CRC_GEN;
+    case device_feature_op_dif_check:
+        return IDXD_OPCODE_DIF_CHECK;
+    case device_feature_op_dif_insert:
+        return IDXD_OPCODE_DIF_INSERT;
+    case device_feature_op_dif_strip:
+        return IDXD_OPCODE_DIF_STRIP;
+    case device_feature_op_dif_update:
+        return IDXD_OPCODE_DIF_UPDATE;
+    case device_feature_op_cache_flush:
+        return IDXD_OPCODE_CACHE_FLUSH;
+    case device_feature_op_crc64:
+        return IDXD_OPCODE_CRC64;
+
+    case device_feature_op_dual_cast:
+        return IDXD_OPCODE_DUAL_CAST;
+    case device_feature_op_create_delta:
+        return IDXD_OPCODE_CREATE_DELTA_REC;
+    case device_feature_op_apply_delta:
+        return IDXD_OPCODE_APPLY_DELTA_REC;
+    case device_feature_op_scan:
+        return IDXD_OPCODE_SCAN;
+    case device_feature_op_extract:
+        return IDXD_OPCODE_EXTRACT;
+    case device_feature_op_select:
+        return IDXD_OPCODE_SELECT;
+    case device_feature_op_expand:
+        return IDXD_OPCODE_EXPAND;
+    case device_feature_op_compress:
+        return IDXD_OPCODE_COMPRESS;
+    case device_feature_op_decompress:
+        return IDXD_OPCODE_DECOMPRESS;
+    default:
+        return ~0u;
+    }
+}
+} // end anonymous namespace
 
 int num_packages()
 {
@@ -46,6 +117,19 @@ int num_packages()
 
 void make_rescheduler(RescheduleMode mode)
 {
+}
+
+namespace {
+Topology& cached_topology()
+{
+    static Topology cached_topology = Topology();
+    return cached_topology;
+}
+}
+
+const Topology& Topology::topology()
+{
+    return cached_topology();
 }
 
 void apply_deviceset_param(const char *param)
@@ -72,6 +156,16 @@ int AccfgCtx::init()
         return log_skip_or_print(RuntimeSkipCategory, "Failed to initialize accfg_ctx");
     }
     return EXIT_SUCCESS;
+}
+
+bool has_opcode(const wq_info_t& info, unsigned opcode)
+{
+    return has_opcode(Topology::topology().devices[info.path.device].op_cap, opcode);
+}
+
+bool has_opcode(const wq_info_t& info, device_features_t feature)
+{
+    return has_opcode(Topology::topology().devices[info.path.device].op_cap, feature_to_opcode(feature));
 }
 
 static device_features_t detect_features(accfg_device* device)
@@ -216,9 +310,113 @@ void create_mock_topology(const char *topo)
 {
 }
 
-template <>
-void setup_devices<WorkQueueSet>(const WorkQueueSet &enabled_devices)
+namespace {
+/// TODO: copied from GPU
+int16_t detect_package_id_via_os(int cpu)
 {
+    int16_t res = -1;
+    if (cpu < 0) { [[unlikely]]
+        return res;
+    }
+    auto file = std::format("/sys/devices/system/cpu/cpu{}/topology/physical_package_id", cpu);
+
+    FILE* fp = fopen(file.c_str(), "r");
+    if (!fp) { [[unlikely]]
+        fprintf(stderr, "%s: internal error: unable to find physical_package_id file: %m\n",
+                program_invocation_name);
+        return res;
+    }
+    int val;
+    if (std::fscanf(fp, "%d", &val) == 1) {
+        res = static_cast<int16_t>(val);
+    }
+    fclose(fp);
+
+    return res;
+}
+
+bdf_t detect_bdf_via_os(accfg_device *device)
+{
+    bdf_t bdf = {};
+
+    const char* devname = accfg_device_get_devname(device);
+    if (!devname) [[unlikely]] {
+        return bdf;
+    }
+
+    const auto link_path = std::filesystem::path(std::format("/sys/bus/dsa/devices/{}/device", devname));
+    std::error_code ec;
+    const auto target_path = std::filesystem::read_symlink(link_path, ec);
+    if (ec) [[unlikely]] {
+        return bdf;
+    }
+
+    unsigned domain = 0;
+    unsigned bus = 0;
+    unsigned dev = 0;
+    unsigned fn = 0;
+    if (std::sscanf(target_path.filename().c_str(), "%x:%x:%x.%x", &domain, &bus, &dev, &fn) != 4) {
+        return {};
+    }
+
+    bdf.domain   = static_cast<uint16_t>(domain);
+    bdf.bus      = static_cast<uint8_t>(bus);
+    bdf.device   = static_cast<uint8_t>(dev);
+    bdf.function = static_cast<uint8_t>(fn);
+
+    return bdf;
+}
+} // end anonymous namespace
+
+/// Update device_info and initial topology based on current config of the WQs in the system.
+template <>
+void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
+{
+    device_info = sApp->shmem->device_info;
+
+    if (SandstoneConfig::Debug) {
+        if (const char* mock_topo = getenv("SANDSTONE_MOCK_TOPOLOGY"); mock_topo && *mock_topo) {
+            // create_mock_topology(mock_topo); // TODO: implement me
+            return;
+        }
+    }
+
+    assert(enabled_devices.visible_wqs.size() == device_count());
+
+    auto enabled_cpus = ambient_logical_processor_set().to_vector();
+    if (enabled_cpus.size() < enabled_devices.visible_wqs.size()) {
+        fprintf(stderr, "%s: error: not enough CPUs available (%zu CPUs vs %zu WQs)\n",
+                program_invocation_name, enabled_cpus.size(), enabled_devices.visible_wqs.size());
+        exit(EX_USAGE);
+    }
+
+    wq_info_t* info = device_info;
+    [[maybe_unused]] const wq_info_t* cend = device_info + device_count();
+
+    std::map<int, bdf_t> bdf_cache; // bdfs are unique per device
+
+    int cpu_ind = 0;
+    for (const auto &enabled : enabled_devices.visible_wqs) {
+        info->cpu_number = enabled_cpus[cpu_ind++];
+        info->package_id = detect_package_id_via_os(info->cpu_number);
+
+        auto it = bdf_cache.find(enabled.device_id);
+        if (it == bdf_cache.end()) {
+            it = bdf_cache.emplace(enabled.device_id, detect_bdf_via_os(enabled.device_handle)).first;
+        }
+        info->bdf = it->second;
+
+        info->device_id = enabled.device_id;
+        info->wq_id = enabled.wq_id;
+        info->dev_type = enabled.device_type;
+        info->dev_version = static_cast<accfg_device_version>(accfg_device_get_version(enabled.device_handle));
+        info->path = { -1, -1 };
+
+        info++;
+    }
+    assert(info == cend);
+
+    cached_topology() = build_topology(enabled_devices.ctx);
 }
 
 void restrict_topology(DeviceRange range)
@@ -231,6 +429,28 @@ void rebuild_topology()
 
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
 {
+}
+
+std::vector<const Topology::WorkQueue*> Topology::targetable_wqs(
+        std::optional<accfg_device_type> device_type,
+        std::optional<accfg_wq_mode> mode,
+        std::optional<unsigned int> op) const
+{
+    std::vector<const WorkQueue*> result;
+    for (const Device &device : devices) {
+        if (device_type && device.dev_type != *device_type)
+            continue;
+        if (op && !has_opcode(device.op_cap, *op))
+            continue;
+        for (const Group &group : device.groups) {
+            for (const WorkQueue &wq : group.wqs) {
+                if (wq.targetable && (!mode || wq.mode == *mode))
+                    result.push_back(&wq);
+            }
+        }
+    }
+
+    return result;
 }
 
 void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)

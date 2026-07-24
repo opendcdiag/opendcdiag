@@ -49,6 +49,13 @@ struct wq_info_t
     /// Device version (V1/V2/V3).
     enum accfg_device_version dev_version;
 
+    /// Path within Topology. Changed after topo rebuild.
+    struct
+    {
+        int device;
+        int group;
+    } path;
+
 #ifdef __cplusplus
     int wq() const;        ///! Internal WQ number
 #endif
@@ -74,6 +81,9 @@ inline bool has_opcode(const accfg_op_cap& op_cap, unsigned opcode)
     }
     return (op_cap.bits[idx] & (1u << bit)) != 0;
 }
+
+bool has_opcode(const wq_info_t& info, unsigned opcode);
+bool has_opcode(const wq_info_t& info, device_features_t feature);
 #endif
 
 #define device_has_feature(f)      ((device_compiler_features & (f)) == (f) || (device_features & (f)) == (f))
