@@ -819,8 +819,6 @@ static void run_threads_sequentially(const struct test *test)
 
 static void run_threads(const struct test *test)
 {
-    current_test = test;
-
     switch (test->flags & test_schedule_mask) {
     default:
         run_threads_in_parallel(test);
@@ -830,8 +828,6 @@ static void run_threads(const struct test *test)
         run_threads_sequentially(test);
         break;
     }
-
-    current_test = nullptr;
 }
 
 namespace {
@@ -1132,6 +1128,9 @@ static void finish_test_common(struct test *test)
 
 static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
 {
+    current_test = test;
+    auto resetCurrentTest = scopeExit([&] { current_test = nullptr; });
+
     TestResult state = [&] {
         int ret = 0;
         test->per_thread = sApp->user_thread_data.data();
@@ -1486,6 +1485,9 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
     // Set up device/thread ranges so logging can iterate over them
     sApp->main_thread_data()->device_range = { 0, sApp->device_count };
     sApp->main_thread_data()->thread_range = { 0, sApp->thread_count };
+
+    current_test = test;
+    auto resetCurrentTest = scopeExit([&] { current_test = nullptr; });
 
     TestResult res;
     init_per_thread_data();
