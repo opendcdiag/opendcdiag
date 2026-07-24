@@ -672,6 +672,7 @@ ShortDuration test_timeout(ShortDuration regular_duration);
 TestResult child_run(/*nonconst*/ struct test *test, int child_number);
 struct test_cfg_info;
 TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_thread_failures);
+const struct test *current_test() noexcept __attribute__((pure));
 
 /* sandstone_ulog.cpp */
 void ulog_init(std::span<const char * const> args);
