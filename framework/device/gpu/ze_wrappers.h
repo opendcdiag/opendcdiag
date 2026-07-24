@@ -196,6 +196,17 @@ inline ZeDeviceDataPtr ze_alloc_device(ze_context_handle_t context, size_t size,
     return {context, size, device, desc, alignment};
 }
 
+inline ZeHostDataPtr ze_alloc_shared(ze_context_handle_t context, size_t size, ze_device_handle_t device,
+        const ze_device_mem_alloc_desc_t& device_desc = { .stype = ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC },
+        const ze_host_mem_alloc_desc_t& host_desc = { .stype = ZE_STRUCTURE_TYPE_HOST_MEM_ALLOC_DESC },
+        size_t alignment = 1)
+{
+    ZeHostDataPtrDeleter deleter{context};
+    void* data = nullptr;
+    ZE_CHECK_AND_SKIP(zeMemAllocShared(context, &device_desc, &host_desc, size, alignment, device, &data));
+    return {data, deleter};
+}
+
 inline ZeCmdListPtr ze_create_cmd_list(ze_context_handle_t context, ze_device_handle_t device, const ze_command_list_desc_t& desc)
 {
     return {context, device, desc};
