@@ -136,18 +136,63 @@ void apply_deviceset_param(const char *param)
 {
 }
 
+/// Build a per-device failure mask for IDXD topology.
+/// Mask format:
+/// - one character per WQ in topology iteration order;
+/// - ':' separates devices.
+/// Example: "X.:..X" means device 0 has two WQs (first failed),
+/// and device 1 has three WQs (only the last failed).
+/// Returns an empty string if there are no failures in any WQ.
 std::string build_failure_mask_for_topology(const struct test* test)
 {
-    return {};
+    UNUSED_ARGS(test);
+
+    std::string mask;
+    int total_fail_count = 0;
+
+    for (const auto& device : Topology::topology().devices) {
+        std::string device_mask;
+
+        for (const auto& group : device.groups) {
+            for (const auto& wq : group.wqs) {
+                assert(wq.wq);
+                const int thread = wq.wq->wq();
+                assert((thread >= 0 && thread < thread_count()));
+
+                if (sApp->thread_data(thread)->has_failed()) {
+                    ++total_fail_count;
+                    device_mask += 'X';
+                } else {
+                    device_mask += '.';
+                }
+            }
+        }
+
+        if (!mask.empty())
+            mask += ':';
+
+        mask += device_mask;
+    }
+
+    if (total_fail_count == 0)
+        return {};
+    return mask;
 }
 
+/// TODO: think about using the pattern from CPU, for legacy reasons?
 uint32_t mixin_from_device_info(int thread_num)
 {
-    return 1;
+    const auto& info = device_info[thread_num];
+    return scramble(
+        static_cast<uint32_t>(info.bdf.domain), static_cast<uint32_t>(info.bdf.bus),
+        static_cast<uint32_t>(info.bdf.device), static_cast<uint32_t>(info.bdf.function),
+        static_cast<uint32_t>(info.dev_type),   static_cast<uint32_t>(info.wq_id)
+    );
 }
 
 void print_temperature_of_device()
 {
+    // TODO: could we use hwmon?
 }
 
 int AccfgCtx::init()
@@ -429,6 +474,79 @@ void rebuild_topology()
 
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
 {
+    auto pattern_for_wq = [&per_thread_failures](const Topology::WorkQueue& wq) -> PerThreadFailures::value_type {
+        assert(wq.wq);
+        const int thread = wq.wq->wq();
+        assert(thread < 0 || size_t(thread) >= per_thread_failures.size());
+        return per_thread_failures[size_t(thread)];
+    };
+
+    const auto& topology = Topology::topology();
+
+    logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
+
+    bool all_devices_failed_once = true;
+    bool all_devices_failed_equally = true;
+    int failed_devices = 0;
+    PerThreadFailures::value_type last_device_pattern = 0;
+
+    for (const auto& device : topology.devices) {
+        int total_wqs = 0;
+        int failed_wqs = 0;
+        bool all_wqs_failed_once = true;
+        bool all_wqs_failed_equally = true;
+        PerThreadFailures::value_type first_nonzero_pattern = 0;
+
+        for (const auto& group : device.groups) {
+            for (const auto& wq : group.wqs) {
+                ++total_wqs;
+                auto pattern = pattern_for_wq(wq);
+                if (pattern == 0) {
+                    all_wqs_failed_once = false;
+                    all_devices_failed_once = false;
+                    continue;
+                }
+
+                ++failed_wqs;
+                if (first_nonzero_pattern && pattern != first_nonzero_pattern) {
+                    all_wqs_failed_equally = false;
+                    all_devices_failed_equally = false;
+                }
+                if (!first_nonzero_pattern)
+                    first_nonzero_pattern = pattern;
+            }
+        }
+
+        if (failed_wqs == 0)
+            continue;
+
+        ++failed_devices;
+        if (last_device_pattern && first_nonzero_pattern != last_device_pattern)
+            all_devices_failed_equally = false;
+        last_device_pattern = first_nonzero_pattern;
+
+        if (failed_wqs == 1) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Device %s: only one WQ failed\n", device.name.c_str());
+        } else if (all_wqs_failed_equally) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Device %s: all WQs failed exactly the same way\n", device.name.c_str());
+        } else if (all_wqs_failed_once) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Device %s: all WQs failed at least once\n", device.name.c_str());
+        } else if (failed_wqs < total_wqs) {
+            logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Device %s: some WQs failed but some others succeeded\n", device.name.c_str());
+        }
+    }
+
+    if (failed_devices == 0)
+        return;
+    if (failed_devices == 1) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# - Only one IDXD device failed\n");
+    } else if (all_devices_failed_equally) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# - All IDXD devices failed exactly the same way\n");
+    } else if (all_devices_failed_once) {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# - All IDXD devices failed at least once\n");
+    } else {
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# - Some IDXD devices failed but some others succeeded\n");
+    }
 }
 
 std::vector<const Topology::WorkQueue*> Topology::targetable_wqs(
