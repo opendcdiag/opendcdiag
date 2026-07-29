@@ -123,12 +123,7 @@ typedef enum TestQuality {
 #endif
 
 #ifdef __cplusplus
-#define IGNORE_RETVAL(call)                     \
-    __extension__ ({                            \
-        auto __return_value__  = call;          \
-        (void)__return_value__;                 \
-    })
-
+#define IGNORE_RETVAL(call)     std::ignore = call
 #else
 #define IGNORE_RETVAL(call)                     \
     __extension__ ({                            \
