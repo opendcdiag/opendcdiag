@@ -1210,6 +1210,7 @@ int main(int argc, char **argv)
     TestResult lastTestResult = TestResult::Skipped;
 
     preinit_tests();
+    random_restore_seed();
     for (auto it = get_first_test(); it != test_set->end(); it = get_next_test(it)) {
         if (lastTestResult != TestResult::Skipped) {
             if (sApp->service_background_scan) {
