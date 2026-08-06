@@ -20,15 +20,17 @@ generated_files += configure_file(
 
 framework_files += files(
     'cpu_device.cpp',
-    'topology.cpp',
     'logging_cpu.cpp',
     'slicing.cpp',
+    'topology.cpp',
+    'topology_cpu.cpp',
 )
 
 unittests_sources += files(
     'unit-tests/thermal_monitor_tests.cpp',
     'unit-tests/topology_tests.cpp',
     'slicing.cpp',
+    'topology_cpu.cpp',
 )
 
 premain_files += files(
