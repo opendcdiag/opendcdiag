@@ -502,6 +502,7 @@ void AbstractLogger::device_print_extra_info()
     };
 
     logging_printf(LOG_LEVEL_VERBOSE(1), "cache-info:\n");
+    bool any_cache_levels = false;
 
     for (int level = 0; level < cache_levels; ++level) {
         // Group the logical processors by which physical cache instance they
@@ -542,6 +543,12 @@ void AbstractLogger::device_print_extra_info()
             // unnecessary information (for now)
             // logging_printf(LOG_LEVEL_VERBOSE(1), "    instances: %zu\n", instances.size());
         }
+
+        any_cache_levels = true;
+    }
+    if (!any_cache_levels) {
+        // print an empty map to satisy the schema requirements
+        logging_printf(LOG_LEVEL_VERBOSE(1), "  {}\n");
     }
 }
 
