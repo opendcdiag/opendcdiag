@@ -116,7 +116,9 @@ test_fail_socket1() {
                 test_yaml_numeric "/cpu-info/$i/microcode" "value == $v"
             fi
             if v=`cat topology/ppin 2>/dev/null`; then
-                test_yaml_expr "/cpu-info/$i/ppin" = "${v#0x}"
+                # Re-format with exactly 16 hex digits, without a prefix
+                printf -v v '%016x' "$v"
+                test_yaml_expr "/cpu-info/$i/ppin" = "$v"
             else
                 test_yaml_expr "/cpu-info/$i/ppin" = None
             fi
