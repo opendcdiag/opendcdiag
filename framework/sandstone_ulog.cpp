@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sysexits.h>
 #include <unistd.h>
 
@@ -128,8 +129,10 @@ void ulog_init(std::span<const char * const> args)
         if (!page) {
             page = mmap(nullptr, MmapGranularity, PROT_READ | PROT_WRITE, MAP_SHARED_VALIDATE | MAP_SYNC, fd, off_t(page_offset));
             if (page == MAP_FAILED && errno == EOPNOTSUPP) {
+                struct stat st = {};
+                std::ignore = fstat(fd, &st);
                 page = mmap(nullptr, MmapGranularity, PROT_READ | PROT_WRITE, MAP_SHARED, fd, off_t(page_offset));
-                if (page != MAP_FAILED)
+                if (page != MAP_FAILED && !S_ISREG(st.st_mode))
                     fprintf(stderr, "# --ulog: MAP_SYNC not supported on '%s', falling back to MAP_SHARED\n",
                             filename.c_str());
             }
