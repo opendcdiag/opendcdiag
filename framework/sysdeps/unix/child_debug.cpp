@@ -642,6 +642,12 @@ static auto communicate_gdb_backtrace(int in, int out, uintptr_t handle)
     // read until EOF as the backtrace
     read_until(in, result.backtrace, EOF);
 
+    // work around a gdb bug: on its internal-error abort path it emits a
+    // trailing NUL (an off-by-one error) that would make our YAML log
+    // unparseable.
+    if (result.backtrace.ends_with('\0'))
+        result.backtrace.pop_back();
+
     return result;
 }
 
