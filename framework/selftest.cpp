@@ -228,9 +228,9 @@ static int selftest_logs_l3cachesize_init(struct test *)
         for (const Topology::CoreGrouping &group : pkg.groups) {
             if (group_sizes.size())
                 group_sizes += ", ";
-            group_sizes += std::to_string(group.l3_cache_size);
+            group_sizes += std::to_string(group.llc_cache_slice);
         }
-        aggregate += pkg.l3_cache_size;
+        aggregate += pkg.llc_cache_slice;
     }
 
     log_yaml(SANDSTONE_LOG_INFO,
