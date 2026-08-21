@@ -286,9 +286,9 @@ struct SandstoneApplicationConfig {
     static constexpr struct {
         size_t size() const { return 0; }
         char *c_str() const { return nullptr; }
-    } gdb_server_comm = {};
+    } exec_wrapper = {};
 #else
-    std::string gdb_server_comm;
+    std::string exec_wrapper;
 #endif
 
     ForkMode fork_mode =

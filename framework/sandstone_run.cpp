@@ -1355,7 +1355,7 @@ static StartedChild spawn_child(int child_number, const std::vector<const char *
     argv.insert(argv.end(), common_args.begin(), common_args.end());
     assert(argv.back() == nullptr);
 
-    if (sApp->gdb_server_comm.size()) {
+    if (sApp->exec_wrapper.size()) {
 #ifdef _WIN32
         // we need the actual Windows handle, because the file
         // descriptors don't inherit properly via gdbserver
@@ -1363,7 +1363,7 @@ static StartedChild spawn_child(int child_number, const std::vector<const char *
        argv[3] = shmemfdstr.c_str();
 #endif
        argv.insert(argv.begin(), {
-            "gdbserver", "--no-startup-with-shell", sApp->gdb_server_comm.c_str(),
+            "gdbserver", "--no-startup-with-shell", sApp->exec_wrapper.c_str(),
         });
     }
 
@@ -1372,7 +1372,7 @@ static StartedChild spawn_child(int child_number, const std::vector<const char *
     static int saved_stderr = _dup(STDERR_FILENO);
     logging_init_child_preexec();
 
-    if (sApp->gdb_server_comm.size()) {
+    if (sApp->exec_wrapper.size()) {
         ret.pid = _spawnvp(_P_NOWAIT, argv[0], const_cast<char **>(argv.data()));
     } else {
         ret.pid = _spawnv(_P_NOWAIT, path_to_exe(), const_cast<char **>(argv.data()));
@@ -1393,7 +1393,7 @@ static StartedChild spawn_child(int child_number, const std::vector<const char *
     if (ret.fd == FFD_CHILD_PROCESS) {
         logging_init_child_preexec();
 
-        if (sApp->gdb_server_comm.size()) {
+        if (sApp->exec_wrapper.size()) {
             execvp(argv[0], const_cast<char **>(argv.data()));
         }
 

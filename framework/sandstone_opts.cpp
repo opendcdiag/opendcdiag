@@ -879,7 +879,7 @@ struct ProgramOptionsParser {
         // assign 1:1
         opts.seed = string_opt_for('s');
 #ifndef NDEBUG
-        app_cfg->gdb_server_comm = string_opt_for<std::string>(gdb_server_option);
+        app_cfg->exec_wrapper = string_opt_for<std::string>(gdb_server_option);
 #endif
         opts.on_crash_arg = string_opt_for(on_crash_option);
         opts.on_hang_arg = string_opt_for(on_hang_option);
