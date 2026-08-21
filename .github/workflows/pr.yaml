@@ -144,12 +144,12 @@ jobs:
     name: Build binary for GPU
     needs: [ lint, git-sanity ]
     runs-on: ubuntu-24.04${{ matrix.archsuffix }}
-    container: debian:sid
+    container: ubuntu:24.04
     strategy:
       matrix:
         include:
-        - { name: GCC, unittests: "unittests" }
-        - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
+        - { name: GCC, unittests: "unittests", env: "CC=gcc-16 CXX=g++-16" }
+        - { name: GCC-NoLogging, unittests: "unittests", env: "CC=gcc-16 CXX=g++-16", meson_args: "-Dlogging_format=no_output" }
     steps:
       - name: Checkout the PR merge point
         uses: actions/checkout@v6

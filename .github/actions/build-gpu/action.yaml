@@ -28,11 +28,17 @@ runs:
       shell: bash
       run: |
         DEBIAN_FRONTEND=noninteractive apt-get -y update
+        DEBIAN_FRONTEND=noninteractive apt-get -y install ca-certificates gpg software-properties-common wget
+        add-apt-repository -y ppa:ubuntu-toolchain-r/test
+        install -d -m 0755 /etc/apt/keyrings
+        wget -qO - https://repositories.intel.com/gpu/intel-graphics.key | gpg --dearmor --yes -o /etc/apt/keyrings/intel-graphics.gpg
+        printf 'deb [arch=amd64 signed-by=/etc/apt/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu noble unified\n' >/etc/apt/sources.list.d/intel-gpu.list
+        DEBIAN_FRONTEND=noninteractive apt-get -y update
         echo "::group::Installing build dependencies"
         DEBIAN_FRONTEND=noninteractive apt-get -y install \
             bats \
             ca-certificates \
-            ${CC-g++} \
+            ${CXX:-g++} \
             elfutils \
             file \
             gawk \
