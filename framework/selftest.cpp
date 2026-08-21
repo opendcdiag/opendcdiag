@@ -93,10 +93,10 @@ static int selftest_pass_run(struct test * test, int)
 template <useconds_t Usecs>
 static int selftest_timedpass_run(struct test *test, int)
 {
-    do {
+    TEST_LOOP(test, 1) {
         if (Usecs)
             usleep(Usecs);
-    } while (test_time_condition(test));
+    }
     return EXIT_SUCCESS;
 }
 

@@ -641,14 +641,6 @@ static void inline __attribute__((always_inline)) assembly_marker(P param = 0)
 #endif
 }
 
-namespace AssemblyMarker {
-static constexpr uint32_t Test = 0x00;
-static constexpr uint32_t TestLoop = 0x100;
-static constexpr uint32_t Start = 0x53;             // "S"
-static constexpr uint32_t Iterate = 0x49;           // "I"
-static constexpr uint32_t End = 0x45;               // "E";
-}
-
 extern "C" {
 // The test_start() and test_stop() functions are no-op, but exist to
 // facilitate catching test starts and stops from external tools like the Intel
@@ -1341,8 +1333,24 @@ static StartedChild call_forkfd()
     return { .pid = pid, .fd = ffd };
 }
 
-static StartedChild spawn_child(int child_number, const std::vector<const char *> &common_args)
+static StartedChild spawn_child(const char *test_id, int child_number,
+                                const std::vector<const char *> &common_args)
 {
+    auto xform_arg = [&, cache = std::string()](const std::string &arg) mutable {
+        constexpr std::string_view replacement = "@@";
+        size_t pos = arg.find(replacement);
+        if (pos == std::string::npos)
+            return arg.c_str();
+
+        assert(cache.empty() && "Only one \"@@\" argument allowed per command-line!");
+        cache = arg.substr(0, pos);
+        cache += stdprintf("%s.%d", test_id, sApp->current_test_count);
+        if (child_number > 0)
+            cache += stdprintf(",%d", child_number);
+        cache += arg.substr(pos + replacement.size());
+        return cache.c_str();
+    };
+
     assert(sApp->shmemfd != -1);
     std::string childnumstr = stdprintf("%d", child_number);
 
@@ -1363,7 +1371,7 @@ static StartedChild spawn_child(int child_number, const std::vector<const char *
        argv[3] = shmemfdstr.c_str();
 #endif
        for (const std::string &arg : std::ranges::reverse_view(sApp->exec_wrapper))
-           argv.insert(argv.begin(), arg.c_str());
+           argv.insert(argv.begin(), xform_arg(arg));
     }
 
 #ifdef _WIN32
@@ -1478,7 +1486,7 @@ static void run_one_test_children(ChildrenList &children, const struct test *tes
         save_test_knob_args(common_args, test->id);
         common_args.push_back(nullptr);
         for (int i = 0; i < child_count; ++i)
-            children.add(spawn_child(i, common_args));
+            children.add(spawn_child(test->id, i, common_args));
     }
 
     /* wait for the children */

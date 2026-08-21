@@ -75,6 +75,9 @@ enum {
     retest_on_failure_option,
     reschedule_option,
     schedule_by_option,
+#ifdef __x86_64__
+    sde_trace_option,
+#endif
 #ifndef NO_SELF_TESTS
     selftest_option,
 #endif
@@ -165,6 +168,9 @@ static struct option long_options[]  = {
     { "reschedule", required_argument, nullptr, reschedule_option },
     { "rng-state", required_argument, nullptr, 's' },
     { "schedule-by", required_argument, nullptr, schedule_by_option },
+#ifdef __x86_64__
+    { "sde-trace", required_argument, nullptr, sde_trace_option },
+#endif
 #ifndef NO_SELF_TESTS
     { "selftests", no_argument, nullptr, selftest_option },
 #endif
@@ -407,6 +413,14 @@ template <typename Integer = int> struct ParseIntArgument
     }
 };
 
+static constexpr auto stringify_hex(unsigned n)
+{
+    std::array<char, 8 + 1> result = {}; // 8 nibbles in an unsigned
+    auto [ptr, ec] = std::to_chars(result.begin(), result.end(), n, 16);
+    *ptr = '\0';
+    return result;
+}
+
 void warn_deprecated_opt(const char *opt)
 {
     fprintf(ERR_STREAM, "%s: option '%s' is ignored and will be removed in a future version.\n",
@@ -459,6 +473,9 @@ struct ProgramOptionsParser {
             case disable_option:
             case 'e':
             case 'O':
+#ifdef __x86_64__
+            case sde_trace_option:
+#endif
 #if SANDSTONE_ULOG
             case ulog_option:
 #endif
@@ -879,6 +896,35 @@ struct ProgramOptionsParser {
 #ifndef NDEBUG
         if (auto comm = string_opt_for(gdb_server_option))
             app_cfg->exec_wrapper = { "gdbserver", "--no-startup-with-shell", comm };
+#endif
+#ifdef __x86_64__
+        if (auto it = opts_map.find(sde_trace_option); it != opts_map.end()) {
+            if (app_cfg->exec_wrapper.size()) {
+                fprintf(ERR_STREAM, "%s: --sde-trace is incompatible with other executable "
+                                    "wrapper options\n", argv[0]);
+                return EX_USAGE;
+            }
+
+            using namespace AssemblyMarker;
+            constexpr std::array Marker_start = stringify_hex(TestLoop ^ Start);
+            constexpr std::array Marker_end = stringify_hex(TestLoop ^ End);
+            std::initializer_list extra_args = {
+                "-odebugtrace", "sde-debugtrace.@@.out",
+                "-start_ssc_mark", Marker_start.data(), "-stop_ssc_mark", Marker_end.data(),
+                "--"
+            };
+            auto sde_args = std::get<std::vector<const char*>>(it->second);
+
+            app_cfg->exec_wrapper.reserve(sde_args.size() + extra_args.size() + 1);
+            if (sde_args.size() > 0 && *sde_args[0] == '-')
+                app_cfg->exec_wrapper.push_back("sde64");
+            app_cfg->exec_wrapper.append_range(sde_args);
+            app_cfg->exec_wrapper.append_range(extra_args);
+
+            if (opts_map.find('n') == opts_map.end())
+                app_cfg->device_count = 1;      // default to -n1
+            app_cfg->max_test_loop_count = 1;
+        }
 #endif
 
         // assign 1:1

@@ -104,6 +104,14 @@ static inline __attribute__((always_inline, noreturn)) void ud2()
 #ifdef __cplusplus
 }
 
+namespace AssemblyMarker {
+static constexpr uint32_t Test = 0x00;
+static constexpr uint32_t TestLoop = 0x100;
+static constexpr uint32_t Start = 0x53;             // "S"
+static constexpr uint32_t Iterate = 0x49;           // "I"
+static constexpr uint32_t End = 0x45;               // "E";
+}
+
 enum class LogLevelVerbosity : int8_t
 {
     Error = -1,
@@ -282,16 +290,7 @@ struct SandstoneApplicationConfig {
     ShortDuration timeout_to_kill = std::chrono::seconds(20);
     ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
-#ifdef NDEBUG
-    static constexpr struct {
-        size_t size() const { return 0; }
-        const char **begin() const { return nullptr; }
-        const char **end() const { return nullptr; }
-    } exec_wrapper = {};
-#else
     std::vector<std::string> exec_wrapper;
-#endif
-
     ForkMode fork_mode =
 #ifdef _WIN32
         ForkMode::exec_each_test;
