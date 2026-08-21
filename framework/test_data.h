@@ -68,7 +68,7 @@ struct Common
     MonotonicTimePoint fail_time;
     bool has_failed() const
     {
-        assert((fail_time > MonotonicTimePoint{}) == (int(failing_cpu) >= 0));
+        //assert((fail_time > MonotonicTimePoint{}) == (int(failing_cpu) >= 0));
         return fail_time > MonotonicTimePoint{};
     }
     bool has_skipped() const

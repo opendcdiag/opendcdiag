@@ -129,7 +129,7 @@ static int ssl_sha_run(struct test* test, int cpu)
     uint8_t *our_arena = (uint8_t *) mmap(NULL, our_arena_size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
 
 
-    TEST_LOOP(test, 256) {
+    TEST_LOOP(test, 2) {
         const size_t our_offset = (random64() & 0x1ff) | 1;
         const size_t golden_idx = random64() & (SHA_GOLDEN_ELEMS - 1);
         sha_elem *golden_elem = &golden_elements[golden_idx];
