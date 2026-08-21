@@ -24,7 +24,7 @@
 #endif
 
 #include <chrono>
-#include <map>
+#include <ranges>
 #include <vector>
 
 #include <errno.h>
@@ -1362,9 +1362,8 @@ static StartedChild spawn_child(int child_number, const std::vector<const char *
        static std::string shmemfdstr = stdprintf("h%tx", _get_osfhandle(sApp->shmemfd));
        argv[3] = shmemfdstr.c_str();
 #endif
-       argv.insert(argv.begin(), {
-            "gdbserver", "--no-startup-with-shell", sApp->exec_wrapper.c_str(),
-        });
+       for (const std::string &arg : std::ranges::reverse_view(sApp->exec_wrapper))
+           argv.insert(argv.begin(), arg.c_str());
     }
 
 #ifdef _WIN32
