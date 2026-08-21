@@ -905,6 +905,14 @@ struct ProgramOptionsParser {
                 fprintf(ERR_STREAM, "unknown value to -f\n");
                 return EX_USAGE;
             }
+            if (app_cfg->fork_mode != SandstoneApplication::ForkMode::exec_each_test &&
+                    app_cfg->exec_wrapper.size()) {
+                fprintf(ERR_STREAM, "--fork-mode=%s is incompatible with executable wrappers; "
+                                    "using -fexec\n", mode.data());
+                app_cfg->fork_mode = SandstoneApplication::ForkMode::exec_each_test;
+            }
+        } else if (app_cfg->exec_wrapper.size()) {
+            app_cfg->fork_mode = SandstoneApplication::ForkMode::exec_each_test;
         }
         if (auto value = string_opt_for('n')) {
             auto maybe_int = ParseIntArgument<>{
