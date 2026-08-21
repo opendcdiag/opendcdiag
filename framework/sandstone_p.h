@@ -285,10 +285,11 @@ struct SandstoneApplicationConfig {
 #ifdef NDEBUG
     static constexpr struct {
         size_t size() const { return 0; }
-        char *c_str() const { return nullptr; }
+        const char **begin() const { return nullptr; }
+        const char **end() const { return nullptr; }
     } exec_wrapper = {};
 #else
-    std::string exec_wrapper;
+    std::vector<std::string> exec_wrapper;
 #endif
 
     ForkMode fork_mode =

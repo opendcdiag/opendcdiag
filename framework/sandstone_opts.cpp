@@ -876,11 +876,13 @@ struct ProgramOptionsParser {
         opts.shmem_cfg.use_strict_runtime = opts_map.contains(strict_runtime_option);
         opts.shmem_cfg.ud_on_failure = opts_map.contains(ud_on_failure_option);
 
+#ifndef NDEBUG
+        if (auto comm = string_opt_for(gdb_server_option))
+            app_cfg->exec_wrapper = { "gdbserver", "--no-startup-with-shell", comm };
+#endif
+
         // assign 1:1
         opts.seed = string_opt_for('s');
-#ifndef NDEBUG
-        app_cfg->exec_wrapper = string_opt_for<std::string>(gdb_server_option);
-#endif
         opts.on_crash_arg = string_opt_for(on_crash_option);
         opts.on_hang_arg = string_opt_for(on_hang_option);
         opts.test_list_file_path = string_opt_for(test_list_file_option);
