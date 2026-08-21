@@ -454,6 +454,8 @@ struct ProgramOptionsParser {
 
         while ((opt = simple_getopt(argc, argv, long_options, &coptind)) != -1) {
             switch (opt) {
+            // list options
+            case deviceset_option:
             case disable_option:
             case 'e':
             case 'O':
@@ -463,15 +465,12 @@ struct ProgramOptionsParser {
                 add_to_map_as_vec(opt, optarg);
                 break;
 
+            // time string options
             case 't':
             case test_delay_option:
             case timeout_option:
             case timeout_kill_option:
                 opts_map.insert_or_assign(opt, string_to_millisecs(optarg));
-                break;
-
-            case deviceset_option:
-                add_to_map_as_vec(deviceset_option, optarg);
                 break;
 
             // boolean options
