@@ -27,6 +27,9 @@ runs:
     - name: Install distro packages
       shell: bash
       run: |
+        DEBIAN_SNAPSHOT=20260818T000000Z
+        printf 'deb [trusted=yes check-valid-until=no] http://snapshot.debian.org/archive/debian/%s/ sid main\n' "${DEBIAN_SNAPSHOT}" >/etc/apt/sources.list.d/debian-snapshot.list
+        printf 'Acquire::Check-Valid-Until "false";\n' >/etc/apt/apt.conf.d/99snapshot
         DEBIAN_FRONTEND=noninteractive apt-get -y update
         echo "::group::Installing build dependencies"
         DEBIAN_FRONTEND=noninteractive apt-get -y install \
@@ -49,11 +52,11 @@ runs:
             python3-yaml \
             yq \
             zlib1g-dev \
-            libze1 \
-            libze-dev \
-            intel-ocloc \
-            libigdfcl2 \
-            libigc2
+            libze1=1.28.2-2 \
+            libze-dev=1.28.2-2 \
+            intel-ocloc=26.05.37020.3-1 \
+            libigdfcl2=2.28.4-4 \
+            libigc2=2.28.4-4
         echo "::endgroup::"
     - uses: actions/checkout@v6
     - name: meson setup
