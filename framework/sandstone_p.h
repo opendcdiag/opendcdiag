@@ -291,8 +291,6 @@ struct SandstoneApplicationConfig {
     std::string gdb_server_comm;
 #endif
 
-    bool fatal_skips = false;
-
     ForkMode fork_mode =
 #ifdef _WIN32
         ForkMode::exec_each_test;
@@ -300,6 +298,7 @@ struct SandstoneApplicationConfig {
         ForkMode::fork_each_test;
 #endif
 
+    bool fatal_skips = false;
     bool ignore_mce_errors = false;
     bool ignore_os_errors = false;
     bool force_test_time = false;
