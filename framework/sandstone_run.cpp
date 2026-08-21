@@ -1395,9 +1395,9 @@ static StartedChild spawn_child(int child_number, const std::vector<const char *
 
         if (sApp->exec_wrapper.size()) {
             execvp(argv[0], const_cast<char **>(argv.data()));
+        } else {
+            execv(path_to_exe(), const_cast<char **>(argv.data()));
         }
-
-        execv(path_to_exe(), const_cast<char **>(argv.data()));
         /* does not return */
         perror("execv");
         _exit(EX_OSERR);
