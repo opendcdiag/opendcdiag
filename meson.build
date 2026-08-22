@@ -128,8 +128,9 @@ foreach ccflag : [
 endforeach
 
 foreach lflag : [
-    '-Wl,-z,relro',
     '-Wl,-z,noexecstack',
+    '-Wl,-z,now',
+    '-Wl,-z,relro',
 ]
     if cc.links('int main() { return 0; }', args: [lflag], name: lflag)
         add_project_link_arguments(lflag, language: ['c', 'cpp'])
