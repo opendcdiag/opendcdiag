@@ -64,11 +64,11 @@ struct Common
         return flags & unsigned(f2);
     }
 
-    LogicalProcessor failing_cpu;
+    int failing_cpu_plus_1;
     MonotonicTimePoint fail_time;
     bool has_failed() const
     {
-        //assert((fail_time > MonotonicTimePoint{}) == (int(failing_cpu) >= 0));
+        assert((fail_time > MonotonicTimePoint{}) == (failing_cpu_plus_1 > 0));
         return fail_time > MonotonicTimePoint{};
     }
     bool has_skipped() const
@@ -81,7 +81,7 @@ struct Common
         thread_state.store(thread_not_started, std::memory_order_relaxed);
         messages_logged.store(0, std::memory_order_relaxed);
         data_bytes_logged.store(0, std::memory_order_relaxed);
-        failing_cpu = LogicalProcessor::None;
+        failing_cpu_plus_1 = int(LogicalProcessor::None) + 1;   // == 0
         fail_time = MonotonicTimePoint{};
         thread_flags = {};
     }

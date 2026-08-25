@@ -153,3 +153,27 @@ EOF
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/stderr messages" ".*WRAP_STDERR_MARKER.*"
 }
+
+@test "failing executable wrapper is reported" {
+    declare -A yamldump
+    wrapper_skip_unless_direct
+    local false_path=`type -P false`
+    if $is_windows && type -p cygpath > /dev/null; then
+        # get actual Windows file path
+        false_path=`cygpath -a -m "$false_path"`
+    fi
+
+    sandstone_selftest -e selftest_pass --wrapper-executable "$false_path" || :
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+}
+
+@test "failing script wrapper is reported" {
+    declare -A yamldump
+    wrapper_skip_unless_direct
+
+    # A wrapper that cannot be exec'd must make the run invalid, not pass.
+    sandstone_selftest -e selftest_pass --wrapper-script "false" || :
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+}
