@@ -944,18 +944,43 @@ void logging_print_header(int argc, char **argv, ShortDuration test_duration, Sh
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;                 // short-circuit
 
+    // Append one command-line argument, quoting it if necessary so that
+    // argument boundaries (and any embedded whitespace) survive in the printed
+    // command line and it can be pasted back into a shell. We only quote when
+    // needed to keep the common case free of noise.
+    auto append_arg = [](std::string &out, std::string_view arg) {
+        static constexpr std::string_view needs_quoting = " \t\n\r\v\f'";
+        if (!arg.empty() && arg.find_first_of(needs_quoting) == std::string_view::npos) {
+            out += arg;
+            return;
+        }
+
+        // Single-quote the argument, escaping embedded single quotes as '\''.
+        out += '\'';
+        for (char c : arg) {
+            if (c == '\'')
+                out += "'\\''";
+            else
+                out += c;
+        }
+        out += '\'';
+    };
+
     std::string cmdline;
     if (argc > 0) {
-        cmdline = argv[0];
+        std::string_view arg0 = argv[0];
 #ifdef _WIN32
-        size_t pos = cmdline.find_last_of('\\');
+        size_t pos = arg0.find_last_of('\\');
 #else
-        size_t pos = cmdline.find_last_of('/');
+        size_t pos = arg0.find_last_of('/');
 #endif
-        if (pos != std::string::npos)
-            cmdline = cmdline.substr(pos+1);
-        for (int i = 1; i < argc; i++)
-            cmdline += " " + std::string(argv[i]);
+        if (pos != std::string_view::npos)
+            arg0.remove_prefix(pos + 1);
+        append_arg(cmdline, arg0);
+        for (int i = 1; i < argc; i++) {
+            cmdline += ' ';
+            append_arg(cmdline, argv[i]);
+        }
     }
 
     switch (current_output_format()) {
@@ -2312,7 +2337,10 @@ void YamlLogger::maybe_print_virt_state() {
 void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout)
 {
     using ::format_duration;
-    logging_printf(LOG_LEVEL_QUIET, "command-line: '%s'\n", cmdline.data());
+    std::string storage;
+    std::string_view escaped_cmdline = escape_for_single_line(cmdline, storage);
+    logging_printf(LOG_LEVEL_QUIET, "command-line: '%.*s'\n",
+                   int(escaped_cmdline.size()), escaped_cmdline.data());
     logging_printf(LOG_LEVEL_QUIET, "version: %s\n", program_version);
     logging_printf(LOG_LEVEL_VERBOSE(1), "os: %s\n", kernel_info().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "runtime: %s\n", libc_info().c_str());
