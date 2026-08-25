@@ -651,7 +651,7 @@ void logging_mark_thread_failed(int thread_num) noexcept
     // get_monotonic_time_now() because we'll compare to
     // sApp->current_test_starttime.
     thr->fail_time = std::chrono::steady_clock::now();
-    thr->failing_cpu = LogicalProcessor(sched_getcpu());
+    thr->failing_cpu_plus_1 = sched_getcpu() + 1;
     if (thread_num >= 0) {
         auto tthr = static_cast<PerThreadData::Test *>(thr);
         tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
@@ -1753,7 +1753,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
             bool had_failed = data->has_failed();
             log_message(thread, SANDSTONE_LOG_ERROR "Thread is stuck");
             if (!had_failed)
-                data->failing_cpu = LogicalProcessor(device_info[device].cpu_number);
+                data->failing_cpu_plus_1 = device_info[device].cpu_number + 1;
         }, slices.size());
         return;
 
@@ -1957,8 +1957,9 @@ void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int th
                 thread_id_header_for_device(device, verbosity).c_str());
     }
     if (has_failed) {
+        LogicalProcessor lp = LogicalProcessor(thr->failing_cpu_plus_1 - 1);
         dprintf(fd, "%s    %s: %s\n", indent_spaces().data(), failing_cpu_label,
-                format_logical_processor(thr->failing_cpu).c_str());
+                format_logical_processor(lp).c_str());
         if (int(thr->previous_cpu) >= 0)
             dprintf(fd, "%s    previous-cpu: %s\n", indent_spaces().data(),
                     format_logical_processor(thr->previous_cpu).c_str());
