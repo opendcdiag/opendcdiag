@@ -115,6 +115,7 @@ Topology build_topology(const AccfgCtx& ctx)
             it->numa_node = accfg_device_get_numa_node(device_handle);
             it->max_transfer_size = accfg_device_get_max_transfer_size(device_handle);
             it->max_batch_size = accfg_device_get_max_batch_size(device_handle);
+            it->max_groups = accfg_device_get_max_groups(device_handle);
             int op_cap_ret = accfg_device_get_op_cap(device_handle, &it->op_cap);
             assert(op_cap_ret == 0);
         }
