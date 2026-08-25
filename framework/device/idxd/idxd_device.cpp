@@ -5,10 +5,22 @@
 
 #include "sandstone_p.h"
 #include "idxd_device.h"
+#include "idxd_features.h"
+
+#include <string>
+#include <vector>
 
 std::string device_features_to_string(device_features_t f)
 {
     std::string result;
+    const char *comma = "";
+    for (size_t i = 0; i < IDXD_FEATURE_SIZE; ++i) {
+        if (f & IDXD_FEATURE_CONSTANT(i)) {
+            result += comma;
+            result += features_names[i];
+            comma = ",";
+        }
+    }
     return result;
 }
 
