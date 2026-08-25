@@ -1333,6 +1333,44 @@ static StartedChild call_forkfd()
     return { .pid = pid, .fd = ffd };
 }
 
+#ifdef _WIN32
+// The MSVCRT/UCRT _spawn* family builds the child's command line by
+// concatenating argv[] separated by single spaces, without any quoting. Any
+// argument that is empty or contains whitespace, a double quote or a backslash
+// would therefore be split or mangled before the child (or a wrapper shell)
+// re-parses it. Apply the canonical Windows command-line quoting so the
+// argument round-trips through both CommandLineToArgvW and Cygwin/MSYS sh.
+static std::string windows_quote_arg(std::string_view arg)
+{
+    if (!arg.empty() && arg.find_first_of(" \t\n\v\"") == std::string_view::npos)
+        return std::string(arg);
+
+    std::string result = "\"";
+    for (auto it = arg.begin(); ; ++it) {
+        unsigned backslashes = 0;
+        while (it != arg.end() && *it == '\\') {
+            ++it;
+            ++backslashes;
+        }
+        if (it == arg.end()) {
+            // escape trailing backslashes so they don't escape the closing quote
+            result.append(backslashes * 2, '\\');
+            break;
+        } else if (*it == '"') {
+            // escape all preceding backslashes and the double quote itself
+            result.append(backslashes * 2 + 1, '\\');
+            result.push_back('"');
+        } else {
+            // backslashes not followed by a quote are literal
+            result.append(backslashes, '\\');
+            result.push_back(*it);
+        }
+    }
+    result.push_back('"');
+    return result;
+}
+#endif // _WIN32
+
 static StartedChild spawn_child(const char *test_id, int child_number,
                                 const std::vector<const char *> &common_args)
 {
@@ -1375,14 +1413,30 @@ static StartedChild spawn_child(const char *test_id, int child_number,
     }
 
 #ifdef _WIN32
+    // Quote each argument for the child command line (see windows_quote_arg).
+    // The cmdname argument passed separately to _spawnv* is used only to locate
+    // the executable and must stay unquoted.
+    std::vector<std::string> quoted;
+    std::vector<const char *> qargv;
+    quoted.reserve(argv.size());
+    qargv.reserve(argv.size());
+    for (const char *arg : argv) {
+        if (!arg) {
+            qargv.push_back(nullptr);
+            continue;
+        }
+        quoted.push_back(windows_quote_arg(arg));
+        qargv.push_back(quoted.back().c_str());
+    }
+
     // save stderr
     static int saved_stderr = _dup(STDERR_FILENO);
     logging_init_child_preexec();
 
     if (sApp->exec_wrapper.size()) {
-        ret.pid = _spawnvp(_P_NOWAIT, argv[0], const_cast<char **>(argv.data()));
+        ret.pid = _spawnvp(_P_NOWAIT, argv[0], const_cast<char **>(qargv.data()));
     } else {
-        ret.pid = _spawnv(_P_NOWAIT, path_to_exe(), const_cast<char **>(argv.data()));
+        ret.pid = _spawnv(_P_NOWAIT, path_to_exe(), const_cast<char **>(qargv.data()));
     }
 
     int saved_errno = errno;
