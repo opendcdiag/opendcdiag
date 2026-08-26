@@ -78,7 +78,17 @@ static DWORD map_max_protection(int prot, int flags)
     DWORD flProtect = PAGE_NOACCESS;
     if (flags & MAP_PRIVATE) {
         if (flags & MAP_ANONYMOUS)
-            flProtect = PAGE_EXECUTE_WRITECOPY;
+            // Anonymous private mappings are backed by the page file, not a
+            // real file, so there's no reason to restrict the section to
+            // copy-on-write protection. Use PAGE_EXECUTE_READWRITE instead,
+            // so later mprotect()/VirtualProtect() calls can grant any
+            // combination of read/write/exec permissions (e.g. JIT buffers
+            // toggling between writable and executable). Per MS docs,
+            // mapping such a view with FILE_MAP_COPY access (below) also
+            // requires the section's protection to be PAGE_READWRITE,
+            // PAGE_EXECUTE_READWRITE, PAGE_READONLY, or PAGE_EXECUTE_READ --
+            // not one of the WRITECOPY variants.
+            flProtect = PAGE_EXECUTE_READWRITE;
         else
             flProtect = priv_mapping[prot & PROT_MASK];
     } else {
