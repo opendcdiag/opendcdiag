@@ -31,7 +31,7 @@ template <typename SVD, int Dim> struct EigenSVDTest
 
     [[gnu::noinline]] static void calculate_once(const Mat &orig_matrix, Mat &u, Mat &v)
     {
-        SVD fullSvd(orig_matrix, Eigen::ComputeFullU | Eigen::ComputeFullV);
+        SVD fullSvd(orig_matrix);
         u = fullSvd.matrixU();
         v = fullSvd.matrixV();
     }
