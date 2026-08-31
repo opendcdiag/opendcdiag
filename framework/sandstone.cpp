@@ -590,7 +590,7 @@ static int exec_mode_run(int argc, char **argv)
         char *end;
         long n = strtol(arg, &end, 10);
         if (__builtin_expect(int(n) != n || n < 0 || *end, false)) {
-#if defined(_WIN32) && !defined(NDEBUG)
+#if defined(_WIN32)
            if (*arg == 'h') {
                // a handle
                n = _open_osfhandle(strtoll(arg + 1, &end, 16), O_RDWR);
