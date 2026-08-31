@@ -651,7 +651,7 @@ void logging_mark_thread_failed(int thread_num) noexcept
     // get_monotonic_time_now() because we'll compare to
     // sApp->current_test_starttime.
     thr->fail_time = std::chrono::steady_clock::now();
-    thr->failing_cpu = LogicalProcessor(sched_getcpu());
+    thr->failing_cpu_plus_1 = sched_getcpu() + 1;
     if (thread_num >= 0) {
         auto tthr = static_cast<PerThreadData::Test *>(thr);
         tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
@@ -944,18 +944,43 @@ void logging_print_header(int argc, char **argv, ShortDuration test_duration, Sh
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
         return;                 // short-circuit
 
+    // Append one command-line argument, quoting it if necessary so that
+    // argument boundaries (and any embedded whitespace) survive in the printed
+    // command line and it can be pasted back into a shell. We only quote when
+    // needed to keep the common case free of noise.
+    auto append_arg = [](std::string &out, std::string_view arg) {
+        static constexpr std::string_view needs_quoting = " \t\n\r\v\f'";
+        if (!arg.empty() && arg.find_first_of(needs_quoting) == std::string_view::npos) {
+            out += arg;
+            return;
+        }
+
+        // Single-quote the argument, escaping embedded single quotes as '\''.
+        out += '\'';
+        for (char c : arg) {
+            if (c == '\'')
+                out += "'\\''";
+            else
+                out += c;
+        }
+        out += '\'';
+    };
+
     std::string cmdline;
     if (argc > 0) {
-        cmdline = argv[0];
+        std::string_view arg0 = argv[0];
 #ifdef _WIN32
-        size_t pos = cmdline.find_last_of('\\');
+        size_t pos = arg0.find_last_of('\\');
 #else
-        size_t pos = cmdline.find_last_of('/');
+        size_t pos = arg0.find_last_of('/');
 #endif
-        if (pos != std::string::npos)
-            cmdline = cmdline.substr(pos+1);
-        for (int i = 1; i < argc; i++)
-            cmdline += " " + std::string(argv[i]);
+        if (pos != std::string_view::npos)
+            arg0.remove_prefix(pos + 1);
+        append_arg(cmdline, arg0);
+        for (int i = 1; i < argc; i++) {
+            cmdline += ' ';
+            append_arg(cmdline, argv[i]);
+        }
     }
 
     switch (current_output_format()) {
@@ -1728,7 +1753,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
             bool had_failed = data->has_failed();
             log_message(thread, SANDSTONE_LOG_ERROR "Thread is stuck");
             if (!had_failed)
-                data->failing_cpu = LogicalProcessor(device_info[device].cpu_number);
+                data->failing_cpu_plus_1 = device_info[device].cpu_number + 1;
         }, slices.size());
         return;
 
@@ -1932,8 +1957,9 @@ void YamlLogger::print_thread_header(int fd, PerThreadData::Common *data, int th
                 thread_id_header_for_device(device, verbosity).c_str());
     }
     if (has_failed) {
+        LogicalProcessor lp = LogicalProcessor(thr->failing_cpu_plus_1 - 1);
         dprintf(fd, "%s    %s: %s\n", indent_spaces().data(), failing_cpu_label,
-                format_logical_processor(thr->failing_cpu).c_str());
+                format_logical_processor(lp).c_str());
         if (int(thr->previous_cpu) >= 0)
             dprintf(fd, "%s    previous-cpu: %s\n", indent_spaces().data(),
                     format_logical_processor(thr->previous_cpu).c_str());
@@ -2312,7 +2338,10 @@ void YamlLogger::maybe_print_virt_state() {
 void YamlLogger::print_header(std::string_view cmdline, Duration test_duration, Duration test_timeout)
 {
     using ::format_duration;
-    logging_printf(LOG_LEVEL_QUIET, "command-line: '%s'\n", cmdline.data());
+    std::string storage;
+    std::string_view escaped_cmdline = escape_for_single_line(cmdline, storage);
+    logging_printf(LOG_LEVEL_QUIET, "command-line: '%.*s'\n",
+                   int(escaped_cmdline.size()), escaped_cmdline.data());
     logging_printf(LOG_LEVEL_QUIET, "version: %s\n", program_version);
     logging_printf(LOG_LEVEL_VERBOSE(1), "os: %s\n", kernel_info().c_str());
     logging_printf(LOG_LEVEL_VERBOSE(1), "runtime: %s\n", libc_info().c_str());

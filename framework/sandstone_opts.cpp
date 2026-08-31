@@ -14,6 +14,9 @@
 #include <vector>
 
 #include <getopt.h>
+#if __has_include(<paths.h>)
+#  include <paths.h>
+#endif
 
 #ifdef SANDSTONE_UNITTESTS
 extern FILE* test_stream;
@@ -22,6 +25,10 @@ extern FILE* test_stream;
 #else
 #define OUT_STREAM stdout
 #define ERR_STREAM stderr
+#endif
+
+#ifndef _PATH_BSHELL
+#define _PATH_BSHELL    "sh"
 #endif
 
 using namespace std::chrono;
@@ -102,6 +109,8 @@ enum {
     vary_uncore_frequency,
 #endif
     version_option,
+    wrapper_exec_option,
+    wrapper_script_option,
     weighted_testrun_option,
     thread_ratio_option,
     alpha_option,
@@ -203,6 +212,8 @@ static struct option long_options[]  = {
 #endif
     { "verbose", no_argument, nullptr, 'v' },
     { "version", no_argument, nullptr, version_option },
+    { "wrapper-executable", required_argument, nullptr, wrapper_exec_option },
+    { "wrapper-script", required_argument, nullptr, wrapper_script_option },
     { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
     { "yaml", optional_argument, nullptr, 'Y' },
 
@@ -479,6 +490,7 @@ struct ProgramOptionsParser {
 #if SANDSTONE_ULOG
             case ulog_option:
 #endif
+            case wrapper_exec_option:
                 add_to_map_as_vec(opt, optarg);
                 break;
 
@@ -527,6 +539,7 @@ struct ProgramOptionsParser {
             case max_messages_option:
             case reschedule_option:
             case thread_ratio_option:
+            case wrapper_script_option:
                 opts_map.insert_or_assign(opt, optarg);
                 break;
 
@@ -926,6 +939,24 @@ struct ProgramOptionsParser {
             app_cfg->max_test_loop_count = 1;
         }
 #endif
+        if (auto it = opts_map.find(wrapper_exec_option); it != opts_map.end()) {
+            if (app_cfg->exec_wrapper.size()) {
+                fprintf(ERR_STREAM, "%s: --wrapper-executable is incompatible with other "
+                                    "executable wrapper options\n", argv[0]);
+                return EX_USAGE;
+            }
+            const auto args = std::get<std::vector<const char *>>(it->second);
+            app_cfg->exec_wrapper.reserve(args.size());
+            std::copy(args.begin(), args.end(), std::back_inserter(app_cfg->exec_wrapper));
+        }
+        if (const char *script = string_opt_for(wrapper_script_option)) {
+            if (app_cfg->exec_wrapper.size()) {
+                fprintf(ERR_STREAM, "%s: --wrapper-script is incompatible with other executable "
+                                    "wrapper options\n", argv[0]);
+                return EX_USAGE;
+            }
+            app_cfg->exec_wrapper = { _PATH_BSHELL, "-c", script };
+        }
 
         // assign 1:1
         opts.seed = string_opt_for('s');
