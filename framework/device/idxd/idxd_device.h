@@ -34,6 +34,9 @@ struct wq_info_t
     /// Package ID in the system.
     int16_t package_id;
 
+    /// Core ID within the package.
+    int16_t core_id;
+
     /// PCI location.
     struct bdf_t bdf;
 
