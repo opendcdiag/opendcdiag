@@ -597,9 +597,9 @@ bdf_t detect_bdf_via_os(accfg_device *device)
         return bdf;
     }
 
-    const auto link_path = std::filesystem::path(std::format("/sys/bus/dsa/devices/{}/device", devname));
+    const auto link_path = std::filesystem::path(std::format("/sys/bus/dsa/devices/{}", devname));
     std::error_code ec;
-    const auto target_path = std::filesystem::read_symlink(link_path, ec);
+    const auto target_path = std::filesystem::canonical(link_path, ec);
     if (ec) [[unlikely]] {
         return bdf;
     }
@@ -608,7 +608,7 @@ bdf_t detect_bdf_via_os(accfg_device *device)
     unsigned bus = 0;
     unsigned dev = 0;
     unsigned fn = 0;
-    if (std::sscanf(target_path.filename().c_str(), "%x:%x:%x.%x", &domain, &bus, &dev, &fn) != 4) {
+    if (std::sscanf(target_path.parent_path().filename().c_str(), "%x:%x:%x.%x", &domain, &bus, &dev, &fn) != 4) {
         return {};
     }
 
