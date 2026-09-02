@@ -541,19 +541,18 @@ void create_mock_topology(const char *topo)
 }
 
 namespace {
-/// TODO: copied from GPU
-int16_t detect_package_id_via_os(int cpu)
+int16_t detect_via_os_internal(const char* name, int cpu)
 {
     int16_t res = -1;
-    if (cpu < 0) { [[unlikely]]
+    if (cpu < 0) [[unlikely]] {
         return res;
     }
-    auto file = std::format("/sys/devices/system/cpu/cpu{}/topology/physical_package_id", cpu);
+    auto file = std::format("/sys/devices/system/cpu/cpu{}/topology/{}", cpu, name);
 
     FILE* fp = fopen(file.c_str(), "r");
-    if (!fp) { [[unlikely]]
-        fprintf(stderr, "%s: internal error: unable to find physical_package_id file: %m\n",
-                program_invocation_name);
+    if (!fp) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: unable to find %s file: %m\n",
+                program_invocation_name, name);
         return res;
     }
     int val;
@@ -563,6 +562,16 @@ int16_t detect_package_id_via_os(int cpu)
     fclose(fp);
 
     return res;
+}
+
+int16_t detect_package_id_via_os(int cpu)
+{
+    return detect_via_os_internal("physical_package_id", cpu);
+}
+
+int16_t detect_core_id_via_os(int cpu)
+{
+    return detect_via_os_internal("core_id", cpu);
 }
 
 bdf_t detect_bdf_via_os(accfg_device *device)
@@ -629,6 +638,7 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
     for (const auto &enabled : enabled_devices.visible_wqs) {
         info->cpu_number = enabled_cpus[cpu_ind++];
         info->package_id = detect_package_id_via_os(info->cpu_number);
+        info->core_id = detect_core_id_via_os(info->cpu_number);
 
         auto it = bdf_cache.find(enabled.device_id);
         if (it == bdf_cache.end()) {
