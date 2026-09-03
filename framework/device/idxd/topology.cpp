@@ -390,7 +390,13 @@ void print_temperature_of_device()
 
 int AccfgCtx::init()
 {
-    if (accfg_new(&ctx) < 0) {
+    static constexpr int MAX_RETRIES = 3;
+    int attempt = 0;
+    int ret = 0;
+    while (ret = accfg_new(&ctx), ret < 0 && ++attempt < MAX_RETRIES) {
+        usleep(100);
+    }
+    if (ret < 0) {
         return log_skip_or_print(RuntimeSkipCategory, "Failed to initialize accfg_ctx");
     }
     return EXIT_SUCCESS;
