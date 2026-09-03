@@ -132,6 +132,7 @@ public:
 
         uint32_t max_batch_size = 0;
         uint64_t max_transfer_size = 0;
+        uint32_t max_groups = 0;
 
         accfg_op_cap op_cap = {};
 
