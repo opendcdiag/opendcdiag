@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <format>
 
 namespace {
@@ -77,15 +78,18 @@ void append_topo_device(Topology::Device& device, accfg_device* device_handle, w
     append_topo_group(*it, wq_handle, info);
 }
 
+// Since the IDs can be sparse, we must store the relative indinces inside the vector.
 void finalize_topology_links(Topology& topo)
 {
-    for (auto& device : topo.devices) {
-        for (auto& group : device.groups) {
+    for (size_t device_index = 0; device_index < topo.devices.size(); ++device_index) {
+        auto& device = topo.devices[device_index];
+        for (size_t group_index = 0; group_index < device.groups.size(); ++group_index) {
+            auto& group = device.groups[group_index];
             for (auto& wq : group.wqs) {
                 wq.this_device = &device;
                 wq.this_group = &group;
                 // We can do const_cast because originally (in append_topo_group()) info was non-const.
-                const_cast<wq_info_t*>(wq.wq)->path = { device.id, group.id };
+                const_cast<wq_info_t*>(wq.wq)->path = { (int)device_index, (int)group_index }; // instead of { device.id, group.id }
             }
         }
     }

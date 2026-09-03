@@ -52,7 +52,7 @@ struct wq_info_t
     /// Device version (V1/V2/V3).
     enum accfg_device_version dev_version;
 
-    /// Path within Topology. Changed after topo rebuild.
+    /// Path (vector indices) within Topology. Changed after topo rebuild.
     struct
     {
         int device;
