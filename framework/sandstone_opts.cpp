@@ -9,6 +9,7 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <charconv>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -413,7 +414,7 @@ template <typename Integer = int> struct ParseIntArgument
     }
 };
 
-static constexpr auto stringify_hex(unsigned n)
+[[maybe_unused]] static constexpr auto stringify_hex(unsigned n)
 {
     std::array<char, 8 + 1> result = {}; // 8 nibbles in an unsigned
     auto [ptr, ec] = std::to_chars(result.begin(), result.end(), n, 16);
