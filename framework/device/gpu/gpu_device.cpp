@@ -53,8 +53,9 @@ TestResult prepare_test_for_device(struct test *test)
     return TestResult::Passed;
 }
 
-void finish_test_for_device(struct test *test)
+TestResult finish_test_for_device(struct test *test)
 {
+    return TestResult::Passed;
 }
 
 extern struct test _test_event_monitor;
