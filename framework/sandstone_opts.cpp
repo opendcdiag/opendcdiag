@@ -414,13 +414,15 @@ template <typename Integer = int> struct ParseIntArgument
     }
 };
 
-[[maybe_unused]] static constexpr auto stringify_hex(unsigned n)
+#ifdef __x86_64__
+static constexpr auto stringify_hex(unsigned n)
 {
     std::array<char, 8 + 1> result = {}; // 8 nibbles in an unsigned
     auto [ptr, ec] = std::to_chars(result.begin(), result.end(), n, 16);
     *ptr = '\0';
     return result;
 }
+#endif
 
 void warn_deprecated_opt(const char *opt)
 {
