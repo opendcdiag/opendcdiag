@@ -651,10 +651,20 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
 
 void restrict_topology(DeviceRange range)
 {
+    assert(range.starting_device + range.device_count <= sApp->device_count);
+    auto old_wq_info = std::exchange(device_info, sApp->shmem->device_info + range.starting_device);
+    int old_device_count = std::exchange(sApp->device_count, range.device_count);
+
+    Topology &topo = cached_topology();
+    if (old_wq_info != device_info || old_device_count != sApp->device_count || topo.devices.empty()) {
+        topo = build_topology();
+    }
 }
 
 void rebuild_topology()
 {
+    assert(device_info && sApp->device_count && "device_info must be filled at this point");
+    cached_topology() = build_topology();
 }
 
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
