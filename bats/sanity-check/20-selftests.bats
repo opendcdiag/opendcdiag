@@ -168,7 +168,11 @@ tap_negative_check() {
     if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
         skip "TAP skipped for GPU"
     fi
-    local -a opts=(--output-format=tap --quick --selftests --quiet --disable="*fork" -e @positive)
+    local -a opts=(--output-format=tap --quick --selftests --quiet -e @positive)
+    if ! $is_windows; then
+        # tests not defined for windows
+        opts+=(--disable="*fork")
+    fi
     $SANDSTONE "${opts[@]}" > $BATS_TEST_TMPDIR/output.tap
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.tap
@@ -191,7 +195,11 @@ tap_negative_check() {
 }
 
 @test "YAML silent output" {
-    local -a opts=(-Y --quick --selftests --quiet --disable="*fork" -e @positive)
+    local -a opts=(-Y --quick --selftests --quiet -e @positive)
+    if ! $is_windows; then
+        # tests not defined for windows
+        opts+=(--disable="*fork")
+    fi
     $SANDSTONE "${opts[@]}" > $BATS_TEST_TMPDIR/output.yaml
 
     sed -i -e 's/\r$//' $BATS_TEST_TMPDIR/output.yaml
@@ -968,6 +976,18 @@ test_random() {
 
     # Confirm we've run the test we expected to run
     test_yaml_regexp "/tests/0/test" selftest_pass
+}
+
+@test "--disable non-existing test" {
+    run $SANDSTONE --selftests --disable=non_existing_test
+    [[ "$status" -eq 64 ]]
+    [[ "$output" = *"Cannot find matching tests for 'non_existing_test' to disable"* ]]
+}
+
+@test "--enable non-existing test" {
+    run $SANDSTONE --selftests --enable=non_existing_test
+    [[ "$status" -eq 64 ]]
+    [[ "$output" = *"Cannot find matching tests for 'non_existing_test'"* ]]
 }
 
 @test "wildcard --enable" {
