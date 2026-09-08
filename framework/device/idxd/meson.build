@@ -14,6 +14,7 @@ framework_files += files(
     'idxd_device.cpp',
     'topology.cpp',
     'logging_idxd.cpp',
+    'wq_base.c',
 )
 
 unittests_sources += files(
