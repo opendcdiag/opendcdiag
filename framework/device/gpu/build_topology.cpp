@@ -25,7 +25,7 @@ Topology build_topology()
 {
     Topology topo;
     gpu_info_t* info = device_info;
-    const gpu_info_t* cend = device_info + thread_count();
+    const gpu_info_t* cend = device_info + device_count();
     auto root_first = info;
     while (info != cend) {
         if (info->subdevice_index == -1) {
