@@ -405,13 +405,19 @@ static int kvm_prot64_setup_sregs(int cpu_fd, struct kvm_sregs *sregs)
 __attribute__((target("xsave")))
 static int kvm_prot64_setup_xsave(int cpu_fd)
 {
-    struct kvm_xcrs xcrs;
-    IOCTL_OR_RET(cpu_fd, KVM_GET_XCRS, &xcrs);
+    uint64_t supported_xcr0 = 0;
+    struct kvm_device_attr devattr = {
+        .attr = KVM_X86_XCOMP_GUEST_SUPP,
+        .addr = (uintptr_t)&supported_xcr0,
+    };
+    IOCTL_OR_RET(kvm_fd, KVM_GET_DEVICE_ATTR, &devattr);
 
-    /* clear bits above 9 (bit 17 & 18, AMX support). it workarounds the kernels
-     * refusing to set it on the hardware which supports AMX and KVM's CPUID
-     * reporting support too. */
-    xcrs.xcrs[0].value = _xgetbv(0) & 0x3ff;
+    struct kvm_xcrs xcrs = {
+        .nr_xcrs = 1,
+        .flags = 0,
+        .xcrs[0].xcr = 0,        /* XCR0 */
+    };
+    xcrs.xcrs[0].value = _xgetbv(0) & supported_xcr0;
     return ioctl(cpu_fd, KVM_SET_XCRS, &xcrs);
 }
 
