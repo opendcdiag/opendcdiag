@@ -1154,7 +1154,11 @@ int main(int argc, char **argv)
     /* Remove all the tests we were told to disable */
     if (opts.disabled_tests.size()) {
         for (const auto& name : opts.disabled_tests) {
-            test_set->remove(name.c_str());
+            auto ret = test_set->remove(name.c_str());
+            if (ret < 0 && !opts.test_set_config.ignore_unknown_tests) {
+                fprintf(stderr, "%s: Cannot find matching tests for '%s' to disable\n", program_invocation_name, name.c_str());
+                exit(EX_USAGE);
+            }
         }
     }
 
