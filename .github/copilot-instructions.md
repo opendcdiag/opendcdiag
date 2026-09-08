@@ -22,4 +22,5 @@ Use the Markdown files from the table below as rules for any code review:
 | `.github/instructions/style.instructions.md` | Coding style guide |
 | `.github/instructions/general-c++.instructions.md` | C++ coding rules |
 | `.github/instructions/test.instructions.md` | Test specific coding guidelines |
+| `.github/instructions/changelog.instructions.md` | ChangeLog tag requirements for critical changes |
 
