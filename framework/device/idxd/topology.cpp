@@ -29,6 +29,14 @@
 #include <utility>
 #include <vector>
 
+#include <cpuid.h>
+
+#ifdef __linux__
+#  include <asm/prctl.h>
+#  include <sys/syscall.h>
+#  include <unistd.h>
+#endif
+
 struct wq_info_t* device_info = nullptr;
 
 namespace {
@@ -398,6 +406,56 @@ bool has_feature(const wq_info_t& info, device_features_t feature)
     return has_opcode(Topology::topology().devices[info.path.device].op_cap, feature_to_opcode(feature));
 }
 
+// Parse only a fraction required for IDXD tests.
+static device_features_t detect_cpu_features()
+{
+    uint32_t eax, ebx, ecx, edx;
+    uint32_t max_level = 0;
+    device_features_t features = 0;
+
+    __cpuid(0, max_level, ebx, ecx, edx);
+    if (max_level < 7)
+        return features;
+
+    __cpuid_count(7, 0, eax, ebx, ecx, edx);
+
+    if (ebx & (UINT32_C(1) << 3))
+        features |= cpu_feature_bmi;
+    if (ecx & (UINT32_C(1) << 5))
+        features |= cpu_feature_waitpkg;
+    if (ecx & (UINT32_C(1) << 29))
+        features |= cpu_feature_enqcmd;
+
+    constexpr uint32_t AmxTile = UINT32_C(1) << 24;
+    constexpr uint32_t AmxInt8 = UINT32_C(1) << 25;
+    if ((edx & (AmxTile | AmxInt8)) != (AmxTile | AmxInt8))
+        return features;
+
+    __cpuid(1, eax, ebx, ecx, edx);
+    constexpr uint32_t OsXsave = UINT32_C(1) << 27;
+    if ((ecx & OsXsave) == 0)
+        return features;
+
+    uint32_t xcr0_low, xcr0_high;
+    asm("xgetbv" : "=a"(xcr0_low), "=d"(xcr0_high) : "c"(0));
+    uint64_t xcr0 = xcr0_low | (uint64_t(xcr0_high) << 32);
+
+    constexpr uint64_t Xtilecfg = UINT64_C(1) << 17;
+    constexpr uint64_t Xtiledata = UINT64_C(1) << 18;
+    constexpr uint64_t AmxState = Xtilecfg | Xtiledata;
+
+#ifdef __linux__
+    if ((xcr0 & Xtiledata) == 0 &&
+        syscall(SYS_arch_prctl, ARCH_REQ_XCOMP_PERM, 18) == 0)
+        xcr0 |= Xtiledata;
+#endif
+
+    if ((xcr0 & AmxState) == AmxState)
+        features |= cpu_feature_amx_int8;
+
+    return features;
+}
+
 static device_features_t detect_features(accfg_device* device)
 {
     device_features_t features = 0;
@@ -492,7 +550,8 @@ device_features_t detect_features()
     if (auto ret = ctx.init(); ret)
         return 0;
 
-    device_features_t features = 0;
+    device_features_t features = detect_cpu_features();
+
     accfg_device* device;
     accfg_device_foreach(ctx.get(), device) {
         features |= detect_features(device);
@@ -512,7 +571,7 @@ WorkQueueSet detect_devices<WorkQueueSet>()
         return res;
     }
 
-    device_features = 0; // reset
+    device_features = detect_cpu_features(); // reset
 
     accfg_device* device;
     accfg_device_foreach(res.ctx.get(), device) {

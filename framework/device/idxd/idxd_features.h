@@ -65,9 +65,28 @@ typedef unsigned __int128 device_features_t;
 #define device_feature_op_compress      IDXD_FEATURE_CONSTANT(73)
 #define device_feature_op_decompress    IDXD_FEATURE_CONSTANT(74)
 
+// CPU-specific features
+#define cpu_feature_bmi                 IDXD_FEATURE_CONSTANT(75)
+#define cpu_feature_waitpkg             IDXD_FEATURE_CONSTANT(76)
+#define cpu_feature_enqcmd              IDXD_FEATURE_CONSTANT(77)
+#define cpu_feature_amx_int8            IDXD_FEATURE_CONSTANT(78)
+
 // Further features can describe additional capabilities or type-specific ones.
 
-// IDXD features are runtime-detected only; there are no compile-time feature bits.
-static const device_features_t device_compiler_features = 0;
+// In this case, compiler features are in fact CPU-features.
+static const device_features_t device_compiler_features = 0
+#ifdef __BMI__
+         | cpu_feature_bmi
+#endif
+#ifdef __WAITPKG__
+         | cpu_feature_waitpkg
+#endif
+#ifdef __ENQCMD__
+         | cpu_feature_enqcmd
+#endif
+#ifdef __AMX_INT8__
+         | cpu_feature_amx_int8
+#endif
+        ;
 
 #endif // INC_IDXD_FEATURES_H

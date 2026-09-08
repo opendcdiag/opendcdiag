@@ -608,6 +608,9 @@ static int exec_mode_run(int argc, char **argv)
     attach_shmem(parse_int(argv[1]));
 #if SANDSTONE_DEVICE_IDXD
     device_features = detect_features();
+    if (!device_features) {
+        return EX_DATAERR;
+    }
 #endif
     device_info = sApp->shmem->device_info;
     sApp->thread_count = sApp->shmem->total_thread_count;
