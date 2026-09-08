@@ -61,6 +61,8 @@ struct wq_info_t
 #endif
 };
 
+typedef struct wq_info_t wq_info_t;
+
 // Alias for use in common framework code
 typedef struct wq_info_t device_info_t;
 
