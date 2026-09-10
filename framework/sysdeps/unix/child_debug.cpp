@@ -980,21 +980,25 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
         generate_backtrace(pidstr, slice, handle, thread);
     }
 
-    if (!handle)
-        return;
+    std::string log;
+    dump_device_state(log, thread);
 
-    // now include the register state
-    if (ctx.contents & CrashContext::MachineContext) {
-        std::string log;
-
-#ifdef __x86_64__
-        dump_context(log, &ctx.mc, ctx.xsave_buffer.data(), ctx.xsave_buffer.size());
-#endif
-        dump_device_state(log, thread);
-
+    if (!handle) {
         if (log.size()) {
             log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
         }
+        return;
+    }
+
+    // now include the register state
+    if (ctx.contents & CrashContext::MachineContext) {
+#ifdef __x86_64__
+        dump_context(log, &ctx.mc, ctx.xsave_buffer.data(), ctx.xsave_buffer.size());
+#endif
+    }
+
+    if (log.size()) {
+        log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
     }
 
     // Dump code bytes around RIP.
