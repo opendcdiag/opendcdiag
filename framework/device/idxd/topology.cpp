@@ -614,10 +614,10 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
     assert(enabled_devices.visible_wqs.size() == device_count());
 
     auto enabled_cpus = ambient_logical_processor_set().to_vector();
-    if (enabled_cpus.size() < enabled_devices.visible_wqs.size()) {
-        fprintf(stderr, "%s: error: not enough CPUs available (%zu CPUs vs %zu WQs)\n",
-                program_invocation_name, enabled_cpus.size(), enabled_devices.visible_wqs.size());
-        exit(EX_USAGE);
+    if (enabled_cpus.empty()) [[unlikely]] {
+        fprintf(stderr, "%s: internal error: ambient logical processor set appears to be empty!\n",
+                program_invocation_name);
+        exit(EX_OSERR);
     }
 
     wq_info_t* info = device_info;
@@ -627,7 +627,7 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
 
     int cpu_ind = 0;
     for (const auto &enabled : enabled_devices.visible_wqs) {
-        info->cpu_number = enabled_cpus[cpu_ind++];
+        info->cpu_number = enabled_cpus[cpu_ind++ % enabled_cpus.size()];
         info->package_id = detect_package_id_via_os(info->cpu_number);
 
         auto it = bdf_cache.find(enabled.device_id);
