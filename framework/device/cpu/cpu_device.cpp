@@ -18,8 +18,8 @@ extern constexpr const device_features_t minimum_cpu_features = device_compiler_
 std::string device_features_to_string(device_features_t f)
 {
     std::string result;
-#ifndef __aarch64__
     const char *comma = "";
+#ifndef __aarch64__
     for (size_t i = 0; i < std::size(x86_locators); ++i) {
         if (f & CPU_FEATURE_CONSTANT(i)) {
             result += comma;
@@ -27,9 +27,35 @@ std::string device_features_to_string(device_features_t f)
             comma = ",";
         }
     }
+#else
+    for (size_t i = 0; i < std::size(aarch64_locators); ++i) {
+        if (f & CPU_FEATURE_CONSTANT(i)) {
+            uint16_t idx = features_indices[i];
+            if (idx == FEATURE_INDEX_UNUSED) continue;  // Skip unused/reserved feature slots
+            result += comma;
+            result += features_string + idx + 1;
+            comma = ",";
+        }
+    }
 #endif
     return result;
 }
+
+#ifdef __aarch64__
+static const char* detect_aarch64_architecture(device_features_t features)
+{
+    for (const auto &arch : aarch64_architectures) {
+        if ((arch.features & features) == arch.features) {
+            return arch.name;
+        }
+        if (sApp->shmem->cfg.verbosity > 1) {
+            printf("CPU is not %s: missing %s\n", arch.name,
+                   device_features_to_string(arch.features & ~features).c_str());
+        }
+    }
+    return "<unknown>";
+}
+#endif
 
 void dump_device_info()
 {
@@ -53,6 +79,7 @@ void dump_device_info()
 #else
     const char *vendor = "<unknown>";
     const char *detected_cpu = "<unknown>";
+    const char *detected_arch = "<unknown>";
 
 #ifdef __linux__
     // Reading MIDR_EL1 from EL0 is emulated by the Linux kernel. Other OSes
@@ -67,6 +94,9 @@ void dump_device_info()
     // Parse MIDR_EL1 fields
     implementer = MIDR_EL1_IMPLEMENTER(midr_el1);
     part_num = MIDR_EL1_PART_NUM(midr_el1);
+
+    // Find best matching architecture baseline
+    detected_arch = detect_aarch64_architecture(device_features);
 
     // Find vendor and part
     for (const auto &curr_vendor : aarch64_vendors) {
@@ -83,9 +113,10 @@ void dump_device_info()
     }
 #endif
 
-    printf("CPU Vendor   : %s\n", vendor);
-    printf("Detected CPU : %s\n", detected_cpu);
-    printf("CPU features : %s\n", device_features_to_string(device_features).c_str());
+    printf("CPU Vendor    : %s\n", vendor);
+    printf("Detected CPU  : %s\n", detected_cpu);
+    printf("Detected Arch : %s\n", detected_arch);
+    printf("CPU features  : %s\n", device_features_to_string(device_features).c_str());
 #endif
     printf("# CPU\tPkgID\tCoreID\tThrdID\tModId\tDieId\tNUMAId\tApicId\tMicrocode\tPPIN\n");
     for (i = 0; i < device_count(); ++i) {
