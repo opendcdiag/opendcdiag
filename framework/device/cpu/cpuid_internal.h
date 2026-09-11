@@ -22,6 +22,13 @@
 #include "cpu_features.h"
 #include "sandstone_p.h"
 
+
+#if SANDSTONE_NO_LOGGING
+#  define cpuid_errmsg(msg)             logging_restricted(LOG_LEVEL_QUIET, msg)
+#else
+#  define cpuid_errmsg(msg)             fputs(msg, stderr)
+#endif
+
 #ifdef __x86_64__
 
 #ifndef signature_INTEL_ebx     /* cpuid.h lacks include guards */
@@ -113,12 +120,6 @@ static device_features_t parse_register(enum X86CpuidLeaves leaf, uint32_t reg)
     }
     return features;
 };
-
-#if SANDSTONE_NO_LOGGING
-#  define cpuid_errmsg(msg)             logging_restricted(LOG_LEVEL_QUIET, msg)
-#else
-#  define cpuid_errmsg(msg)             fputs(msg, stderr)
-#endif
 
 __attribute__((cold, noreturn))
 static void detect_cpu_not_supported(const char *msg)
@@ -244,46 +245,22 @@ static device_features_t detect_cpu()
     return features;
 }
 
-__attribute__((unused))
-static void check_missing_features(device_features_t features, device_features_t minimum_cpu_features)
-{
-    device_features_t missing = minimum_cpu_features & ~features;
-    if (!missing)
-        return;
-
-    size_t i;
-    cpuid_errmsg("Cannot run on this CPU.\n"
-                 "This application requires certain features not found in your CPU:");
-    for (i = 0; i < x86_locator_count; ++i) {
-        if (missing & CPU_FEATURE_CONSTANT(i))
-            fputs(features_string + features_indices[i], stderr);
-    }
-    fputs("\nexit: invalid\n", stderr);
-    _exit(EX_CONFIG);
-}
-
-#undef cpuid_errmsg
-
 #elif defined(__aarch64__) && defined(__linux__)
 
 #include <sys/auxv.h>
+
+static const size_t aarch64_locator_count = sizeof(aarch64_locators) / sizeof(aarch64_locators[0]);
 
 static device_features_t detect_cpu()
 {
     uint64_t hwcap = getauxval(AT_HWCAP);
     uint64_t hwcap2 = getauxval(AT_HWCAP2);
 
-    // AT_HWCAP occupies bits 0-63 and AT_HWCAP2 bits 64-127. Do not narrow the
-    // shift: AT_HWCAP2 bit 31 (HWCAP2_WFXT) would then alias cpu_feature_hypervisor.
+    // AT_HWCAP occupies bits 0-63 and AT_HWCAP2 bits 64-127.
+    // Both HWCAP and HWCAP2 are now 64 bits wide in modern kernels.
     device_features_t features = (device_features_t)hwcap | ((device_features_t)hwcap2 << 64);
 
     return features;
-}
-
-static void check_missing_features(device_features_t features, device_features_t minimum_cpu_features)
-{
-    (void) features;
-    (void) minimum_cpu_features;
 }
 
 #else
@@ -300,6 +277,34 @@ static void check_missing_features(device_features_t features, device_features_t
 }
 
 #endif // ! x86-64
+
+
+#if defined(__x86_64__) || (defined(__aarch64__) && defined(__linux__))
+
+__attribute__((unused))
+static void check_missing_features(device_features_t features, device_features_t minimum_cpu_features)
+{
+    device_features_t missing = minimum_cpu_features & ~features;
+    if (!missing)
+        return;
+
+    size_t i;
+    cpuid_errmsg("Cannot run on this CPU.\n"
+                 "This application requires certain features not found in your CPU:");
+#if __x86_64__
+    for (i = 0; i < x86_locator_count; ++i) {
+#else
+    for (i = 0; i < aarch64_locator_count; ++i) {
+#endif
+        if (missing & CPU_FEATURE_CONSTANT(i))
+            fputs(features_string + features_indices[i], stderr);
+    }
+    fputs("\nexit: invalid\n", stderr);
+    _exit(EX_CONFIG);
+}
+#undef cpuid_errmsg
+
+#endif // __x86_64__ || __aarch64__ && __linux__
 
 // Keep an alias for compatibility
 typedef device_features_t cpu_features_t;
