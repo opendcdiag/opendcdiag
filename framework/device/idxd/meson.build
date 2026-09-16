@@ -1,7 +1,9 @@
 # Copyright 2026 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-accel_config_dep = dependency('libaccel-config', required: true)
+dep_static = get_option('dependency_link') == 'static'
+
+accel_config_dep = dependency('libaccel-config', required: true, static: dep_static)
 
 target_deps += [
     accel_config_dep,
