@@ -29,7 +29,12 @@ static DWORD map_protection(int prot, int flags)
         [PROT_READ] = PAGE_READONLY,
         [PROT_WRITE] = PAGE_READWRITE,
         [PROT_READ | PROT_WRITE] = PAGE_READWRITE,
-        [PROT_READ | PROT_EXEC] = PAGE_EXECUTE_READWRITE,
+        // MapViewOfFileEx() rejects a later VirtualProtect() that is more
+        // permissive than the access the view was mapped with (see
+        // map_access()); a read+exec-only mapping must not be upgraded to
+        // PAGE_EXECUTE_READWRITE here, or mmap()/mprotect() fail with
+        // ERROR_INVALID_PARAMETER.
+        [PROT_READ | PROT_EXEC] = PAGE_EXECUTE_READ,
         [PROT_WRITE | PROT_EXEC] = PAGE_EXECUTE_READWRITE,
         [PROT_READ | PROT_WRITE | PROT_EXEC] = PAGE_EXECUTE_READWRITE
     };
