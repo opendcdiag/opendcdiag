@@ -66,7 +66,7 @@ int open_memfd(enum MemfdCloexecFlag flag)
 
     for (int i = 0; hFile == INVALID_HANDLE_VALUE && i < WIN_TEMP_MAX_RETIRES; ++i) {
         wcscat(_ultow(next_random(), tmpname, 36), L".tmp");            // yes, base 36
-        DWORD access = GENERIC_READ | GENERIC_WRITE;
+        DWORD access = GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE;
         DWORD sharemode = FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE;
         DWORD creation = CREATE_NEW;
         DWORD flags = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE;
