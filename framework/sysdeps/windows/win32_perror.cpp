@@ -21,7 +21,8 @@ void win32_perror(const char *msg)
 std::string win32_strerror(last_error_t last_err)
 {
     DWORD dwFlags = FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS |
-            FORMAT_MESSAGE_ARGUMENT_ARRAY | FORMAT_MESSAGE_ALLOCATE_BUFFER;
+            FORMAT_MESSAGE_ARGUMENT_ARRAY | FORMAT_MESSAGE_ALLOCATE_BUFFER |
+            FORMAT_MESSAGE_MAX_WIDTH_MASK;
     LPCVOID lpSource = nullptr;
     DWORD dwLanguageId = 0;
     LPSTR lpBuffer = nullptr;
