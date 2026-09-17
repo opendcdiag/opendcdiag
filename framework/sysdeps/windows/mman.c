@@ -140,6 +140,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
     DWORD flProtect = map_protection(prot, flags);
     DWORD dwDesiredAccess = map_access(prot, flags);
     if (flProtect == 0 || dwDesiredAccess == 0) {
+        SetLastError(ERROR_INVALID_PARAMETER);
         errno = EINVAL;
         return MAP_FAILED;
     }
@@ -147,6 +148,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
     // address requested for MapViewOfFileEx must be aligned to 64KB
     if (((uintptr_t) addr & 0xFFFF) != 0) {
         if (flags & MAP_FIXED) {
+           SetLastError(ERROR_INVALID_PARAMETER);
            errno = EINVAL;
            return MAP_FAILED;
         } else {                     // otherwise, let the OS choose the address
