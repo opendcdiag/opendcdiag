@@ -16,6 +16,7 @@ my %leaves = (
     Leaf07_01ECX        => "CPUID Leaf 7, Sub-leaf 1, ECX",
     Leaf07_01EDX        => "CPUID Leaf 7, Sub-leaf 1, EDX",
     Leaf0D_01EAX        => "CPUID Leaf 0Dh, Sub-leaf 1, EAX",
+    Leaf1D_02EAX        => "CPUID Leaf 1Dh, Sub-leaf 2, EAX",
     Leaf1E_01EAX        => "CPUID Leaf 1Eh, Sub-leaf 1, EAX",
     Leaf24_00EBX        => "CPUID Leaf 24h, Sub-leaf 0, EBX",
     Leaf80000001ECX     => "CPUID Leaf 80000001h, ECX",
