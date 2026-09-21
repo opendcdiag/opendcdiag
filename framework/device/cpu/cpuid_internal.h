@@ -206,6 +206,11 @@ static device_features_t detect_cpu()
             features |= cpu_feature_avx10_4;
 #endif
         assert(avx10ver < 5 && "Internal error: update code above!");
+
+        if (eax >= 1) {
+            __cpuid_count(0x24, 1, eax, ebx, ecx, edx);
+            features |= parse_register(Leaf24_01ECX, ecx);
+        }
     }
 
     uint64_t xcr0 = 0;
