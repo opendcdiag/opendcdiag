@@ -980,8 +980,15 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
         generate_backtrace(pidstr, slice, handle, thread);
     }
 
-    if (!handle)
+    if (!handle) {
+        // dump only device state, which is not ctx-dependent. For CPU it will dump nothing.
+        std::string log;
+        dump_device_state(log, thread);
+        if (log.size()) {
+            log_message_preformatted(thread, LOG_LEVEL_VERBOSE(2), log);
+        }
         return;
+    }
 
     // now include the register state
     if (ctx.contents & CrashContext::MachineContext) {
