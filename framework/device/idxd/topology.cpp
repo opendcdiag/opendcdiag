@@ -398,6 +398,13 @@ bool has_feature(const wq_info_t& info, device_features_t feature)
     return has_opcode(Topology::topology().devices[info.path.device].op_cap, feature_to_opcode(feature));
 }
 
+// We require only waitpkg and enqcmd system-wide.
+static bool cpu_supports_idxd()
+{
+    return __builtin_cpu_supports("waitpkg")
+        && __builtin_cpu_supports("enqcmd");
+}
+
 static device_features_t detect_features(accfg_device* device)
 {
     device_features_t features = 0;
@@ -492,7 +499,12 @@ device_features_t detect_features()
     if (auto ret = ctx.init(); ret)
         return 0;
 
+    if (!cpu_supports_idxd()) {
+        return 0;
+    }
+
     device_features_t features = 0;
+
     accfg_device* device;
     accfg_device_foreach(ctx.get(), device) {
         features |= detect_features(device);
@@ -512,7 +524,9 @@ WorkQueueSet detect_devices<WorkQueueSet>()
         return res;
     }
 
-    device_features = 0; // reset
+    if (!cpu_supports_idxd()) {
+        return res;
+    }
 
     accfg_device* device;
     accfg_device_foreach(res.ctx.get(), device) {
