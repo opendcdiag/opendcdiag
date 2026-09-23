@@ -788,6 +788,21 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     return EXIT_SUCCESS;
 }
 
+int selftest_datacompare_pattern_fail_run(struct test *, int thread)
+{
+    static const uint8_t count = 16;
+    uint8_t pattern = rand() & 0xFF;
+    uint8_t actual[count] = {};
+    memset(actual, pattern, count);
+
+    // inject a data corruption at a random offset of the buffer
+    uint8_t offset = (rand() % count) & 0xFF;
+    actual[offset] = ~actual[offset];
+
+    memcmp_byte_or_fail(actual, pattern, count);
+    return EXIT_SUCCESS;
+}
+
 template <typename Ratio, typename T = uint32_t>
 static int selftest_datacomparefailrare_run(struct test *, int)
 {
@@ -838,6 +853,15 @@ static int selftest_datacompare_nodifference_run(struct test *, int)
     memcmp_or_fail(actual, expected, sizeof(actual), formatter);    // won't fail
     // now pretend we did see a failure and call the internal reporting function
     _memcmp_fail_report(actual, expected, sizeof(actual), UInt8Data, nullptr);
+}
+
+static int selftest_datacompare_pattern_nodifference_run(struct test *, int)
+{
+    uint8_t pattern = random32() & 0xFF;
+    uint8_t actual[16];
+    memset(actual, pattern, sizeof(actual));
+    memcmp_byte_or_fail(actual, pattern, sizeof(pattern));
+    return EXIT_SUCCESS;
 }
 
 static int selftest_cxxthrow_run(struct test *, int) noexcept(false)
@@ -2296,10 +2320,26 @@ static struct test selftests_array[] = {
 FOREACH_DATATYPE(DATACOMPARE_TEST)
 #undef DATACOMPARE_TEST
 {
+    .id = "selftest_datacompare_pattern_fail",
+    .description = "Compares a buffer with injected failure to a bit pattern.",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_datacompare_pattern_fail_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_datacompare_nodifference",
     .description = "Fakes a memcmp_or_fail that finds a difference that isn't there",
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_run = selftest_datacompare_nodifference_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_datacompare_pattern_nodifference",
+    .description = "Fakes a memcmp_byte_or_fail that finds a difference that isn't there",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_datacompare_pattern_nodifference_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },

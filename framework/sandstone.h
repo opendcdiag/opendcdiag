@@ -688,6 +688,25 @@ report(const void *, const void *, size_t, DataType, FormatterCallback,
 bool test_formatter(std::function<std::string ()> cb, size_t max);
 bool test_formatter(std::function<std::string (ptrdiff_t)> cb, size_t max);
 
+template <FormatterFunction Fn> static inline auto make_formatter_cb(const Fn &formatter)
+{
+    struct R {
+        FormatterCallback cb;
+        const void *token;
+    } result = {};
+    if constexpr (!std::is_null_pointer_v<Fn> && !SandstoneConfig::NoLogging) {
+        result.token = &formatter;
+        result.cb = [](const void *token, void *, ptrdiff_t idx) -> std::string {
+            auto formatter = static_cast<const Fn *>(token);
+            if constexpr (std::is_invocable_v<Fn>)
+                return (*formatter)();
+            else
+                return (*formatter)(idx);
+        };
+    }
+    return result;
+}
+
 /// compares the arrays actual and expected, both of which are expected to have
 /// count elements, and fails the test if the two arrays are not equal. In the
 /// case of a mismatch the calling thread will exit and diagnostic information
@@ -708,20 +727,7 @@ static inline void memcmp_or_fail(const T *actual, const T *expected, size_t cou
         return;         // no mismatch!
     }
 
-    FormatterCallback cb = {};
-    const void *token = nullptr;
-    if constexpr (std::is_null_pointer_v<Fn>) {
-        // use null pointers
-    } else if (!SandstoneConfig::NoLogging) {
-        token = &formatter;
-        cb = [](const void *token, void *, ptrdiff_t idx) -> std::string {
-            auto formatter = static_cast<const Fn *>(token);
-            if constexpr (std::is_invocable_v<Fn>)
-                return (*formatter)();
-            else
-                return (*formatter)(idx);
-        };
-    }
+    auto [cb, token] = make_formatter_cb(formatter);
     report(actual, expected, count * elemSize, type, cb, token);
     __builtin_unreachable();
 }
@@ -731,9 +737,65 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 {
     return memcmp_or_fail(actual, expected, count, nullptr);
 }
+
+/// Checks that the array pointed to by actual (which has count elements of type
+/// T) is entirely filled with copies of pattern, and fails the test otherwise.
+/// This complements memcmp_or_fail() for tests that expect a buffer to hold a
+/// single repeated value (e.g. a fill/eviction marker) instead of a golden
+/// reference array. Additional overloads for other pattern types can be added
+/// by calling this template directly.
+template <ValidDataType T, FormatterFunction Fn>
+static inline void memcmp_pattern_or_fail(const T *actual, T pattern, size_t count, Fn formatter)
+{
+    DataType type = TypeToDataType<T>::Type;
+    size_t elem_size = sizeof(T);
+
+    // self-comparison trick: every element equals actual[0], and actual[0]
+    // equals pattern; avoids allocating a full reference buffer on the (common)
+    // success path
+    bool matches = count == 0
+            || (actual[0] == pattern
+                && (count == 1 || __builtin_memcmp(actual, actual + 1, (count - 1) * elem_size) == 0));
+    if (matches) [[likely]] {
+        if constexpr (!std::is_null_pointer_v<Fn>)
+            assert(test_formatter(formatter, count));
+        return;
+    }
+
+    // mismatch found: build a reference buffer so the existing reporting/logging code,
+    // which diffs two equally-sized buffers, can be reused unchanged
+    std::vector<T> expected(count, pattern);
+
+    auto [cb, token] = make_formatter_cb(formatter);
+    report(actual, expected.data(), count * elem_size, type, cb, token);
+    __builtin_unreachable();
+}
+
+template <ValidDataType T> static inline void
+memcmp_pattern_or_fail(const T *actual, T pattern, size_t count)
+{
+    memcmp_pattern_or_fail(actual, pattern, count, nullptr);
+}
+
+/// Checks that the buffer pointed to by actual is entirely filled with count
+/// copies of the byte value pattern, and fails the test otherwise. Convenience
+/// wrapper around memcmp_pattern_or_fail<uint8_t>() for the common case of
+/// validating byte-filled buffers.
+template <FormatterFunction Fn>
+static inline void memcmp_byte_or_fail(const void *actual, uint8_t pattern, size_t count, Fn formatter)
+{
+    memcmp_pattern_or_fail(static_cast<const uint8_t *>(actual), pattern, count, formatter);
+}
+
+static inline void memcmp_byte_or_fail(const void *actual, uint8_t pattern, size_t count)
+{
+    memcmp_byte_or_fail(actual, pattern, count, nullptr);
+}
 }
 
 using SandstoneMemcmpOrFail::memcmp_or_fail;
+using SandstoneMemcmpOrFail::memcmp_pattern_or_fail;
+using SandstoneMemcmpOrFail::memcmp_byte_or_fail;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
