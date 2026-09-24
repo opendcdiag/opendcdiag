@@ -685,8 +685,11 @@ void restrict_topology(DeviceRange range)
     }
 }
 
+/// We use topology in tests for logging, so it must exist in exec'd process.
 void rebuild_topology()
 {
+    assert(device_info && sApp->device_count && "device_info must be filled at this point");
+    cached_topology() = build_topology();
 }
 
 void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
