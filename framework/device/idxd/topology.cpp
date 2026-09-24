@@ -646,19 +646,25 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
     wq_info_t* info = device_info;
     [[maybe_unused]] const wq_info_t* cend = device_info + device_count();
 
-    std::map<int, bdf_t> bdf_cache; // bdfs are unique per device
+    struct BdfCache
+    {
+        bdf_t bdf;
+        std::vector<int> local_cpus;
+    };
+    std::map<int, BdfCache> bdf_cache; // bdfs are unique per device
 
-    int cpu_ind = 0;
+    size_t start = 0;
     for (const auto &enabled : enabled_devices.visible_wqs) {
-        info->cpu_number = enabled_cpus[cpu_ind++ % enabled_cpus.size()];
-        info->package_id = detect_package_id_via_os(info->cpu_number);
-        info->core_id = detect_core_id_via_os(info->cpu_number);
-
         auto it = bdf_cache.find(enabled.device_id);
         if (it == bdf_cache.end()) {
-            it = bdf_cache.emplace(enabled.device_id, detect_bdf_via_os(enabled.device_handle)).first;
+            auto bdf = detect_bdf_via_os(enabled.device_handle);
+            it = bdf_cache.emplace(enabled.device_id, BdfCache{bdf, find_numa_local_cpus(bdf)}).first;
         }
-        info->bdf = it->second;
+        info->bdf = it->second.bdf;
+        info->cpu_number = cpulist_intersection(enabled_cpus, it->second.local_cpus, start, false);
+        start = (start + 1) % enabled_cpus.size();
+        info->package_id = detect_package_id_via_os(info->cpu_number);
+        info->core_id = detect_core_id_via_os(info->cpu_number);
 
         info->device_id = enabled.device_id;
         info->wq_id = enabled.wq_id;

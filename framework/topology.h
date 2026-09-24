@@ -9,8 +9,10 @@
 #include <sandstone_config.h>
 #include "test_data.h"
 
+#include <algorithm>
+#include <array>
 #include <bit>
-#include <memory>
+#include <iterator>
 #include <limits>
 #include <span>
 #include <string>
@@ -276,5 +278,14 @@ template <typename... Args> constexpr uint32_t scramble(Args ...args)
     return (scramble(r, args), ...);
 }
 uint32_t mixin_from_device_info(int thread_num);
+
+/// Reads affinity for given PCI device and constructs a vector of all local logical cpus.
+template <typename BdfType>
+    requires requires(const BdfType& bdf) { bdf.domain; bdf.bus; bdf.device; bdf.function; }
+std::vector<int> find_numa_local_cpus(const BdfType& bdf);
+
+/// Tries to find an intersection of 2 lists of cpus, with list1 starting from start1 offset.
+/// If no such exists, assigns list1[start]. Can remove the assigned CPU from list1 to avoid duplicates.
+int cpulist_intersection(std::vector<int>& list1, const std::vector<int>& list2, size_t start1 = 0, bool remove = true);
 
 #endif /* INC_TOPOLOGY_H */
