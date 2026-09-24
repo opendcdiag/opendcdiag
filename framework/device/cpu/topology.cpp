@@ -6,6 +6,9 @@
 #include "topology.h"
 #include "sandstone_p.h"
 #include "thermal_monitor.hpp"
+#ifdef __linux__
+#   include "sysutils.hpp"
+#endif
 
 #include <algorithm>
 #include <cassert>
@@ -607,30 +610,6 @@ bool TopologyDetector::detect_cache_via_os(Topology::Thread *info, int cpufd)
 
 bool TopologyDetector::detect_numa()
 {
-    auto parse_cpulist_range = [](const char *&ptr) {
-        // parses one range (which can be a single number) and advances ptr to
-        // the next range
-        // see https://codebrowser.dev/linux/linux/lib/vsprintf.c.html#bitmap_list_string
-        struct { int start, stop; } r;
-        assert(*ptr);
-
-        char *endptr;
-        r.start = strtol(ptr, &endptr, 10);
-        assert(endptr > ptr);
-
-        if (*endptr == '-') {
-            // it's a range
-            r.stop = strtol(endptr + 1, &endptr, 10);
-        } else {
-            // it was a single number
-            r.stop = r.start;
-        }
-        if (*endptr == ',')
-            ++endptr;   // there's more
-        ptr = endptr;
-        return r;
-    };
-
     int dfd = open("/sys/devices/system/node", O_RDONLY | O_DIRECTORY);
     if (dfd < 0)
         return false;
@@ -642,9 +621,6 @@ bool TopologyDetector::detect_numa()
         return false;
     }
 
-    std::string cpulist;
-    if (!cpulist.capacity())
-        cpulist.reserve(16);
     while (struct dirent *entry = readdir(dir)) {
         std::string_view name(entry->d_name);
         if (!name.starts_with("node"))
@@ -656,52 +632,29 @@ bool TopologyDetector::detect_numa()
         if (endptr != name.end())
             continue;   // maybe something else starting with "node" ("node_list" ?)
 
-        auto_fd listfd = { openat(dfd, (std::string(entry->d_name) + "/cpulist").c_str(),
-                                  O_RDONLY | O_CLOEXEC) };
-        if (listfd < 0)
-            continue;
-
-        cpulist.resize(cpulist.capacity());
-        while (true) {
-            ssize_t n = pread(listfd, &cpulist[0], cpulist.size(), 0);
-            if (n <= 0) [[unlikely]] {
-                closedir(dir);
-                return false;
-            }
-
-            if (cpulist[n - 1] == '\n') {
-                // it fit
-                cpulist.resize(n - 1);
-                break;
-            }
-
-            // need more space
-            cpulist.resize(cpulist.capacity() * 4);
-        }
-
-        // Parse the list. This will *usually* be one or two ranges.
+        auto ranges = read_cpulist_file(std::string("/sys/devices/system/node/") + entry->d_name + "/cpulist");
         cpu_info_t *cpu = &device_info[0];
         const cpu_info_t *const end = device_info + sApp->device_count;
-        const char *ptr = cpulist.c_str();
-        while (*ptr && cpu != end) {
-            auto [start, stop] = parse_cpulist_range(ptr);
+        for (const CpuListRange &range : ranges) {
+            if (cpu == end)
+                break;
 
             // Find the starting CPU.
             // At this point, the device_info array is sorted by cpu_number and,
             // if we're running over the entire system, the array index
             // matches the cpu_number too.
-            if (start < sApp->device_count && device_info[start].cpu_number == start) {
-                cpu = &device_info[start];
+            if (range.start < sApp->device_count && device_info[range.start].cpu_number == range.start) {
+                cpu = &device_info[range.start];
             } else {
                 // no such luck, scan forward from the last cpu we marked
                 for ( ; cpu < end; ++cpu) {
-                    if (cpu->cpu_number >= start)
+                    if (cpu->cpu_number >= range.start)
                         break;
                 }
             }
 
             // Mark the range until stop
-            for ( ; cpu < end && cpu->cpu_number <= stop; ++cpu)
+            for ( ; cpu < end && cpu->cpu_number <= range.stop; ++cpu)
                 cpu->numa_id = id;
         }
     }

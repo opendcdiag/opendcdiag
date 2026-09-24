@@ -6,12 +6,14 @@
 #include "topology.h"
 #include "topology_gpu.h"
 #include "sandstone_p.h"
+#include "sysutils.hpp"
 #include "ze_enumeration.h"
 
 #include <algorithm>
 #include <charconv>
 #include <format>
 #include <fstream>
+#include <functional>
 #include <numeric>
 #include <set>
 #include <span>
@@ -340,80 +342,19 @@ GpusSet detect_devices<GpusSet>()
 }
 
 namespace {
-/// Reads affinity for given PCI device and constructs a vector of all local logical cpus.
-std::vector<int> find_numa_local_cpus(const ze_pci_address_ext_t& bdf)
-{
-    std::vector<int> res;
-    auto address = std::format("{:04x}:{:02x}:{:02x}.{:01x}", bdf.domain, bdf.bus, bdf.device, bdf.function);
-    auto file = std::format("/sys/bus/pci/devices/{}/local_cpulist", address);
-
-    std::ifstream infile;
-    infile.open(file.data(), std::ios::binary);
-    if (!infile.is_open()) {
-        return res;
-    }
-
-    std::string contents;
-    infile >> contents;
-    infile.close();
-
-    struct Range { int start, stop; };
-    std::vector<Range> ranges;
-    const char* ptr = contents.data();
-    const char* const endptr = ptr + contents.size();
-    while (ptr != endptr) {
-        auto& range = ranges.emplace_back();
-        auto [nextptr, ec] = std::from_chars(ptr, endptr, range.start);
-        if (ec != std::errc()) {
-            return res;
-        }
-        ptr = nextptr;
-        if (ptr != endptr && *ptr == '-') {
-            // it's a range
-            auto [nextptr2, ec] = std::from_chars(ptr + 1, endptr, range.stop);
-            if (ec != std::errc()) {
-                return res;
-            }
-            ptr = nextptr2;
-        } else {
-            // it was a single number
-            range.stop = range.start;
-        }
-        if (ptr != endptr && *ptr == ',') {
-            ++ptr;   // there's more
-        }
-    }
-
-    for (auto& range : ranges) {
-        if (range.start != range.stop) {
-            std::vector<int> tmp(range.stop - range.start + 1);
-            std::iota(tmp.begin(), tmp.end(), range.start);
-            res.insert(res.end(), tmp.begin(), tmp.end());
-        } else {
-            res.emplace_back(range.start);
-        }
-    }
-
-    return res;
-}
-
-/// Tries to find an intersection of enabled_cpus and NUMA local CPUs. If no such exists,
-/// assigns first cpu from enabled_cpus. Removes the assigned CPU from enabled_cpus
-/// to avoid duplicates.
+/// Tries to find an intersection of enabled_cpus and NUMA local CPUs.
 int try_assign_local_cpu(std::vector<int>& enabled_cpus, const ze_pci_address_ext_t& bdf)
 {
-    int res = -1;
-    auto local_cpus = find_numa_local_cpus(bdf);
-    if (!local_cpus.empty()) {
-        std::vector<int> available_cpus;
-        std::ranges::set_intersection(enabled_cpus, local_cpus, std::back_inserter(available_cpus));
-        if (!available_cpus.empty()) {
-            res = available_cpus[0];
-        } else {
-            res = enabled_cpus[0];
-        }
-    } else {
-        res = enabled_cpus[0];
+    auto address = std::format("{:04x}:{:02x}:{:02x}.{:01x}",
+        static_cast<uint32_t>(bdf.domain), static_cast<uint32_t>(bdf.bus),
+        static_cast<uint32_t>(bdf.device), static_cast<uint32_t>(bdf.function));
+    auto local_cpus = CpuListRange::to_vector(read_cpulist_file(std::format("/sys/bus/pci/devices/{}/local_cpulist", address)));
+
+    std::vector<int> intersection;
+    std::ranges::set_intersection(enabled_cpus, local_cpus, std::back_inserter(intersection));
+    int res = enabled_cpus[0];
+    if (!intersection.empty()) {
+        res = intersection[0];
     }
     enabled_cpus.erase(std::remove(enabled_cpus.begin(), enabled_cpus.end(), res), enabled_cpus.end());
 
