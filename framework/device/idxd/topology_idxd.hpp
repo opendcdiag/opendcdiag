@@ -161,4 +161,6 @@ struct HardwareInfo
 
 device_features_t detect_features();
 
+int apply_global_idxd_config(int argc, char **argv);
+
 #endif // INC_TOPOLOGY_IDXD_HPP
