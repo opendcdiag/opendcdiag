@@ -16,11 +16,39 @@
 
 #include "windows.h"
 #include "memoryapi.h"
+#include "winternl.h"
 
 #define PROT_MASK       (PROT_READ | PROT_WRITE | PROT_EXEC)
 static_assert(PROT_MASK == 7, "PROT_xxx macro values inconsistent");
 
 extern void set_errno_from_last_error(DWORD error); // in errno.cpp
+
+// Determines the subset of PROT_READ|PROT_WRITE|PROT_EXEC that hFile's
+// actual granted access allows to be mapped with `flags`. For MAP_PRIVATE
+// (copy-on-write), writes never reach the file, so PROT_WRITE is included
+// as soon as the file is readable; for MAP_SHARED, PROT_WRITE/PROT_EXEC
+// require the matching real file access. Returns -1 (not a valid PROT_*
+// combination) if the query fails.
+static int query_file_rights(HANDLE hFile, int flags)
+{
+    OBJECT_BASIC_INFORMATION info;
+    NTSTATUS status = NtQueryObject(hFile, ObjectBasicInformation, &info, sizeof(info), NULL);
+    if (status < 0) {
+        SetLastError(RtlNtStatusToDosError(status));
+        return -1;
+    }
+
+    int rights = 0;
+    if (info.GrantedAccess & FILE_READ_DATA)
+        rights |= PROT_READ;
+    if ((info.GrantedAccess & FILE_READ_DATA) && (flags & MAP_PRIVATE))
+        rights |= PROT_WRITE;
+    if (info.GrantedAccess & FILE_WRITE_DATA)
+        rights |= PROT_WRITE;
+    if (info.GrantedAccess & FILE_EXECUTE)
+        rights |= PROT_EXEC;
+    return rights;
+}
 
 static DWORD map_protection(int prot, int flags)
 {
@@ -29,7 +57,12 @@ static DWORD map_protection(int prot, int flags)
         [PROT_READ] = PAGE_READONLY,
         [PROT_WRITE] = PAGE_READWRITE,
         [PROT_READ | PROT_WRITE] = PAGE_READWRITE,
-        [PROT_READ | PROT_EXEC] = PAGE_EXECUTE_READWRITE,
+        // MapViewOfFileEx() rejects a later VirtualProtect() that is more
+        // permissive than the access the view was mapped with (see
+        // map_access()); a read+exec-only mapping must not be upgraded to
+        // PAGE_EXECUTE_READWRITE here, or mmap()/mprotect() fail with
+        // ERROR_INVALID_PARAMETER.
+        [PROT_READ | PROT_EXEC] = PAGE_EXECUTE_READ,
         [PROT_WRITE | PROT_EXEC] = PAGE_EXECUTE_READWRITE,
         [PROT_READ | PROT_WRITE | PROT_EXEC] = PAGE_EXECUTE_READWRITE
     };
@@ -50,40 +83,6 @@ static DWORD map_protection(int prot, int flags)
     }
     if (flProtect == 0)
         return 0;
-    if (flags & MAP_HUGETLB)
-        flProtect |= SEC_LARGE_PAGES;
-    return flProtect;
-}
-
-static DWORD map_max_protection(int prot, int flags)
-{
-    static const DWORD mapping[] = {
-        [PROT_NONE] = PAGE_NOACCESS,
-        [PROT_READ] = PAGE_READWRITE,
-        [PROT_WRITE] = PAGE_READWRITE,
-        [PROT_READ | PROT_WRITE] = PAGE_READWRITE,
-        [PROT_READ | PROT_EXEC] = PAGE_EXECUTE_READWRITE,
-        [PROT_WRITE | PROT_EXEC] = PAGE_EXECUTE_READWRITE,
-        [PROT_READ | PROT_WRITE | PROT_EXEC] = PAGE_EXECUTE_READWRITE
-    };
-    static const DWORD priv_mapping[] = {
-        [PROT_NONE] = PAGE_NOACCESS,
-        [PROT_READ] = PAGE_WRITECOPY,
-        [PROT_WRITE] = PAGE_WRITECOPY,
-        [PROT_READ | PROT_WRITE] = PAGE_WRITECOPY,
-        [PROT_READ | PROT_EXEC] = PAGE_EXECUTE_WRITECOPY,
-        [PROT_WRITE | PROT_EXEC] = PAGE_EXECUTE_WRITECOPY,
-        [PROT_READ | PROT_WRITE | PROT_EXEC] = PAGE_EXECUTE_WRITECOPY
-    };
-    DWORD flProtect = PAGE_NOACCESS;
-    if (flags & MAP_PRIVATE) {
-        if (flags & MAP_ANONYMOUS)
-            flProtect = PAGE_EXECUTE_WRITECOPY;
-        else
-            flProtect = priv_mapping[prot & PROT_MASK];
-    } else {
-        flProtect = mapping[prot & PROT_MASK];
-    }
     if (flags & MAP_HUGETLB)
         flProtect |= SEC_LARGE_PAGES;
     return flProtect;
@@ -137,16 +136,10 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
 {
     HANDLE hFile = INVALID_HANDLE_VALUE;
 
-    DWORD flProtect = map_protection(prot, flags);
-    DWORD dwDesiredAccess = map_access(prot, flags);
-    if (flProtect == 0 || dwDesiredAccess == 0) {
-        errno = EINVAL;
-        return MAP_FAILED;
-    }
-
     // address requested for MapViewOfFileEx must be aligned to 64KB
     if (((uintptr_t) addr & 0xFFFF) != 0) {
         if (flags & MAP_FIXED) {
+           SetLastError(ERROR_INVALID_PARAMETER);
            errno = EINVAL;
            return MAP_FAILED;
         } else {                     // otherwise, let the OS choose the address
@@ -154,7 +147,17 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
         }
     }
 
-    if ((flags & MAP_ANONYMOUS) == 0) {
+    // May be elevated beyond `prot` so a later mprotect() can grant more
+    // access without recreating the mapping (see map_max_protection()).
+    int effective_prot = prot;
+    DWORD flMaxProtect;
+    if (flags & MAP_ANONYMOUS) {
+        // Anonymous mappings are backed by the page file, not a real
+        // file, so we can grant full read/write/exec. This lets a
+        // later mprotect() / VirtualProtect() grant any combination
+        // of those permissions.
+        flMaxProtect = PAGE_EXECUTE_READWRITE;
+    } else {
         // if fd == -1, we'll get an error here, so go along with the flow
         struct _stat64 st;
         if (_fstat64(fildes, &st) < 0)
@@ -164,6 +167,35 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
             length = st.st_size - off;
 
         hFile = (HANDLE)_get_osfhandle(fildes);
+
+        int rights = query_file_rights(hFile, flags);
+        if (rights < 0) {
+            set_errno_from_last_error(GetLastError());
+            return MAP_FAILED;
+        }
+
+        // `prot` must not request anything hFile wasn't opened for.
+        if (prot & ~rights & PROT_MASK) {
+            SetLastError(ERROR_ACCESS_DENIED);
+            set_errno_from_last_error(GetLastError());
+            return MAP_FAILED;
+        }
+
+        // Opportunistically grant the full set of achievable rights (not
+        // just what was requested) so a later mprotect() can use them
+        // without recreating the mapping.
+        effective_prot |= rights;
+        flMaxProtect = map_protection(effective_prot, flags);
+    }
+    if (flags & MAP_HUGETLB)
+        flMaxProtect |= SEC_LARGE_PAGES;
+
+    DWORD dwDesiredAccess = map_access(effective_prot, flags);
+    DWORD flProtect = map_protection(prot, flags);
+    if (flProtect == 0 || dwDesiredAccess == 0 || flMaxProtect == 0) {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        errno = EINVAL;
+        return MAP_FAILED;
     }
 
     size_t map_size = (size_t)off + length;
@@ -171,7 +203,6 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fildes, off_t off
     uint32_t hsize = ((uint64_t)map_size >> 32) & 0xFFFFFFFF;
     LPSECURITY_ATTRIBUTES lpFileMappingAttributes = NULL;
     LPCWSTR lpName = NULL;
-    DWORD flMaxProtect = map_max_protection(prot, flags);
     HANDLE hmap = CreateFileMappingW(hFile, lpFileMappingAttributes, flMaxProtect,
                                      hsize, lsize, lpName);
     if (!hmap) {
