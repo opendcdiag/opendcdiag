@@ -53,6 +53,7 @@ struct ProgramOptions {
 
     bool test_tests = false;
 
+    static int verify(int argc, char** argv); // to be called way before parse()
     int parse(int argc, char** argv, SandstoneApplicationConfig* app_cfg);
 
     // for RestrictedCommandLine put it here to enable code elimination

@@ -55,7 +55,7 @@ struct idxd_config_t
             int wq_id = -1;
             bool enabled = false;
             int group_id = -1;
-            uint64_t wq_size = 0;
+            std::optional<uint64_t> wq_size;
             int threshold = -1;
             int priority = -1;
             int block_on_fault = -1;

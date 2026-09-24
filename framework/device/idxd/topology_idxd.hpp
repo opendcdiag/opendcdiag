@@ -165,4 +165,6 @@ std::vector<unsigned> features_to_opcodes(device_features_t, accfg_device_type);
 device_features_t device_type_features(accfg_device_type, unsigned version);
 device_features_t detect_features();
 
+int apply_global_idxd_config(int argc, char **argv);
+
 #endif // INC_TOPOLOGY_IDXD_HPP
