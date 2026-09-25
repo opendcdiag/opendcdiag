@@ -96,7 +96,7 @@ void finalize_topology_links(Topology& topo)
 }
 } // end anonymous namespace
 
-Topology build_topology(const AccfgCtx& ctx)
+Topology build_topology(accfg_ctx* ctx)
 {
     Topology topo;
 
@@ -111,7 +111,10 @@ Topology build_topology(const AccfgCtx& ctx)
 
             it->id = info->device_id;
             it->dev_type = info->dev_type;
-            auto device_handle = accfg_ctx_device_get_by_id(ctx.get(), it->id);
+            if (!ctx)
+                continue;
+
+            auto device_handle = accfg_ctx_device_get_by_id(ctx, it->id);
             assert(device_handle != nullptr);
             const char* devname = accfg_device_get_devname(device_handle);
             assert(devname != nullptr && devname[0] != '\0');
@@ -123,9 +126,12 @@ Topology build_topology(const AccfgCtx& ctx)
             [[maybe_unused]] int op_cap_ret = accfg_device_get_op_cap(device_handle, &it->op_cap);
             assert(op_cap_ret == 0);
         }
-        auto device_handle = accfg_ctx_device_get_by_id(ctx.get(), it->id);
-        assert(device_handle != nullptr);
-        append_topo_device(*it, device_handle, info);
+        if (ctx) {
+            auto device_handle = accfg_ctx_device_get_by_id(ctx, it->id);
+            assert(device_handle != nullptr);
+            append_topo_device(*it, device_handle, info);
+        }
+        it->wqs.emplace_back(info);
         info++;
     }
 
@@ -140,5 +146,5 @@ Topology build_topology()
     if (auto ret = ctx.init(); ret) {
         return {};
     }
-    return build_topology(ctx);
+    return build_topology(ctx.get());
 }
