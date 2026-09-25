@@ -76,7 +76,7 @@ public:
     struct WorkQueue
     {
         /// Immutable part.
-        const wq_info_t* wq = nullptr;
+        const Thread* wq = nullptr;
         int id = -1;
 
         /// Mutable part, either configurable or just observed/effective.
@@ -136,7 +136,8 @@ public:
 
         accfg_op_cap op_cap = {};
 
-        std::vector<Group> groups;
+        std::vector<const Thread*> wqs; // all wqs; immutable
+        std::vector<Group> groups; // wqs divided into groups
     };
 
     // Decide:
@@ -154,7 +155,7 @@ public:
 };
 
 Topology build_topology();
-Topology build_topology(const AccfgCtx&);
+Topology build_topology(accfg_ctx*);
 
 struct HardwareInfo
 {};

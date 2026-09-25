@@ -18,4 +18,10 @@ framework_files += files(
 
 unittests_sources += files(
     'unit-tests/idxd_features_tests.cpp',
+    'unit-tests/topology_tests.cpp',
+    'build_topology.cpp',
 )
+
+unittests_deps += [
+    accel_config_dep,
+]

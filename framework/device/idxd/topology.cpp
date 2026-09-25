@@ -670,7 +670,7 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
     }
     assert(info == cend);
 
-    cached_topology() = build_topology(enabled_devices.ctx);
+    cached_topology() = build_topology(enabled_devices.ctx.get());
 }
 
 void restrict_topology(DeviceRange range)
