@@ -93,9 +93,12 @@ void AbstractLogger::device_print_extra_info()
 
 }
 
-void dump_device_state(std::string&, int)
+// same as for CPU
+void dump_device_state(std::string& out, int)
 {
-
+    if (out.size()) {
+        out.insert(0, "Registers:\n");
+    }
 }
 
 #else

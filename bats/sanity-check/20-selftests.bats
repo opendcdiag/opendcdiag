@@ -36,6 +36,101 @@ load helpers
     out_of_range 2147483648
 }
 
+@test "IDXD selftest topology matches accel-config" {
+    command -v accel-config >/dev/null 2>&1 || skip "accel-config not installed"
+    command -v jq >/dev/null 2>&1 || skip "jq not installed"
+    [[ -d /sys/bus/dsa/devices ]] || skip "No DSA devices detected"
+    sudo -n true >/dev/null 2>&1 || skip "sudo required to read IDXD accel-config state"
+
+    local yamlfile=$(mktempfile output-XXXXXX.yaml)
+    sudo -n "$SANDSTONE_BIN" \
+        --on-crash=core --on-hang=kill --ignore-mce-errors \
+        -Y -o - -vvv \
+        --disable='@special' --selftests --timeout=20s --retest-on-failure=0 \
+        -e selftest_pass > "$yamlfile"
+    [[ "$?" -eq 0 ]]
+
+    local accel_json=$(mktempfile accel-XXXXXX.json)
+    sudo -n accel-config list > "$accel_json"
+    local expected_json=$(mktempfile expected-XXXXXX.json)
+    jq '[.[] as $device |
+        ($device.dev | capture("dsa(?<id>[0-9]+)") | .id | tonumber) as $device_id |
+        $device.groups[]?.grouped_workqueues[]? |
+        {
+            device: $device.dev,
+            device_id: $device_id,
+            wq_id: (.dev | capture("wq[0-9]+\\.(?<id>[0-9]+)") | .id | tonumber),
+            group_id: .group_id
+        }
+    ]' "$accel_json" > "$expected_json"
+
+    python3 - "$expected_json" "$yamlfile" <<'PY'
+import json
+import os
+import sys
+import yaml
+
+expected_path, yaml_path = sys.argv[1], sys.argv[2]
+
+with open(expected_path, 'r', encoding='utf-8') as f:
+    expected = json.load(f)
+
+expected_basic = set()
+expected_group = set()
+for wq in expected:
+    name = wq['device']
+    sysfs_path = os.path.realpath(f'/sys/bus/dsa/devices/{name}')
+    bdf = os.path.basename(os.path.dirname(sysfs_path))
+    if not bdf:
+        continue
+    expected_basic.add((wq['device_id'], wq['wq_id'], bdf))
+    expected_group.add((wq['device_id'], wq['wq_id'], wq['group_id'], bdf))
+
+with open(yaml_path, 'r', encoding='utf-8') as f:
+    data = yaml.safe_load(f) or {}
+
+actual_basic = set()
+actual_group = set()
+seen_group = False
+
+
+def consume(entry):
+    global seen_group
+    if not isinstance(entry, dict):
+        return
+    dev = entry.get('device')
+    if dev is None:
+        return
+    device_id = int(str(dev).removeprefix('dsa'))
+    wq = entry.get('wq')
+    if wq is None:
+        return
+    bdf = entry.get('pci_address')
+    if bdf is not None:
+        actual_basic.add((device_id, int(wq), str(bdf)))
+    if 'group' in entry:
+        seen_group = True
+        actual_group.add((device_id, int(wq), int(entry['group']), str(bdf or '')))
+
+for entry in data.get('device-info', []):
+    consume(entry)
+for test in data.get('tests', []):
+    for thread in test.get('threads', []):
+        consume(thread.get('id'))
+
+if not expected_basic:
+    raise SystemExit('No DSA work queues discovered by accel-config')
+missing_basic = sorted(expected_basic - actual_basic)
+if missing_basic:
+    raise SystemExit(f'Missing device/wq/BDF tuples in opendcdiag output: {missing_basic}')
+if seen_group:
+    missing_group = sorted(expected_group - actual_group)
+    if missing_group:
+        raise SystemExit(f'Missing device/wq/group/BDF tuples in opendcdiag output: {missing_group}')
+PY
+    rm -f "$accel_json"
+}
+
 @test "TAP output @positive" {
     # make an associative array:
     #  tests=([selftest_pass]=1 [selftest_logs]=1 ...)
@@ -117,8 +212,8 @@ tap_negative_check() {
 }
 
 @test "TAP output fails" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     # not all tests
     for test in selftest_failinit selftest_fail; do
@@ -133,8 +228,8 @@ tap_negative_check() {
 }
 
 @test "TAP output crash" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     if $is_asan; then
         skip "Crashing tests skipped with ASAN"
@@ -155,8 +250,8 @@ tap_negative_check() {
 }
 
 @test "TAP output OS error" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     run $SANDSTONE --output-format=tap --selftests --retest-on-failure=0 --on-crash=kill -e selftest_oserror -o /dev/null -v
     [[ $status -eq 2 ]]
@@ -165,8 +260,8 @@ tap_negative_check() {
 }
 
 @test "TAP silent output" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     local -a opts=(--output-format=tap --quick --selftests --quiet -e @positive)
     if ! $is_windows; then
@@ -368,8 +463,8 @@ selftest_pass() {
 }
 
 @test "selftest_pass TAP has main thread and loop-count at -vvv" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
@@ -388,8 +483,8 @@ selftest_pass() {
 }
 
 @test "selftest_pass Key-value has main thread and loop-count at -vvv" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "Key-value skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "Key-value skipped for non CPU"
     fi
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
@@ -875,6 +970,10 @@ test_random() {
 }
 
 @test "selftest_logs_random_lcg" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "IDXD" ]]; then
+        skip "mock topology not supported for IDXD"
+    fi
+
     local -r SEED=LCG:1348219713
 
     if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
@@ -919,6 +1018,9 @@ test_random() {
 }
 
 @test "selftest_logs_random_aes" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "IDXD" ]]; then
+        skip "mock topology not supported for IDXD"
+    fi
     run $SANDSTONE -s list
     if ! [[ "$output" = *'  AES'* ]]; then
         skip "AES engine is not present in this build"
@@ -2238,7 +2340,7 @@ check_thread_ratio_plans() {
     local logical_id_key=logical
     local start_id_key=starting_cpu
     local device_info_key=cpu-info
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
         logical_id_key=logical_cpu
         start_id_key=starting_device
         device_info_key=device-info
@@ -2300,8 +2402,8 @@ check_thread_ratio_plans() {
 }
 
 @test "thread_ratio delta YAML pass output" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "thread_ratio skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "thread_ratio skipped for non CPU"
     fi
     if [[ $(visible_device_count) -le 1 ]]; then
         skip "thread_ratio delta skipped: requires at least 2 visible devices"
@@ -2313,8 +2415,8 @@ check_thread_ratio_plans() {
 }
 
 @test "thread_ratio 70% YAML pass output" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "thread_ratio skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "thread_ratio skipped for non CPU"
     fi
     declare -A yamldump
     sandstone_selftest -e selftest_pass -vvv --max-cores-per-slice=2 --thread-ratio=70%

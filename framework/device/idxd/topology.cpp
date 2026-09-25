@@ -694,7 +694,7 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
     auto pattern_for_wq = [&per_thread_failures](const Topology::WorkQueue& wq) -> PerThreadFailures::value_type {
         assert(wq.wq);
         const int thread = wq.wq->wq();
-        assert(thread < 0 || size_t(thread) >= per_thread_failures.size());
+        assert(thread >= 0 && size_t(thread) < per_thread_failures.size());
         return per_thread_failures[size_t(thread)];
     };
 
