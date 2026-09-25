@@ -197,6 +197,7 @@ framework_files += files(
     'Floats.cpp',
     'generated_vectors.c',
     'logging.cpp',
+    'topology.cpp',
     'random.cpp',
     'sandstone.cpp',
     'sandstone_chrono.cpp',
