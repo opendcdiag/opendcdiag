@@ -1724,6 +1724,43 @@ function selftest_datacompare_nodifference_common() {
     fail_callback_common
 }
 
+@test "selftest_datacompare_pattern_nodifference" {
+    declare -A yamldump
+    # Should pass unless the implementation of memcmp_pattern_or_fail gets broken
+    sandstone_selftest -vvv -e selftest_datacompare_pattern_nodifference
+}
+@test "selftest_datacompare_pattern_fail" {
+    declare -A yamldump
+    local dataregexp='0x[0-9a-f]+( \(([-0-9]+|[-+0-9a-fpx.]+)\))?'
+
+    sandstone_selftest -vvv -e "selftest_datacompare_pattern_fail"
+    set -e
+    fail_common
+    [[ "$test" != *_with_cb ]] || fail_callback_common
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        # there may be debug messages ahead of our error
+        local found=0
+        for ((j = 0; !found && j < ${yamldump[/tests/0/threads/$i/messages@len]}; ++j)); do
+            [[ "${yamldump[/tests/0/threads/$i/messages/$j/level]}" = error ]] || continue
+            found=1
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/level" error
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/offset" '\[.*\]'
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/address" '(0x)?[0-9a-f]+'
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/description" "$description"
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/expected" "$dataregexp"
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/mask" '0x[0-9a-f]+'
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/actual data" '[0-9a-f ]+'
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/expected data" '[0-9a-f ]+'
+            test_yaml_regexp "/tests/0/threads/$i/messages/0/data-miscompare/description" "$description"
+            if [[ -n "$description" ]]; then
+                test_yaml_expr "/tests/0/threads/$i/messages/0/data-miscompare/details/rare" = False
+                test_yaml_numeric "/tests/0/threads/$i/messages/0/data-miscompare/details/count" 'value == 16'
+            fi
+        done
+        ((found))
+    done
+}
+
 selftest_freeze_msgs_common() {
     for ((i = 1; i <= MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/state" failed
