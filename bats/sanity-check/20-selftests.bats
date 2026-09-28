@@ -117,8 +117,8 @@ tap_negative_check() {
 }
 
 @test "TAP output fails" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     # not all tests
     for test in selftest_failinit selftest_fail; do
@@ -133,8 +133,8 @@ tap_negative_check() {
 }
 
 @test "TAP output crash" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     if $is_asan; then
         skip "Crashing tests skipped with ASAN"
@@ -155,8 +155,8 @@ tap_negative_check() {
 }
 
 @test "TAP output OS error" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     run $SANDSTONE --output-format=tap --selftests --retest-on-failure=0 --on-crash=kill -e selftest_oserror -o /dev/null -v
     [[ $status -eq 2 ]]
@@ -165,8 +165,8 @@ tap_negative_check() {
 }
 
 @test "TAP silent output" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     local -a opts=(--output-format=tap --quick --selftests --quiet -e @positive)
     if ! $is_windows; then
@@ -368,8 +368,8 @@ selftest_pass() {
 }
 
 @test "selftest_pass TAP has main thread and loop-count at -vvv" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "TAP skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "TAP skipped for non CPU"
     fi
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
@@ -388,8 +388,8 @@ selftest_pass() {
 }
 
 @test "selftest_pass Key-value has main thread and loop-count at -vvv" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "Key-value skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "Key-value skipped for non CPU"
     fi
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
@@ -875,6 +875,10 @@ test_random() {
 }
 
 @test "selftest_logs_random_lcg" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "IDXD" ]]; then
+        skip "mock topology not supported for IDXD"
+    fi
+
     local -r SEED=LCG:1348219713
 
     if [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]]; then
@@ -919,6 +923,9 @@ test_random() {
 }
 
 @test "selftest_logs_random_aes" {
+    if [[ "$SANDSTONE_DEVICE_TYPE" = "IDXD" ]]; then
+        skip "mock topology not supported for IDXD"
+    fi
     run $SANDSTONE -s list
     if ! [[ "$output" = *'  AES'* ]]; then
         skip "AES engine is not present in this build"
@@ -2275,7 +2282,7 @@ check_thread_ratio_plans() {
     local logical_id_key=logical
     local start_id_key=starting_cpu
     local device_info_key=cpu-info
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
         logical_id_key=logical_cpu
         start_id_key=starting_device
         device_info_key=device-info
@@ -2337,8 +2344,8 @@ check_thread_ratio_plans() {
 }
 
 @test "thread_ratio delta YAML pass output" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "thread_ratio skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "thread_ratio skipped for non CPU"
     fi
     if [[ $(visible_device_count) -le 1 ]]; then
         skip "thread_ratio delta skipped: requires at least 2 visible devices"
@@ -2350,8 +2357,8 @@ check_thread_ratio_plans() {
 }
 
 @test "thread_ratio 70% YAML pass output" {
-    if [[ "$SANDSTONE_DEVICE_TYPE" = "GPU" ]]; then
-        skip "thread_ratio skipped for GPU"
+    if [[ "$SANDSTONE_DEVICE_TYPE" != "CPU" ]]; then
+        skip "thread_ratio skipped for non CPU"
     fi
     declare -A yamldump
     sandstone_selftest -e selftest_pass -vvv --max-cores-per-slice=2 --thread-ratio=70%

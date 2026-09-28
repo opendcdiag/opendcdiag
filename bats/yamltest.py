@@ -78,12 +78,18 @@ def validate_thread_id_gpu(id):
     # TODO
     pass
 
+def validate_thread_id_idxd(id):
+    # TODO
+    pass
+
 def validate_thread(device_type, name, thr):
     n = thr['thread']
 
     if type(n) is int:
         if (device_type == "GPU"):
             validate_thread_id_gpu(thr['id'])
+        elif (device_type == "IDXD"):
+            validate_thread_id_idxd(thr['id'])
         else:
             validate_thread_id_cpu(thr['id'])
     elif not n.startswith('main'):
@@ -120,9 +126,12 @@ with open(sys.argv[1]) as file:
     if len(sys.argv) != 3:
         fail('device type argument missing')
         exit(1)
-    if sys.argv[2] == "GPU":
+    if sys.argv[2] != "CPU":
         for thread in log['device-info']:
-            validate_thread_id_gpu(thread)
+            if sys.argv[2] == "GPU":
+                validate_thread_id_gpu(thread)
+            elif sys.argv[2] == "IDXD":
+                validate_thread_id_idxd(thread)
     else:
         for thread in log['cpu-info']:
             validate_thread_id_cpu(thread)
