@@ -8,6 +8,8 @@
 
 #include <stdint.h>
 
+#include <accel-config/libaccel_config.h>
+
 typedef unsigned __int128 device_features_t;
 #define IDXD_FEATURE_CONSTANT(bit) (((device_features_t) 1) << (bit))
 
@@ -112,6 +114,45 @@ static constexpr const char* features_names[IDXD_FEATURE_SIZE] = {
     "iax_op_noop", "iax_op_batch", "iax_op_drain", "iax_op_xlat_fetch",
     "op_crc64", "op_scan", "op_extract", "op_select", "op_expand",
     "op_compress", "op_decompress", "op_decrypt", "op_encrypt",
+};
+
+// NOOP, BATCH, DRAIN and XLAT_FETCH exist in both opcode namespaces, so each entry
+// records the family it was detected on.
+static constexpr struct { device_features_t feature; unsigned opcode; accfg_device_type dev_type; }
+feature_to_opcode_map[] = {
+    { device_feature_dsa_op_noop,           IDXD_OPCODE_NOOP,               ACCFG_DEVICE_DSA },
+    { device_feature_iax_op_noop,           IDXD_OPCODE_NOOP,               ACCFG_DEVICE_IAX },
+    { device_feature_dsa_op_batch,          IDXD_OPCODE_BATCH,              ACCFG_DEVICE_DSA },
+    { device_feature_iax_op_batch,          IDXD_OPCODE_BATCH,              ACCFG_DEVICE_IAX },
+    { device_feature_dsa_op_drain,          IDXD_OPCODE_DRAIN,              ACCFG_DEVICE_DSA },
+    { device_feature_iax_op_drain,          IDXD_OPCODE_DRAIN,              ACCFG_DEVICE_IAX },
+    { device_feature_dsa_op_xlat_fetch,     IDXD_OPCODE_XLAT_FETCH,         ACCFG_DEVICE_DSA },
+    { device_feature_iax_op_xlat_fetch,     IDXD_OPCODE_XLAT_FETCH,         ACCFG_DEVICE_IAX },
+
+    { device_feature_op_memmove,            IDXD_OPCODE_MEMMOVE,            ACCFG_DEVICE_DSA },
+    { device_feature_op_fill,               IDXD_OPCODE_FILL,               ACCFG_DEVICE_DSA },
+    { device_feature_op_compare,            IDXD_OPCODE_COMPARE,            ACCFG_DEVICE_DSA },
+    { device_feature_op_compare_pat,        IDXD_OPCODE_COMPARE_PAT,        ACCFG_DEVICE_DSA },
+    { device_feature_op_crc_gen,            IDXD_OPCODE_CRC_GEN,            ACCFG_DEVICE_DSA },
+    { device_feature_op_copy_with_crc_gen,  IDXD_OPCODE_COPY_WITH_CRC_GEN,  ACCFG_DEVICE_DSA },
+    { device_feature_op_dif_check,          IDXD_OPCODE_DIF_CHECK,          ACCFG_DEVICE_DSA },
+    { device_feature_op_dif_insert,         IDXD_OPCODE_DIF_INSERT,         ACCFG_DEVICE_DSA },
+    { device_feature_op_dif_strip,          IDXD_OPCODE_DIF_STRIP,          ACCFG_DEVICE_DSA },
+    { device_feature_op_dif_update,         IDXD_OPCODE_DIF_UPDATE,         ACCFG_DEVICE_DSA },
+    { device_feature_op_cache_flush,        IDXD_OPCODE_CACHE_FLUSH,        ACCFG_DEVICE_DSA },
+    { device_feature_op_dual_cast,          IDXD_OPCODE_DUAL_CAST,          ACCFG_DEVICE_DSA },
+    { device_feature_op_create_delta,       IDXD_OPCODE_CREATE_DELTA_REC,   ACCFG_DEVICE_DSA },
+    { device_feature_op_apply_delta,        IDXD_OPCODE_APPLY_DELTA_REC,    ACCFG_DEVICE_DSA },
+
+    { device_feature_op_crc64,              IDXD_OPCODE_CRC64,              ACCFG_DEVICE_IAX },
+    { device_feature_op_scan,               IDXD_OPCODE_SCAN,               ACCFG_DEVICE_IAX },
+    { device_feature_op_extract,            IDXD_OPCODE_EXTRACT,            ACCFG_DEVICE_IAX },
+    { device_feature_op_select,             IDXD_OPCODE_SELECT,             ACCFG_DEVICE_IAX },
+    { device_feature_op_expand,             IDXD_OPCODE_EXPAND,             ACCFG_DEVICE_IAX },
+    { device_feature_op_compress,           IDXD_OPCODE_COMPRESS,           ACCFG_DEVICE_IAX },
+    { device_feature_op_decompress,         IDXD_OPCODE_DECOMPRESS,         ACCFG_DEVICE_IAX },
+    { device_feature_op_decrypt,            IDXD_OPCODE_DECRYPT,            ACCFG_DEVICE_IAX },
+    { device_feature_op_encrypt,            IDXD_OPCODE_ENCRYPT,            ACCFG_DEVICE_IAX },
 };
 #endif
 

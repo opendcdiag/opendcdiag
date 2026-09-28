@@ -160,6 +160,8 @@ Topology build_topology(accfg_ctx*);
 struct HardwareInfo
 {};
 
+std::vector<unsigned> features_to_opcodes(device_features_t, accfg_device_type);
+
 device_features_t detect_features();
 
 #endif // INC_TOPOLOGY_IDXD_HPP
