@@ -44,6 +44,9 @@ unsigned feature_to_opcode(device_features_t feature)
     case device_feature_dsa_op_drain:
     case device_feature_iax_op_drain:
         return IDXD_OPCODE_DRAIN;
+    case device_feature_dsa_op_xlat_fetch:
+    case device_feature_iax_op_xlat_fetch:
+        return IDXD_OPCODE_XLAT_FETCH;
 
     case device_feature_op_memmove:
         return IDXD_OPCODE_MEMMOVE;
@@ -88,6 +91,10 @@ unsigned feature_to_opcode(device_features_t feature)
         return IDXD_OPCODE_COMPRESS;
     case device_feature_op_decompress:
         return IDXD_OPCODE_DECOMPRESS;
+    case device_feature_op_decrypt:
+        return IDXD_OPCODE_DECRYPT;
+    case device_feature_op_encrypt:
+        return IDXD_OPCODE_ENCRYPT;
     default:
         return ~0u;
     }
@@ -435,8 +442,14 @@ static device_features_t detect_features(accfg_device* device)
                 features |= device_feature_op_dif_update;
             if (has_opcode(op_cap, IDXD_OPCODE_CACHE_FLUSH))
                 features |= device_feature_op_cache_flush;
-            if (has_opcode(op_cap, IDXD_OPCODE_CRC64))
-                features |= device_feature_op_crc64;
+            if (has_opcode(op_cap, IDXD_OPCODE_DUAL_CAST))
+                features |= device_feature_op_dual_cast;
+            if (has_opcode(op_cap, IDXD_OPCODE_CREATE_DELTA_REC))
+                features |= device_feature_op_create_delta;
+            if (has_opcode(op_cap, IDXD_OPCODE_APPLY_DELTA_REC))
+                features |= device_feature_op_apply_delta;
+            if (has_opcode(op_cap, IDXD_OPCODE_XLAT_FETCH))
+                features |= device_feature_dsa_op_xlat_fetch;
         } else if (dev_type == ACCFG_DEVICE_IAX) {
             if (has_opcode(op_cap, IDXD_OPCODE_NOOP))
                 features |= device_feature_iax_op_noop;
@@ -444,12 +457,10 @@ static device_features_t detect_features(accfg_device* device)
                 features |= device_feature_iax_op_batch;
             if (has_opcode(op_cap, IDXD_OPCODE_DRAIN))
                 features |= device_feature_iax_op_drain;
-            if (has_opcode(op_cap, IDXD_OPCODE_DUAL_CAST))
-                features |= device_feature_op_dual_cast;
-            if (has_opcode(op_cap, IDXD_OPCODE_CREATE_DELTA_REC))
-                features |= device_feature_op_create_delta;
-            if (has_opcode(op_cap, IDXD_OPCODE_APPLY_DELTA_REC))
-                features |= device_feature_op_apply_delta;
+            if (has_opcode(op_cap, IDXD_OPCODE_XLAT_FETCH))
+                features |= device_feature_iax_op_xlat_fetch;
+            if (has_opcode(op_cap, IDXD_OPCODE_CRC64))
+                features |= device_feature_op_crc64;
             if (has_opcode(op_cap, IDXD_OPCODE_SCAN))
                 features |= device_feature_op_scan;
             if (has_opcode(op_cap, IDXD_OPCODE_EXTRACT))
@@ -462,6 +473,10 @@ static device_features_t detect_features(accfg_device* device)
                 features |= device_feature_op_compress;
             if (has_opcode(op_cap, IDXD_OPCODE_DECOMPRESS))
                 features |= device_feature_op_decompress;
+            if (has_opcode(op_cap, IDXD_OPCODE_DECRYPT))
+                features |= device_feature_op_decrypt;
+            if (has_opcode(op_cap, IDXD_OPCODE_ENCRYPT))
+                features |= device_feature_op_encrypt;
         }
     }
 
