@@ -32,31 +32,6 @@
 struct wq_info_t* device_info = nullptr;
 
 namespace {
-constexpr unsigned IDXD_OPCODE_NOOP              = 0x00;
-constexpr unsigned IDXD_OPCODE_BATCH             = 0x01;
-constexpr unsigned IDXD_OPCODE_DRAIN             = 0x02;
-constexpr unsigned IDXD_OPCODE_MEMMOVE           = 0x03;
-constexpr unsigned IDXD_OPCODE_FILL              = 0x04;
-constexpr unsigned IDXD_OPCODE_COMPARE           = 0x05;
-constexpr unsigned IDXD_OPCODE_COMPARE_PAT       = 0x06;
-constexpr unsigned IDXD_OPCODE_CREATE_DELTA_REC  = 0x07;
-constexpr unsigned IDXD_OPCODE_APPLY_DELTA_REC   = 0x08;
-constexpr unsigned IDXD_OPCODE_DUAL_CAST         = 0x09;
-constexpr unsigned IDXD_OPCODE_CRC_GEN           = 0x10;
-constexpr unsigned IDXD_OPCODE_COPY_WITH_CRC_GEN = 0x11;
-constexpr unsigned IDXD_OPCODE_DIF_CHECK         = 0x12;
-constexpr unsigned IDXD_OPCODE_DIF_INSERT        = 0x13;
-constexpr unsigned IDXD_OPCODE_DIF_STRIP         = 0x14;
-constexpr unsigned IDXD_OPCODE_DIF_UPDATE        = 0x15;
-constexpr unsigned IDXD_OPCODE_CACHE_FLUSH       = 0x20;
-constexpr unsigned IDXD_OPCODE_DECOMPRESS        = 0x42;
-constexpr unsigned IDXD_OPCODE_COMPRESS          = 0x43;
-constexpr unsigned IDXD_OPCODE_CRC64             = 0x44;
-constexpr unsigned IDXD_OPCODE_SCAN              = 0x50;
-constexpr unsigned IDXD_OPCODE_EXTRACT           = 0x52;
-constexpr unsigned IDXD_OPCODE_SELECT            = 0x53;
-constexpr unsigned IDXD_OPCODE_EXPAND            = 0x56;
-
 unsigned feature_to_opcode(device_features_t feature)
 {
     switch (feature) {
