@@ -10,6 +10,8 @@
 
 #include <cassert>
 #include <cstdint>
+#include <format>
+#include <optional>
 #include <print>
 #include <string>
 #include <vector>
@@ -34,29 +36,28 @@ void dump_device_info()
     for (const auto& device : Topology::topology().devices) {
         uint32_t num_wqs = 0;
         uint32_t num_eng = 0;
-        bdf_t bdf{};
-        const char* version = nullptr;
+        std::optional<bdf_t> bdf{};
         for (const auto& group : device.groups) {
             auto size = group.wqs.size();
             num_wqs += size;
             num_eng += group.engines.size();
-            if (!version && size != 0) {
+            if (!bdf && size != 0) {
                 bdf = group.wqs.front().wq->bdf;
-
-                switch (group.wqs.front().wq->dev_version) {
-                case ACCFG_DEVICE_VERSION_1:
-                    version = "v1";
-                    break;
-                case ACCFG_DEVICE_VERSION_2:
-                    version = "v2";
-                    break;
-                }
             }
         }
 
+        std::string version;
+        if (device.dev_version & 0xff)
+            version = std::format("v{}.{}", device.dev_version >> 8, device.dev_version & 0xff);
+        else if (device.dev_version != 0)
+            version = std::format("v{}", device.dev_version >> 8);
+        else
+            version = "??";
+
         std::print("{}\t{}\t{}\t{}\t", device.name, version, num_wqs, num_eng);
+        assert(bdf.has_value());
         std::print("{:04x}:{:02x}:{:02x}.{:01x}\n",
-            bdf.domain, bdf.bus, (uint8_t)bdf.device, (uint8_t)bdf.function
+            bdf->domain, bdf->bus, (uint8_t)bdf->device, (uint8_t)bdf->function
         );
     }
 }

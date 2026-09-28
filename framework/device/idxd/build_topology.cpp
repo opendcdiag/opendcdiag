@@ -111,6 +111,7 @@ Topology build_topology(accfg_ctx* ctx)
 
             it->id = info->device_id;
             it->dev_type = info->dev_type;
+            it->dev_version = info->dev_version;
             if (!ctx)
                 continue;
 

@@ -45,6 +45,30 @@ std::vector<unsigned> features_to_opcodes(device_features_t features, accfg_devi
     return res;
 }
 
+/// Feature bits a device of this type and version satisfies, excluding op bits.
+device_features_t device_type_features(accfg_device_type dev_type, unsigned version)
+{
+    device_features_t features = 0;
+    if (dev_type == ACCFG_DEVICE_DSA) {
+        features |= device_feature_dsa;
+        if (version >= ACCFG_DEVICE_VERSION_1)
+            features |= device_feature_dsa_v1;
+        if (version >= ACCFG_DEVICE_VERSION_2)
+            features |= device_feature_dsa_v2;
+        if (version > ACCFG_DEVICE_VERSION_2)
+            features |= device_feature_dsa_v3;
+    } else if (dev_type == ACCFG_DEVICE_IAX) {
+        features |= device_feature_iax;
+        if (version >= ACCFG_DEVICE_VERSION_1)
+            features |= device_feature_iax_v1;
+        if (version >= ACCFG_DEVICE_VERSION_2)
+            features |= device_feature_iax_v2;
+        if (version > ACCFG_DEVICE_VERSION_2)
+            features |= device_feature_iax_v3;
+    }
+    return features;
+}
+
 int num_packages()
 {
     return 1;
@@ -335,27 +359,8 @@ static bool cpu_supports_idxd()
 
 static device_features_t detect_features(accfg_device* device)
 {
-    device_features_t features = 0;
-
-    unsigned int ver = accfg_device_get_version(device);
     accfg_device_type dev_type = accfg_device_get_type(device);
-    if (dev_type == ACCFG_DEVICE_DSA) {
-        features |= device_feature_dsa;
-        if (ver >= ACCFG_DEVICE_VERSION_1)
-            features |= device_feature_dsa_v1;
-        if (ver >= ACCFG_DEVICE_VERSION_2)
-            features |= device_feature_dsa_v2;
-        if (ver > ACCFG_DEVICE_VERSION_2)
-            features |= device_feature_dsa_v3;
-    } else if (dev_type == ACCFG_DEVICE_IAX) {
-        features |= device_feature_iax;
-        if (ver >= ACCFG_DEVICE_VERSION_1)
-            features |= device_feature_iax_v1;
-        if (ver >= ACCFG_DEVICE_VERSION_2)
-            features |= device_feature_iax_v2;
-        if (ver > ACCFG_DEVICE_VERSION_2)
-            features |= device_feature_iax_v3;
-    }
+    device_features_t features = device_type_features(dev_type, accfg_device_get_version(device));
 
     accfg_op_cap op_cap = {};
     if (accfg_device_get_op_cap(device, &op_cap) == 0) {

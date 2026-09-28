@@ -129,6 +129,7 @@ public:
         int numa_node = -1; // rather useless, but keep for legacy reasons.
         int id = -1;
         accfg_device_type dev_type = accfg_device_type::ACCFG_DEVICE_TYPE_UNKNOWN;
+        unsigned dev_version = 0;
 
         uint32_t max_batch_size = 0;
         uint64_t max_transfer_size = 0;
@@ -161,7 +162,7 @@ struct HardwareInfo
 {};
 
 std::vector<unsigned> features_to_opcodes(device_features_t, accfg_device_type);
-
+device_features_t device_type_features(accfg_device_type, unsigned version);
 device_features_t detect_features();
 
 #endif // INC_TOPOLOGY_IDXD_HPP
