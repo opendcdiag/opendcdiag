@@ -67,6 +67,34 @@ typedef unsigned __int128 device_features_t;
 
 #define IDXD_FEATURE_SIZE  35
 
+#define IDXD_OPCODE_NOOP              0x00
+#define IDXD_OPCODE_BATCH             0x01
+#define IDXD_OPCODE_DRAIN             0x02
+#define IDXD_OPCODE_MEMMOVE           0x03
+#define IDXD_OPCODE_FILL              0x04
+#define IDXD_OPCODE_COMPARE           0x05
+#define IDXD_OPCODE_COMPARE_PAT       0x06
+#define IDXD_OPCODE_CREATE_DELTA_REC  0x07
+#define IDXD_OPCODE_APPLY_DELTA_REC   0x08
+#define IDXD_OPCODE_DUAL_CAST         0x09
+#define IDXD_OPCODE_XLAT_FETCH        0x0a
+#define IDXD_OPCODE_CRC_GEN           0x10
+#define IDXD_OPCODE_COPY_WITH_CRC_GEN 0x11
+#define IDXD_OPCODE_DIF_CHECK         0x12
+#define IDXD_OPCODE_DIF_INSERT        0x13
+#define IDXD_OPCODE_DIF_STRIP         0x14
+#define IDXD_OPCODE_DIF_UPDATE        0x15
+#define IDXD_OPCODE_CACHE_FLUSH       0x20
+#define IDXD_OPCODE_DECRYPT           0x40
+#define IDXD_OPCODE_ENCRYPT           0x41
+#define IDXD_OPCODE_DECOMPRESS        0x42
+#define IDXD_OPCODE_COMPRESS          0x43
+#define IDXD_OPCODE_CRC64             0x44
+#define IDXD_OPCODE_SCAN              0x50
+#define IDXD_OPCODE_EXTRACT           0x52
+#define IDXD_OPCODE_SELECT            0x53
+#define IDXD_OPCODE_EXPAND            0x56
+
 #ifdef __cplusplus
 static constexpr const char* features_names[IDXD_FEATURE_SIZE] = {
     "dsa", "iax",
