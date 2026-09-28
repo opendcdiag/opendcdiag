@@ -8,6 +8,7 @@
 #include "idxd_features.h"
 #include "topology_idxd.hpp"
 
+#include <cassert>
 #include <cstdint>
 #include <print>
 #include <string>

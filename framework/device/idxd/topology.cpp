@@ -31,75 +31,19 @@
 
 struct wq_info_t* device_info = nullptr;
 
-namespace {
-unsigned feature_to_opcode(device_features_t feature)
+/// Maps each operation feature bit set in features to its IDXD opcode. Op must match its dev_type.
+std::vector<unsigned> features_to_opcodes(device_features_t features, accfg_device_type dev_type)
 {
-    switch (feature) {
-    case device_feature_dsa_op_noop:
-    case device_feature_iax_op_noop:
-        return IDXD_OPCODE_NOOP;
-    case device_feature_dsa_op_batch:
-    case device_feature_iax_op_batch:
-        return IDXD_OPCODE_BATCH;
-    case device_feature_dsa_op_drain:
-    case device_feature_iax_op_drain:
-        return IDXD_OPCODE_DRAIN;
-    case device_feature_dsa_op_xlat_fetch:
-    case device_feature_iax_op_xlat_fetch:
-        return IDXD_OPCODE_XLAT_FETCH;
-
-    case device_feature_op_memmove:
-        return IDXD_OPCODE_MEMMOVE;
-    case device_feature_op_fill:
-        return IDXD_OPCODE_FILL;
-    case device_feature_op_compare:
-        return IDXD_OPCODE_COMPARE;
-    case device_feature_op_compare_pat:
-        return IDXD_OPCODE_COMPARE_PAT;
-    case device_feature_op_crc_gen:
-        return IDXD_OPCODE_CRC_GEN;
-    case device_feature_op_copy_with_crc_gen:
-        return IDXD_OPCODE_COPY_WITH_CRC_GEN;
-    case device_feature_op_dif_check:
-        return IDXD_OPCODE_DIF_CHECK;
-    case device_feature_op_dif_insert:
-        return IDXD_OPCODE_DIF_INSERT;
-    case device_feature_op_dif_strip:
-        return IDXD_OPCODE_DIF_STRIP;
-    case device_feature_op_dif_update:
-        return IDXD_OPCODE_DIF_UPDATE;
-    case device_feature_op_cache_flush:
-        return IDXD_OPCODE_CACHE_FLUSH;
-    case device_feature_op_crc64:
-        return IDXD_OPCODE_CRC64;
-
-    case device_feature_op_dual_cast:
-        return IDXD_OPCODE_DUAL_CAST;
-    case device_feature_op_create_delta:
-        return IDXD_OPCODE_CREATE_DELTA_REC;
-    case device_feature_op_apply_delta:
-        return IDXD_OPCODE_APPLY_DELTA_REC;
-    case device_feature_op_scan:
-        return IDXD_OPCODE_SCAN;
-    case device_feature_op_extract:
-        return IDXD_OPCODE_EXTRACT;
-    case device_feature_op_select:
-        return IDXD_OPCODE_SELECT;
-    case device_feature_op_expand:
-        return IDXD_OPCODE_EXPAND;
-    case device_feature_op_compress:
-        return IDXD_OPCODE_COMPRESS;
-    case device_feature_op_decompress:
-        return IDXD_OPCODE_DECOMPRESS;
-    case device_feature_op_decrypt:
-        return IDXD_OPCODE_DECRYPT;
-    case device_feature_op_encrypt:
-        return IDXD_OPCODE_ENCRYPT;
-    default:
-        return ~0u;
+    std::vector<unsigned> res;
+    for (auto [feature, opcode, entry_type] : feature_to_opcode_map) {
+        if ((features & feature) == 0)
+            continue;
+        if (entry_type != dev_type)
+            continue;
+        res.push_back(opcode);
     }
+    return res;
 }
-} // end anonymous namespace
 
 int num_packages()
 {
@@ -375,9 +319,11 @@ bool has_opcode(const wq_info_t& info, unsigned opcode)
     return has_opcode(Topology::topology().devices[info.path.device].op_cap, opcode);
 }
 
-bool has_feature(const wq_info_t& info, device_features_t feature)
+bool has_feature(const wq_info_t& info, device_features_t features)
 {
-    return has_opcode(Topology::topology().devices[info.path.device].op_cap, feature_to_opcode(feature));
+    const accfg_op_cap& op_cap = Topology::topology().devices[info.path.device].op_cap;
+    return std::ranges::all_of(features_to_opcodes(features, info.dev_type),
+                               [&op_cap](unsigned opcode) { return has_opcode(op_cap, opcode); });
 }
 
 // We require only waitpkg and enqcmd system-wide.
