@@ -107,6 +107,9 @@ enum {
     thread_ratio_option,
     alpha_option,
     beta_option,
+#if SANDSTONE_DEVICE_IDXD
+    idxd_user_config_option,
+#endif
 
     // syntethic values to track which of conflicting opts is currently active
     _duration_option,
@@ -206,6 +209,10 @@ static struct option long_options[]  = {
     { "version", no_argument, nullptr, version_option },
     { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
     { "yaml", optional_argument, nullptr, 'Y' },
+#if SANDSTONE_DEVICE_IDXD
+    // it won't be parsed here, but we need it defined for parser to recognize it
+    { "idxd-config", required_argument, nullptr, idxd_user_config_option },
+#endif
 
 #if defined(__SANITIZE_ADDRESS__)
     { "is-asan-build", no_argument, nullptr, is_asan_option },
@@ -444,6 +451,10 @@ inline int simple_getopt(int argc, char **argv, struct option *options, int *cop
             if (o->has_arg == optional_argument)
                 result += ':';
         }
+        // The command line is scanned more than once. Do not let getopt_long()
+        // permute argv order - enforce REQUIRE_ORDER mode by setting the first
+        // character to '+'.
+        result.insert(result.begin(), '+');
         return result;
     }();
     return getopt_long(argc, argv, cached_short_opts.c_str(), options, coptind);
@@ -452,6 +463,25 @@ inline int simple_getopt(int argc, char **argv, struct option *options, int *cop
 struct ProgramOptionsParser {
 
     std::map<int, std::variant<bool, int, const char*, std::vector<const char*>, ShortDuration>> opts_map;
+
+    static int verify_args(int argc, char** argv) {
+        int opt;
+        int coptind = -1;
+        optind = 1;
+        opterr = 1; // make sure we print the unrecognized option message
+
+        while ((opt = simple_getopt(argc, argv, long_options, &coptind)) != -1) {
+            switch (opt) {
+            case '?':
+                suggest_help(argv);
+                return EX_USAGE;
+            }
+        }
+
+        opterr = 0; // further calls do not need to print the message
+
+        return EXIT_SUCCESS;
+    }
 
     void add_to_map_as_vec(int opt, const char *arg) {
         auto map = opts_map.find(opt);
@@ -671,6 +701,9 @@ struct ProgramOptionsParser {
                 warn_deprecated_opt(long_options[coptind].name);
                 break;
 
+#if SANDSTONE_DEVICE_IDXD
+            case idxd_user_config_option:
+#endif
             case 0:
                 /* long option setting a value */
                 continue;
@@ -1289,6 +1322,11 @@ struct ProgramOptionsParser {
     }
 };
 } /* anonymous namespace */
+
+int ProgramOptions::verify(int argc, char** argv)
+{
+    return ProgramOptionsParser::verify_args(argc, argv);
+}
 
 int ProgramOptions::parse(int argc, char** argv, SandstoneApplicationConfig* app_cfg) {
     ProgramOptionsParser parser;
