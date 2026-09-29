@@ -27,6 +27,8 @@ typedef unsigned __int128 device_features_t;
 #define device_feature_iax_v2   IDXD_FEATURE_CONSTANT(6)
 #define device_feature_iax_v3   IDXD_FEATURE_CONSTANT(7)
 
+#define IDXD_TYPE_FEATURES_END 7
+
 // Operation capability bits from accfg_device_get_op_cap().
 // They indicate that at least one visible accelerator reports support
 // for the given opcode. Common operations are split by device type since
@@ -54,6 +56,8 @@ typedef unsigned __int128 device_features_t;
 #define device_feature_op_create_delta      IDXD_FEATURE_CONSTANT(24)
 #define device_feature_op_apply_delta       IDXD_FEATURE_CONSTANT(25)
 
+#define IDXD_DSA_FEATURES_END 25
+
 // IAX common operations
 #define device_feature_iax_op_noop          IDXD_FEATURE_CONSTANT(26)
 #define device_feature_iax_op_batch         IDXD_FEATURE_CONSTANT(27)
@@ -70,6 +74,8 @@ typedef unsigned __int128 device_features_t;
 #define device_feature_op_decompress        IDXD_FEATURE_CONSTANT(36)
 #define device_feature_op_decrypt           IDXD_FEATURE_CONSTANT(37)
 #define device_feature_op_encrypt           IDXD_FEATURE_CONSTANT(38)
+
+#define IDXD_IAX_FEATURES_END 38
 
 #define IDXD_FEATURE_SIZE  39
 
@@ -102,6 +108,15 @@ typedef unsigned __int128 device_features_t;
 #define IDXD_OPCODE_EXPAND            0x56
 
 #ifdef __cplusplus
+static constexpr device_features_t idxd_dev_type_features_mask =
+    (device_features_t{1} << (IDXD_TYPE_FEATURES_END + 1)) - 1;
+static constexpr device_features_t idxd_all_features_mask =
+    (device_features_t{1} << IDXD_FEATURE_SIZE) - 1;
+static constexpr device_features_t idxd_dsa_operation_features_mask =
+    ((device_features_t{1} << (IDXD_DSA_FEATURES_END + 1)) - 1) & ~idxd_dev_type_features_mask;
+static constexpr device_features_t idxd_iax_operation_features_mask =
+    idxd_all_features_mask & ~((device_features_t{1} << (IDXD_DSA_FEATURES_END + 1)) - 1);
+
 static constexpr const char* features_names[IDXD_FEATURE_SIZE] = {
     "dsa", "iax",
     "dsa_v1", "dsa_v2", "dsa_v3",
