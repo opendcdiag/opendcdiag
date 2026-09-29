@@ -345,6 +345,25 @@ bool has_opcode(const wq_info_t& info, unsigned opcode)
 
 bool has_feature(const wq_info_t& info, device_features_t features)
 {
+    if (features & ~idxd_all_features_mask) {
+        // undefined bit
+        return false;
+    }
+
+    auto this_dev_type_features = device_type_features(info.dev_type, info.dev_version);
+    auto requested_dev_type_features = features & idxd_dev_type_features_mask;
+    if ((requested_dev_type_features & this_dev_type_features) != requested_dev_type_features) {
+        // wrong device's features requested (i.e. info.dev_type=iax and device_feature_dsa_v2)
+        return false;
+    }
+
+    auto other_op_features = info.dev_type == ACCFG_DEVICE_DSA
+            ? idxd_iax_operation_features_mask : idxd_dsa_operation_features_mask;
+    if (features & other_op_features) {
+        // wrong device's features requested (i.e. info.dev_type=iax and device_feature_dsa_op_drain)
+        return false;
+    }
+
     const accfg_op_cap& op_cap = Topology::topology().devices[info.path.device].op_cap;
     return std::ranges::all_of(features_to_opcodes(features, info.dev_type),
                                [&op_cap](unsigned opcode) { return has_opcode(op_cap, opcode); });
