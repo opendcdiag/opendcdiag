@@ -144,6 +144,19 @@ framework_config.set10('SANDSTONE_BUILTIN_TEST_LIST', get_option('builtin_test_l
 framework_config.set_quoted('SANDSTONE_EXECUTABLE_NAME', get_option('executable_name'))
 framework_config.set_quoted('SANDSTONE_FALLBACK_EXEC', get_option('fallback_exec'))
 
+default_exec_mode = get_option('default_exec_mode')
+if default_exec_mode == 'auto'
+    default_exec_mode = host_machine.system() == 'windows' ? 'exec' : 'fork'
+endif
+framework_config.set(
+    'SANDSTONE_DEFAULT_FORK_MODE',
+    'ForkMode::' + {
+        'no' : 'no_fork',
+        'fork' : 'fork_each_test',
+        'exec' : 'exec_each_test',
+    }[default_exec_mode],
+)
+
 framework_config.set10('SANDSTONE_NO_LOGGING', get_option('logging_format') == 'no_output')
 framework_config.set(
     'SANDSTONE_DEFAULT_LOGGING',

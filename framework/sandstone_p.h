@@ -291,12 +291,7 @@ struct SandstoneApplicationConfig {
     ShortDuration delay_between_tests = std::chrono::milliseconds(5);
 
     std::vector<std::string> exec_wrapper;
-    ForkMode fork_mode =
-#ifdef _WIN32
-        ForkMode::exec_each_test;
-#else
-        ForkMode::fork_each_test;
-#endif
+    ForkMode fork_mode = SANDSTONE_DEFAULT_FORK_MODE;
 
     bool fatal_skips = false;
     bool ignore_mce_errors = false;
