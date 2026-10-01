@@ -31,44 +31,6 @@
 
 struct wq_info_t* device_info = nullptr;
 
-/// Maps each operation feature bit set in features to its IDXD opcode. Op must match its dev_type.
-std::vector<unsigned> features_to_opcodes(device_features_t features, accfg_device_type dev_type)
-{
-    std::vector<unsigned> res;
-    for (auto [feature, opcode, entry_type] : feature_to_opcode_map) {
-        if ((features & feature) == 0)
-            continue;
-        if (entry_type != dev_type)
-            continue;
-        res.push_back(opcode);
-    }
-    return res;
-}
-
-/// Feature bits a device of this type and version satisfies, excluding op bits.
-device_features_t device_type_features(accfg_device_type dev_type, unsigned version)
-{
-    device_features_t features = 0;
-    if (dev_type == ACCFG_DEVICE_DSA) {
-        features |= device_feature_dsa;
-        if (version >= ACCFG_DEVICE_VERSION_1)
-            features |= device_feature_dsa_v1;
-        if (version >= ACCFG_DEVICE_VERSION_2)
-            features |= device_feature_dsa_v2;
-        if (version > ACCFG_DEVICE_VERSION_2)
-            features |= device_feature_dsa_v3;
-    } else if (dev_type == ACCFG_DEVICE_IAX) {
-        features |= device_feature_iax;
-        if (version >= ACCFG_DEVICE_VERSION_1)
-            features |= device_feature_iax_v1;
-        if (version >= ACCFG_DEVICE_VERSION_2)
-            features |= device_feature_iax_v2;
-        if (version > ACCFG_DEVICE_VERSION_2)
-            features |= device_feature_iax_v3;
-    }
-    return features;
-}
-
 int num_packages()
 {
     return 1;
@@ -341,20 +303,6 @@ int AccfgCtx::init()
 bool has_opcode(const wq_info_t& info, unsigned opcode)
 {
     return has_opcode(Topology::topology().devices[info.path.device].op_cap, opcode);
-}
-
-bool has_feature(const wq_info_t& info, device_features_t features)
-{
-    auto this_dev_type_features = device_type_features(info.dev_type, info.dev_version);
-    auto requested_dev_type_features = features & idxd_dev_type_features_mask;
-    if ((requested_dev_type_features & this_dev_type_features) != requested_dev_type_features) {
-        // i.e. info.dev_type=iax,info.dev_version=v1 and device_feature_iax_v2
-        return false;
-    }
-
-    const accfg_op_cap& op_cap = Topology::topology().devices[info.path.device].op_cap;
-    return std::ranges::all_of(features_to_opcodes(features, info.dev_type),
-                               [&op_cap](unsigned opcode) { return has_opcode(op_cap, opcode); });
 }
 
 // We require only waitpkg and enqcmd system-wide.
@@ -715,30 +663,6 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
     } else {
         logging_printf(LOG_LEVEL_VERBOSE(1), "# - Some IDXD devices failed but some others succeeded\n");
     }
-}
-
-std::vector<const Topology::WorkQueue*> Topology::targetable_wqs(struct test* test, accfg_device_type required_device_type) const
-{
-    std::vector<const WorkQueue*> result;
-
-    std::optional<accfg_wq_mode> required_mode = {}; // TODO: define somewhere, as a feature?
-
-    for (const Device &device : devices) {
-        if (device.dev_type != required_device_type) {
-            continue;
-        }
-
-        for (const Group &group : device.groups) {
-            for (const WorkQueue &wq : group.wqs) {
-                if (wq.targetable && (!required_mode || wq.mode == *required_mode)
-                        && has_feature(*wq.wq, test->minimum_cpu)) {
-                    result.push_back(&wq);
-                }
-            }
-        }
-    }
-
-    return result;
 }
 
 void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)

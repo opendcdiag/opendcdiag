@@ -15,10 +15,21 @@ protected:
 
 TEST_F(IdxdFeatureTestSuite, NoFeaturesMeansNoMatch)
 {
+    EXPECT_TRUE(device_has_feature(0));
     EXPECT_FALSE(device_has_feature(device_feature_dsa));
     EXPECT_FALSE(device_has_feature(device_feature_iax));
     EXPECT_FALSE(device_has_feature(device_feature_dsa_v2));
     EXPECT_FALSE(device_has_feature(device_feature_iax_v3));
+}
+
+TEST_F(IdxdFeatureTestSuite, CombinedFeaturesRequireEveryBit)
+{
+    device_features = device_feature_dsa
+            | device_feature_dsa_v1
+            | device_feature_dsa_v2;
+
+    EXPECT_TRUE(device_has_feature(device_feature_dsa | device_feature_dsa_v2));
+    EXPECT_FALSE(device_has_feature(device_feature_dsa | device_feature_dsa_v3));
 }
 
 TEST_F(IdxdFeatureTestSuite, DsaVersionBitsMatchSameFamily)
@@ -66,5 +77,10 @@ TEST(IdxdFeatureBits, FeatureBitsAreDistinct)
     static_assert((device_feature_dsa_v1 & device_feature_iax_v1) == 0);
     static_assert((device_feature_dsa_v2 & device_feature_iax_v2) == 0);
     static_assert((device_feature_dsa_v3 & device_feature_iax_v3) == 0);
+    static_assert((idxd_dsa_operation_features_mask & idxd_iax_operation_features_mask) == 0);
+    static_assert((idxd_dsa_operation_features_mask & idxd_dev_type_features_mask) == 0);
+    static_assert((idxd_iax_operation_features_mask & idxd_dev_type_features_mask) == 0);
+    static_assert((idxd_dsa_operation_features_mask | idxd_iax_operation_features_mask)
+                  == (idxd_all_features_mask & ~idxd_dev_type_features_mask));
     SUCCEED();
 }
