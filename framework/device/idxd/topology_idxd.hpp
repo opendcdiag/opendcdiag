@@ -147,10 +147,7 @@ public:
     //   - one std::vector<Device> and a type member to Device?
     std::vector<Device> devices;
 
-    std::vector<const WorkQueue*> targetable_wqs(
-        std::optional<accfg_device_type> device_type = std::nullopt,
-        std::optional<accfg_wq_mode> mode = std::nullopt,
-        std::optional<unsigned int> op = std::nullopt) const;
+    std::vector<const WorkQueue*> targetable_wqs(struct test*, accfg_device_type) const;
 
     static const Topology &topology();
 };
