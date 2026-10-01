@@ -53,7 +53,11 @@ struct test_cfg_info {
 
 #ifdef __cplusplus
 
-inline std::span<struct test> regular_tests = { &__start_tests, &__stop_tests };
+inline std::span<struct test> regular_tests()
+{
+    static std::span<struct test> value = { &__start_tests, &__stop_tests };
+    return value;
+}
 #ifdef NO_SELF_TESTS
 constexpr const std::span<struct test> selftests = {};
 #else
@@ -142,11 +146,11 @@ private:
         if (!SandstoneConfig::RestrictedCommandLine && cfg.is_selftest)
             return selftests;
 #endif
-        return regular_tests;
+        return regular_tests();
     }
     bool is_selftest() const
     {
-        return test_source().begin() != regular_tests.begin();
+        return test_source().begin() != regular_tests().begin();
     }
 };
 

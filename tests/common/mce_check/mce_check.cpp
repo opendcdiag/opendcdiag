@@ -36,7 +36,11 @@
 
 namespace {
 // we can use globals as it's run for 0th cpu only (data won't be shared accross >1 threads)
-std::vector<uint32_t> mce_counts_start;
+std::vector<uint32_t> &mce_counts_start()
+{
+    static std::vector<uint32_t> counts;
+    return counts;
+}
 uint64_t mce_count_last;
 uint64_t last_thermal_event_count;
 
@@ -44,8 +48,8 @@ int mce_check_preinit(struct test *test)
 {
     (void) test;
     last_thermal_event_count = InterruptMonitor::count_thermal_events();
-    mce_counts_start = InterruptMonitor::get_mce_interrupt_counts();
-    mce_count_last = std::accumulate(mce_counts_start.begin(), mce_counts_start.end(), uint64_t(0));
+    mce_counts_start() = InterruptMonitor::get_mce_interrupt_counts();
+    mce_count_last = std::accumulate(mce_counts_start().begin(), mce_counts_start().end(), uint64_t(0));
     return EXIT_SUCCESS;
 }
 
@@ -58,18 +62,18 @@ int mce_check_run(struct test *test, int thread)
 
     std::vector<uint32_t> counts = InterruptMonitor::get_mce_interrupt_counts();
 
-    if (counts.size() != mce_counts_start.size()) {
+    if (counts.size() != mce_counts_start().size()) {
         report_fail_msg("Number of CPUs changed during execution, test is not valid.");
         return EXIT_FAILURE;
     }
 
     std::vector<uint32_t> differences(counts.size());
     for (size_t i = 0; i < counts.size(); ++i)
-        differences[i] = counts[i] - mce_counts_start[i];
+        differences[i] = counts[i] - mce_counts_start()[i];
 
     // set up for the next iteration (in case there's one)
     mce_count_last = std::accumulate(counts.begin(), counts.end(), uint64_t(0));
-    mce_counts_start = std::move(counts);
+    mce_counts_start() = std::move(counts);
     counts.clear();
 
     // check the CPUs we were running tests on
@@ -111,7 +115,7 @@ int mce_check_run(struct test *test, int thread)
 // Member function defined here as we're using mce_counts_start
 bool InterruptMonitor::observed_mce_events()
 {
-    return get_mce_interrupt_counts() != mce_counts_start;
+    return get_mce_interrupt_counts() != mce_counts_start();
 }
 #endif
 
