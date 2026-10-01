@@ -95,26 +95,40 @@ def main():
             f.write('\n'.join(decls))
             f.write('\n\n')
 
+        # Each list/set is wrapped in a function returning a reference to a
+        # function-local static, instead of a namespace-scope global. This
+        # avoids eager, non-trivial global constructors (std::vector and
+        # std::optional are non-trivial types) running at program startup;
+        # construction now happens lazily, on first use.
         if len(files) != 0:
             for path, tests in test_lists.items():
                 file_id = files[path]
-                num_tests = len(tests)
                 f.write(f'// content of {path}\n')
-                f.write(f'static const std::vector<struct test *> test_set_{file_id}{{')
-                test_list = [ f'\n    &_test_{test}' for test in tests ]
+                f.write(f'static const std::vector<struct test *> &test_set_{file_id}()\n')
+                f.write('{\n')
+                f.write(f'    static const std::vector<struct test *> set{{')
+                test_list = [ f'\n        &_test_{test}' for test in tests ]
                 f.write(','.join(test_list))
-                f.write('\n};\n')
-            f.write('\n')
+                f.write('\n    };\n')
+                f.write('    return set;\n')
+                f.write('}\n\n')
 
         # build all defined lists
         for name, path in test_list_files.items():
             file_id = files[path]
             # this uses cpu_<code name> defined via simd.conf
-            f.write(f'static const BuiltinTestSet {name}_test_set{{ {"cpu_" + name if name != "default" else 0}, "{name}", test_set_{file_id} }};\n')
+            f.write(f'static const BuiltinTestSet &{name}_test_set()\n')
+            f.write('{\n')
+            f.write(f'    static const BuiltinTestSet set{{ {"cpu_" + name if name != "default" else 0}, "{name}", test_set_{file_id}() }};\n')
+            f.write('    return set;\n')
+            f.write('}\n\n')
         # create default "null" list if not defined
         if default_name is None:
-            f.write(f'static const BuiltinTestSet default_test_set{{ 0, "default", std::nullopt }};\n')
-        f.write('\n')
+            f.write('static const BuiltinTestSet &default_test_set()\n')
+            f.write('{\n')
+            f.write('    static const BuiltinTestSet set{ 0, "default", std::nullopt };\n')
+            f.write('    return set;\n')
+            f.write('}\n\n')
 
         # function to check if the list is selected, applied to non-default lists only
         if other_names:
@@ -133,14 +147,16 @@ def main():
         f.write('{\n')
         for name in test_list_files.keys():
             if default_name is None or name != default_name:
-                f.write(f'    if (test_list_matches(&{name}_test_set, name)) return {name}_test_set;\n')
+                f.write(f'    if (test_list_matches(&{name}_test_set(), name)) return {name}_test_set();\n')
 
         # emit warning if neither list matches
         if default_name is not None:
             f.write('    if (name && (strcmp(name, "default") != 0)) {\n')
             f.write('        logging_printf(LOG_LEVEL_QUIET, "# ERROR: list for %s not found. Using default\\n", name);\n')
             f.write('    }\n')
-        f.write('    return default_test_set;\n')
+            f.write('    return default_test_set();\n')
+        else:
+            f.write('    return default_test_set();\n')
         f.write('}\n')
 
     # generate .h file
