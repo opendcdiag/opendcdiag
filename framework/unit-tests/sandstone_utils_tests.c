@@ -5,6 +5,57 @@
 
 #include <sandstone.h>
 #include "fp_vectors/Floats.h"
+#include "sandstone_data.h"
+
+// Direct DATATYPEFORTYPE coverage.
+int test_datatypefortype_c(void)
+{
+    _Bool b = 0;
+    char c = 0;
+    uint8_t u8 = 0;
+    uint16_t u16 = 0;
+    uint32_t u32 = 0;
+    unsigned long ul = 0;
+    unsigned long long ull = 0;
+    __uint128_t u128 = 0;
+    int8_t i8 = 0;
+    int16_t i16 = 0;
+    int32_t i32 = 0;
+    long l = 0;
+    long long ll = 0;
+    __int128_t i128 = 0;
+    HFloat8 hf8 = new_hfloat8(0, 0, 0);
+    BFloat8 bf8 = new_bfloat8(0, 0, 0);
+    BFloat16 bf16 = new_bfloat16(0, 0, 0);
+    Float16 f16 = new_float16(0, 0, 0);
+    float f32 = 0.0f;
+    double f64 = 0.0;
+    long double f80 = 0.0L;
+
+    if (DATATYPEFORTYPE(b) != UInt8Data) return __LINE__;
+    if (DATATYPEFORTYPE(c) != UInt8Data) return __LINE__;
+    if (DATATYPEFORTYPE(u8) != UInt8Data) return __LINE__;
+    if (DATATYPEFORTYPE(u16) != UInt16Data) return __LINE__;
+    if (DATATYPEFORTYPE(u32) != UInt32Data) return __LINE__;
+    if (DATATYPEFORTYPE(ul) != (sizeof(unsigned long) == sizeof(unsigned long long) ? UInt64Data : UInt32Data)) return __LINE__;
+    if (DATATYPEFORTYPE(ull) != UInt64Data) return __LINE__;
+    if (DATATYPEFORTYPE(u128) != UInt128Data) return __LINE__;
+    if (DATATYPEFORTYPE(i8) != Int8Data) return __LINE__;
+    if (DATATYPEFORTYPE(i16) != Int16Data) return __LINE__;
+    if (DATATYPEFORTYPE(i32) != Int32Data) return __LINE__;
+    if (DATATYPEFORTYPE(l) != (sizeof(long) == sizeof(long long) ? Int64Data : Int32Data)) return __LINE__;
+    if (DATATYPEFORTYPE(ll) != Int64Data) return __LINE__;
+    if (DATATYPEFORTYPE(i128) != Int128Data) return __LINE__;
+    if (DATATYPEFORTYPE(hf8) != HFloat8Data) return __LINE__;
+    if (DATATYPEFORTYPE(bf8) != BFloat8Data) return __LINE__;
+    if (DATATYPEFORTYPE(bf16) != BFloat16Data) return __LINE__;
+    if (DATATYPEFORTYPE(f16) != Float16Data) return __LINE__;
+    if (DATATYPEFORTYPE(f32) != Float32Data) return __LINE__;
+    if (DATATYPEFORTYPE(f64) != Float64Data) return __LINE__;
+    if (DATATYPEFORTYPE(f80) != (sizeof(long double) == sizeof(double) ? Float64Data : Float80Data)) return __LINE__;
+
+    return 0;
+}
 
 int test_floats_prototypes_c(void)
 {
