@@ -1662,6 +1662,7 @@ function selftest_cxxthrow_common() {
         type=${type%_with_cb}   # if any
         case "$type" in
             Float16)            type=_Float16;;
+            BFloat16)           type=_BFloat16;;
             long_double)        type=_Float64x;;
         esac
         local description="data of type '$type'.*"

@@ -55,6 +55,12 @@ using uint128_t = __uint128_t;
     F(uint32_t, 0x11111111)         \
     F(uint64_t, UINT64_C(0x0102030405060708)) \
     F(uint128_t, (uint128_t(UINT64_C(0x0102030405060708)) << 64) + UINT64_C(0x090a0b0c0d0e0f00)) \
+    F(int8_t, -0x55)                \
+    F(int16_t, -0x1111)             \
+    F(int32_t, -0x11111111)         \
+    F(HFloat8, -1.5f)               \
+    F(BFloat8, -1.5f)               \
+    F(BFloat16, -1.5f)              \
     F(Float16, -1.5f)               \
     F(float, 0.5f)                  \
     F(double, 65535.0)              \
