@@ -21,7 +21,11 @@
 namespace {
 // we can use global variable, since write to this vector is done by single thread (initialize_smi_counts),
 // and in smi_count_run it's read-only + each thread reads different memory location.
-std::vector<uint64_t> smi_counts_start;
+std::vector<uint64_t> &smi_counts_start()
+{
+    static std::vector<uint64_t> counts;
+    return counts;
+}
 
 int initialize_smi_counts(struct test*)
 {
@@ -30,10 +34,10 @@ int initialize_smi_counts(struct test*)
         log_skip(RuntimeSkipCategory, "Could not read msr");
         return EXIT_SKIP;
     }
-    smi_counts_start.resize(thread_count());
-    smi_counts_start[0] = *v;
+    smi_counts_start().resize(thread_count());
+    smi_counts_start()[0] = *v;
     for (int i = 1; i < thread_count(); i++) {
-        smi_counts_start[i] = InterruptMonitor::count_smi_events(device_info[i].cpu_number).value_or(0);
+        smi_counts_start()[i] = InterruptMonitor::count_smi_events(device_info[i].cpu_number).value_or(0);
     }
     return EXIT_SUCCESS;
 }
@@ -42,9 +46,9 @@ int smi_count_run(struct test *test, int thread)
 {
     (void) test;
 
-    if (int(smi_counts_start.size()) > thread) {
+    if (int(smi_counts_start().size()) > thread) {
         int real_cpu_number = device_info[thread].cpu_number;
-        auto initial_count = smi_counts_start[thread];
+        auto initial_count = smi_counts_start()[thread];
         auto current_count = InterruptMonitor::count_smi_events(real_cpu_number);
         if (current_count) {
             uint64_t difference = *current_count - initial_count;
