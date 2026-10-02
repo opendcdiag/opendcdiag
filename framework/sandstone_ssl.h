@@ -622,14 +622,13 @@
 
 
 #define SANDSTONE_SSL_EVP_FUNCTIONS(F)           \
+    F(EVP_aes_128_cbc)                           \
     F(EVP_aes_128_cbc_hmac_sha1)                 \
     F(EVP_aes_128_cbc_hmac_sha256)               \
-    F(EVP_aes_128_cbc)                           \
     F(EVP_aes_128_ccm)                           \
-    F(EVP_aes_128_cfb128)                        \
     F(EVP_aes_128_cfb1)                          \
+    F(EVP_aes_128_cfb128)                        \
     F(EVP_aes_128_cfb8)                          \
-    F(EVP_aes_128_cfb)                           \
     F(EVP_aes_128_ctr)                           \
     F(EVP_aes_128_ecb)                           \
     F(EVP_aes_128_gcm)                           \
@@ -640,10 +639,9 @@
     F(EVP_aes_128_xts)                           \
     F(EVP_aes_192_cbc)                           \
     F(EVP_aes_192_ccm)                           \
-    F(EVP_aes_192_cfb128)                        \
     F(EVP_aes_192_cfb1)                          \
+    F(EVP_aes_192_cfb128)                        \
     F(EVP_aes_192_cfb8)                          \
-    F(EVP_aes_192_cfb)                           \
     F(EVP_aes_192_ctr)                           \
     F(EVP_aes_192_ecb)                           \
     F(EVP_aes_192_gcm)                           \
@@ -651,14 +649,13 @@
     F(EVP_aes_192_ofb)                           \
     F(EVP_aes_192_wrap)                          \
     F(EVP_aes_192_wrap_pad)                      \
+    F(EVP_aes_256_cbc)                           \
     F(EVP_aes_256_cbc_hmac_sha1)                 \
     F(EVP_aes_256_cbc_hmac_sha256)               \
-    F(EVP_aes_256_cbc)                           \
     F(EVP_aes_256_ccm)                           \
-    F(EVP_aes_256_cfb128)                        \
     F(EVP_aes_256_cfb1)                          \
+    F(EVP_aes_256_cfb128)                        \
     F(EVP_aes_256_cfb8)                          \
-    F(EVP_aes_256_cfb)                           \
     F(EVP_aes_256_ctr)                           \
     F(EVP_aes_256_ecb)                           \
     F(EVP_aes_256_gcm)                           \
@@ -670,107 +667,98 @@
     /*F(EVP_aes)*/                               \
     F(EVP_aria_128_cbc)                          \
     F(EVP_aria_128_ccm)                          \
-    F(EVP_aria_128_cfb128)                       \
     F(EVP_aria_128_cfb1)                         \
+    F(EVP_aria_128_cfb128)                       \
     F(EVP_aria_128_cfb8)                         \
-    F(EVP_aria_128_cfb)                          \
     F(EVP_aria_128_ctr)                          \
     F(EVP_aria_128_ecb)                          \
     F(EVP_aria_128_gcm)                          \
     F(EVP_aria_128_ofb)                          \
     F(EVP_aria_192_cbc)                          \
     F(EVP_aria_192_ccm)                          \
-    F(EVP_aria_192_cfb128)                       \
     F(EVP_aria_192_cfb1)                         \
+    F(EVP_aria_192_cfb128)                       \
     F(EVP_aria_192_cfb8)                         \
-    F(EVP_aria_192_cfb)                          \
     F(EVP_aria_192_ctr)                          \
     F(EVP_aria_192_ecb)                          \
     F(EVP_aria_192_gcm)                          \
     F(EVP_aria_192_ofb)                          \
     F(EVP_aria_256_cbc)                          \
     F(EVP_aria_256_ccm)                          \
-    F(EVP_aria_256_cfb128)                       \
     F(EVP_aria_256_cfb1)                         \
+    F(EVP_aria_256_cfb128)                       \
     F(EVP_aria_256_cfb8)                         \
-    F(EVP_aria_256_cfb)                          \
     F(EVP_aria_256_ctr)                          \
     F(EVP_aria_256_ecb)                          \
     F(EVP_aria_256_gcm)                          \
     F(EVP_aria_256_ofb)                          \
     /*F(EVP_aria)*/                              \
+    F(EVP_BytesToKey)                            \
     F(EVP_bf_cbc)                                \
     F(EVP_bf_cfb64)                              \
-    F(EVP_bf_cfb)                                \
     F(EVP_bf_ecb)                                \
     F(EVP_bf_ofb)                                \
     F(EVP_blake2b512)                            \
     F(EVP_blake2s256)                            \
-    F(EVP_BytesToKey)                            \
     F(EVP_camellia_128_cbc)                      \
-    F(EVP_camellia_128_cfb128)                   \
     F(EVP_camellia_128_cfb1)                     \
+    F(EVP_camellia_128_cfb128)                   \
     F(EVP_camellia_128_cfb8)                     \
-    F(EVP_camellia_128_cfb)                      \
     F(EVP_camellia_128_ctr)                      \
     F(EVP_camellia_128_ecb)                      \
     F(EVP_camellia_128_ofb)                      \
     F(EVP_camellia_192_cbc)                      \
-    F(EVP_camellia_192_cfb128)                   \
     F(EVP_camellia_192_cfb1)                     \
+    F(EVP_camellia_192_cfb128)                   \
     F(EVP_camellia_192_cfb8)                     \
-    F(EVP_camellia_192_cfb)                      \
     F(EVP_camellia_192_ctr)                      \
     F(EVP_camellia_192_ecb)                      \
     F(EVP_camellia_192_ofb)                      \
     F(EVP_camellia_256_cbc)                      \
-    F(EVP_camellia_256_cfb128)                   \
     F(EVP_camellia_256_cfb1)                     \
+    F(EVP_camellia_256_cfb128)                   \
     F(EVP_camellia_256_cfb8)                     \
-    F(EVP_camellia_256_cfb)                      \
     F(EVP_camellia_256_ctr)                      \
     F(EVP_camellia_256_ecb)                      \
     F(EVP_camellia_256_ofb)                      \
     /*F(EVP_camellia)*/                          \
     F(EVP_cast5_cbc)                             \
     F(EVP_cast5_cfb64)                           \
-    F(EVP_cast5_cfb)                             \
     F(EVP_cast5_ecb)                             \
     F(EVP_cast5_ofb)                             \
     F(EVP_chacha20)                              \
     F(EVP_chacha20_poly1305)                     \
-    F(EVP_CIPHER_asn1_to_param)                  \
-    F(EVP_CIPHER_block_size)                     \
-    F(EVP_CIPHER_CTX_block_size)                 \
     F(EVP_CIPHER_CTX_cipher)                     \
     F(EVP_CIPHER_CTX_ctrl)                       \
-    /*F(EVP_CIPHER_CTX_flags)*/                  \
     F(EVP_CIPHER_CTX_free)                       \
     F(EVP_CIPHER_CTX_get_app_data)               \
+    F(EVP_CIPHER_CTX_get_block_size)             \
     F(EVP_CIPHER_CTX_get_cipher_data)            \
+    F(EVP_CIPHER_CTX_get_iv_length)              \
+    F(EVP_CIPHER_CTX_get_key_length)             \
     F(EVP_CIPHER_CTX_get_params)                 \
-    F(EVP_CIPHER_CTX_iv_length)                  \
-    F(EVP_CIPHER_CTX_key_length)                 \
-    /*F(EVP_CIPHER_CTX_mode)*/                   \
+    /*F(EVP_CIPHER_CTX_get_mode)*/               \
     F(EVP_CIPHER_CTX_new)                        \
-    F(EVP_CIPHER_CTX_nid)                        \
+    F(EVP_CIPHER_CTX_get_nid)                    \
     F(EVP_CIPHER_CTX_reset)                      \
     F(EVP_CIPHER_CTX_set_app_data)               \
     F(EVP_CIPHER_CTX_set_cipher_data)            \
     F(EVP_CIPHER_CTX_set_key_length)             \
     F(EVP_CIPHER_CTX_set_padding)                \
-    /*F(EVP_CIPHER_CTX_type)*/                   \
+    /*F(EVP_CIPHER_CTX_get_type)*/               \
+    F(EVP_CIPHER_get_block_size)                 \
+    F(EVP_CIPHER_get_flags)                      \
+    F(EVP_CIPHER_get_iv_length)                  \
+    F(EVP_CIPHER_get_key_length)                 \
+    F(EVP_CIPHER_get_nid)                        \
+    F(EVP_CIPHER_get_type)                       \
+    F(EVP_CIPHER_asn1_to_param)                  \
     F(EVP_CipherFinal_ex)                        \
     F(EVP_CipherFinal)                           \
-    F(EVP_CIPHER_flags)                          \
     F(EVP_CipherInit_ex)                         \
     F(EVP_CipherInit)                            \
-    F(EVP_CIPHER_iv_length)                      \
-    F(EVP_CIPHER_key_length)                     \
-    /*F(EVP_CIPHER_mode)*/                       \
-    F(EVP_CIPHER_nid)                            \
+    /*F(EVP_CIPHER_get_mode)*/                   \
     F(EVP_CIPHER_param_to_asn1)                  \
-    F(EVP_CIPHER_type)                           \
     F(EVP_CipherUpdate)                          \
     /*F(EVP_cleanup)*/                           \
     F(EVP_DecodeBlock)                           \
@@ -787,20 +775,17 @@
     F(EVP_des_cfb1)                              \
     F(EVP_des_cfb64)                             \
     F(EVP_des_cfb8)                              \
-    F(EVP_des_cfb)                               \
     F(EVP_des_ecb)                               \
     F(EVP_des_ede3_cbc)                          \
     F(EVP_des_ede3_cfb1)                         \
     F(EVP_des_ede3_cfb64)                        \
     F(EVP_des_ede3_cfb8)                         \
-    F(EVP_des_ede3_cfb)                          \
     F(EVP_des_ede3_ecb)                          \
     F(EVP_des_ede3)                              \
     F(EVP_des_ede3_ofb)                          \
     F(EVP_des_ede3_wrap)                         \
     F(EVP_des_ede_cbc)                           \
     F(EVP_des_ede_cfb64)                         \
-    F(EVP_des_ede_cfb)                           \
     F(EVP_des_ede_ecb)                           \
     F(EVP_des_ede)                               \
     F(EVP_des_ede_ofb)                           \
@@ -852,41 +837,35 @@
     F(EVP_md4)                                   \
     F(EVP_md5)                                   \
     F(EVP_md5_sha1)                              \
-    F(EVP_MD_block_size)                         \
     F(EVP_MD_fetch)                              \
     F(EVP_MD_free)                               \
+    F(EVP_MD_get_block_size)                     \
     /*F(EVP_mdc2)                                \
     F(EVP_MD_CTX_block_size)*/                   \
     F(EVP_MD_CTX_clear_flags)                    \
-    F(EVP_MD_CTX_copy_ex)                        \
     F(EVP_MD_CTX_copy)                           \
+    F(EVP_MD_CTX_copy_ex)                        \
     F(EVP_MD_CTX_ctrl)                           \
     F(EVP_MD_CTX_free)                           \
-    F(EVP_MD_CTX_md_data)                        \
+    F(EVP_MD_CTX_get0_md_data)                   \
+    F(EVP_MD_CTX_get_pkey_ctx)                   \
+    /*F(EVP_MD_CTX_get_size_ex)*/                \
+    /*F(EVP_MD_CTX_get_type)*/                   \
     F(EVP_MD_CTX_md)                             \
     F(EVP_MD_CTX_new)                            \
-    F(EVP_MD_CTX_pkey_ctx)                       \
     F(EVP_MD_CTX_reset)                          \
     F(EVP_MD_CTX_set_flags)                      \
     F(EVP_MD_CTX_set_pkey_ctx)                   \
-    /*F(EVP_MD_CTX_size)*/                       \
     F(EVP_MD_CTX_test_flags)                     \
-    /*F(EVP_MD_CTX_type)*/                       \
-    F(EVP_MD_flags)                              \
-    F(EVP_md_null)                               \
-    F(EVP_MD_pkey_type)                          \
-    F(EVP_MD_size)                               \
-    F(EVP_MD_type)                               \
+    F(EVP_MD_get_flags)                          \
+    F(EVP_MD_get_pkey_type)                      \
+    F(EVP_MD_get_size)                           \
+    F(EVP_MD_get_type)                           \
     F(EVP_OpenFinal)                             \
     F(EVP_OpenInit)                              \
+    F(EVP_md_null)                               \
     /*F(EVP_OpenUpdate)*/                        \
     /*F(EVP_PKEY_ASN1_METHOD)*/                  \
-    F(EVP_PKEY_base_id)                          \
-    F(EVP_PKEY_bits)                             \
-    F(EVP_PKEY_check)                            \
-    F(EVP_PKEY_cmp)                              \
-    F(EVP_PKEY_cmp_parameters)                   \
-    F(EVP_PKEY_copy_parameters)                  \
     F(EVP_PKEY_CTX_ctrl)                         \
     F(EVP_PKEY_CTX_ctrl_str)                     \
     F(EVP_PKEY_CTX_ctrl_uint64)                  \
@@ -899,7 +878,13 @@
     F(EVP_PKEY_CTX_set_group_name)               \
     F(EVP_PKEY_CTX_set_rsa_padding)              \
     F(EVP_PKEY_CTX_set_signature_md)             \
-    /*F(EVP_PKEY_CTX_set_rsa_keygen_bits)*/          \
+    F(EVP_PKEY_check)                            \
+    F(EVP_PKEY_cmp)                              \
+    F(EVP_PKEY_cmp_parameters)                   \
+    F(EVP_PKEY_copy_parameters)                  \
+    F(EVP_PKEY_get_base_id)                      \
+    F(EVP_PKEY_get_bits)                         \
+    /*F(EVP_PKEY_CTX_set_rsa_keygen_bits)*/      \
     F(EVP_PKEY_decrypt)                          \
     F(EVP_PKEY_decrypt_init)                     \
     F(EVP_PKEY_derive)                           \
@@ -913,25 +898,26 @@
     F(EVP_PKEY_fromdata_init)                    \
     F(EVP_PKEY_get0_DH)                          \
     F(EVP_PKEY_get0_DSA)                         \
-    F(EVP_PKEY_get_size)                         \
     F(EVP_PKEY_get0_EC_KEY)                      \
+    F(EVP_PKEY_get0_RSA)                         \
     F(EVP_PKEY_get0_hmac)                        \
     F(EVP_PKEY_get0_poly1305)                    \
-    F(EVP_PKEY_get0_RSA)                         \
     F(EVP_PKEY_get0_siphash)                     \
     F(EVP_PKEY_get1_DH)                          \
     F(EVP_PKEY_get1_DSA)                         \
     F(EVP_PKEY_get1_EC_KEY)                      \
     F(EVP_PKEY_get1_RSA)                         \
     F(EVP_PKEY_get_default_digest_nid)           \
+    F(EVP_PKEY_get_id)                           \
     F(EVP_PKEY_get_raw_private_key)              \
     F(EVP_PKEY_get_raw_public_key)               \
-    F(EVP_PKEY_id)                               \
+    F(EVP_PKEY_get_security_bits)                \
+    F(EVP_PKEY_get_size)                         \
     F(EVP_PKEY_keygen)                           \
     F(EVP_PKEY_keygen_init)                      \
     F(EVP_PKEY_missing_parameters)               \
-    F(EVP_PKEY_new_CMAC_key)                     \
     F(EVP_PKEY_new)                              \
+    F(EVP_PKEY_new_CMAC_key)                     \
     F(EVP_PKEY_new_mac_key)                      \
     F(EVP_PKEY_new_raw_private_key)              \
     F(EVP_PKEY_new_raw_public_key)               \
@@ -942,14 +928,12 @@
     F(EVP_PKEY_print_private)                    \
     F(EVP_PKEY_print_public)                     \
     F(EVP_PKEY_public_check)                     \
-    F(EVP_PKEY_security_bits)                    \
     F(EVP_PKEY_set1_DH)                          \
     F(EVP_PKEY_set1_DSA)                         \
     F(EVP_PKEY_set1_EC_KEY)                      \
     F(EVP_PKEY_set1_RSA)                         \
     F(EVP_PKEY_sign)                             \
     F(EVP_PKEY_sign_init)                        \
-    F(EVP_PKEY_size)                             \
     F(EVP_PKEY_type)                             \
     F(EVP_PKEY_up_ref)                           \
     F(EVP_PKEY_verify)                           \
@@ -960,7 +944,6 @@
     F(EVP_rc2_64_cbc)                            \
     F(EVP_rc2_cbc)                               \
     F(EVP_rc2_cfb64)                             \
-    F(EVP_rc2_cfb)                               \
     F(EVP_rc2_ecb)                               \
     F(EVP_rc2_ofb)                               \
     /*F(EVP_rc5_32_12_16_cbc)                    \
@@ -968,30 +951,29 @@
     F(EVP_rc5_32_12_16_cfb)                      \
     F(EVP_rc5_32_12_16_ecb)                      \
     F(EVP_rc5_32_12_16_ofb)*/                    \
-    F(EVP_ripemd160)                             \
     F(EVP_SealFinal)                             \
     F(EVP_SealInit)                              \
+    F(EVP_SignFinal)                             \
+    F(EVP_VerifyFinal)                           \
+    F(EVP_ripemd160)                             \
     F(EVP_seed_cbc)                              \
     F(EVP_seed_cfb128)                           \
-    F(EVP_seed_cfb)                              \
     F(EVP_seed_ecb)                              \
     F(EVP_seed_ofb)                              \
     F(EVP_sha1)                                  \
     F(EVP_sha224)                                \
     F(EVP_sha256)                                \
+    F(EVP_sha384)                                \
     F(EVP_sha3_224)                              \
     F(EVP_sha3_256)                              \
     F(EVP_sha3_384)                              \
     F(EVP_sha3_512)                              \
-    F(EVP_sha384)                                \
+    F(EVP_sha512)                                \
     F(EVP_sha512_224)                            \
     F(EVP_sha512_256)                            \
-    F(EVP_sha512)                                \
     F(EVP_shake128)                              \
     F(EVP_shake256)                              \
-    F(EVP_SignFinal)                             \
     F(EVP_sm3)                                   \
-    F(EVP_VerifyFinal)                           \
     F(EVP_whirlpool)                             \
     /**/
 
@@ -1566,9 +1548,7 @@
     F(X509_get_extension_flags)*/               \
     F(X509_get_issuer_name)                     \
     /*F(X509_get_key_usage)*/                   \
-    F(X509_get_notAfter)                       \
     F(X509_getm_notAfter)                       \
-    F(X509_get_notBefore)                      \
     F(X509_getm_notBefore)                      \
     /*F(X509_get_pathlen)                       \
     F(X509_get_proxy_pathlen)*/                 \
@@ -2064,7 +2044,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
-#if SANDSTONE_OPENSSL_LINKED
+#if SANDSTONE_SSL_LINKED
 static constexpr bool OpenSSLWorking = true;
 #  define DECLARE_FUNCTIONS(Fn)     static constexpr auto s_ ## Fn = Fn;
 #else
