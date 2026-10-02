@@ -42,7 +42,7 @@ jobs:
         include:
         - { name: GCC-x86_64, unittests: "unittests", selftests: "selftests" }
         - { name: GCC-x86_64-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
-        - { name: Clang-x86_64, unittests: "unittests", env: "CC=clang-19 CXX=clang++-19" }
+        - { name: Clang-x86_64, unittests: "unittests", env: "CC=clang-19 CXX=clang++-19", meson_args: "-Dssl_link_type=loaded" }
         - { name: GCC-arm64, archsuffix: "-arm", selftests: "selftests" }
     steps:
       - name: Checkout the PR merge point
