@@ -126,7 +126,6 @@ public:
     struct Device
     {
         std::string name;
-        int numa_node = -1; // rather useless, but keep for legacy reasons.
         int id = -1;
         accfg_device_type dev_type = accfg_device_type::ACCFG_DEVICE_TYPE_UNKNOWN;
         unsigned dev_version = 0;

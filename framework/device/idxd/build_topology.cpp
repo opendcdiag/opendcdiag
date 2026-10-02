@@ -120,7 +120,6 @@ Topology build_topology(accfg_ctx* ctx)
             const char* devname = accfg_device_get_devname(device_handle);
             assert(devname != nullptr && devname[0] != '\0');
             it->name = devname;
-            it->numa_node = accfg_device_get_numa_node(device_handle);
             it->max_transfer_size = accfg_device_get_max_transfer_size(device_handle);
             it->max_batch_size = accfg_device_get_max_batch_size(device_handle);
             it->max_groups = accfg_device_get_max_groups(device_handle);
