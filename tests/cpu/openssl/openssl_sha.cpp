@@ -88,6 +88,7 @@ static void ssl_sha512(sha_elem *target)
     s_EVP_DigestFinal_ex(mdctx, &target->sha512sum[0], &md_len);
 }
 
+#pragma GCC diagnostic ignored "-Waddress" // for builds we've linked to OpenSSL
 static int ssl_sha_init(struct test* test)
 {
     if (s_EVP_DigestInit_ex && s_EVP_DigestUpdate && s_EVP_DigestFinal_ex && s_EVP_get_digestbyname) {

@@ -20,19 +20,21 @@
 
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
-
-#define DECLARE_SSL_POINTERS(Fn)        decltype(&Fn) s_ ## Fn = nullptr;
 #define CHECK_SSL_POINTERS(Fn)          check(s_ ## Fn);
 
 #if SANDSTONE_SSL_LINKED
-#define INITIALIZE_SSL_POINTERS(Fn)     s_ ## Fn = &Fn;
+// Variables were statically initialized, so we just need to verify they
+// were correctly declared.
+#define INITIALIZE_SSL_POINTERS(Fn)     CHECK_SSL_POINTERS(Fn)
 #else
 #define INITIALIZE_SSL_POINTERS(Fn)     s_ ## Fn = reinterpret_cast<decltype(&Fn)>(resolve(SANDSTONE_STRINGIFY(Fn)));
-#endif
+
+#define DECLARE_SSL_POINTERS(Fn)        decltype(&Fn) s_ ## Fn = nullptr;
+SANDSTONE_SSL_FUNCTIONS(DECLARE_SSL_POINTERS)
+#undef DECLARE_SSL_POINTERS
 
 bool OpenSSLWorking = false;
-
-SANDSTONE_SSL_FUNCTIONS(DECLARE_SSL_POINTERS)
+#endif
 
 void sandstone_ssl_init()
 {
@@ -87,7 +89,9 @@ void sandstone_ssl_init()
     if (!failed) {
         s_OPENSSL_init_crypto(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr);
         s_OPENSSL_config(SANDSTONE_EXECUTABLE_NAME);
+#if SANDSTONE_SSL_LINKED == 0
         OpenSSLWorking = true;
+#endif
     }
 }
 
@@ -155,6 +159,7 @@ static constexpr ElfDlopenMetadata elfDlopenMetadata = {};
 } // unnamed namespace
 #endif
 
+#pragma GCC diagnostic ignored "-Waddress" // for builds we've linked to OpenSSL
 static void add_providers(std::string &info)
 {
     if (!s_OSSL_PROVIDER_do_all) [[unlikely]]
