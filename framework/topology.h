@@ -228,7 +228,7 @@ struct SlicePlans
         IsolateSockets,
 #ifdef SANDSTONE_DEVICE_CPU
         IsolateCoreGroup,
-#elif defined(SANDSTONE_DEVICE_GPU)
+#else
         IsolateNuma,
 #endif
         Heuristic,

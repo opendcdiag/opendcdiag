@@ -4,6 +4,7 @@
  */
 
 #include "sandstone.h"
+#include "topology.h"
 #include "topology_idxd.hpp"
 
 #include <accel-config/libaccel_config.h>
@@ -12,6 +13,7 @@
 #include <cassert>
 #include <cstddef>
 #include <format>
+#include <vector>
 
 namespace {
 // append existing group with a new wq, fill its config
@@ -148,4 +150,77 @@ Topology build_topology()
         return {};
     }
     return build_topology(ctx.get());
+}
+
+// Heuristic:
+// - keeps contiguous WQs of a device together,
+// - groups by NUMA node,
+// - takes max_cores_per_slice into account
+void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
+{
+    SlicePlans::Slices full_plan = { SlicePlans::Slice{ DeviceRange{ 0, device_count() }, {} } };
+    plans[SlicePlans::IsolateSockets] = full_plan;
+
+    auto& isolate_numa = plans[SlicePlans::IsolateNuma];
+    auto& heuristic = plans[SlicePlans::Heuristic];
+    const auto& topology = Topology::topology();
+
+    std::vector<int> numa_ids;
+    std::vector<std::vector<DeviceRange>> buckets; //each numa contains a vector of contiguous ranges
+    for (const auto& device : topology.devices) {
+        if (device.wqs.empty())
+            continue;
+
+        auto id = std::find(numa_ids.begin(), numa_ids.end(), device.wqs.front()->numa_id);
+        size_t index = id - numa_ids.begin();
+        if (id == numa_ids.end()) {
+            numa_ids.push_back(device.wqs.front()->numa_id);
+            buckets.emplace_back();
+        }
+        auto& bucket = buckets[index];
+        int start = device.wqs.front()->wq();
+        int last = start;
+        for (size_t index = 1; index < device.wqs.size(); ++index) {
+            int current = device.wqs[index]->wq();
+            // not contiguous, must close range
+            if (current != last + 1) {
+                bucket.push_back({ start, last - start + 1 });
+                start = current;
+            }
+            last = current;
+        }
+        bucket.push_back({ start, last - start + 1 });
+    }
+
+    int max_devices_per_slice = max_cores_per_slice > 0 ? max_cores_per_slice : SlicePlans::DefaultMaxCoresPerSlice;
+    for (const auto& bucket : buckets) {
+        DeviceRange numa_range = bucket.front();
+        DeviceRange heuristic_range = numa_range;
+        for (size_t index = 1; index < bucket.size(); ++index) {
+            const auto& range = bucket[index];
+            if (range.starting_device != numa_range.starting_device + numa_range.device_count) {
+                isolate_numa.push_back(SlicePlans::Slice{ numa_range, {} });
+                numa_range = range;
+            } else {
+                // merge adjacent contiguous WQs (split in the first loop due to being on different devices)
+                numa_range.device_count += range.device_count;
+            }
+
+            if (range.starting_device != heuristic_range.starting_device + heuristic_range.device_count
+                    || heuristic_range.device_count + range.device_count > max_devices_per_slice) {
+                heuristic.push_back(SlicePlans::Slice{ heuristic_range, {} });
+                heuristic_range = range;
+            } else {
+                // ditto, except we take max_devices_per_slice into account
+                heuristic_range.device_count += range.device_count;
+            }
+        }
+        isolate_numa.push_back(SlicePlans::Slice{ numa_range, {} });
+        heuristic.push_back(SlicePlans::Slice{ heuristic_range, {} });
+    }
+
+    if (isolate_numa.empty())
+        isolate_numa = full_plan;
+    if (heuristic.empty())
+        heuristic = full_plan;
 }
