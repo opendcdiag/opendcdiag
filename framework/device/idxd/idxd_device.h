@@ -46,6 +46,9 @@ struct wq_info_t
     /// Device that this WQ belongs to.
     int device_id;
 
+    /// NUMA node ID in the system.
+    int numa_id;
+
     /// Device type that this WQ belongs to (DSA/IAX).
     enum accfg_device_type dev_type;
 
