@@ -7,6 +7,7 @@
 #include "sandstone_p.h"
 #include "idxd_device.h"
 #include "topology_idxd.hpp"
+#include "sysutils.hpp"
 
 #include <accel-config/libaccel_config.h>
 
@@ -19,6 +20,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <iterator>
 #include <map>
 #include <set>
 #include <span>
@@ -634,19 +636,48 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
     wq_info_t* info = device_info;
     [[maybe_unused]] const wq_info_t* cend = device_info + device_count();
 
-    std::map<int, bdf_t> bdf_cache; // bdfs are unique per device
+    // cpu assignment allows duplicates; we try to pick least-used cpu out of eligible cpu list
+    // TODO: this is not guaranteed to be optimal for all list cases, though
+    std::map<int, size_t> cpu_assignment_count;
+    for (int cpu : enabled_cpus) {
+        cpu_assignment_count.emplace(cpu, 0);
+    }
 
-    int cpu_ind = 0;
+    struct BdfCache
+    {
+        bdf_t bdf;
+        int numa_id;
+        std::vector<int> local_cpus;
+    };
+    std::map<int, BdfCache> bdf_cache; // bdfs are unique per device
+
     for (const auto &enabled : enabled_devices.visible_wqs) {
-        info->cpu_number = enabled_cpus[cpu_ind++ % enabled_cpus.size()];
-        info->package_id = detect_package_id_via_os(info->cpu_number);
-        info->core_id = detect_core_id_via_os(info->cpu_number);
-
         auto it = bdf_cache.find(enabled.device_id);
         if (it == bdf_cache.end()) {
-            it = bdf_cache.emplace(enabled.device_id, detect_bdf_via_os(enabled.device_handle)).first;
+            auto bdf = detect_bdf_via_os(enabled.device_handle);
+            auto numa_id = accfg_device_get_numa_node(enabled.device_handle);
+            std::vector<int> local_cpus;
+            if (numa_id >= 0) {
+                local_cpus = CpuListRange::to_vector(read_cpulist_file(std::format("/sys/devices/system/node/node{}/cpulist", numa_id)));
+            }
+            it = bdf_cache.emplace(enabled.device_id, BdfCache{bdf, numa_id}).first;
+            std::ranges::set_intersection(enabled_cpus, local_cpus, std::back_inserter(it->second.local_cpus));
+            if (it->second.local_cpus.empty()) {
+                it->second.local_cpus = enabled_cpus;
+            }
         }
-        info->bdf = it->second;
+        auto& cached = it->second;
+        info->bdf = cached.bdf;
+        info->numa_id = cached.numa_id;
+
+        auto cpu = std::ranges::min_element(cached.local_cpus, {}, [&](int cpu) {
+            return cpu_assignment_count.at(cpu);
+        });
+        info->cpu_number = *cpu;
+        ++cpu_assignment_count.at(info->cpu_number);
+
+        info->package_id = detect_package_id_via_os(info->cpu_number);
+        info->core_id = detect_core_id_via_os(info->cpu_number);
 
         info->device_id = enabled.device_id;
         info->wq_id = enabled.wq_id;
