@@ -4,10 +4,13 @@
  */
 
 #include "sandstone_unittests_utils.h"
+#include "topology.h"
 #include "topology_idxd.hpp"
 #include "idxd_device.h"
 
 #include "gtest/gtest.h"
+
+#include <array>
 
 namespace {
 wq_info_t make_wq_info_entry(int device_id, int wq_id, accfg_device_type dev_type, accfg_device_version dev_version, __uint128_t bdf)
@@ -84,4 +87,47 @@ TEST(Topology, HeterogenousTopology)
     EXPECT_EQ(topo.devices[2].id, 3);
     EXPECT_EQ(topo.devices[2].dev_type, ACCFG_DEVICE_IAX);
     EXPECT_EQ(topo.devices[2].wqs.size(), 4);
+}
+
+TEST(Topology, SlicePlansGroupContiguousWorkQueuesByNumaAndLimit)
+{
+    std::array<wq_info_t, UNITTESTS_THREAD_COUNT> wq_info{};
+    device_info = wq_info.data();
+    topo_global.devices.clear();
+
+    auto add_device = [&](int numa_id, int first, int count) {
+        auto& device = topo_global.devices.emplace_back();
+        for (int index = first; index < first + count; ++index) {
+            wq_info[index].numa_id = numa_id;
+            device.wqs.push_back(&wq_info[index]);
+        }
+    };
+    add_device(0, 0, 3);
+    add_device(0, 3, 2);
+    add_device(1, 5, 2);
+    add_device(0, 7, 4);
+    add_device(1, 11, 5);
+
+    auto expect_plan = [](const SlicePlans::Slices& actual, const std::vector<DeviceRange>& expected) {
+        ASSERT_EQ(actual.size(), expected.size());
+        for (size_t index = 0; index < expected.size(); ++index) {
+            EXPECT_EQ(actual[index].device_range.starting_device, expected[index].starting_device);
+            EXPECT_EQ(actual[index].device_range.device_count, expected[index].device_count);
+        }
+    };
+
+    SlicePlans plans;
+    slice_plan_init_for_device(plans.plans, 4);
+    expect_plan(plans.plans[SlicePlans::IsolateSockets], { { 0, 16 } });
+    expect_plan(plans.plans[SlicePlans::IsolateNuma], { { 0, 5 }, { 7, 4 }, { 5, 2 }, { 11, 5 } });
+    expect_plan(plans.plans[SlicePlans::Heuristic], { { 0, 3 }, { 3, 2 }, { 7, 4 }, { 5, 2 }, { 11, 5 } }); // 3+2>4, cannot merge
+
+    for (auto& plan : plans.plans) {
+        plan.clear();
+    }
+    slice_plan_init_for_device(plans.plans, 5);
+    expect_plan(plans.plans[SlicePlans::Heuristic], { { 0, 5 }, { 7, 4 }, { 5, 2 }, { 11, 5 } }); // 3+2=5, first 5 can be merged now
+
+    topo_global.devices.clear();
+    device_info = nullptr;
 }

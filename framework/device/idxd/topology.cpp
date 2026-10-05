@@ -826,12 +826,6 @@ std::vector<const Topology::WorkQueue*> Topology::targetable_wqs(
     return result;
 }
 
-void slice_plan_init_for_device(SlicePlans::SlicesArray& plans, int max_cores_per_slice)
-{
-    SlicePlans::Slices plan = { SlicePlans::Slice{ DeviceRange{ 0, device_count() }, {} } };
-    plans.fill(plan);
-}
-
 int slice_plan_init_for_threads(SlicePlans::SlicesArray& plans, ThreadRatio ratio_type)
 {
     for (auto &plan : plans) {
