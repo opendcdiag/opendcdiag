@@ -30,10 +30,15 @@
 #include "test_knobs.h"
 
 #ifdef __cplusplus
+#include <array>
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <ranges>
 #include <span>
+#include <string>
+#include <type_traits>
+#include <vector>
 using std::atomic_int;
 extern "C" {
 #else
@@ -674,6 +679,20 @@ template <typename Callback> void install_failure_callback(Callback cb)
     }
 }
 
+namespace SandstoneCrossCheck {
+
+// range_value_t<T> must itself be a ValidDataType (not merely trivially
+// copyable), because the comparison is reported through a DataType tag and
+// an opaque struct (padding, pointer members, etc.) cannot be soundly
+// compared via raw memcmp just because it happens to be trivially copyable.
+template <typename T>
+concept ContiguousComparable =
+    std::ranges::contiguous_range<T> &&
+    std::ranges::sized_range<T> &&
+    SandstoneDataDetails::ValidDataType<std::ranges::range_value_t<T>>;
+
+} // namespace SandstoneCrossCheck
+
 namespace SandstoneMemcmpOrFail {
 using namespace SandstoneDataDetails;
 template <typename Callback> concept FormatterFunction =
@@ -736,6 +755,42 @@ template <ValidDataType T> static inline void
 memcmp_or_fail(const T *actual, const T *expected, size_t count)
 {
     return memcmp_or_fail(actual, expected, count, nullptr);
+}
+
+// Container overload with a formatter. It compares two contiguous ranges of
+// the same element type and reports a mismatch through the formatter. The
+// element type is already guaranteed to be a ValidDataType by
+// ContiguousComparable, because the failure path reports a DataType tag.
+template <SandstoneCrossCheck::ContiguousComparable T, FormatterFunction Fn>
+static inline void memcmp_or_fail(const T &actual, const T &expected, Fn formatter)
+{
+    using U = std::ranges::range_value_t<T>;
+    size_t n_actual = std::ranges::size(actual);
+    size_t n_expected = std::ranges::size(expected);
+    // TODO: a size mismatch does not identify which call failed when a test
+    // makes several of these calls.
+    if (n_actual != n_expected)
+        report_fail_msg("container size mismatch: %zu vs %zu", n_actual, n_expected);
+
+    DataType type = TypeToDataType<U>::Type;
+    const void *actualData = std::ranges::data(actual);
+    const void *expectedData = std::ranges::data(expected);
+    if (__builtin_memcmp(actualData, expectedData, n_actual * sizeof(U)) == 0) [[likely]] {
+        if constexpr (!std::is_null_pointer_v<Fn>)
+            assert(test_formatter(formatter, n_actual));
+        return;         // no mismatch!
+    }
+
+    auto [cb, token] = make_formatter_cb(formatter);
+    report(actualData, expectedData, n_actual * sizeof(U), type, cb, token);
+    __builtin_unreachable();
+}
+
+// Container overload without a formatter.
+template <SandstoneCrossCheck::ContiguousComparable T>
+static inline void memcmp_or_fail(const T &actual, const T &expected)
+{
+    return memcmp_or_fail(actual, expected, nullptr);
 }
 
 /// Checks that the array pointed to by actual (which has count elements of type
