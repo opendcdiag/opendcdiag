@@ -681,20 +681,26 @@ int test_run_wrapper_function(const struct test *test, int thread_number)
 // - The test will run N loops of the content (see TEST_LOOP docs)
 //   between calls of these functions
 
-void test_loop_start() noexcept
+// noinline/noclone: these must remain real, out-of-line functions with stable
+// addresses (like test_start()/test_end() above), even for the call to
+// test_loop_iterate() from within test_time_condition() in this same TU --
+// otherwise external tools relying on "-start_address/-stop_address" against
+// these symbols (e.g. Intel SDE) can silently miss them if the compiler
+// inlines the call away.
+void __attribute__((noinline, noclone)) test_loop_start() noexcept
 {
     sApp->at_loop_start(current_test());
     using namespace AssemblyMarker;
     assembly_marker<TestLoop, Start>();
 }
 
-void test_loop_iterate() noexcept
+void __attribute__((noinline, noclone)) test_loop_iterate() noexcept
 {
     using namespace AssemblyMarker;
     assembly_marker<TestLoop, Iterate>();
 }
 
-void test_loop_end() noexcept
+void __attribute__((noinline, noclone)) test_loop_end() noexcept
 {
     using namespace AssemblyMarker;
     assembly_marker<TestLoop, End>(sApp->test_thread_data(thread_num)->inner_loop_count);
