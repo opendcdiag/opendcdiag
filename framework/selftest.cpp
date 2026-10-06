@@ -864,6 +864,34 @@ static int selftest_datacompare_pattern_nodifference_run(struct test *, int)
     return EXIT_SUCCESS;
 }
 
+// _report_fail_msg is [[noreturn]] and depends on sApp->shmem, so the failure
+// paths are selftests, not gtests.
+static int selftest_container_comparefail_size_mismatch_run(struct test *, int)
+{
+    std::vector<uint32_t> actual   = {1, 2, 3, 4, 5};
+    std::vector<uint32_t> expected = {1, 2, 3, 4};
+    memcmp_or_fail(actual, expected);     // noreturn: size mismatch
+    return EXIT_SUCCESS;
+}
+
+// Content mismatch: falls through to the pointer-based memcmp_or_fail,
+// reinterpreted as uint8_t.
+static int selftest_container_comparefail_content_mismatch_run(struct test *, int)
+{
+    std::vector<uint32_t> actual   = {1, 2, 3, 4, 5};
+    std::vector<uint32_t> expected = {1, 2, 3, 4, 99};
+    memcmp_or_fail(actual, expected);     // noreturn: content mismatch
+    return EXIT_SUCCESS;
+}
+
+static int selftest_container_compare_nodifference_run(struct test *, int)
+{
+    std::vector<uint32_t> actual   = {1, 2, 3, 4, 5};
+    std::vector<uint32_t> expected = {1, 2, 3, 4, 5};
+    memcmp_or_fail(actual, expected);     // no mismatch
+    return EXIT_SUCCESS;
+}
+
 static int selftest_cxxthrow_run(struct test *, int) noexcept(false)
 {
     throw SelftestException();
@@ -2349,6 +2377,30 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_init_installcallback,
     .test_run = selftest_datacompare_nodifference_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_container_comparefail_size_mismatch",
+    .description = "Container memcmp_or_fail with mismatched sizes (report_fail_msg path)",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_container_comparefail_size_mismatch_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_container_comparefail_content_mismatch",
+    .description = "Container memcmp_or_fail with matching sizes but differing contents",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_container_comparefail_content_mismatch_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_container_compare_nodifference",
+    .description = "Container memcmp_or_fail with matching contents",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_container_compare_nodifference_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },

@@ -1768,6 +1768,55 @@ function selftest_datacompare_nodifference_common() {
     done
 }
 
+# Container memcmp_or_fail overload. Size mismatch goes through report_fail_msg
+# (generic failure message, emitted from sandstone.h where the container overload
+# lives); content mismatch goes through the pointer-based memcmp_or_fail failure
+# path (data-miscompare block, uint8_t type since the overload reinterprets
+# storage as bytes); the nodifference case must pass.
+
+@test "selftest_container_comparefail_size_mismatch" {
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_container_comparefail_size_mismatch
+    set -e
+    fail_common
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        [[ "${yamldump[/tests/0/threads/$i/thread]}" = [0-9]* ]] || continue
+        local found=0
+        for ((j = 0; !found && j < ${yamldump[/tests/0/threads/$i/messages@len]}; ++j)); do
+            [[ "${yamldump[/tests/0/threads/$i/messages/$j/level]}" = error ]] || continue
+            found=1
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/level" error
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/text" 'E> Failed at .*:[0-9]+: container size mismatch: [0-9]+ vs [0-9]+'
+        done
+        ((found))
+    done
+}
+
+@test "selftest_container_comparefail_content_mismatch" {
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_container_comparefail_content_mismatch
+    set -e
+    fail_common
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        [[ "${yamldump[/tests/0/threads/$i/thread]}" = [0-9]* ]] || continue
+        local found=0
+        for ((j = 0; !found && j < ${yamldump[/tests/0/threads/$i/messages@len]}; ++j)); do
+            [[ "${yamldump[/tests/0/threads/$i/messages/$j/level]}" = error ]] || continue
+            found=1
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/level" error
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/type" 'uint8_t'
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/offset" '\[.*\]'
+            test_yaml_regexp "/tests/0/threads/$i/messages/$j/data-miscompare/address" '(0x)?[0-9a-f]+'
+        done
+        ((found))
+    done
+}
+
+@test "selftest_container_compare_nodifference" {
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_container_compare_nodifference
+}
+
 selftest_freeze_msgs_common() {
     for ((i = 1; i <= MAX_PROC; ++i)); do
         test_yaml_regexp "/tests/0/threads/$i/state" failed
