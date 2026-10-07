@@ -72,6 +72,17 @@ typedef struct wq_info_t device_info_t;
 extern struct wq_info_t *device_info;
 
 #ifdef __cplusplus
+extern "C" {
+#endif
+uint64_t idxd_wq_max_transfer_size(const struct wq_info_t* info);
+uint32_t idxd_wq_max_batch_size(const struct wq_info_t* info);
+bool idxd_wq_block_on_fault(const struct wq_info_t* info);
+bool idxd_wq_has_opcode(const struct wq_info_t* info, unsigned opcode);
+#ifdef __cplusplus
+}
+#endif
+
+#ifdef __cplusplus
 inline int wq_info_t::wq() const
 {
     return this - ::device_info;
