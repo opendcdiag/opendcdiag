@@ -343,6 +343,34 @@ bool has_opcode(const wq_info_t& info, unsigned opcode)
     return has_opcode(Topology::topology().devices[info.path.device].op_cap, opcode);
 }
 
+static const Topology::WorkQueue& topology_wq(const wq_info_t* info)
+{
+    const auto& group = Topology::topology().devices[info->path.device].groups[info->path.group];
+    auto it = std::ranges::find_if(group.wqs, [info](const auto& wq) { return wq.wq == info; });
+    assert(it != group.wqs.end());
+    return *it;
+}
+
+extern "C" uint64_t idxd_wq_max_transfer_size(const wq_info_t* info)
+{
+    return topology_wq(info).max_transfer_size;
+}
+
+extern "C" uint32_t idxd_wq_max_batch_size(const wq_info_t* info)
+{
+    return Topology::topology().devices[info->path.device].max_batch_size;
+}
+
+extern "C" bool idxd_wq_block_on_fault(const wq_info_t* info)
+{
+    return topology_wq(info).block_on_fault.value_or(false);
+}
+
+extern "C" bool idxd_wq_has_opcode(const wq_info_t* info, unsigned opcode)
+{
+    return topology_wq(info).targetable && has_opcode(*info, opcode);
+}
+
 bool has_feature(const wq_info_t& info, device_features_t features)
 {
     if (features & ~idxd_all_features_mask) {
