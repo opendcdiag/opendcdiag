@@ -117,6 +117,7 @@ enum {
     alpha_option,
     beta_option,
 #if SANDSTONE_DEVICE_IDXD
+    idxd_default_config_option,
     idxd_user_config_option,
 #endif
 
@@ -222,6 +223,7 @@ static struct option long_options[]  = {
     { "yaml", optional_argument, nullptr, 'Y' },
 #if SANDSTONE_DEVICE_IDXD
     // it won't be parsed here, but we need it defined for parser to recognize it
+    { "idxd-default-config", no_argument, nullptr, idxd_default_config_option },
     { "idxd-config", required_argument, nullptr, idxd_user_config_option },
 #endif
 
@@ -715,6 +717,7 @@ struct ProgramOptionsParser {
                 break;
 
 #if SANDSTONE_DEVICE_IDXD
+            case idxd_default_config_option:
             case idxd_user_config_option:
 #endif
             case 0:

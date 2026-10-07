@@ -6,6 +6,7 @@
 #include "sandstone.h"
 #include "sandstone_p.h"
 #include "idxd_config.hpp"
+#include "idxd_default_config.h"
 
 #include <accel-config/libaccel_config.h>
 
@@ -135,7 +136,7 @@ accfg_wq_type parse_type(const ptree& node)
 {
     const auto value = node.get_optional<std::string>("type");
     if (!value)
-        return ACCFG_WQT_NONE;
+        return ACCFG_WQT_USER;
     if (*value == "kernel")
         return ACCFG_WQT_KERNEL;
     if (*value == "user")
@@ -227,6 +228,7 @@ void parse_device(const ptree& node, idxd_config_t::config_t& result, const std:
     }
 }
 
+// Fills omitted queue values such as size, threshold, and limits from hardware.
 void expand_default_profile(idxd_config_t::config_t& config)
 {
     accfg_ctx* ctx = nullptr;
@@ -266,6 +268,9 @@ void expand_default_profile(idxd_config_t::config_t& config)
         const std::optional wq_defaults = wq_template == config.wqs.end()
             ? std::optional<idxd_config_t::config_t::wq_t>{}
             : std::optional{*wq_template};
+        const int max_wqs = accfg_device_get_max_work_queues(device);
+        const int default_wq_size = max_wqs > 0
+            ? accfg_device_get_max_work_queues_size(device) / max_wqs : 0;
 
         accfg_group* group;
         accfg_group_foreach(device, group) {
@@ -310,13 +315,13 @@ void expand_default_profile(idxd_config_t::config_t& config)
 
             auto& current = *existing;
             if (!current.wq_size)
-                current.wq_size = accfg_wq_get_size(wq);
+                current.wq_size = default_wq_size;
             if (!current.max_batch_size)
                 current.max_batch_size = accfg_wq_get_max_batch_size(wq);
             if (!current.max_transfer_size)
                 current.max_transfer_size = accfg_wq_get_max_transfer_size(wq);
             if (current.threshold < 0)
-                current.threshold = accfg_wq_get_threshold(wq);
+                current.threshold = default_wq_size;
             if (current.priority < 0)
                 current.priority = accfg_wq_get_priority(wq);
             if (current.block_on_fault < 0)
@@ -419,7 +424,7 @@ int read_config(idxd_config_t::config_t& into)
             idxd_config_t::config_t::wq_t q;
             q.device_id = dev.device_id;
             q.wq_id = accfg_wq_get_id(wq);
-            q.enabled = accfg_wq_is_enabled(wq) > 0;
+            q.enabled = dev.enabled && accfg_wq_get_state(wq) == ACCFG_WQ_ENABLED;
 
             if (int v = accfg_wq_get_group_id(wq); v >= 0) {
                 q.group_id = v;
@@ -468,7 +473,7 @@ int read_config(idxd_config_t::config_t& into)
 }
 
 // differentiate between wrong user config (SKIP) and other failures when applying it (FAILURE)
-int write_config(const idxd_config_t::config_t& from)
+int write_config(const idxd_config_t::config_t& from, bool restoring = false)
 {
     accfg_ctx* ctx = nullptr;
     assert(accfg_new(&ctx) == 0);
@@ -707,7 +712,7 @@ int write_config(const idxd_config_t::config_t& from)
                 return EXIT_FAILURE;
             }
         }
-        if (q.threshold >= 0) {
+        if (q.threshold >= 0 && (!restoring || q.wq_size.value_or(0) > 0)) {
             if (int ret = accfg_wq_set_threshold(wq, q.threshold); ret < 0) {
                 log_error_or_print("Failed to set work queue %d.%d threshold to %d: %s",
                           q.device_id, q.wq_id, q.threshold, strerror(-ret));
@@ -766,7 +771,8 @@ int write_config(const idxd_config_t::config_t& from)
 
         if (d.enabled) {
             if (int ret = accfg_device_enable(device); ret < 0) {
-                log_error_or_print("Failed to enable device %d: %s", d.device_id, strerror(-ret));
+                log_error_or_print("Failed to enable device %d: %s (command status: %s)",
+                                   d.device_id, strerror(-ret), accfg_device_get_cmd_status_str(device));
                 return EXIT_FAILURE;
             }
         } else if (accfg_device_get_state(device) == ACCFG_DEVICE_ENABLED) {
@@ -901,6 +907,24 @@ idxd_config_t::config_t expand_templates_for_system(const idxd_config_t::config_
     return result;
 }
 
+// accel-config config-user-default leaves already-enabled devices untouched.
+void remove_enabled_devices(idxd_config_t::config_t& config)
+{
+    accfg_ctx* ctx = nullptr;
+    assert(accfg_new(&ctx) == 0);
+
+    const auto is_enabled = [ctx](int device_id) {
+        accfg_device* device = accfg_ctx_device_get_by_id(ctx, device_id);
+        return device && accfg_device_get_state(device) == ACCFG_DEVICE_ENABLED;
+    };
+    std::erase_if(config.devices, [&](const auto& device) { return is_enabled(device.device_id); });
+    std::erase_if(config.groups, [&](const auto& group) { return is_enabled(group.device_id); });
+    std::erase_if(config.engines, [&](const auto& engine) { return is_enabled(engine.device_id); });
+    std::erase_if(config.wqs, [&](const auto& wq) { return is_enabled(wq.device_id); });
+
+    accfg_unref(ctx);
+}
+
 // Disabling a device clears its engine-to-group bindings, so a config that targets a device
 // without listing its engines has to inherit the bindings it wants to keep.
 void inherit_unlisted_engines(idxd_config_t::config_t& into, const idxd_config_t::config_t& current)
@@ -937,7 +961,7 @@ int apply_with_fallback(idxd_config_t::config_t& desired, idxd_config_t::config_
     }
 
     // best-effort rollback if applying desired config failed
-    if (write_config(previous) != EXIT_SUCCESS) {
+    if (write_config(previous, true) != EXIT_SUCCESS) {
         log_error_or_print("Failed to apply desired IDXD configuration and failed to restore previous configuration");
         return EXIT_FAILURE;
     } else {
@@ -965,6 +989,7 @@ idxd_config_t::config_t read_from_file(const std::string& path)
 
         for (const auto& entry : root)
             parse_device(entry.second, res, path);
+        remove_enabled_devices(res);
         expand_default_profile(res);
     } catch (const std::exception& error) {
         fprintf(stderr, "Invalid IDXD configuration file %s: %s\n", path.c_str(), error.what());
@@ -976,22 +1001,50 @@ idxd_config_t::config_t read_from_file(const std::string& path)
 
 int apply_global_idxd_config(int argc, char **argv)
 {
+    // here we parse idxd-related cmdlne options. We need to apply config before topology is constructed,
+    // that's why it's here.
     std::string path;
+    bool use_default = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string_view arg = argv[i];
-        constexpr std::string_view option = "--idxd-config";
-        if (arg == option) {
+        constexpr std::string_view user_config_option = "--idxd-config";
+        if (arg == "--idxd-default-config") {
+            use_default = true;
+        } else if (arg == user_config_option) {
             if (++i >= argc) {
                 fprintf(stderr, "%s: option '--idxd-config' requires an argument\n",
                         program_invocation_name);
                 return EX_USAGE;
             }
             path = argv[i];
-        } else if (arg.starts_with(option) && arg.size() > option.size() &&
-                   arg[option.size()] == '=') {
-            path = arg.substr(option.size() + 1);
+        } else if (arg.starts_with(user_config_option) && arg.size() > user_config_option.size() &&
+                   arg[user_config_option.size()] == '=') {
+            path = arg.substr(user_config_option.size() + 1);
         }
+    }
+
+    if (use_default && !path.empty()) {
+        fprintf(stderr, "%s: --idxd-default-config and --idxd-config cannot be used together\n",
+                program_invocation_name);
+        return EX_USAGE;
+    }
+
+    if (use_default) {
+        // same as with accel-config config-user-default -c <path>
+        idxd_config_t::config_t desired;
+        desired.templates.insert(desired.templates.end(), dsa_default_config.desired.templates.begin(),
+                                 dsa_default_config.desired.templates.end());
+        desired.templates.insert(desired.templates.end(), iax_default_config.desired.templates.begin(),
+                                 iax_default_config.desired.templates.end());
+        desired = expand_templates_for_system(desired);
+        remove_enabled_devices(desired);
+        if (desired.devices.empty())
+            return EXIT_SUCCESS;
+
+        expand_default_profile(desired);
+        idxd_config_t::config_t previous{};
+        return apply_with_fallback(desired, previous);
     }
 
     if (path.empty()) {
@@ -1005,11 +1058,13 @@ int apply_global_idxd_config(int argc, char **argv)
     }
 
     auto desired = read_from_file(path);
+    if (desired.devices.empty())
+        return EXIT_SUCCESS;
     idxd_config_t::config_t previous{};
     return apply_with_fallback(desired, previous);
 }
 
 int idxd_config_t::restore_previous()
 {
-    return write_config(previous);
+    return write_config(previous, true);
 }
