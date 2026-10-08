@@ -534,6 +534,12 @@ WorkQueueSet detect_devices<WorkQueueSet>()
         }
     }
 
+    std::ranges::sort(res.visible_wqs, [](const WorkQueueId& left, const WorkQueueId& right) {
+        if (left.device_id != right.device_id)
+            return left.device_id < right.device_id;
+        return left.wq_id < right.wq_id;
+    });
+
     sApp->device_count = res.visible_wqs.size();
     sApp->user_thread_data.resize(sApp->device_count);
 
