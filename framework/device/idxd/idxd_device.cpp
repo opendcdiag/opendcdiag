@@ -9,7 +9,10 @@
 #include "topology_idxd.hpp"
 
 #include <cassert>
+#include <climits>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <format>
 #include <optional>
 #include <print>
@@ -62,8 +65,44 @@ void dump_device_info()
     }
 }
 
+/// Does validation check of the minimum_cpu features, being undefined feature bits or
+/// conflicting devices' features bits. Aborts in case of a mismatch, as it's a test
+/// design problem, rather than a skipable condition.
 TestResult prepare_test_for_device(struct test *test)
 {
+    assert((test->minimum_cpu & ~idxd_all_features_mask) == 0);
+
+    // UINT_MAX due to lack of ACCFG_DEVICE_VERSION_MAX
+    bool wants_dsa = test->minimum_cpu
+        & (idxd_dsa_operation_features_mask | device_type_features(ACCFG_DEVICE_DSA, UINT_MAX));
+    bool wants_iax = test->minimum_cpu
+        & (idxd_iax_operation_features_mask | device_type_features(ACCFG_DEVICE_IAX, UINT_MAX));
+
+    if (wants_dsa && wants_iax) {
+        fprintf(stderr, "Ambiguous features, can't determine device type (%s)\n",
+                 device_features_to_string(test->minimum_cpu).c_str());
+        abort();
+    }
+
+    if (!wants_dsa && !wants_iax) {
+        // The test has no device-specific requirements, so either device type can run it (but must be targetable still).
+        if (Topology::topology().targetable_wqs(test, ACCFG_DEVICE_DSA).empty()
+            && Topology::topology().targetable_wqs(test, ACCFG_DEVICE_IAX).empty())
+        {
+            log_skip(CpuTopologyIssueSkipCategory, "No enabled user-mode WQ");
+            return TestResult::Skipped;
+        } else {
+            return TestResult::Passed;
+        }
+    }
+
+    accfg_device_type required_device_type = wants_dsa ? ACCFG_DEVICE_DSA : ACCFG_DEVICE_IAX;
+    if (Topology::topology().targetable_wqs(test, required_device_type).empty()) {
+        log_skip(CpuTopologyIssueSkipCategory, "No enabled user-mode WQ to satisfy required features (%s)",
+                 device_features_to_string(test->minimum_cpu).c_str());
+        return TestResult::Skipped;
+    }
+
     return TestResult::Passed;
 }
 
