@@ -65,8 +65,9 @@ std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerb
     std::string line;
 
     const auto spacing = calc_spacing();
-    line = std::format("{{ device: {}{:<{}}, wq: {:{}}, ",
-        to_string(info->dev_type), info->device_id, spacing.device, info->wq_id, spacing.wq);
+    line = std::format("{{ device: {:>{}}, wq: {:{}}, ",
+        std::format("{}{}", to_string(info->dev_type), info->device_id),
+        3 + spacing.device, info->wq_id, spacing.wq); // +3 as "iax"/"dsa" is 3-letters
     const auto& path = info->path;
     line += std::format("group: {:{}}, ", Topology::topology().devices[path.device].groups[path.group].id, spacing.group);
     line += std::format("logical_cpu: {:{}}, numa_node: {}, ", info->cpu_number, spacing.cpu, info->numa_id);
