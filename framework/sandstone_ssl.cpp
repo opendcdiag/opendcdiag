@@ -20,13 +20,13 @@
 
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
-#define CHECK_SSL_POINTERS(Fn)          check(s_ ## Fn);
-
 #if SANDSTONE_SSL_LINKED
 // Variables were statically initialized, so we just need to verify they
 // were correctly declared.
+#define CHECK_SSL_POINTERS(Fn)          (void)decltype(&s_ ## Fn){};
 #define INITIALIZE_SSL_POINTERS(Fn)     CHECK_SSL_POINTERS(Fn)
 #else
+#define CHECK_SSL_POINTERS(Fn)          check(s_ ## Fn);
 #define INITIALIZE_SSL_POINTERS(Fn)     s_ ## Fn = reinterpret_cast<decltype(&Fn)>(resolve(SANDSTONE_STRINGIFY(Fn)));
 
 #define DECLARE_SSL_POINTERS(Fn)        decltype(&Fn) s_ ## Fn = nullptr;
@@ -38,6 +38,7 @@ bool OpenSSLWorking = false;
 
 void sandstone_ssl_init()
 {
+    bool failed = false;
 // Load library when not linked
 #if SANDSTONE_SSL_LINKED == 0
 #ifdef _WIN32
@@ -75,13 +76,12 @@ void sandstone_ssl_init()
             result = reinterpret_cast<void (*)(void)>(ptr);
         return result;
     };
-#endif // SANDSTONE_SSL_LINKED == 0
 
     // Initialize pointers and do check ups
-    bool failed = false;
     auto check = [&](auto fn) {
         failed = failed || fn == nullptr;
     };
+#endif // SANDSTONE_SSL_LINKED == 0
 
     SANDSTONE_SSL_FUNCTIONS(INITIALIZE_SSL_POINTERS)
 
