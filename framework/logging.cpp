@@ -1107,8 +1107,11 @@ static inline bool message_common_check(int thread_num, const char *fmt)
 
     if (!SandstoneConfig::Debug && *fmt == 'd')
         return true;       /* no Debug in non-debug build */
-    if (*fmt == 'E')
+    if (*fmt == 'E') {
+        if (sApp->shmem->cfg.ud_on_failure)
+            ud2();
         logging_mark_thread_failed(thread_num);
+    }
     return current_output_format() == SandstoneApplication::OutputFormat::no_output;
 }
 
@@ -1437,8 +1440,11 @@ void log_thread_context(std::string_view ctx)
 
 static PerThreadData::Common *log_yaml_common(int thread_num, char levelchar)
 {
-    if (levelchar == 'E')
+    if (levelchar == 'E') {
+        if (sApp->shmem->cfg.ud_on_failure)
+            ud2();
         logging_mark_thread_failed(thread_num);
+    }
     if (!SandstoneConfig::Debug && levelchar == 'd')
         return nullptr;     // no Debug in non-debug build
     if (current_output_format() == SandstoneApplication::OutputFormat::no_output)
