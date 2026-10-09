@@ -352,6 +352,76 @@ TEST(DataCompare, HFloat8)
     // no NaN values, these are treated as infinity
 }
 
+// TypeToDataType<T> cases DataCompare doesn't exercise: the handwritten
+// exceptions (_Bool, char, bool, void) and the width-dependent unsigned
+// long/long rows.
+TEST(ScalarTypeMapping, BoolCharVoidAndLongWidth)
+{
+    using namespace SandstoneDataDetails;
+    EXPECT_EQ(TypeToDataType<bool>::Type, UInt8Data);
+    EXPECT_EQ(TypeToDataType<char>::Type, UInt8Data);
+    EXPECT_EQ(TypeToDataType<void>::Type, UInt8Data);
+    EXPECT_EQ(TypeToDataType<unsigned long>::Type,
+              sizeof(unsigned long) == sizeof(unsigned long long) ? UInt64Data : UInt32Data);
+    EXPECT_EQ(TypeToDataType<long>::Type,
+              sizeof(long) == sizeof(long long) ? Int64Data : Int32Data);
+#ifdef __SIZEOF_FLOAT128__
+    EXPECT_EQ(TypeToDataType<__float128>::Type, Float128Data);
+#endif
+}
+
+// unsigned long long and long long map directly to 64-bit tags,
+// independent of platform long width.
+TEST(ScalarTypeMapping, UnsignedLongLongAndLongLong)
+{
+    using namespace SandstoneDataDetails;
+    EXPECT_EQ(TypeToDataType<unsigned long long>::Type, UInt64Data);
+    EXPECT_EQ(TypeToDataType<long long>::Type, Int64Data);
+}
+
+// Direct DATATYPEFORTYPE coverage.
+extern "C" int test_datatypefortype_c(void);
+TEST(ScalarTypeMapping, DATATYPEFORTYPE_CSide)
+{
+    EXPECT_EQ(test_datatypefortype_c(), 0);
+}
+
+// Compile-time checks for the shared mappings.
+namespace {
+using namespace SandstoneDataDetails;
+static_assert(TypeToDataType<bool>::Type == UInt8Data);
+static_assert(TypeToDataType<char>::Type == UInt8Data);
+static_assert(TypeToDataType<void>::Type == UInt8Data);
+static_assert(TypeToDataType<uint8_t>::Type == UInt8Data);
+static_assert(TypeToDataType<uint16_t>::Type == UInt16Data);
+static_assert(TypeToDataType<uint32_t>::Type == UInt32Data);
+static_assert(TypeToDataType<uint64_t>::Type == UInt64Data);
+static_assert(TypeToDataType<__uint128_t>::Type == UInt128Data);
+static_assert(TypeToDataType<int8_t>::Type == Int8Data);
+static_assert(TypeToDataType<int16_t>::Type == Int16Data);
+static_assert(TypeToDataType<int32_t>::Type == Int32Data);
+static_assert(TypeToDataType<int64_t>::Type == Int64Data);
+static_assert(TypeToDataType<__int128_t>::Type == Int128Data);
+static_assert(TypeToDataType<HFloat8>::Type == HFloat8Data);
+static_assert(TypeToDataType<BFloat8>::Type == BFloat8Data);
+static_assert(TypeToDataType<BFloat16>::Type == BFloat16Data);
+static_assert(TypeToDataType<Float16>::Type == Float16Data);
+static_assert(TypeToDataType<float>::Type == Float32Data);
+static_assert(TypeToDataType<double>::Type == Float64Data);
+static_assert(TypeToDataType<unsigned long>::Type ==
+              (sizeof(unsigned long) == sizeof(unsigned long long) ? UInt64Data : UInt32Data));
+static_assert(TypeToDataType<long>::Type ==
+              (sizeof(long) == sizeof(long long) ? Int64Data : Int32Data));
+static_assert(TypeToDataType<unsigned long long>::Type == UInt64Data);
+static_assert(TypeToDataType<long long>::Type == Int64Data);
+static_assert(TypeToDataType<long double>::Type ==
+              (sizeof(long double) == sizeof(double) ? Float64Data : Float80Data));
+#ifdef __SIZEOF_FLOAT128__
+static_assert(TypeToDataType<Float128>::Type == Float128Data);
+static_assert(TypeToDataType<__float128>::Type == Float128Data);
+#endif
+} // namespace
+
 // dummy mocks to allow new_random_xxx() compilation
 __attribute__((weak)) uint32_t random32() {
     return random();
