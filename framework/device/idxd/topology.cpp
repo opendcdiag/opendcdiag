@@ -510,7 +510,8 @@ WorkQueueSet detect_devices<WorkQueueSet>()
 {
     WorkQueueSet res;
 
-    if (auto ret = res.ctx.init(); ret) {
+    AccfgCtx ctx;
+    if (auto ret = ctx.init(); ret) {
         return res;
     }
 
@@ -519,7 +520,7 @@ WorkQueueSet detect_devices<WorkQueueSet>()
     }
 
     accfg_device* device;
-    accfg_device_foreach(res.ctx.get(), device) {
+    accfg_device_foreach(ctx.get(), device) {
         device_features |= detect_features(device);
         auto device_type = accfg_device_get_type(device);
         auto device_id   = accfg_device_get_id(device);
@@ -527,7 +528,6 @@ WorkQueueSet detect_devices<WorkQueueSet>()
         accfg_wq* wq;
         accfg_wq_foreach(device, wq) {
             auto& v = res.visible_wqs.emplace_back();
-            v.device_handle = device;
             v.device_type = device_type;
             v.device_id   = device_id;
             v.wq_id       = accfg_wq_get_id(wq);
@@ -651,11 +651,21 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
     };
     std::map<int, BdfCache> bdf_cache; // bdfs are unique per device
 
+    AccfgCtx ctx;
+    if (auto ret = ctx.init(); ret) [[unlikely]] {
+        // should not really happen, if we managed to reach setup_devices it means it must have succeeded before
+        fprintf(stderr, "%s: internal error: cannot initialize libaccel-config ctx\n",
+                program_invocation_name);
+        exit(EX_OSERR);
+    }
+
     for (const auto &enabled : enabled_devices.visible_wqs) {
         auto it = bdf_cache.find(enabled.device_id);
+        accfg_device* device_handle = accfg_ctx_device_get_by_id(ctx.get(), enabled.device_id);
+        assert(device_handle != nullptr);
         if (it == bdf_cache.end()) {
-            auto bdf = detect_bdf_via_os(enabled.device_handle);
-            auto numa_id = accfg_device_get_numa_node(enabled.device_handle);
+            auto bdf = detect_bdf_via_os(device_handle);
+            auto numa_id = accfg_device_get_numa_node(device_handle);
             std::vector<int> local_cpus;
             if (numa_id >= 0) {
                 local_cpus = CpuListRange::to_vector(read_cpulist_file(std::format("/sys/devices/system/node/node{}/cpulist", numa_id)));
@@ -682,14 +692,14 @@ void setup_devices<WorkQueueSet>(const WorkQueueSet& enabled_devices)
         info->device_id = enabled.device_id;
         info->wq_id = enabled.wq_id;
         info->dev_type = enabled.device_type;
-        info->dev_version = static_cast<accfg_device_version>(accfg_device_get_version(enabled.device_handle));
+        info->dev_version = static_cast<accfg_device_version>(accfg_device_get_version(device_handle));
         info->path = { -1, -1 };
 
         info++;
     }
     assert(info == cend);
 
-    cached_topology() = build_topology(enabled_devices.ctx.get());
+    cached_topology() = build_topology();
 }
 
 void restrict_topology(DeviceRange range)
