@@ -85,11 +85,12 @@ void finalize_topology_links(Topology& topo)
         auto& device = topo.devices[device_index];
         for (size_t group_index = 0; group_index < device.groups.size(); ++group_index) {
             auto& group = device.groups[group_index];
-            for (auto& wq : group.wqs) {
+            for (size_t wq_index = 0; wq_index < group.wqs.size(); wq_index++) {
+                auto& wq = group.wqs[wq_index];
                 wq.this_device = &device;
                 wq.this_group = &group;
                 // We can do const_cast because originally (in append_topo_group()) info was non-const.
-                const_cast<wq_info_t*>(wq.wq)->path = { (int)device_index, (int)group_index }; // instead of { device.id, group.id }
+                const_cast<wq_info_t*>(wq.wq)->path = { (int)device_index, (int)group_index, (int)wq_index }; // instead of { device.id, group.id, wq.id }
             }
         }
     }

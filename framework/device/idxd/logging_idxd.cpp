@@ -59,6 +59,23 @@ static auto calc_spacing()
     return spacing;
 }
 
+static const char* to_string(accfg_wq_state state)
+{
+    switch (state) {
+    case accfg_wq_state::ACCFG_WQ_DISABLED:
+        return "disabled";
+    case accfg_wq_state::ACCFG_WQ_ENABLED:
+        return "enabled";
+    case accfg_wq_state::ACCFG_WQ_QUIESCING:
+        return "quiescing";
+    case accfg_wq_state::ACCFG_WQ_LOCKED:
+        return "locked";
+    case accfg_wq_state::ACCFG_WQ_UNKNOWN:
+    default:
+        return "unknown";
+    }
+}
+
 std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerbosity verbosity)
 {
     const wq_info_t* info = device_info + thread;
@@ -68,7 +85,9 @@ std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerb
     line = std::format("{{ device: {}{:<{}}, wq: {:{}}, ",
         to_string(info->dev_type), info->device_id, spacing.device, info->wq_id, spacing.wq);
     const auto& path = info->path;
-    line += std::format("group: {:{}}, ", Topology::topology().devices[path.device].groups[path.group].id, spacing.group);
+    const auto& this_group = Topology::topology().devices[path.device].groups[path.group];
+    line += std::format("group: {:{}}, ", this_group.id, spacing.group);
+    line += std::format("state: {}, ", to_string(this_group.wqs[path.wq].state));
     line += std::format("logical_cpu: {:{}}, numa_node: {}, ", info->cpu_number, spacing.cpu, info->numa_id);
     line += std::format("pci_address: {:04x}:{:02x}:{:02x}.{:01x}",
         info->bdf.domain, info->bdf.bus, info->bdf.device, info->bdf.function
