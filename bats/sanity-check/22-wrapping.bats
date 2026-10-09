@@ -144,6 +144,9 @@ EOF
 @test "wrapper stderr is captured in stderr messages" {
     declare -A yamldump
     wrapper_skip_unless_direct
+    if $is_asan; then
+        skip "stderr not captured when compiled with ASan"
+    fi
 
     # Anything the wrapper writes to stderr before exec'ing the tool must be
     # collected into the test's "stderr messages" field.
