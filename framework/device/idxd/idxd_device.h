@@ -60,6 +60,7 @@ struct wq_info_t
     {
         int device;
         int group;
+        int wq;
     } path;
 
 #ifdef __cplusplus
