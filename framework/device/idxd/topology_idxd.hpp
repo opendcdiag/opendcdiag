@@ -39,20 +39,15 @@ struct AccfgCtx
 };
 
 /// Immutable and unique id of a queue: device_id and wq_id, as in qw<device_id>.<wq_id>.
-/// Since detect/setup_devices() is guaranteed to happen in the same process, we can store
-/// accfg handles as they won't become invalid in the meantime (require accfg_ctx* though).
 struct WorkQueueId
 {
-    accfg_device* device_handle = nullptr;
     accfg_device_type device_type = accfg_device_type::ACCFG_DEVICE_TYPE_UNKNOWN;
     int device_id = -1;
     int wq_id = -1;
 };
 
-/// To be able to store handles, we must carry around the ctx as well.
 struct WorkQueueSet
 {
-    AccfgCtx ctx;
     std::vector<WorkQueueId> visible_wqs;
     bool empty() const noexcept { return visible_wqs.empty(); }
 };
