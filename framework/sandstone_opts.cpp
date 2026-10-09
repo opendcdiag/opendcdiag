@@ -116,6 +116,9 @@ enum {
     thread_ratio_option,
     alpha_option,
     beta_option,
+#if SANDSTONE_DEVICE_IDXD
+    idxd_default_config_option,
+#endif
 
     // syntethic values to track which of conflicting opts is currently active
     _duration_option,
@@ -217,6 +220,9 @@ static struct option long_options[]  = {
     { "wrapper-script", required_argument, nullptr, wrapper_script_option },
     { "weighted-testrun-type", required_argument, nullptr, weighted_testrun_option },
     { "yaml", optional_argument, nullptr, 'Y' },
+#if SANDSTONE_DEVICE_IDXD
+    { "idxd-default-config", no_argument, nullptr, idxd_default_config_option },
+#endif
 
 #if defined(__SANITIZE_ADDRESS__)
     { "is-asan-build", no_argument, nullptr, is_asan_option },
@@ -520,6 +526,9 @@ struct ProgramOptionsParser {
 #endif
             case include_optional_option:
             case ignore_unknown_tests_option:
+#if SANDSTONE_DEVICE_IDXD
+            case idxd_default_config_option:
+#endif
                 opts_map.emplace(opt, true);
                 break;
 
@@ -908,6 +917,9 @@ struct ProgramOptionsParser {
 
         opts.shmem_cfg.use_strict_runtime = opts_map.contains(strict_runtime_option);
         opts.shmem_cfg.ud_on_failure = opts_map.contains(ud_on_failure_option);
+#if SANDSTONE_DEVICE_IDXD
+        opts.idxd_default_config = opts_map.contains(idxd_default_config_option);
+#endif
 
 #ifndef NDEBUG
         if (auto comm = string_opt_for(gdb_server_option))
