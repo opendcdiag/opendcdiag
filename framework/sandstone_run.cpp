@@ -1124,10 +1124,11 @@ static TestResult prepare_test_common(struct test *test)
     return prepare_test_for_device(test);
 }
 
-static void finish_test_common(struct test *test)
+static TestResult finish_test_common(struct test *test)
 {
-    finish_test_for_device(test);
+    TestResult result = finish_test_for_device(test);
     logging_in_test = false;
+    return result;
 }
 
 static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
@@ -1142,7 +1143,6 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         init_per_thread_data();
 
         TestResult state = prepare_test_common(test);
-        auto finish_test = scopeExit([&] { finish_test_common(test); }); // we can return early
         if (state != TestResult::Passed) {
             return state;
         }
@@ -1214,6 +1214,9 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         return state;
     }();
 
+    TestResult finish_result = finish_test_common(test);
+    if (finish_result != TestResult::Passed)
+        state = finish_result;
     logging_cleanup_failure_callback();
     return state;
 }
