@@ -257,6 +257,7 @@ struct TestConfig
     bool selftest = false;
     bool ud_on_failure = false;
     bool use_strict_runtime = false;
+    bool sync_thread_start = false;
     RescheduleMode reschedule_mode = RescheduleMode::unset;
 
     // logging parameters

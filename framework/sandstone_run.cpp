@@ -23,6 +23,7 @@
 #   include "effective_cpu_freq.hpp"
 #endif
 
+#include <barrier>
 #include <chrono>
 #include <ranges>
 #include <vector>
@@ -712,6 +713,11 @@ void __attribute__((noinline, noclone)) test_loop_end() noexcept
 } // extern "C"
 
 DeviceScheduler *device_scheduler = nullptr;
+
+// Used to implement the --sync-thread-start option behavior.
+// NOTE: Has no effect with sequential scheduling
+static std::barrier<> *thread_launch_barrier = nullptr;
+
 void reschedule_internal(DeviceScheduler *scheduler)
 {
     assert(thread_num >= 0 && "reschedule() can only be called from test threads!");
@@ -764,6 +770,13 @@ static uintptr_t thread_runner(int thread_number)
         // indicate to SIGQUIT handler that we're running
         this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
 
+        // Wait until every sibling worker thread has launched and pinned before
+        // any thread begins real work, so the test body starts synchronized.
+        // Placed immediately before the test_start() assembly marker so the
+        // marked region begins at the synchronized start of real work.
+        if (thread_launch_barrier)
+            thread_launch_barrier->arrive_and_wait();
+
         test_start();
         ret = test_run_wrapper_function(current_test(), thread_number);
 
@@ -798,6 +811,11 @@ static void run_threads_in_parallel(const struct test *test)
 {
     SandstoneTestThread thr[sApp->thread_count];    // NOLINT: -Wvla
     int i;
+
+    std::barrier launch_barrier(sApp->thread_count);
+    if (sApp->shmem->cfg.sync_thread_start)
+        thread_launch_barrier = &launch_barrier;
+    auto reset_barrier = scopeExit([] { thread_launch_barrier = nullptr; });
 
     for (i = 0; i < sApp->thread_count; i++) {
         thr[i].start(thread_runner, i);

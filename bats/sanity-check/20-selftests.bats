@@ -675,6 +675,25 @@ function selftest_log_skip_init_common() {
     done
 }
 
+@test "selftest_pass --sync-thread-start" {
+    # The --sync-thread-start barrier must not hang under normal operation:
+    # the run should complete and pass just like without the option.
+    declare -A yamldump
+    selftest_pass -e selftest_pass --sync-thread-start
+}
+
+@test "selftest_timedpass -t 200 --sync-thread-start" {
+    # Exercise the barrier with a timed, looping test (so threads actually
+    # synchronize and run) and confirm it finishes within the timeout (no hang)
+    # and passes.
+    declare -A yamldump
+    sandstone_selftest -e selftest_timedpass -t 200 --sync-thread-start
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_timedpass
+    test_yaml_regexp "/tests/0/result" pass
+}
+
 @test "selftest_logs" {
     # Run the test twice to ensure one run doesn't clobber the next
     declare -A yamldump
