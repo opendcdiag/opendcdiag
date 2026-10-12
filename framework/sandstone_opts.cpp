@@ -93,6 +93,7 @@ enum {
     service_option,
     shortened_runtime_option,
     strict_runtime_option,
+    sync_thread_start_option,
     syslog_runtime_option,
     temperature_threshold_option,
     test_delay_option,
@@ -192,6 +193,7 @@ static struct option long_options[]  = {
     { "service", no_argument, nullptr, service_option },
     { "shorten-runtime", required_argument, nullptr, shortened_runtime_option },
     { "strict-runtime", no_argument, nullptr, strict_runtime_option },
+    { "sync-thread-start", no_argument, nullptr, sync_thread_start_option },
     { "syslog", no_argument, nullptr, syslog_runtime_option },
     { "temperature-threshold", required_argument, nullptr, temperature_threshold_option },
     { "test-delay", required_argument, nullptr, test_delay_option },
@@ -258,6 +260,10 @@ Common command-line options are:
  --strict-runtime
      Use in conjunction with -T to force the program to stop execution after the
      specific time has elapsed.
+ --sync-thread-start
+     Synchronize the start of every test thread: each thread waits at a barrier
+     until all threads of the test have launched and pinned before any begins
+     running the test body.
  -t <test-time>
      Specify the execution time per test for the program in ms. Value for this
      field can also be specified with a label s, m, h for seconds, minutes or
@@ -523,6 +529,7 @@ struct ProgramOptionsParser {
             case ignore_mce_errors_option:
             case ignore_os_errors_option:
             case strict_runtime_option:
+            case sync_thread_start_option:
             case fatal_skips_option:
             case force_test_time_option: /* overrides max and min duration specified by the test */
             case 'F':
@@ -925,6 +932,7 @@ struct ProgramOptionsParser {
 #endif
 
         opts.shmem_cfg.use_strict_runtime = opts_map.contains(strict_runtime_option);
+        opts.shmem_cfg.sync_thread_start = opts_map.contains(sync_thread_start_option);
         opts.shmem_cfg.ud_on_failure = opts_map.contains(ud_on_failure_option);
 #if SANDSTONE_DEVICE_IDXD
         opts.idxd_default_config = opts_map.contains(idxd_default_config_option);
