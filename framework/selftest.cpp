@@ -1906,25 +1906,6 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
     .flags = test_in_parent,
 },
-{
-    .id = "selftest_fail_run_mainproc",
-    .description = "Fails in the run function in main process",
-    .groups = DECLARE_TEST_GROUPS(&group_negative),
-    .test_run = selftest_run_mainproc<selftest_fail_run>,
-    .desired_duration = -1,
-    .quality_level = TEST_QUALITY_PROD,
-    .flags = test_in_parent,
-},
-{
-    .id = "selftest_fail_cleanup_mainproc",
-    .description = "Fails in the cleanup function in main process",
-    .groups = DECLARE_TEST_GROUPS(&group_negative),
-    .test_run = selftest_run_mainproc<selftest_pass_run>,
-    .test_cleanup = selftest_init_mainproc<selftest_fail_cleanup>,
-    .desired_duration = -1,
-    .quality_level = TEST_QUALITY_PROD,
-    .flags = test_in_parent,
-},
 
 #if defined(__linux__) && defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
 {
@@ -2171,6 +2152,25 @@ static struct test selftests_array[] = {
     .test_cleanup = selftest_fail_cleanup,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_fail_run_mainproc",
+    .description = "Fails in the run function in main process",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_run_mainproc<selftest_fail_run>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_in_parent,
+},
+{
+    .id = "selftest_fail_cleanup_mainproc",
+    .description = "Fails in the cleanup function in main process",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_run_mainproc<selftest_pass_run>,
+    .test_cleanup = selftest_init_mainproc<selftest_fail_cleanup>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_in_parent,
 },
 {
     .id = "selftest_logerror_cleanup",
