@@ -118,18 +118,18 @@ static const OSSL_ALGORITHM *sandstone_rand_query(const OSSL_PROVIDER *prov,
     return NULL;
 }
 
-/* Base functions offered by the provider */
-static const OSSL_DISPATCH sandstone_rand_method[] = {
-    {OSSL_FUNC_PROVIDER_TEARDOWN, (void (*)(void))s_OSSL_LIB_CTX_free},
-    {OSSL_FUNC_PROVIDER_QUERY_OPERATION, (void (*)(void))sandstone_rand_query},
-    {0, NULL }
-};
-
 /* Provider's initialization */
 static int sandstone_ssl_rand_provider_init(const OSSL_CORE_HANDLE *handle,
     const OSSL_DISPATCH *in, const OSSL_DISPATCH **out,
     void **provctx)
 {
+    /* Base functions offered by the provider */
+    static const OSSL_DISPATCH sandstone_rand_method[] = {
+        {OSSL_FUNC_PROVIDER_TEARDOWN, (void (*)(void))s_OSSL_LIB_CTX_free},
+        {OSSL_FUNC_PROVIDER_QUERY_OPERATION, (void (*)(void))sandstone_rand_query},
+        {0, nullptr}
+    };
+
     // Create provider context
     *provctx = s_OSSL_LIB_CTX_new();
     if (*provctx == NULL)
