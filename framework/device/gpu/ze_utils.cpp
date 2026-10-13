@@ -91,6 +91,14 @@ const char* to_string(zes_mem_type_t value)
     case ZES_MEM_TYPE_GDDR6: return "GDDR6";
     case ZES_MEM_TYPE_GDDR6X: return "GDDR6X";
     case ZES_MEM_TYPE_GDDR7: return "GDDR7";
+    case ZES_MEM_TYPE_LPDDR5X: return "LPDDR5X";
+    case ZES_MEM_TYPE_HBM2: return "HBM2";
+    case ZES_MEM_TYPE_DDR2: return "DDR2";
+    case ZES_MEM_TYPE_HBM2E: return "HBM2E";
+    case ZES_MEM_TYPE_HBM3: return "HBM3";
+    case ZES_MEM_TYPE_HBM3E: return "HBM3E";
+    case ZES_MEM_TYPE_HBM4: return "HBM4";
+    case ZES_MEM_TYPE_LPDDR6: return "LPDDR6";
     case ZES_MEM_TYPE_FORCE_UINT32:
         break;
     }
