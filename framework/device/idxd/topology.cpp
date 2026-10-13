@@ -129,7 +129,8 @@ void update_topology(std::span<const wq_info_t> new_wq_info)
 } // end anonymous namespace
 
 /// Supported modes:
-/// --deviceset=dsa0,iax2       -> target all WQ of specified devices
+/// --deviceset=dsa             -> target all WQs of specified device type
+/// --deviceset=dsa0,iax2       -> target all WQs of specified devices
 /// --deviceset=wq0.1,wq1.2     -> target specific WQs, cpus are auto attached
 /// --deviceset=wq0.1c0,wq1.2c5 -> target specific WQs, with manually specified cpus
 void apply_deviceset_param(const char *param)
@@ -227,16 +228,20 @@ void apply_deviceset_param(const char *param)
         } else if (strncmp(arg, "dsa", 3) == 0 || strncmp(arg, "iax", 3) == 0) {
             accfg_device_type dev_type = strncmp(arg, "dsa", 3) == 0 ? ACCFG_DEVICE_DSA : ACCFG_DEVICE_IAX;
             arg += 3;
-            int device_id = parse_int(arg, orig_arg);
-            if (*arg != '\0') {
-                fprintf(stderr, "%s: error: Invalid device set parameter: %s (could not parse)\n",
-                        program_invocation_name, orig_arg);
-                exit(EX_USAGE);
+
+            std::optional<int> device_id;
+            if (*arg != '\0') { // there is more to parse, most probably a number
+                device_id = parse_int(arg, orig_arg);
+                if (*arg != '\0' || *device_id < 0) {
+                    fprintf(stderr, "%s: error: Invalid device set parameter: %s (could not parse)\n",
+                            program_invocation_name, orig_arg);
+                    exit(EX_USAGE);
+                }
             }
 
             int matches_before = total_matches;
             for (auto const &wq : old_wq_info) {
-                if (wq.dev_type == dev_type && wq.device_id == device_id) { // check for dev_type is most probably redundant
+                if (wq.dev_type == dev_type && (!device_id || wq.device_id == *device_id)) {
                     apply_to_set(wq);
                 }
             }
