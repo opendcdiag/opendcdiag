@@ -13,7 +13,11 @@ def fail(msg):
     exit(1)
 
 def main():
-    expected_path, yaml_path = sys.argv[1], sys.argv[2]
+    args = sys.argv[1:]
+    exact = '--exact' in args
+    if exact:
+        args.remove('--exact')
+    expected_path, yaml_path = args[0], args[1]
 
     with open(expected_path, 'r', encoding='utf-8') as file:
         expected = json.load(file)
@@ -63,6 +67,10 @@ def main():
     missing_basic = sorted(expected_basic - actual_basic)
     if missing_basic:
         fail(f'Missing device/wq/BDF tuples in opendcdiag output: {missing_basic}')
+    if exact:
+        extra_basic = sorted(actual_basic - expected_basic)
+        if extra_basic:
+            fail(f'Unexpected device/wq/BDF tuples in opendcdiag output: {extra_basic}')
     if seen_group:
         missing_group = sorted(expected_group - actual_group)
         if missing_group:
