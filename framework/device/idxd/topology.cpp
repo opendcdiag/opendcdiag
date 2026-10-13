@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
+#include <compare>
 #include <cstring>
 #include <cstdint>
 #include <cstdio>
@@ -132,24 +133,30 @@ void update_topology(std::span<const wq_info_t> new_wq_info)
 /// --deviceset=dsa             -> target all WQs of specified device type
 /// --deviceset=dsa0,iax2       -> target all WQs of specified devices
 /// --deviceset=wq0.1,wq1.2     -> target specific WQs, cpus are auto attached
-/// --deviceset=wq0.1c0,wq1.2c5 -> target specific WQs, with manually specified cpus
+/// --deviceset=wq0.1c0,wq1.2c5 -> target specific WQs, with manually specified cpus (1:1)
+/// --deviceset=wq0.0c0,wq0.0c1 -> target specific WQ, with multiple manually specified cpus (1:X)
 void apply_deviceset_param(const char *param)
 {
     if (SandstoneConfig::RestrictedCommandLine)
         return;
 
-    struct WQMatch {
+    struct WqCpuPair {
         int device_id;
         int wq_id;
-        bool operator()(const wq_info_t &wq)
-        { return wq.device_id == device_id && wq.wq_id == wq_id; }
+        int cpu_number = -1;    // -1 matches any cpu
+        auto operator<=>(const WqCpuPair&) const = default;
+        bool operator()(const wq_info_t &wq) const
+        {
+            return wq.device_id == device_id && wq.wq_id == wq_id &&
+                    (cpu_number < 0 || wq.cpu_number == cpu_number);
+        }
     };
 
     std::span<wq_info_t> old_wq_info(device_info, sApp->device_count);
     std::vector<wq_info_t> new_wq_info;
     int total_matches = 0;
 
-    std::set<std::pair<uint32_t, uint32_t>> result; // set of unique wqs to disallow duplicate entries
+    std::set<WqCpuPair> result; // set of unique wq:cpu pairings to disallow duplicate entries
     new_wq_info.reserve(old_wq_info.size());
 
     bool add = true;
@@ -161,19 +168,20 @@ void apply_deviceset_param(const char *param)
     }
 
     const auto apply_to_set = [&](const wq_info_t &wq) {
-        if (result.contains({wq.device_id, wq.wq_id})) { // we've got a duplicate
+        if (result.contains({wq.device_id, wq.wq_id, wq.cpu_number})) { // we've got a duplicate
             return;
         }
 
         if (add) {
             new_wq_info.push_back(wq);
         } else {
-            auto it = std::find_if(new_wq_info.begin(), new_wq_info.end(), WQMatch{wq.device_id, wq.wq_id} );
+            auto it = std::find_if(new_wq_info.begin(), new_wq_info.end(),
+                                   WqCpuPair{wq.device_id, wq.wq_id, wq.cpu_number});
             if (it == new_wq_info.end())
                 return;
             new_wq_info.erase(it);
         }
-        result.insert({wq.device_id, wq.wq_id});
+        result.insert({wq.device_id, wq.wq_id, wq.cpu_number});
         ++total_matches;
     };
 
@@ -194,16 +202,17 @@ void apply_deviceset_param(const char *param)
             ++arg;
             int wq_id = parse_int(arg, orig_arg);
 
-            auto it = std::find_if(old_wq_info.begin(), old_wq_info.end(), WQMatch{device_id, wq_id} );
+            auto it = std::find_if(old_wq_info.begin(), old_wq_info.end(), WqCpuPair{device_id, wq_id} );
             if (it == old_wq_info.end()) {
                 fprintf(stderr, "%s: error: Invalid device set parameter: %s (no such wq)\n",
                         program_invocation_name, orig_arg);
                 exit(EX_USAGE);
             }
 
+            int cpu_number = -1;
             if (*arg == 'c') {
                 ++arg;
-                int cpu_number = parse_int(arg, orig_arg);
+                cpu_number = parse_int(arg, orig_arg);
 
                 // check if cpu is enabled in the system
                 if (enabled_cpus.size_bytes() == 0) {
@@ -214,8 +223,6 @@ void apply_deviceset_param(const char *param)
                             program_invocation_name, orig_arg);
                     exit(EX_USAGE);
                 }
-
-                it->cpu_number = cpu_number;
             }
 
             if (*arg != '\0') {
@@ -224,7 +231,20 @@ void apply_deviceset_param(const char *param)
                 exit(EX_USAGE);
             }
 
-            apply_to_set(*it);
+            if (cpu_number >= 0) {
+                // create a new one, as we don't want to modify old_cpu_info in-place
+                wq_info_t wq = *it;
+                wq.cpu_number = cpu_number;
+                apply_to_set(wq);
+            } else if (add) {
+                apply_to_set(*it);
+            } else {
+                // !wqX.Y case - remove all pairings
+                for (const auto &wq : old_wq_info) {
+                    if (WqCpuPair{device_id, wq_id}(wq))
+                        apply_to_set(wq);
+                }
+            }
         } else if (strncmp(arg, "dsa", 3) == 0 || strncmp(arg, "iax", 3) == 0) {
             accfg_device_type dev_type = strncmp(arg, "dsa", 3) == 0 ? ACCFG_DEVICE_DSA : ACCFG_DEVICE_IAX;
             arg += 3;
