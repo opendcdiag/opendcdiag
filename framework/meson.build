@@ -366,6 +366,7 @@ if host_machine.cpu_family() == 'x86_64'
     unittests_sources += files(
         'sandstone_utils.cpp',
         'Floats.cpp',
+        'unit-tests/sandstone_contiguous_comparable_tests.cpp',
         'unit-tests/sandstone_data_tests.cpp',
         'unit-tests/sandstone_utils_tests.c',
         'unit-tests/sandstone_utils_tests.cpp',

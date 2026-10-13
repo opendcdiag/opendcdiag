@@ -30,10 +30,15 @@
 #include "test_knobs.h"
 
 #ifdef __cplusplus
+#include <array>
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <ranges>
 #include <span>
+#include <string>
+#include <type_traits>
+#include <vector>
 using std::atomic_int;
 extern "C" {
 #else
@@ -674,6 +679,18 @@ template <typename Callback> void install_failure_callback(Callback cb)
     }
 }
 
+namespace SandstoneCrossCheck {
+
+// range_value_t<T> must itself be trivially copyable, so a container of
+// containers does not satisfy this concept.
+template <typename T>
+concept ContiguousComparable =
+    std::ranges::contiguous_range<T> &&
+    std::ranges::sized_range<T> &&
+    std::is_trivially_copyable_v<std::ranges::range_value_t<T>>;
+
+} // namespace SandstoneCrossCheck
+
 namespace SandstoneMemcmpOrFail {
 using namespace SandstoneDataDetails;
 template <typename Callback> concept FormatterFunction =
@@ -736,6 +753,69 @@ template <ValidDataType T> static inline void
 memcmp_or_fail(const T *actual, const T *expected, size_t count)
 {
     return memcmp_or_fail(actual, expected, count, nullptr);
+}
+
+// Container overload with a formatter: size mismatch is a hard failure
+// (report_fail_msg), same as the no-formatter overload below; content
+// mismatch calls report() directly with a DataType tag for the element type,
+// so it cannot delegate to the uint8_t-reinterpreting pointer overload (that
+// path has no way to carry the tag through). Requires the element type to be
+// a ValidDataType, since DataType can only encode scalar-like element shapes
+// (sizes 1/2/4/8/16 bytes plus signed/float bits) and not arbitrary struct
+// layouts. This extra requires-clause makes this overload more constrained
+// than the no-formatter container overload below, so for containers of
+// ValidDataType elements it wins by partial ordering; for containers of
+// opaque struct elements (no TypeToDataType specialization) only the
+// no-formatter overload is viable and is still picked. The extra `Fn
+// formatter` parameter also disambiguates by parameter count from the
+// 2-argument no-formatter overload.
+template <SandstoneCrossCheck::ContiguousComparable T, FormatterFunction Fn>
+    requires ValidDataType<std::ranges::range_value_t<T>>
+static inline void memcmp_or_fail(const T &actual, const T &expected, Fn formatter)
+{
+    using U = std::ranges::range_value_t<T>;
+    size_t n_actual = std::ranges::size(actual);
+    size_t n_expected = std::ranges::size(expected);
+    if (n_actual != n_expected)
+        report_fail_msg("container size mismatch: %zu vs %zu", n_actual, n_expected);
+
+    DataType type = TypeToDataType<U>::Type;
+    const void *actualData = std::ranges::data(actual);
+    const void *expectedData = std::ranges::data(expected);
+    if (__builtin_memcmp(actualData, expectedData, n_actual * sizeof(U)) == 0) [[likely]] {
+        if constexpr (!std::is_null_pointer_v<Fn>)
+            assert(test_formatter(formatter, n_actual));
+        return;         // no mismatch!
+    }
+
+    auto [cb, token] = make_formatter_cb(formatter);
+    report(actualData, expectedData, n_actual * sizeof(U), type, cb, token);
+    __builtin_unreachable();
+}
+
+// Container overload: size mismatch is a hard failure (report_fail_msg);
+// content mismatch falls through to the pointer-based overload above,
+// reinterpreting each container's storage as uint8_t. No DataType tag is
+// involved. Resolves unambiguously against the pointer overloads by partial
+// ordering of constraints (a requires-constrained template is more constrained
+// than an unconstrained one) and by parameter shape (reference vs. pointer +
+// count). Also resolves unambiguously against the formatter-taking container
+// overload above by parameter count (2 args here vs. 3 there) and, for
+// containers of ValidDataType elements where both would otherwise be
+// callable with a formatter, by that overload's extra requires-clause making
+// it strictly more constrained.
+template <SandstoneCrossCheck::ContiguousComparable T>
+static inline void memcmp_or_fail(const T &actual, const T &expected)
+{
+    using U = std::ranges::range_value_t<T>;
+    size_t n_actual = std::ranges::size(actual);
+    size_t n_expected = std::ranges::size(expected);
+    if (n_actual != n_expected)
+        report_fail_msg("container size mismatch: %zu vs %zu", n_actual, n_expected);
+
+    memcmp_or_fail(reinterpret_cast<const uint8_t *>(std::ranges::data(actual)),
+                   reinterpret_cast<const uint8_t *>(std::ranges::data(expected)),
+                   n_actual * sizeof(U));
 }
 
 /// Checks that the array pointed to by actual (which has count elements of type
