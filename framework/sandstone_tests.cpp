@@ -21,6 +21,9 @@
 static std::vector<struct test*> special_tests_common()
 {
     std::vector<struct test*> tests;
+#if defined(__linux__) && defined(__x86_64__)
+    tests.push_back(&_test_smi_count);
+#endif
     tests.push_back(&_test_mce_check);
     return tests;
 }
