@@ -88,7 +88,8 @@ tap_negative_check() {
             \#* | \
                 "$exit_line" | \
                 "THIS IS AN UNOPTIMIZED BUILD"* | \
-                "ok"*"mce_check")
+                "ok"*"mce_check" | \
+                "ok"*"smi_count"*)
                 # acceptable line
                 ;;
             "not ok"*)

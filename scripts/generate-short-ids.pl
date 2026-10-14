@@ -60,7 +60,7 @@ if (scalar @ARGV && -f $ARGV[0]) {
 my @test_subdirs = find_dirs($me, @ARGV);
 
 # Find all possible tests in the source code
-my @alltests = qw(mce_check event_monitor);
+my @alltests = qw(mce_check event_monitor smi_count);
 find(sub {
     return unless $_ =~ m/\.(c|cpp)$/;
     open F, "<", $_
