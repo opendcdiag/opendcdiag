@@ -22,8 +22,8 @@
 extern "C" {
 #endif
 
-extern struct test __start_tests;
-extern struct test __stop_tests;
+extern struct test __start_tests __attribute__((weak));
+extern struct test __stop_tests __attribute__((weak));
 
 extern struct test _test_mce_check;
 
