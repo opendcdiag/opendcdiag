@@ -186,12 +186,13 @@ std::string vstdprintf(const char *fmt, va_list va)
 
     // attempt to sprintf
     do {
+        result.resize(minsize + 1);
+
         // we need to pass a copy, in case we loop
         va_list va2;
         va_copy(va2, va);
-
-        result.resize(minsize + 1);
         minsize = vsnprintf(result.data(), result.size(), fmt, va2);
+        va_end(va2);
     } while (minsize >= result.size());
 
     result.resize(minsize);
