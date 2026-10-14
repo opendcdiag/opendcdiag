@@ -7,14 +7,16 @@
 #include "idxd_device.h"
 #include "wq_base.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
-int wq_open(struct idxd_wq_handle_t* handle, const struct wq_info_t* info)
+int wq_open_nolog(struct idxd_wq_handle_t* handle, const struct wq_info_t* info)
 {
     const char* device_type;
     switch (info->dev_type) {
@@ -25,30 +27,38 @@ int wq_open(struct idxd_wq_handle_t* handle, const struct wq_info_t* info)
         device_type = "iax";
         break;
     default:
-        log_skip(RuntimeSkipCategory, "Unknown device type");
-        return EXIT_SKIP;
+        return -ENODEV;
     }
 
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "/dev/%s/wq%d.%d", device_type, info->device_id, info->wq_id);
 
     handle->fd = open(path, O_RDWR | O_CLOEXEC);
-    if (handle->fd < 0) {
-        log_skip(OSResourceIssueSkipCategory, "Cannot open portal: %m");
-        return EXIT_SKIP;
-    }
+    if (handle->fd < 0)
+        return -errno;
 
     handle->reg = mmap(NULL, WQ_PORTAL_SIZE, PROT_WRITE, MAP_SHARED | MAP_POPULATE, handle->fd, 0);
     if (handle->reg == MAP_FAILED) {
+        int err = errno;
         (void)close(handle->fd);
         handle->fd = -1;
-        log_skip(OSResourceIssueSkipCategory, "Cannot mmap portal: %m");
-        return EXIT_SKIP;
+        return -err;
     }
 
     handle->request = NULL;
     handle->completion = NULL;
 
+    return 0;
+}
+
+int wq_open(struct idxd_wq_handle_t* handle, const struct wq_info_t* info)
+{
+    int ret = wq_open_nolog(handle, info);
+    if (ret < 0) {
+        log_skip(OSResourceIssueSkipCategory, "Cannot open portal wq%d.%d: %s",
+                 info->device_id, info->wq_id, strerror(-ret));
+        return EXIT_SKIP;
+    }
     return EXIT_SUCCESS;
 }
 
