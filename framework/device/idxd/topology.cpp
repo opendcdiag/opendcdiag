@@ -373,6 +373,16 @@ extern "C" bool idxd_wq_has_opcode(const wq_info_t* info, unsigned opcode)
     return topology_wq(info).targetable && has_opcode(*info, opcode);
 }
 
+extern "C" bool idxd_wq_is_shared(const wq_info_t* info)
+{
+    return topology_wq(info).mode == ACCFG_WQ_SHARED;
+}
+
+extern "C" bool idxd_wq_is_targetable(const wq_info_t* info)
+{
+    return topology_wq(info).targetable;
+}
+
 bool has_feature(const wq_info_t& info, device_features_t features)
 {
     if (features & ~idxd_all_features_mask) {
