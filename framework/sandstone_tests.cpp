@@ -14,6 +14,17 @@
 #include "sandstone_tests.h"
 #include "sandstone_chrono.h"
 
+/* Special tests that apply regardless of which device backend was built
+ * (as opposed to special_tests_for_device(), which is backend-specific).
+ * Tests run very last, after device-specific tests, in the order they
+ * are appended. */
+static std::vector<struct test*> special_tests_common()
+{
+    std::vector<struct test*> tests;
+    tests.push_back(&_test_mce_check);
+    return tests;
+}
+
 void SandstoneTestSet::load_all_tests()
 {
     std::span<struct test> known_tests = test_source();
@@ -38,7 +49,8 @@ void SandstoneTestSet::load_all_tests()
 
     /* add "special" tests */
     special_tests = special_tests_for_device();
-    special_tests.push_back(&_test_mce_check); // mce always added last
+    for (struct test *t : special_tests_common())
+        special_tests.push_back(t);
     for (struct test *t : special_tests) {
         add_to_all_group_map(*t);
     }
