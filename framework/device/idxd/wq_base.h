@@ -25,6 +25,8 @@ extern "C" {
 #endif
 
 int wq_open(struct idxd_wq_handle_t* handle, const struct wq_info_t* info);
+// Like wq_open(), but doesn't log; returns 0 or -errno
+int wq_open_nolog(struct idxd_wq_handle_t* handle, const struct wq_info_t* info);
 int wq_close(struct idxd_wq_handle_t* handle);
 
 #ifdef __cplusplus
