@@ -61,22 +61,29 @@ static const std::vector<int> &parse_header(char *line, ssize_t nread)
 }
 
 // this function reads the interrupts file and returns a list of integers corresponding
-// to the contents of the line that matches the input header prefix, for example "MCE:"
+// to the sum of the contents of every line that matches one of the input type's header
+// prefixes, for example "TRM:"
 std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
 {
     static_assert(InterruptMonitorWorks);
     static AutoClosingFile f = { fopen(proc_interrupts_file, "r") };
 
-    const char *hdr = [type] {
+    // Sum both rows for MCE: "MCE:" (raw #MC exceptions -- the fatal/uncorrected
+    // path, which usually doesn't survive to be read, except in the rare
+    // SRAR-recoverable case) and "THR:" (Threshold APIC interrupts, CMCI on
+    // Intel: the signal for corrected/non-fatal MCA errors). We don't need to
+    // distinguish which one fired for mce_check's purposes -- either means a
+    // new MCA event was logged.
+    std::vector<const char *> headers = [type]() -> std::vector<const char *> {
         switch (type) {
         case MCE:
-            return "MCE:";
+            return { "MCE:", "THR:" };
         case Thermal:
-            return "TRM:";
+            return { "TRM:" };
         }
         assert(false && "Should not have reached here");
         __builtin_unreachable();
-        return static_cast<const char *>(nullptr);
+        return {};
     }();
 
     std::vector<uint32_t> result;
@@ -100,24 +107,29 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
     // static code analyzers: we trust the kernel
     result.resize(cpu_mapping.back() + 1);
 
-    while (getline(&line, &len, f) != -1) {
+    // stop as soon as we've found every row we were looking for
+    while (!headers.empty() && getline(&line, &len, f) != -1) {
         // Skip any blanks at the start of the line
         char *ptr = skip_to_non_blank(line);
-        if (strncmp(ptr, hdr, strlen(hdr)) != 0)
-            continue;
+        for (auto it = headers.begin(); it != headers.end(); ++it) {
+            const char *hdr = *it;
+            if (strncmp(ptr, hdr, strlen(hdr)) != 0)
+                continue;
 
-        ptr = ptr + strlen(hdr);
-        for (int i = 0; *ptr != '\0'; ++i) {
-            char *endptr;
-            errno = 0;
-            uint64_t n = strtoull(ptr, &endptr, 10);
-            if (n == 0 && ptr == endptr)
-                break;
-            // static code analyzers: we trust the kernel
-            result[cpu_mapping[i]] = n;
-            ptr = endptr;
+            ptr += strlen(hdr);
+            for (int i = 0; *ptr != '\0'; ++i) {
+                char *endptr;
+                errno = 0;
+                uint64_t n = strtoull(ptr, &endptr, 10);
+                if (n == 0 && ptr == endptr)
+                    break;
+                // static code analyzers: we trust the kernel
+                result[cpu_mapping[i]] += n;
+                ptr = endptr;
+            }
+            headers.erase(it);
+            break;
         }
-        break;
     }
 
     // reset the file pointer for the next time we get called

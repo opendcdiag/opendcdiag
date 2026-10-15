@@ -7,22 +7,18 @@
  *
  * @test @b mce_check
  * @parblock
- * This test just checks the number of Machine Check Events that the
- * system has reported and compares it agains the number reported at
+ * This test checks the number of Machine Check Events that the
+ * system has reported and compares it against the number reported at
  * the beginning of the sandstone run.  If there is a difference then
  * it reports an error.
  *
  * The purpose of this is to report that a new machine check event was
- * listed in the logs during the execution of all the tests.
+ * logged during the execution of all the tests.
  *
  * This "test" is not really a test in the same way that it does not
  * cause or look for any errors it creates.  If it fails, it means that
  * one of the previous tests executed by this execution of sandstone
- * likely caused a Machine Check Abort (MCA)
- *
- * Checking is done by ensuring the code always leaves by the expected
- * path.  If this test fails it is likely going to be a seg-fault or
- * UD fault due to a miscalculated jump target.
+ * likely caused a Machine Check Event (MCE).
  * @endparblock
  */
 
