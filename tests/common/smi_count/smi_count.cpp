@@ -6,9 +6,11 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * @test @b smi_count
- * This test is not really a test in the sense that it will never fail.  It is intended to simply
- * print differences in the number of SMI (System Management Interrupts) that have occurred since
- * either the beginning of the sandstone run or the last time this test itself has run
+ * This test reports, per CPU, the number of SMI (System Management Interrupts) that occurred
+ * between the start of the sandstone run and the time this test runs. It is designed to run after
+ * all regular tests have completed. It never fails; it logs an informational message for each CPU
+ * whose SMI count changed. It requires access to the MSR interface (/dev/cpu/N/msr) to read the
+ * SMI information and will skip if that is not available.
  */
 
 #include "sandstone_p.h"
@@ -63,7 +65,8 @@ int smi_count_run(struct test *test, int thread)
 }
 } // end anonymous namespace
 
-DECLARE_TEST(smi_count, "Counts SMI events")
+DECLARE_MANUAL_TEST(smi_count, "Counts SMI events")
+    .groups = DECLARE_TEST_GROUPS(&group_special),
     .test_preinit = initialize_smi_counts,
     .test_init = [](struct test *t) { return EXIT_SUCCESS; },
     .test_run = smi_count_run,

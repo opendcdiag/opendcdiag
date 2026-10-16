@@ -22,10 +22,13 @@
 extern "C" {
 #endif
 
-extern struct test __start_tests;
-extern struct test __stop_tests;
+extern struct test __start_tests __attribute__((weak));
+extern struct test __stop_tests __attribute__((weak));
 
 extern struct test _test_mce_check;
+#if defined(__linux__) && defined(__x86_64__)
+extern struct test _test_smi_count;
+#endif
 
 struct test_set_cfg {
     bool ignore_unknown_tests;  /* whether an error should be reported if
