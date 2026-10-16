@@ -13,7 +13,8 @@
  * it reports an error.
  *
  * The purpose of this is to report that a new machine check event was
- * logged during the execution of all the tests.
+ * logged during the execution of all the tests.  It is designed to be
+ * executed after all regular tests have completed.
  *
  * This "test" is not really a test in the same way that it does not
  * cause or look for any errors it creates.  If it fails, it means that
@@ -114,11 +115,6 @@ bool InterruptMonitor::observed_mce_events()
     return get_mce_interrupt_counts() != mce_counts_start();
 }
 #endif
-
-// The MCE test is special in that it is not handled like a normal test
-// We do not use the macros to specify it because we do not want it to
-// be in the actual test list - it is an "inserted" test in that the test
-// is always inserted in the end.
 
 #if !defined(__linux__) || !defined(__x86_64__)
 // no MCE test outside Linux
