@@ -267,7 +267,12 @@ Common command-line options are:
  -t <test-time>
      Specify the execution time per test for the program in ms. Value for this
      field can also be specified with a label s, m, h for seconds, minutes or
-     hours. Example: 200ms, 2s or 2m.
+     hours. Example: 200ms, 2s or 2m. A special value of "none" (case
+     insensitive) disables the wallclock timing check entirely: the test makes
+     no clock system calls and its run time is bounded only by the loop
+     iteration count (see --max-test-loop-count). Because "none" removes the
+     time bound, it must not be combined with --max-test-loop-count=0 (no loop
+     limit): doing so results in the test running forever.
  --max-test-count <NUMBER>
      Specify the maximum number of tests to execute. Limits the number of tests
      run to <NUMBER> per program invocation.
@@ -484,6 +489,7 @@ inline int simple_getopt(int argc, char **argv, struct option *options, int *cop
 struct ProgramOptionsParser {
 
     std::map<int, std::variant<bool, int, const char*, std::vector<const char*>, ShortDuration>> opts_map;
+    bool no_wallclock_check = false;        // last "-t" was "none"
 
     void add_to_map_as_vec(int opt, const char *arg) {
         auto map = opts_map.find(opt);
@@ -519,11 +525,21 @@ struct ProgramOptionsParser {
                 break;
 
             // time string options
-            case 't':
             case test_delay_option:
             case timeout_option:
             case timeout_kill_option:
                 opts_map.insert_or_assign(opt, string_to_millisecs(optarg));
+                break;
+
+            // -t accepts "none" (case insensitive) to disable wallclock timing
+            // checks; the test is then bounded only by its loop iteration count.
+            case 't':
+                if (boost::iequals(std::string_view(optarg), "none")) {
+                    no_wallclock_check = true;
+                } else {
+                    no_wallclock_check = false;
+                    opts_map.insert_or_assign(opt, string_to_millisecs(optarg));
+                }
                 break;
 
             // boolean options
@@ -859,7 +875,9 @@ struct ProgramOptionsParser {
         }
 
         // times
-        if (auto it = opts_map.find('t'); it != opts_map.end()) {
+        if (no_wallclock_check) {
+            app_cfg->no_wallclock_check = true;
+        } else if (auto it = opts_map.find('t'); it != opts_map.end()) {
             app_cfg->test_time = std::get<ShortDuration>(it->second);
         }
 
