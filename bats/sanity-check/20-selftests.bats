@@ -457,6 +457,7 @@ function selftest_log_skip_init_common() {
     test_yaml_regexp "/tests/0/result" skip
     test_yaml_regexp "/tests/0/skip-category" Selftest
     test_yaml_regexp "/tests/0/skip-reason" "$skipmsg"
+    test_yaml_absent "/tests/0/threads@len"
 }
 
 @test "selftest_log_skip_init" {
