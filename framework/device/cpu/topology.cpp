@@ -226,14 +226,19 @@ void BarrierDeviceScheduler::finish_reschedule()
 void QueueDeviceScheduler::reschedule_to_next_device()
 {
     // Select a cpu from the queue
-    std::lock_guard lock(q_mutex);
-    if (q_idx == 0)
-        shuffle_queue();
+    int next_idx;
+    {
+        std::lock_guard lock(q_mutex);
+        if (q_idx == 0)
+            shuffle_queue();
 
-    int next_idx = queue[q_idx];
-    if (++q_idx == queue.size())
-        q_idx = 0;
+        next_idx = queue[q_idx];
+        if (++q_idx == queue.size())
+            q_idx = 0;
+    }
 
+    // Pin outside the lock: sched_setaffinity() can block for a long time
+    // while the destination CPU is busy and must not serialize other threads.
     pin_to_next_cpu(device_info[next_idx].cpu_number);
     return;
 }
