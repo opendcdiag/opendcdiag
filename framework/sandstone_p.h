@@ -296,6 +296,7 @@ struct SandstoneApplicationConfig {
     ShortDuration max_test_time = {};
     ShortDuration timeout_to_kill = std::chrono::seconds(20);
     ShortDuration delay_between_tests = std::chrono::milliseconds(5);
+    bool no_wallclock_check = false;        // "-t none": bound tests by loop count, not time
 
     std::vector<std::string> exec_wrapper;
     ForkMode fork_mode = SANDSTONE_DEFAULT_FORK_MODE;
@@ -403,6 +404,7 @@ struct SandstoneApplication::SharedMemory
     // test execution
     MonotonicTimePoint current_test_endtime = {};
     int current_max_loop_count = 0;
+    bool current_test_no_wallclock_check = false;   // "-t none": skip clock syscalls
     std::chrono::duration<int, std::micro> current_test_sleep_duration = {};
 
     // child debugging
