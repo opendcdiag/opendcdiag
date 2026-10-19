@@ -147,6 +147,7 @@ public:
 protected:
     LogLevelVerbosity loglevel() const;
     bool should_print_fail_info() const;
+    bool is_skip_only(const LogMessagesFile &msgs) const;
 
     // shared between the TAP and key-value loggers; YAML overrides
     static void format_and_print_message(int fd, std::string_view message, bool from_thread_message);
@@ -176,7 +177,6 @@ protected:
     static void format_and_print_message(int fd, std::string_view level, std::string_view message);
 
 private:
-    int init_skip_message_bytes = 0;
     bool file_printed_messages_header = false;
     bool stdout_printed_messages_header = false;
 
@@ -189,7 +189,7 @@ private:
     inline int print_test_knobs(int fd, const LogMessagesFile &msgs);
     static void format_and_print_skip_reason(int fd, std::string_view message);
     LogLevelVerbosity print_one_thread_messages(int fd, const LogMessagesFile &msgs, LogLevelVerbosity level);
-    void print_result_line(int &init_skip_message_bytes);
+    void print_result_line();
 
     static void maybe_print_virt_state();
 };
