@@ -684,6 +684,20 @@ function selftest_cpuset_accumulate() {
     test_yaml_regexp "/tests/0/threads/3/messages/1/text" "I> ${cpuset[3]}\$"
 }
 
+# Threads must move with every rescheduling mode except "none"
+@test "selftest_reschedule_loop with all modes" {
+    if (( MAX_PROC < 2 )); then
+        skip "Need at least 2 logical processors to run this test"
+    fi
+
+    local mode
+    for mode in none queue random barrier; do
+        declare -A yamldump
+        sandstone_selftest -e selftest_reschedule_loop --reschedule=$mode
+        test_yaml_regexp "/tests/0/result" pass
+    done
+}
+
 @test "selftest_fail_after_reschedule" {
     $is_debug || skip "Test only works with Debug builds to mock the topology"
 

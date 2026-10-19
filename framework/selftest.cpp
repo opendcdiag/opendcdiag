@@ -319,6 +319,31 @@ static int selftest_logs_reschedule_run(struct test *test, int thread)
     return EXIT_SUCCESS;
 }
 
+// Calls reschedule() repeatedly: threads must stay on their CPU when
+// rescheduling is disabled and must change CPU at least once when it is enabled.
+static int selftest_reschedule_loop_run(struct test *test, int thread)
+{
+    constexpr int iterations = 32;
+    bool rescheduling = device_scheduler != nullptr;
+    int moves = 0;
+
+    for (int i = 0; i < iterations; ++i) {
+        int cpu_before = sched_getcpu();
+        reschedule();
+        moves += sched_getcpu() != cpu_before;
+    }
+
+    if (!rescheduling && moves != 0) {
+        report_fail_msg("Thread moved %d times although rescheduling is disabled", moves);
+        return EXIT_FAILURE;
+    }
+    if (rescheduling && moves == 0) {
+        report_fail_msg("Thread did not move in %d calls to reschedule()", iterations);
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
 static int selftest_logs_reschedule_cleanup(struct test *test)
 {
     sem_t *reschedule_sem = (sem_t *) test->data;
@@ -1667,6 +1692,14 @@ static struct test selftests_array[] = {
     .test_init = selftest_logs_reschedule_init,
     .test_run = selftest_logs_reschedule_run,   // may skip
     .test_cleanup = selftest_logs_reschedule_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_reschedule_loop",
+    .description = "Calls reschedule() in a loop and checks that threads move only when rescheduling is enabled",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_reschedule_loop_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
