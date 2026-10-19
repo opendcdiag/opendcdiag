@@ -333,8 +333,17 @@ void TapFormatLogger::print_thread_messages()
         LogMessagesFile r = maybe_mmap_log(data);
         bool want_print = data->has_failed() || sApp->shmem->cfg.verbosity >= 3;
 
-        if (r.empty() && !data->has_failed() && sApp->shmem->cfg.verbosity < 3)
+        bool skip_only = false;
+
+        /* for main threads (negative ids), skip messages were already printed
+         * in the result line. this is to avoid empty messages printed to the log.
+         */
+        if (thread < 0 && !want_print)
+            skip_only = is_skip_only(r);
+        if ((r.empty() || skip_only) && !want_print) {
+            munmap_and_truncate_log(data, r);
             return;             /* nothing to be printed, on any level */
+        }
 
         print_thread_header(file_log_fd, thread, device, LogLevelVerbosity::Max);
         LogLevelVerbosity lowest_level =
