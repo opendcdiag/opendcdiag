@@ -22,6 +22,9 @@
 #if SANDSTONE_DEVICE_CPU
 #   include "effective_cpu_freq.hpp"
 #endif
+#if SANDSTONE_DEVICE_IDXD
+#   include "topology_idxd.hpp"
+#endif
 
 #include <barrier>
 #include <chrono>
@@ -619,6 +622,10 @@ static void cleanup_internal(const struct test *test)
 
 int cleanup_global(int exit_code, PerThreadFailures per_thread_failures)
 {
+#if SANDSTONE_DEVICE_IDXD
+    idxd_config_cleanup();
+#endif
+
 #if SANDSTONE_FREQUENCY_MANAGER
     if (sApp->vary_frequency_mode)
         sApp->frequency_manager->restore_core_frequency_initial_state();
