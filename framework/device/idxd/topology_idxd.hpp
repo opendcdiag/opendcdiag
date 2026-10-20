@@ -10,6 +10,7 @@
 
 #include <accel-config/libaccel_config.h>
 
+#include <cassert>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -141,9 +142,21 @@ public:
     //   - one std::vector<Device> and a type member to Device?
     std::vector<Device> devices;
 
+    void finalize_links();
+
+    const WorkQueue& work_queue(const Thread& info) const
+    {
+        const auto* wq = wqs.at(info.wq());
+        assert(wq && wq->wq == &info);
+        return *wq;
+    }
+
     std::vector<const WorkQueue*> targetable_wqs(struct test*, accfg_device_type) const;
 
     static const Topology &topology();
+
+private:
+    std::vector<const WorkQueue*> wqs; // shall be indexed via info->wq()
 };
 
 Topology build_topology();
