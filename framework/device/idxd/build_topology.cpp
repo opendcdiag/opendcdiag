@@ -15,7 +15,7 @@
 
 namespace {
 // append existing group with a new wq, fill its config
-void append_topo_group(Topology::Group& group, accfg_wq* wq_handle, wq_info_t* info)
+void append_topo_group(Topology::Group& group, accfg_wq* wq_handle, const wq_info_t* info)
 {
     auto& wq = group.wqs.emplace_back();
 
@@ -52,7 +52,7 @@ void append_topo_group(Topology::Group& group, accfg_wq* wq_handle, wq_info_t* i
 }
 
 // search for existing group or create new
-void append_topo_device(Topology::Device& device, accfg_device* device_handle, wq_info_t* info)
+void append_topo_device(Topology::Device& device, accfg_device* device_handle, const wq_info_t* info)
 {
     auto wq_handle = accfg_device_wq_get_by_id(device_handle, info->wq_id);
     assert(wq_handle != nullptr);
@@ -77,31 +77,27 @@ void append_topo_device(Topology::Device& device, accfg_device* device_handle, w
     }
     append_topo_group(*it, wq_handle, info);
 }
+} // end anonymous namespace
 
-// Since the IDs can be sparse, we must store the relative indinces inside the vector.
-void finalize_topology_links(Topology& topo)
+void Topology::finalize_links()
 {
-    for (size_t device_index = 0; device_index < topo.devices.size(); ++device_index) {
-        auto& device = topo.devices[device_index];
-        for (size_t group_index = 0; group_index < device.groups.size(); ++group_index) {
-            auto& group = device.groups[group_index];
-            for (size_t wq_index = 0; wq_index < group.wqs.size(); wq_index++) {
-                auto& wq = group.wqs[wq_index];
+    wqs.assign(device_count(), nullptr);
+    for (auto& device : devices) {
+        for (auto& group : device.groups) {
+            for (auto& wq : group.wqs) {
                 wq.this_device = &device;
                 wq.this_group = &group;
-                // We can do const_cast because originally (in append_topo_group()) info was non-const.
-                const_cast<wq_info_t*>(wq.wq)->path = { (int)device_index, (int)group_index, (int)wq_index }; // instead of { device.id, group.id, wq.id }
+                wqs.at(wq.wq->wq()) = &wq;
             }
         }
     }
 }
-} // end anonymous namespace
 
 Topology build_topology(accfg_ctx* ctx)
 {
     Topology topo;
 
-    wq_info_t* info = device_info;
+    const wq_info_t* info = device_info;
     const wq_info_t* cend = device_info + device_count();
 
     while (info != cend) {
@@ -136,7 +132,7 @@ Topology build_topology(accfg_ctx* ctx)
         info++;
     }
 
-    finalize_topology_links(topo);
+    topo.finalize_links();
 
     return topo;
 }
