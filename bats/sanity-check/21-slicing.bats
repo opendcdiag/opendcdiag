@@ -6,6 +6,10 @@ load ../testenv
 load helpers
 MAX_PROC=`nproc`
 
+setup_file() {
+    [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]] || skip "Tests specific to CPU"
+}
+
 function cpuset_unique_modules() {
     # Make a list of cores that are in unique modules
     VALIDATION=0 sandstone_yq --cpuset=t0 '--disable=*' > /dev/null
