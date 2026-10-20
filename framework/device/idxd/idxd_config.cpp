@@ -720,25 +720,6 @@ idxd_config_t::config_t expand_templates_for_system(const idxd_config_t::config_
     return result;
 }
 
-// accel-config config-user-default leaves already-enabled devices untouched.
-// That's what we want to do as well.
-void remove_enabled_devices(idxd_config_t::config_t& config)
-{
-    AccfgCtx the_ctx;
-    [[maybe_unused]] int rc = the_ctx.init();
-    assert(rc == 0);
-    accfg_ctx* ctx = the_ctx.get();
-
-    const auto is_enabled = [ctx](int device_id) {
-        accfg_device* device = accfg_ctx_device_get_by_id(ctx, device_id);
-        return device && accfg_device_get_state(device) == ACCFG_DEVICE_ENABLED;
-    };
-    std::erase_if(config.devices, [&](const auto& device) { return is_enabled(device.device_id); });
-    std::erase_if(config.groups, [&](const auto& group) { return is_enabled(group.device_id); });
-    std::erase_if(config.engines, [&](const auto& engine) { return is_enabled(engine.device_id); });
-    std::erase_if(config.wqs, [&](const auto& wq) { return is_enabled(wq.device_id); });
-}
-
 // Disabling a device clears its engine-to-group bindings, so a config that targets a device
 // without listing its engines has to inherit the bindings it wants to keep.
 void inherit_unlisted_engines(idxd_config_t::config_t& into, const idxd_config_t::config_t& current)
@@ -790,7 +771,6 @@ int apply_global_idxd_config()
     desired.templates.insert(desired.templates.end(), iax_default_config().templates.begin(),
                     iax_default_config().templates.end());
     desired = expand_templates_for_system(desired);
-    remove_enabled_devices(desired); // TODO: not sure if we want this, maybe we should just always apply what we got (therefore deviate from accel-config a bit)
     if (desired.devices.empty())
         return EXIT_SUCCESS;
 
