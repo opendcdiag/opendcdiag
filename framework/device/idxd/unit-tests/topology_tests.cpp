@@ -12,6 +12,7 @@
 #include "gtest/gtest.h"
 
 #include <array>
+#include <utility>
 
 namespace {
 wq_info_t make_wq_info_entry(int device_id, int wq_id, accfg_device_type dev_type, accfg_device_version dev_version, __uint128_t bdf)
@@ -61,12 +62,71 @@ struct PrepareTestFixture
         auto& topology_wq = group.wqs.emplace_back();
         topology_wq.wq = &wq;
         topology_wq.targetable = true;
-        wq.path = { 0, 0 };
+        device_info = &wq;
+        topo_global.finalize_links();
     }
 
     ~PrepareTestFixture()
     {
-        topo_global.devices.clear();
+        topo_global = {};
+        device_info = nullptr;
+    }
+};
+
+class TopologyLinksTest : public testing::Test
+{
+protected:
+    std::array<wq_info_t, UNITTESTS_THREAD_COUNT> info{};
+    Topology topo;
+
+    void SetUp() override
+    {
+        device_info = info.data();
+        size_t index = 0;
+        for (int device_id : { 3, 17 }) {
+            auto& device = topo.devices.emplace_back();
+            device.id = device_id;
+            device.dev_type = ACCFG_DEVICE_DSA;
+            device.dev_version = ACCFG_DEVICE_VERSION_2;
+            for (int group_id : { 7, 31 }) {
+                auto& group = device.groups.emplace_back();
+                group.id = group_id;
+                for (int queue = 0; queue < 4; ++queue) {
+                    // Visit every internal index, in a different order from the topology traversal.
+                    auto& entry = info[(index++ * 5 + 3) % info.size()];
+                    entry = make_wq_info_entry(device_id, group_id * 4 + queue,
+                                               device.dev_type, ACCFG_DEVICE_VERSION_2, device_id);
+                    device.wqs.push_back(&entry);
+                    auto& wq = group.wqs.emplace_back();
+                    wq.wq = &entry;
+                    wq.id = entry.wq_id;
+                    wq.group_id = group_id;
+                }
+            }
+        }
+    }
+
+    void TearDown() override
+    {
+        device_info = nullptr;
+    }
+
+    void expect_links() const
+    {
+        size_t count = 0;
+        for (const auto& device : topo.devices) {
+            for (const auto& group : device.groups) {
+                for (const auto& wq : group.wqs) {
+                    const auto& linked = topo.work_queue(*wq.wq);
+                    EXPECT_EQ(&linked, &wq);
+                    EXPECT_EQ(linked.wq, wq.wq);
+                    EXPECT_EQ(linked.this_device, &device);
+                    EXPECT_EQ(linked.this_group, &group);
+                    ++count;
+                }
+            }
+        }
+        EXPECT_EQ(count, info.size());
     }
 };
 }
@@ -80,6 +140,43 @@ const Topology &Topology::topology()
 int AccfgCtx::init()
 {
     return EXIT_SUCCESS;
+}
+
+TEST_F(TopologyLinksTest, LookupUsesInternalIndexWithSparseIds)
+{
+    topo.finalize_links();
+
+    expect_links();
+}
+
+TEST_F(TopologyLinksTest, FinalizeLinksRepairsLinksAfterStorageRelocation)
+{
+    topo.finalize_links();
+
+    topo.devices.reserve(topo.devices.capacity() + 1);
+    for (auto& device : topo.devices) {
+        device.groups.reserve(device.groups.capacity() + 1);
+        for (auto& group : device.groups) {
+            group.wqs.reserve(group.wqs.capacity() + 1);
+        }
+    }
+    topo.finalize_links();
+
+    expect_links();
+}
+
+TEST_F(TopologyLinksTest, FinalizeLinksRebuildsLookupAfterQueuesAreReordered)
+{
+    topo.finalize_links();
+
+    for (auto& device : topo.devices) {
+        for (auto& group : device.groups) {
+            std::swap(group.wqs.front(), group.wqs.back());
+        }
+    }
+    topo.finalize_links();
+
+    expect_links();
 }
 
 TEST(Topology, HeterogenousTopology)

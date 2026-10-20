@@ -85,10 +85,9 @@ std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerb
     line = std::format("{{ device: {:>{}}, wq: {:{}}, ",
         std::format("{}{}", to_string(info->dev_type), info->device_id),
         3 + spacing.device, info->wq_id, spacing.wq); // +3 as "iax"/"dsa" is 3-letters
-    const auto& path = info->path;
-    const auto& this_group = Topology::topology().devices[path.device].groups[path.group];
-    line += std::format("group: {:{}}, ", this_group.id, spacing.group);
-    line += std::format("state: {}, ", to_string(this_group.wqs[path.wq].state));
+    const auto& wq = Topology::topology().work_queue(*info);
+    line += std::format("group: {:{}}, ", wq.this_group->id, spacing.group);
+    line += std::format("state: {}, ", to_string(wq.state));
     line += std::format("logical_cpu: {:{}}, numa_node: {}, ", info->cpu_number, spacing.cpu, info->numa_id);
     line += std::format("pci_address: {:04x}:{:02x}:{:02x}.{:01x}",
         info->bdf.domain, info->bdf.bus, info->bdf.device, info->bdf.function
