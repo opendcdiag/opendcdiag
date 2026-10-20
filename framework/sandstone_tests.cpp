@@ -149,8 +149,8 @@ int SandstoneTestSet::remove(const struct test *test)
 }
 
 /// Returns the number of tests that were removed from the test list, which may
-/// be zero if the test is valid but did not match. If it matched nothing, this
-/// function returns -1.
+/// be zero if the test is valid but did not match. An unmatched "*" is a no-op;
+/// other names or patterns that match nothing return -1.
 int SandstoneTestSet::remove(const char *name)
 {
     if (SandstoneConfig::RestrictedCommandLine) {
@@ -160,7 +160,7 @@ int SandstoneTestSet::remove(const char *name)
 
     std::vector tests = lookup(name);
     if (tests.size() == 0)
-        return -1;
+        return name && !strcmp(name, "*") ? 0 : -1;
 
     int res = 0;
     for (auto t : tests) {

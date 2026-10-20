@@ -292,6 +292,7 @@ Common command-line options are:
      Selectively enable/disable a given test. Can be given multiple times.
      <test> is a test's ID (see the -l option), a wildcard matching test IDs.
      or a test group (starting with @).
+     --disable='*' succeeds even when no test IDs match.
  --ignore-os-error, --ignore-timeout
      Continue execution of Sandstone even if a test encounters an operating
      system error (this includes tests timing out).
