@@ -1114,6 +1114,18 @@ test_random() {
     [[ "$output" = *"Cannot find matching tests for 'non_existing_test' to disable"* ]]
 }
 
+@test "--disable non-existing pattern (pre)" {
+    run $SANDSTONE --selftests '--disable=*non_existing_test'
+    [[ "$status" -eq 64 ]]
+    [[ "$output" = *"Cannot find matching tests for '*non_existing_test' to disable"* ]]
+}
+
+@test "--disable non-existing pattern (post)" {
+    run $SANDSTONE --selftests '--disable=non_existing_test*'
+    [[ "$status" -eq 64 ]]
+    [[ "$output" = *"Cannot find matching tests for 'non_existing_test*' to disable"* ]]
+}
+
 @test "--enable non-existing test" {
     run $SANDSTONE --selftests --enable=non_existing_test
     [[ "$status" -eq 64 ]]
