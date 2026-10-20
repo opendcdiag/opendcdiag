@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "sandstone_p.h"
 #include "sandstone_unittests_utils.h"
 #include "topology.h"
 #include "topology_idxd.hpp"
@@ -32,6 +33,43 @@ wq_info_t make_wq_info_entry(int device_id, int wq_id, accfg_device_type dev_typ
 }
 
 Topology topo_global;
+
+#ifdef __llvm__
+thread_local int thread_num = 0;
+#else
+__thread int thread_num __attribute__((tls_model("initial-exec"))) = 0;
+#endif
+
+#undef log_message_skip
+void log_message_skip(int, SkipCategory, const char*, ...)
+{}
+
+namespace {
+struct PrepareTestFixture
+{
+    wq_info_t wq{};
+    struct test test = {};
+
+    PrepareTestFixture(accfg_device_type dev_type = ACCFG_DEVICE_DSA,
+                       accfg_device_version dev_version = ACCFG_DEVICE_VERSION_2)
+    {
+        wq = make_wq_info_entry(0, 0, dev_type, dev_version, 0);
+        auto& device = topo_global.devices.emplace_back();
+        device.dev_type = dev_type;
+        device.dev_version = dev_version;
+        auto& group = device.groups.emplace_back();
+        auto& topology_wq = group.wqs.emplace_back();
+        topology_wq.wq = &wq;
+        topology_wq.targetable = true;
+        wq.path = { 0, 0 };
+    }
+
+    ~PrepareTestFixture()
+    {
+        topo_global.devices.clear();
+    }
+};
+}
 
 const Topology &Topology::topology()
 {
@@ -130,4 +168,84 @@ TEST(Topology, SlicePlansGroupContiguousWorkQueuesByNumaAndLimit)
 
     topo_global.devices.clear();
     device_info = nullptr;
+}
+
+
+TEST(PrepareTestForDevice, DeviceAgnosticTestPassesWithTargetableWq)
+{
+    PrepareTestFixture fixture;
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Passed);
+}
+
+TEST(PrepareTestForDevice, VersionRequirementSkipsOlderWq)
+{
+    PrepareTestFixture fixture;
+    fixture.test.minimum_cpu = device_feature_dsa_v3;
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Skipped);
+}
+
+TEST(PrepareTestForDevice, IaxRequirementPassesWithMatchingWq)
+{
+    PrepareTestFixture fixture(ACCFG_DEVICE_IAX, ACCFG_DEVICE_VERSION_2);
+    fixture.test.minimum_cpu = device_feature_iax_v2;
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Passed);
+}
+
+TEST(PrepareTestForDevice, DeviceAgnosticTestSkipsWithoutTargetableWq)
+{
+    PrepareTestFixture fixture;
+    topo_global.devices.clear();
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Skipped);
+}
+
+TEST(PrepareTestForDevice, WrongDeviceFamilySkips)
+{
+    PrepareTestFixture fixture;
+    fixture.test.minimum_cpu = device_feature_iax_v2;
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Skipped);
+}
+
+TEST(PrepareTestForDevice, SupportedOperationPasses)
+{
+    PrepareTestFixture fixture;
+    auto& bits = topo_global.devices[0].op_cap.bits;
+    bits[std::size(bits) - 1 - IDXD_OPCODE_MEMMOVE / 32] |=
+        1u << (IDXD_OPCODE_MEMMOVE % 32);
+    fixture.test.minimum_cpu = device_feature_op_memmove;
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Passed);
+}
+
+TEST(PrepareTestForDevice, UnsupportedOperationSkips)
+{
+    PrepareTestFixture fixture;
+    fixture.test.minimum_cpu = device_feature_op_memmove;
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Skipped);
+}
+
+TEST(PrepareTestForDevice, UndefinedFeatureBitsAssert)
+{
+    PrepareTestFixture fixture;
+    fixture.test.minimum_cpu = idxd_all_features_mask + 1;
+
+    EXPECT_DEATH(prepare_test_for_device(&fixture.test), "Undefined feature bits");
+}
+
+TEST(PrepareTestForDevice, MixedDeviceFeaturesAllowed)
+{
+    PrepareTestFixture fixture;
+    auto& bits = topo_global.devices[0].op_cap.bits;
+    bits[std::size(bits) - 1 - IDXD_OPCODE_MEMMOVE / 32] |=
+        1u << (IDXD_OPCODE_MEMMOVE % 32);
+    bits[std::size(bits) - 1 - IDXD_OPCODE_CRC64 / 32] |=
+        1u << (IDXD_OPCODE_CRC64 % 32);
+    fixture.test.minimum_cpu = device_feature_op_memmove | device_feature_op_crc64;
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Passed);
 }
