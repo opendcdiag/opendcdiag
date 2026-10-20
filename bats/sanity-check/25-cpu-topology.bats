@@ -7,6 +7,8 @@ load helpers
 MAX_PROC=`nproc`
 
 setup_file() {
+    [[ "$SANDSTONE_DEVICE_TYPE" = "CPU" ]] || skip "Tests specific to CPU"
+
     if [[ -e /sys/devices/system/cpu/cpu0 ]] && [[ -e /sys/devices/system/cpu/cpu$n ]]; then
         false "Don't run this bats under taskset"
     fi
