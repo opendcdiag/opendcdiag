@@ -80,24 +80,27 @@ TestResult prepare_test_for_device(struct test *test)
     bool wants_iax = test->minimum_cpu
         & (idxd_iax_operation_features_mask | device_type_features(ACCFG_DEVICE_IAX, UINT_MAX));
 
-    // XXX wants_dsa && wants_iax is supported, as there can be tests targetting both types of WQs
-
+    // XXX wants_dsa && wants_iax is supported, as there can be tests targetting both types of WQs.
+    // On the other hand, !wants_dsa && !wants_iax is also supported - we allow such tests to check
+    // at runtime what they got assigned.
     if (!wants_dsa && !wants_iax) {
-        // The test has no device-specific requirements, so either device type can run it (but must be targetable still).
-        if (Topology::topology().targetable_wqs(test, ACCFG_DEVICE_DSA).empty()
-            && Topology::topology().targetable_wqs(test, ACCFG_DEVICE_IAX).empty())
-        {
-            log_skip(CpuTopologyIssueSkipCategory, "No enabled user-mode WQ");
-            return TestResult::Skipped;
-        } else {
-            return TestResult::Passed;
+        return TestResult::Passed;
+    }
+    std::vector<accfg_device_type> to_check;
+    if (wants_dsa) to_check.push_back(ACCFG_DEVICE_DSA);
+    if (wants_iax) to_check.push_back(ACCFG_DEVICE_IAX);
+
+    bool any = false;
+    for (auto device_type : to_check) {
+        if (!Topology::topology().targetable_wqs(test, device_type).empty()) {
+            any = true;
+            break;
         }
     }
 
-    accfg_device_type required_device_type = wants_dsa ? ACCFG_DEVICE_DSA : ACCFG_DEVICE_IAX;
-    if (Topology::topology().targetable_wqs(test, required_device_type).empty()) {
+    if (!any) {
         log_skip(CpuTopologyIssueSkipCategory, "No enabled user-mode WQ to satisfy required features (%s)",
-                 device_features_to_string(test->minimum_cpu).c_str());
+                    device_features_to_string(test->minimum_cpu).c_str());
         return TestResult::Skipped;
     }
 
