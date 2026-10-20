@@ -37,6 +37,7 @@ struct ProgramOptions {
     std::vector<const char*> deviceset;
     std::vector<const char *> ulog_args;
     bool idxd_default_config = false;
+    bool idxd_restore = false;
 
     std::string list_group_name; // for list_group
 
