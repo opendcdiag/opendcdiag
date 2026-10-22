@@ -89,7 +89,7 @@ std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerb
     line += std::format("group: {:{}}, ", wq.this_group->id, spacing.group);
     line += std::format("state: {}, ", to_string(wq.state));
     line += std::format("logical_cpu: {:{}}, numa_node: {}, ", info->cpu_number, spacing.cpu, info->numa_id);
-    line += std::format("pci_address: {:04x}:{:02x}:{:02x}.{:01x}",
+    line += std::format("pci_address: '{:04x}:{:02x}:{:02x}.{:01x}'",
         info->bdf.domain, info->bdf.bus, info->bdf.device, info->bdf.function
     );
     line += " }";
