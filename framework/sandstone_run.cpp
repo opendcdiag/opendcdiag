@@ -579,6 +579,11 @@ bool test_time_condition() noexcept
     if (max_loop_count_exceeded(current_test()))
         return 0;  // end the test if max loop count exceeded
 
+    // "-t none": timing is controlled solely by the loop iteration count, so
+    // avoid the clock::now() syscall in wallclock_deadline_has_expired().
+    if (sApp->shmem->current_test_no_wallclock_check)
+        return 1;
+
     return !wallclock_deadline_has_expired(sApp->shmem->current_test_endtime);
 }
 
@@ -1777,6 +1782,18 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
     sApp->current_test_duration = test_duration(test_cfg);
     first_iteration_target = MonotonicTimePoint::clock::now() + 10ms;
 
+    // "-t none": the test loop is bounded by the loop iteration count only and
+    // must not read the clock, so there is no wallclock deadline. A per-test
+    // time from the test list still takes precedence.
+    sApp->shmem->current_test_no_wallclock_check =
+            sApp->no_wallclock_check && test_cfg.duration.count() == 0;
+
+    // "-t none" bounds the run purely by the loop iteration count, so the test
+    // must run a single fracture: without a wallclock deadline, fracturing on a
+    // test with a non-zero duration would otherwise repeat the run until the
+    // duration elapsed in real time.
+    const bool single_fracture = sApp->shmem->current_test_no_wallclock_check;
+
     if (sApp->inject_idle > 0) {
         float idle_rate = sApp->inject_idle / 100.0;
         sApp->shmem->current_test_sleep_duration = duration_cast<microseconds>(
@@ -1844,7 +1861,7 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
         }
 
         // do we fracture?
-        if (sApp->shmem->current_max_loop_count <= 0 || sApp->max_test_loop_count
+        if (single_fracture || sApp->shmem->current_max_loop_count <= 0 || sApp->max_test_loop_count
                 || (runtime >= sApp->current_test_duration))
             goto out;
 
