@@ -41,7 +41,16 @@ inline ze_result_t get_ze_handles(zes_device_handle_t device_handle, uint32_t& c
 }
 inline ze_result_t get_ze_handles(zes_device_handle_t device_handle, uint32_t& count, zes_engine_handle_t* vec)
 {
-    return zesDeviceEnumEngineGroups(device_handle, &count, vec);
+    auto result = zesDeviceEnumEngineGroups(device_handle, &count, vec);
+    // As of version 26.22.38646.4 of the compute-runtime, enumerating the
+    // engine groups using ZES API requires root permissions.
+    // If not running as root, demote the error and set the count of engines
+    // to 0.
+    if (result == ZE_RESULT_ERROR_INSUFFICIENT_PERMISSIONS) {
+        result = ZE_RESULT_SUCCESS;
+        count = 0;
+    }
+    return result;
 }
 inline ze_result_t get_ze_handles(zes_device_handle_t device_handle, uint32_t& count, zes_ras_handle_t* vec)
 {
