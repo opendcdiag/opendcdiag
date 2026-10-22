@@ -15,15 +15,15 @@ accel_config_wqs() {
     local label=${type^^}
     label=${label:-IDXD}
     command -v accel-config >/dev/null 2>&1 || skip "accel-config not installed"
+    local accel_error
+    accel_error=$(accel-config list 2>&1 >/dev/null) || skip "accel-config list failed: $accel_error"
     command -v jq >/dev/null 2>&1 || skip "jq not installed"
     [[ -d /sys/bus/dsa/devices ]] || skip "No $label devices detected"
 
-    # accel-config reads the device attributes below; they are root-only
     local prefix devdir found=0
     for prefix in ${type:-dsa iax}; do
         for devdir in /sys/bus/dsa/devices/$prefix*; do
             [[ -d "$devdir" ]] || continue
-            cat "$devdir/state" > /dev/null 2>&1 || skip "must run as root"
             found=1
             break 2
         done
