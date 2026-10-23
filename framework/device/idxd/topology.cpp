@@ -725,7 +725,8 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
                 auto pattern = pattern_for_wq(wq);
                 if (pattern == 0) {
                     all_wqs_failed_once = false;
-                    all_devices_failed_once = false;
+                    all_wqs_failed_equally = false;
+                    all_devices_failed_equally = false;
                     continue;
                 }
 
@@ -739,8 +740,11 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
             }
         }
 
-        if (failed_wqs == 0)
+        if (failed_wqs == 0) {
+            all_devices_failed_once = false;
+            all_devices_failed_equally = false;
             continue;
+        }
 
         ++failed_devices;
         if (last_device_pattern && first_nonzero_pattern != last_device_pattern)
