@@ -1763,14 +1763,14 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
         per_thread_failures.clear();
         per_thread_failures.resize(sApp->thread_count, 0);
     }
-    auto mark_up_per_thread_fail = [&per_thread_failures, &fail_count](int i) {
+    auto mark_up_per_thread_fail = [&per_thread_failures, &fail_count](int attempt) {
         ++fail_count;
-        if (i >= SandstoneApplication::MaxRetestCount)
+        if (attempt >= SandstoneApplication::MaxRetestCount)
             return;
-        for_each_test_thread([&](PerThreadData::Test *data, int i) {
+        for_each_test_thread([&](PerThreadData::Test *data, int thread) {
             using U = PerThreadFailures::value_type;
             if (data->has_failed())
-                per_thread_failures[i] |= U(1) << i;
+                per_thread_failures[thread] |= U(1) << attempt;
         });
     };
 
