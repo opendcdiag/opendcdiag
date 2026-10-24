@@ -50,6 +50,16 @@ enum DataType {
 #   define SANDSTONE_LONG_TYPE Int32Data
 #endif
 
+#if FLT_RADIX == 2 && LDBL_MANT_DIG == 53 && LDBL_MIN_EXP == -1021 && LDBL_MAX_EXP == 1024
+#   define SANDSTONE_LONG_DOUBLE_TYPE Float64Data
+#elif FLT_RADIX == 2 && LDBL_MANT_DIG == 64 && LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384
+#   define SANDSTONE_LONG_DOUBLE_TYPE Float80Data
+#elif FLT_RADIX == 2 && LDBL_MANT_DIG == 113 && LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384
+#   define SANDSTONE_LONG_DOUBLE_TYPE Float128Data
+#else
+#   error "Unsupported long double representation"
+#endif
+
 // T(ctype, tag, suffix): tag is the DataType enumerator; suffix is a unique
 // per-ctype identifier token (distinct even where tag is not, e.g. _Bool,
 // char, and uint8_t all carry UInt8Data). Consumers that only need the
@@ -76,7 +86,8 @@ enum DataType {
     T(BFloat16, BFloat16Data, bfloat16) \
     T(Float16, Float16Data, float16) \
     T(float, Float32Data, float) \
-    T(double, Float64Data, double)
+    T(double, Float64Data, double) \
+    T(long double, SANDSTONE_LONG_DOUBLE_TYPE, long_double)
 
 #ifdef __SIZEOF_FLOAT128__
 struct Float128
@@ -195,8 +206,6 @@ SANDSTONE_SCALAR_TYPES(SANDSTONE_DATATYPE_SPECIALIZATION)
 template<> struct TypeToDataType<void>  : TypeToDataType_helper<UInt8Data> {};
 template<> struct TypeToDataType<Float32> : TypeToDataType_helper<Float32Data> {};
 template<> struct TypeToDataType<Float64> : TypeToDataType_helper<Float64Data> {};
-template<> struct TypeToDataType<long double> :
-        TypeToDataType_helper<sizeof(long double) == sizeof(double) ? Float64Data : Float80Data> {};
 #ifdef __SIZEOF_FLOAT128__
 template<> struct TypeToDataType<Float128> : TypeToDataType_helper<Float128Data> {};
 template<> struct TypeToDataType<__float128> : TypeToDataType_helper<Float128Data> {};
@@ -207,9 +216,25 @@ template<> struct TypeToDataType<fp16_t> : TypeToDataType_helper<Float16Data> {}
 
 template <typename T> concept ValidDataType = TypeToDataType<T>::IsValid;
 
-static constexpr size_t type_real_size(DataType type)
+} // namespace SandstoneDataDetails
+#else
+/* for C mode, we'll have to use _Generic */
+#define SANDSTONE_DATATYPE_ASSOC(ctype, tag, suffix) , ctype: tag
+#define DATATYPEFORTYPE(X) _Generic((X) \
+        SANDSTONE_SCALAR_TYPES(SANDSTONE_DATATYPE_ASSOC) \
+    )
+#endif
+
+#ifdef __cplusplus
+namespace SandstoneDataDetails {
+#define SANDSTONE_DATA_INLINE static constexpr
+#else
+#define SANDSTONE_DATA_INLINE static inline
+#endif
+
+SANDSTONE_DATA_INLINE size_t type_real_size(enum DataType type)
 {
-    constexpr unsigned SizeMask = 0x3f;
+    const unsigned SizeMask = 0x3f;
     switch (type) {
         case HFloat8Data:
         case BFloat8Data:
@@ -221,7 +246,7 @@ static constexpr size_t type_real_size(DataType type)
     }
 }
 
-static constexpr size_t type_size(DataType type)
+SANDSTONE_DATA_INLINE size_t type_size(enum DataType type)
 {
     // special case: long double has 10 bytes of data but occupies 16 bytes
     if (type == Float80Data)
@@ -229,20 +254,64 @@ static constexpr size_t type_size(DataType type)
     return type_real_size(type);
 }
 
-static constexpr size_t type_alignment(DataType type)
+SANDSTONE_DATA_INLINE size_t type_alignment(enum DataType type)
 {
     return type_size(type);
 }
-} // namespace SandstoneDataDetails
 
+// Returns the first differing representation byte, excluding trailing padding.
+static inline ptrdiff_t memcmp_offset_strided(const void *actual, const void *expected,
+                                             size_t size, size_t stride, size_t meaningful)
+{
+    const uint8_t *a = (const uint8_t *)actual;
+    const uint8_t *e = (const uint8_t *)expected;
+    for (size_t base = 0; base < size; base += stride) {
+        for (size_t i = 0; i < meaningful && base + i < size; ++i) {
+            if (a[base + i] != e[base + i])
+                return base + i;
+        }
+    }
+    return -1;
+}
+
+static inline ptrdiff_t memcmp_offset(const void *actual, const void *expected,
+                                     size_t size, enum DataType type)
+{
+    return memcmp_offset_strided(actual, expected, size, type_size(type), type_real_size(type));
+}
+
+#ifdef __cplusplus
+template <DataType Type>
+static inline bool memcmp_equal(const void *actual, const void *expected, size_t size)
+{
+    if constexpr (Type == Float80Data)
+        return memcmp_offset_strided(actual, expected, size, sizeof(long double), type_real_size(Type)) < 0;
+    else
+        return __builtin_memcmp(actual, expected, size) == 0;
+}
 #else
-/* for C mode, we'll have to use _Generic */
-#define SANDSTONE_DATATYPE_ASSOC(ctype, tag, suffix) ctype: tag,
-#define DATATYPEFORTYPE(X) _Generic((X), \
-        SANDSTONE_SCALAR_TYPES(SANDSTONE_DATATYPE_ASSOC) \
-        long double: (sizeof(long double) == sizeof(double) ? Float64Data : Float80Data) \
-    )
+static inline int memcmp_equal_bytes(const void *actual, const void *expected, size_t size)
+{
+    return __builtin_memcmp(actual, expected, size) == 0;
+}
 
-#endif /* __cplusplus */
+static inline int memcmp_equal_long_double(const void *actual, const void *expected, size_t size)
+{
+#if FLT_RADIX == 2 && LDBL_MANT_DIG == 64 && LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384
+    return memcmp_offset_strided(actual, expected, size, sizeof(long double), type_real_size(Float80Data)) < 0;
+#else
+    return memcmp_equal_bytes(actual, expected, size);
+#endif
+}
+
+#define SANDSTONE_MEMCMP_EQUAL(actual, expected, size) \
+    _Generic(*(actual), long double: memcmp_equal_long_double, default: memcmp_equal_bytes) \
+        ((actual), (expected), (size))
+#endif
+
+#undef SANDSTONE_DATA_INLINE
+#ifdef __cplusplus
+} // namespace SandstoneDataDetails
+#endif
 
 #endif /* SANDSTONE_DATA_H */

@@ -213,18 +213,6 @@ void _report_fail_msg(const char *file, int line, const char *fmt, ...)
     report_fail_common();
 }
 
-/* Like memcmp(), but returns the offset of the byte that differed (negative if equal) */
-static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size)
-{
-    ptrdiff_t i = 0;
-
-    for (; i < (ptrdiff_t) size; ++i) {
-        if (d1[i] != d2[i])
-            return i;
-    }
-    return -1;
-}
-
 #ifndef NDEBUG
 // we can only rely on the CI for this
 bool _memcmp_or_fail_check_fmt(const char *fmt, ...)
@@ -321,7 +309,7 @@ void SandstoneMemcmpOrFail::report(const void *_actual, const void *_expected, s
 
         auto actual = static_cast<const uint8_t *>(_actual);
         auto expected = static_cast<const uint8_t *>(_expected);
-        ptrdiff_t offset = memcmp_offset(actual, expected, size);
+        ptrdiff_t offset = memcmp_offset(actual, expected, size, type);
 
         logging_report_mismatched_data(type, actual, expected, size, offset, formatter, t1, t2);
     }
