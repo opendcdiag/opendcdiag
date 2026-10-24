@@ -11,6 +11,7 @@
 #include "sandstone_yaml.h"
 
 #include <limits.h>
+#include <float.h>
 #include <locale.h>
 #include <inttypes.h>
 
@@ -206,6 +207,7 @@ TEST(DataCompare, Float128)
 
 TEST(DataCompare, Float80)
 {
+#if LDBL_MANT_DIG == 64
     using namespace SandstoneDataDetails;
     setlocale(LC_ALL, "C");     // ensure C locale, so we get periods as decimal separators
     EXPECT_STREQ(type_name(Float80Data), "_Float64x");
@@ -220,6 +222,24 @@ TEST(DataCompare, Float80)
     EXPECT_EQ(format_type_helper(-std::numeric_limits<long double>::infinity()), "ffff8000000000000000 (-inf)");
     EXPECT_EQ(format_type_helper(std::numeric_limits<long double>::quiet_NaN()), "7fffc000000000000000 (nan)");
     EXPECT_EQ(format_type_helper(std::numeric_limits<long double>::signaling_NaN()), "7fffa000000000000000 (nan)");
+#else
+    GTEST_SKIP() << "long double is not x87 extended precision";
+#endif
+}
+
+TEST(DataCompare, LongDouble)
+{
+#if LDBL_MANT_DIG == 53
+    EXPECT_EQ(format_type_helper(1.L), format_type_helper(1.0));
+#elif LDBL_MANT_DIG == 64
+    EXPECT_EQ(format_type_helper(1.L), "3fff8000000000000000 (0x8p-3)");
+#elif LDBL_MANT_DIG == 113
+    // Float128Data intentionally has a bit-exact hex renderer, not an x87 conversion.
+    EXPECT_EQ(format_type_helper(1.L), "3fff0000000000000000000000000000");
+    EXPECT_EQ(format_type_helper(-0.L), "80000000000000000000000000000000");
+    EXPECT_EQ(format_type_helper(std::numeric_limits<long double>::epsilon()),
+              "3f8f0000000000000000000000000000");
+#endif
 }
 
 TEST(DataCompare, Float64)
@@ -414,8 +434,18 @@ static_assert(TypeToDataType<long>::Type ==
               (sizeof(long) == sizeof(long long) ? Int64Data : Int32Data));
 static_assert(TypeToDataType<unsigned long long>::Type == UInt64Data);
 static_assert(TypeToDataType<long long>::Type == Int64Data);
-static_assert(TypeToDataType<long double>::Type ==
-              (sizeof(long double) == sizeof(double) ? Float64Data : Float80Data));
+static_assert(FLT_RADIX == 2);
+#if LDBL_MANT_DIG == 53
+static_assert(TypeToDataType<long double>::Type == Float64Data);
+static_assert(LDBL_MIN_EXP == -1021 && LDBL_MAX_EXP == 1024);
+#elif LDBL_MANT_DIG == 64
+static_assert(TypeToDataType<long double>::Type == Float80Data);
+static_assert(LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384);
+#elif LDBL_MANT_DIG == 113
+static_assert(TypeToDataType<long double>::Type == Float128Data);
+static_assert(LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384);
+#endif
+static_assert(type_size(TypeToDataType<long double>::Type) == sizeof(long double));
 #ifdef __SIZEOF_FLOAT128__
 static_assert(TypeToDataType<Float128>::Type == Float128Data);
 static_assert(TypeToDataType<__float128>::Type == Float128Data);

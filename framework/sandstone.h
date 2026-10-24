@@ -736,11 +736,11 @@ template <FormatterFunction Fn> static inline auto make_formatter_cb(const Fn &f
 template <ValidDataType T, FormatterFunction Fn>
 static inline void memcmp_or_fail(const T *actual, const T *expected, size_t count, Fn formatter)
 {
-    DataType type = TypeToDataType<T>::Type;
+    constexpr DataType type = TypeToDataType<T>::Type;
     size_t elemSize = 1;
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
-    if (__builtin_memcmp(actual, expected, count * elemSize) == 0) [[likely]] {
+    if (memcmp_equal<type>(actual, expected, count * elemSize)) [[likely]] {
         if constexpr (!std::is_null_pointer_v<Fn>)
             assert(test_formatter(formatter, count));
         return;         // no mismatch!
@@ -772,10 +772,10 @@ static inline void memcmp_or_fail(const T &actual, const T &expected, Fn formatt
     if (n_actual != n_expected)
         report_fail_msg("container size mismatch: %zu vs %zu", n_actual, n_expected);
 
-    DataType type = TypeToDataType<U>::Type;
+    constexpr DataType type = TypeToDataType<U>::Type;
     const void *actualData = std::ranges::data(actual);
     const void *expectedData = std::ranges::data(expected);
-    if (__builtin_memcmp(actualData, expectedData, n_actual * sizeof(U)) == 0) [[likely]] {
+    if (memcmp_equal<type>(actualData, expectedData, n_actual * sizeof(U))) [[likely]] {
         if constexpr (!std::is_null_pointer_v<Fn>)
             assert(test_formatter(formatter, n_actual));
         return;         // no mismatch!
@@ -802,15 +802,15 @@ static inline void memcmp_or_fail(const T &actual, const T &expected)
 template <ValidDataType T, FormatterFunction Fn>
 static inline void memcmp_pattern_or_fail(const T *actual, T pattern, size_t count, Fn formatter)
 {
-    DataType type = TypeToDataType<T>::Type;
+    constexpr DataType type = TypeToDataType<T>::Type;
     size_t elem_size = sizeof(T);
 
     // self-comparison trick: every element equals actual[0], and actual[0]
     // equals pattern; avoids allocating a full reference buffer on the (common)
     // success path
     bool matches = count == 0
-            || (actual[0] == pattern
-                && (count == 1 || __builtin_memcmp(actual, actual + 1, (count - 1) * elem_size) == 0));
+            || (memcmp_equal<type>(actual, &pattern, elem_size)
+                && (count == 1 || memcmp_equal<type>(actual, actual + 1, (count - 1) * elem_size)));
     if (matches) [[likely]] {
         if constexpr (!std::is_null_pointer_v<Fn>)
             assert(test_formatter(formatter, count));
@@ -819,7 +819,9 @@ static inline void memcmp_pattern_or_fail(const T *actual, T pattern, size_t cou
 
     // mismatch found: build a reference buffer so the existing reporting/logging code,
     // which diffs two equally-sized buffers, can be reused unchanged
-    std::vector<T> expected(count, pattern);
+    std::vector<T> expected(count);
+    for (size_t i = 0; i < count; ++i)
+        memcpy(&expected[i], &pattern, elem_size);
 
     auto [cb, token] = make_formatter_cb(formatter);
     report(actual, expected.data(), count * elem_size, type, cb, token);
@@ -864,7 +866,7 @@ using SandstoneMemcmpOrFail::memcmp_byte_or_fail;
 template <typename T, typename... FmtArgs> static inline std::enable_if_t<SandstoneDataDetails::TypeToDataType<T>::IsValid>
 memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt, FmtArgs &&... args)
 {
-    DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
+    constexpr DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
     size_t elemSize = 1;
     if constexpr (!std::is_same_v<T, void>)
         elemSize = sizeof(T);
@@ -875,7 +877,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
         return memcmp_or_fail(actual, expected, count);
 
     // printf style instead
-    if (__builtin_memcmp(actual, expected, count * elemSize) != 0)
+    if (!SandstoneDataDetails::memcmp_equal<type>(actual, expected, count * elemSize))
         _memcmp_fail_report(actual, expected, count * elemSize, type, fmt, std::forward<FmtArgs>(args)...);
     assert(_memcmp_or_fail_check_fmt(fmt, std::forward<FmtArgs>(args)...));
 }
@@ -899,7 +901,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
         __auto_type _actual = (actual);                             \
         __auto_type _expected = (expected);                         \
         size_t _size = sizeof(*_actual) * (size);                   \
-        if (__builtin_memcmp(_actual, _expected, _size) != 0)       \
+        if (!SANDSTONE_MEMCMP_EQUAL(_actual, _expected, _size))     \
             memcmp_fail_report(_actual, _expected, (size), fmt, ##__VA_ARGS__); \
         assert(_memcmp_or_fail_check_fmt((fmt), ##__VA_ARGS__));    \
     })
@@ -913,7 +915,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
         size_t _size = sizeof(*_actual) * size;                     \
         enum DataType _type = DATATYPEFORTYPE(*_actual);            \
         assert(!cb || _memcmp_fail_check_cb(cb, token, size));      \
-        if (__builtin_expect(__builtin_memcmp(_actual, _expected, _size), 0)) \
+        if (__builtin_expect(!SANDSTONE_MEMCMP_EQUAL(_actual, _expected, _size), 0)) \
             _memcmp_fail_report_cb(_actual, _expected, _size, _type,\
                                    cb, token);                      \
     })

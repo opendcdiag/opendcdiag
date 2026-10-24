@@ -7,6 +7,17 @@
 #include "fp_vectors/Floats.h"
 #include "sandstone_data.h"
 
+#include <float.h>
+#include <stddef.h>
+
+#if LDBL_MANT_DIG == 53
+_Static_assert(DATATYPEFORTYPE(0.L) == Float64Data, "binary64 long double");
+#elif LDBL_MANT_DIG == 64
+_Static_assert(DATATYPEFORTYPE(0.L) == Float80Data, "x87 long double");
+#elif LDBL_MANT_DIG == 113
+_Static_assert(DATATYPEFORTYPE(0.L) == Float128Data, "binary128 long double");
+#endif
+
 // Direct DATATYPEFORTYPE coverage.
 int test_datatypefortype_c(void)
 {
@@ -52,9 +63,24 @@ int test_datatypefortype_c(void)
     if (DATATYPEFORTYPE(f16) != Float16Data) return __LINE__;
     if (DATATYPEFORTYPE(f32) != Float32Data) return __LINE__;
     if (DATATYPEFORTYPE(f64) != Float64Data) return __LINE__;
-    if (DATATYPEFORTYPE(f80) != (sizeof(long double) == sizeof(double) ? Float64Data : Float80Data)) return __LINE__;
+    if (DATATYPEFORTYPE(f80) != SANDSTONE_LONG_DOUBLE_TYPE) return __LINE__;
 
     return 0;
+}
+
+void test_memcmp_long_double_c(const long double *actual, const long double *expected,
+                             size_t count, int callback)
+{
+    if (callback)
+        memcmp_or_fail_cb(actual, expected, count, NULL, NULL);
+    else
+        memcmp_or_fail(actual, expected, count, "long double C comparison");
+}
+
+int test_memcmp_equal_long_double_c(const void *actual, const void *expected, size_t size)
+{
+    // Call the C selector's long double helper without requiring aligned floating pointers.
+    return memcmp_equal_long_double(actual, expected, size);
 }
 
 int test_floats_prototypes_c(void)
