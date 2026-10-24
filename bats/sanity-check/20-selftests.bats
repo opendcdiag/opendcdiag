@@ -1798,7 +1798,7 @@ function selftest_cxxthrow_common() {
         case "$type" in
             Float16)            type=_Float16;;
             BFloat16)           type=_BFloat16;;
-            long_double)        type=_Float64x;;
+            long_double)        type='(_Float64x|_Float128|double)';;
         esac
         local description="data of type '$type'.*"
         case "$type" in
@@ -1829,6 +1829,29 @@ function selftest_cxxthrow_common() {
                     test_yaml_expr "/tests/0/threads/$i/messages/0/data-miscompare/details/rare" = False
                     test_yaml_numeric "/tests/0/threads/$i/messages/0/data-miscompare/details/count" 'value == 16'
                 fi
+            done
+            ((found))
+        done
+    done
+}
+
+@test "selftest_long_double_mismatch" {
+    declare -A yamldump
+    local test
+    for test in selftest_long_double_mismatch selftest_long_double_pattern_mismatch; do
+        sandstone_selftest -vvv -e "$test"
+        set -e
+        fail_common
+        for ((i = 1; i <= MAX_PROC; ++i)); do
+            local found=0
+            for ((j = 0; !found && j < ${yamldump[/tests/0/threads/$i/messages@len]}; ++j)); do
+                [[ "${yamldump[/tests/0/threads/$i/messages/$j/level]}" = error ]] || continue
+                found=1
+                local path="/tests/0/threads/$i/messages/$j/data-miscompare"
+                test_yaml_regexp "$path/description" '^element 2$'
+                test_yaml_regexp "$path/offset" '\[.*\]'
+                [[ "${yamldump[$path/actual]}" != "${yamldump[$path/expected]}" ]]
+                test_yaml_regexp "$path/mask" '0x[0-9a-f]*[1-9a-f][0-9a-f]*'
             done
             ((found))
         done

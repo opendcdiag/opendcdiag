@@ -830,6 +830,31 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
     return EXIT_SUCCESS;
 }
 
+template <bool Pattern> static int selftest_long_double_mismatch_run(struct test *, int)
+{
+    using namespace SandstoneDataDetails;
+    constexpr DataType TYPE = TypeToDataType<long double>::Type;
+    constexpr size_t MEANINGFUL = type_real_size(TYPE);
+    long double actual[3];
+    long double expected[3];
+    long double pattern = 1.L;
+    memset(reinterpret_cast<uint8_t *>(&pattern) + MEANINGFUL, 0, sizeof(pattern) - MEANINGFUL);
+    for (size_t i = 0; i < 3; ++i) {
+        memcpy(&actual[i], &pattern, sizeof(pattern));
+        memcpy(&expected[i], &pattern, sizeof(pattern));
+        memset(reinterpret_cast<uint8_t *>(&actual[i]) + MEANINGFUL, 0x55, sizeof(pattern) - MEANINGFUL);
+        memset(reinterpret_cast<uint8_t *>(&expected[i]) + MEANINGFUL, 0xaa, sizeof(pattern) - MEANINGFUL);
+    }
+    // Earlier padding differs, but the report must identify element 2 and its value.
+    reinterpret_cast<uint8_t *>(&actual[2])[1] ^= 1;
+    auto formatter = [](ptrdiff_t idx) { return stdprintf("element %td", idx); };
+    if constexpr (Pattern)
+        memcmp_pattern_or_fail(actual, pattern, 3, formatter);
+    else
+        memcmp_or_fail(actual, expected, 3, formatter);
+    return EXIT_SUCCESS;
+}
+
 int selftest_datacompare_pattern_fail_run(struct test *, int thread)
 {
     static const uint8_t count = 16;
@@ -2430,6 +2455,22 @@ static struct test selftests_array[] = {
 },
 FOREACH_DATATYPE(DATACOMPARE_TEST)
 #undef DATACOMPARE_TEST
+{
+    .id = "selftest_long_double_mismatch",
+    .description = "Reports meaningful long double differences after padding",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_long_double_mismatch_run<false>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_long_double_pattern_mismatch",
+    .description = "Reports meaningful long double pattern differences after padding",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_long_double_mismatch_run<true>,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
 {
     .id = "selftest_datacompare_pattern_fail",
     .description = "Compares a buffer with injected failure to a bit pattern.",
