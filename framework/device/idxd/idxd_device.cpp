@@ -74,6 +74,13 @@ TestResult prepare_test_for_device(struct test *test)
         abort();
     }
 
+#ifndef SANDSTONE_UNITTESTS
+    // Framework selftests do not submit accelerator work.
+    // This is not guaranteed to always be the case, though.
+    if (sApp->shmem->cfg.selftest)
+        return TestResult::Passed;
+#endif
+
     // UINT_MAX due to lack of ACCFG_DEVICE_VERSION_MAX
     bool wants_dsa = test->minimum_cpu
         & (idxd_dsa_operation_features_mask | device_type_features(ACCFG_DEVICE_DSA, UINT_MAX));
