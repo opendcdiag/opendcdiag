@@ -414,6 +414,86 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/test" selftest_preinit
 }
 
+@test "selftest_crosscheck_input all pass" {
+    local tests=($($SANDSTONE --selftests --list-tests |
+                      sed -n 's/\r$//; /^selftest_crosscheck_input_.*_pass$/p'))
+    [[ ${#tests[@]} -gt 0 ]]
+    declare -A yamldump
+    local test
+    for test in "${tests[@]}"; do
+        sandstone_selftest -e "$test"
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/exit" pass
+        test_yaml_regexp "/tests/0/test" "$test"
+        test_yaml_regexp "/tests/0/result" pass
+    done
+}
+
+@test "selftest_crosscheck_input resets between no-fork passes" {
+    declare -A yamldump
+    sandstone_selftest -fno -e selftest_crosscheck_input_containers_pass \
+        -e selftest_crosscheck_input_c_pass -e selftest_crosscheck_input_containers_pass \
+        -e selftest_crosscheck_input_c_pass
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_numeric "/tests@len" 'value == 4'
+    local i
+    for ((i = 0; i < 4; ++i)); do
+        test_yaml_regexp "/tests/$i/result" pass
+    done
+}
+
+@test "selftest_crosscheck_input duplicate is invalid" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_crosscheck_input_duplicate
+    [[ "$status" -eq 2 ]]
+    [[ "$output" = *"input name already set"* ]]
+}
+
+@test "selftest_crosscheck_input early init exits release no-fork storage" {
+    declare -A yamldump
+    sandstone_selftest -fno -e selftest_crosscheck_input_skip_init \
+        -e selftest_crosscheck_input_containers_pass -e selftest_crosscheck_input_error_init \
+        -e selftest_crosscheck_input_containers_pass
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 4'
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/1/result" pass
+    test_yaml_regexp "/tests/2/result" fail
+    test_yaml_regexp "/tests/3/result" pass
+}
+
+@test "selftest_crosscheck_input get in cleanup is invalid" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_crosscheck_input_get_cleanup
+    [[ "$status" -eq 2 ]]
+    [[ "$output" = *"get_input() must be called"* ]]
+}
+
+@test "selftest_crosscheck_input setting in run is invalid" {
+    ((MAX_PROC > 1)) || skip "Requires two configured consensus workers"
+    declare -A yamldump
+    sandstone_selftest -e selftest_crosscheck_input_set_run
+    [[ "$status" -eq 2 ]]
+    [[ "$output" = *"set_input() must be called"* ]]
+}
+
+@test "selftest_crosscheck_input missing is invalid" {
+    ((MAX_PROC > 1)) || skip "Requires two configured consensus workers"
+    declare -A yamldump
+    sandstone_selftest -e selftest_crosscheck_input_missing
+    [[ "$status" -eq 2 ]]
+    [[ "$output" = *"input was not set"* ]]
+}
+
+@test "selftest_crosscheck_input type mismatch is invalid" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_crosscheck_input_type_mismatch
+    [[ "$status" -eq 2 ]]
+    [[ "$output" = *"input key has a different element type"* ]]
+}
+
 @test "selftest_cxxthrowcatch" {
     # Note: we want to test with the crash handler enabled (--on-crash)
     declare -A yamldump

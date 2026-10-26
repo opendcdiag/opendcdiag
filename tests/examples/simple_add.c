@@ -45,5 +45,3 @@ DECLARE_TEST(simple_add, "Repeatedly add two integer numbers")
         .test_run = simple_add_run,
         .quality_level = TEST_QUALITY_BETA,
 END_DECLARE_TEST
-
-

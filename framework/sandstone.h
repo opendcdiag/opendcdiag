@@ -35,6 +35,7 @@
 #include <functional>
 #include <memory>
 #include <ranges>
+#include <concepts>
 #include <span>
 #include <string>
 #include <type_traits>
@@ -464,6 +465,8 @@ extern void _memcmp_fail_report(const void *actual, const void *expected, size_t
 /// time this thread logs an error (with memcmp_or_fail(), log_error(),
 /// report_fail_msg(), throwing an exception, or by returning with error from
 /// the test's run function). The callback is called at most once per thread.
+/// Deferred cross-check failures call it from the coordinator with the target
+/// logical thread identity, not the original worker's TLS or physical CPU context.
 ///
 /// This function must be called from the main thread (usually, from the test's
 /// init function). The @p cleanup callback, if not a null pointer, will be

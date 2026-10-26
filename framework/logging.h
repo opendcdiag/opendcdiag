@@ -109,6 +109,7 @@ public:
     static const char *iso8601_time_now(Iso8601Format format);
     static std::string log_timestamp();
     static std::string get_skip_message(int thread_num);
+    std::string main_skip_message() const;
     static const char *char_to_skip_category(int val);
     static LogMessagesFile maybe_mmap_log(const PerThreadData::Common *data);
     static void truncate_log(PerThreadData::Common *data);

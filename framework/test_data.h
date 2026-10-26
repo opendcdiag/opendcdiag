@@ -53,6 +53,7 @@ struct Common
 
     enum class Flag {
         CallbackCalled = 0x0001,
+        CrossCheckFailure = 0x0002,
     };
     uint32_t thread_flags;
     friend constexpr inline uint32_t operator|(Flag f1, Flag f2)
@@ -106,6 +107,7 @@ struct alignas(64) TestCommon : Common
     uint32_t inner_loop_count;
     uint32_t inner_loop_count_at_fail;
     LogicalProcessor previous_cpu;  // used by reschedule
+    LogicalProcessor completion_cpu; // saved before scheduler cleanup for post-join checks
 
     /* Thread ID */
     std::atomic<tid_t> tid;
@@ -115,6 +117,7 @@ struct alignas(64) TestCommon : Common
         Common::init();
         inner_loop_count = inner_loop_count_at_fail = 0;
         previous_cpu = LogicalProcessor::None;
+        completion_cpu = LogicalProcessor::None;
     }
 };
 } // namespace PerThreadData

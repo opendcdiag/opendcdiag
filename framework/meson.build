@@ -208,6 +208,8 @@ framework_config.set10(
 
 framework_files += files(
     'Floats.cpp',
+    'crosscheck.cpp',
+    'crosscheck_state.cpp',
     'generated_vectors.c',
     'logging.cpp',
     'random.cpp',
@@ -254,6 +256,11 @@ if get_option('selftests')
     framework_files += files(
         'selftest.c',
         'selftest.cpp',
+        'selftest_crosscheck_inputs.c',
+        'selftest_crosscheck_outputs.cpp',
+        'selftest_crosscheck_outputs.c',
+        'selftest_crosscheck_outputs_peer.cpp',
+        'selftest_crosscheck_outputs_conflict.c',
     )
 else
     default_c_flags += [
@@ -352,12 +359,17 @@ framework_a = static_library(
 )
 
 unittests_sources += files(
+    'crosscheck_state.cpp',
     'sandstone_chrono.cpp',
     'sandstone_data.cpp',
     'sandstone_opts.cpp',
     'test_knobs.cpp',
     'unit-tests/tests_dummy.cpp',
     'unit-tests/test_knob_tests.cpp',
+    'unit-tests/crosscheck_input_tests.c',
+    'unit-tests/crosscheck_input_tests.cpp',
+    'unit-tests/crosscheck_output_peer.cpp',
+    'unit-tests/crosscheck_output_tests.cpp',
     'unit-tests/opts_parser_tests.cpp',
     'unit-tests/sandstone_test_utils_tests.cpp',
     'unit-tests/topology_tests.cpp',
