@@ -55,6 +55,7 @@ struct test_cfg_info {
 };
 
 #ifdef __cplusplus
+} // extern "C"
 
 inline std::span<struct test> regular_tests()
 {
@@ -157,7 +158,6 @@ private:
     }
 };
 
-}
 #endif
 
 #endif /* INC_SANDSTONE_TESTS_H */
