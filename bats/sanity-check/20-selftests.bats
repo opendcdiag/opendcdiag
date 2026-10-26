@@ -414,6 +414,94 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/test" selftest_preinit
 }
 
+@test "selftest_crosscheck_input all pass" {
+    local tests=($($SANDSTONE --selftests --list-tests |
+                      sed -n 's/\r$//; /^selftest_crosscheck_input_.*_pass$/p'))
+    [[ ${#tests[@]} -gt 0 ]]
+    declare -A yamldump
+    local test
+    for test in "${tests[@]}"; do
+        sandstone_selftest -e "$test"
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/exit" pass
+        test_yaml_regexp "/tests/0/test" "$test"
+        test_yaml_regexp "/tests/0/result" pass
+    done
+}
+
+@test "selftest_crosscheck_input resets between no-fork passes" {
+    declare -A yamldump
+    sandstone_selftest -fno -e selftest_crosscheck_input_containers_pass \
+        -e selftest_crosscheck_input_c_pass -e selftest_crosscheck_input_containers_pass \
+        -e selftest_crosscheck_input_c_pass
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_numeric "/tests@len" 'value == 4'
+    local i
+    for ((i = 0; i < 4; ++i)); do
+        test_yaml_regexp "/tests/$i/result" pass
+    done
+}
+
+@test "selftest_crosscheck_input duplicate asserts" {
+    if ! $is_debug; then
+        skip "Cross-check input misuse assertions require a debug build"
+    fi
+    selftest_crash_common selftest_crosscheck_input_duplicate SIGABRT \
+        '0xC0000602 || value == 0xC0000409' \
+        "Aborted|Program self-triggered abnormal termination"
+}
+
+@test "selftest_crosscheck_input early init exits release no-fork storage" {
+    declare -A yamldump
+    sandstone_selftest -fno -e selftest_crosscheck_input_skip_init \
+        -e selftest_crosscheck_input_containers_pass -e selftest_crosscheck_input_error_init \
+        -e selftest_crosscheck_input_containers_pass
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 4'
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/1/result" pass
+    test_yaml_regexp "/tests/2/result" fail
+    test_yaml_regexp "/tests/3/result" pass
+}
+
+@test "selftest_crosscheck_input get in cleanup asserts" {
+    if ! $is_debug; then
+        skip "Cross-check input misuse assertions require a debug build"
+    fi
+    selftest_crash_common selftest_crosscheck_input_get_cleanup SIGABRT \
+        '0xC0000602 || value == 0xC0000409' \
+        "Aborted|Program self-triggered abnormal termination"
+}
+
+@test "selftest_crosscheck_input capture in run asserts" {
+    if ! $is_debug; then
+        skip "Cross-check input misuse assertions require a debug build"
+    fi
+    selftest_crash_common selftest_crosscheck_input_capture_run SIGABRT \
+        '0xC0000602 || value == 0xC0000409' \
+        "Aborted|Program self-triggered abnormal termination"
+}
+
+@test "selftest_crosscheck_input missing asserts" {
+    if ! $is_debug; then
+        skip "Cross-check input misuse assertions require a debug build"
+    fi
+    selftest_crash_common selftest_crosscheck_input_missing SIGABRT \
+        '0xC0000602 || value == 0xC0000409' \
+        "Aborted|Program self-triggered abnormal termination"
+}
+
+@test "selftest_crosscheck_input type mismatch asserts" {
+    if ! $is_debug; then
+        skip "Cross-check input misuse assertions require a debug build"
+    fi
+    selftest_crash_common selftest_crosscheck_input_type_mismatch SIGABRT \
+        '0xC0000602 || value == 0xC0000409' \
+        "Aborted|Program self-triggered abnormal termination"
+}
+
 @test "selftest_cxxthrowcatch" {
     # Note: we want to test with the crash handler enabled (--on-crash)
     declare -A yamldump
@@ -2128,37 +2216,6 @@ selftest_freeze_common() {
     test_yaml_regexp "/exit" pass
     test_yaml_regexp "/tests/0/result" 'timed out'
     selftest_freeze_msgs_common
-}
-
-selftest_crash_common() {
-    if $is_asan; then
-        skip "Crashing tests skipped with ASAN"
-    fi
-    if ! declare -p yamldump >/dev/null 2>/dev/null; then
-        declare -A yamldump
-    fi
-
-    local test=$1
-    local code=$2
-    if $is_windows; then
-        code=$3
-        reason=$4
-    elif [[ "$code" != "" ]]; then
-        # transform symbolic name to code
-        reason=`python3 -c "from signal import *; print(strsignal($code)); exit($code)"` || code=$?
-    fi
-    if [[ "$code" == "" ]]; then
-        skip "Test skipped on this platform"
-    fi
-
-    sandstone_selftest --on-crash=kill -vvv -e $test
-    [[ "$status" -eq 1 ]]
-    test_yaml_regexp "/exit" fail
-    test_yaml_regexp "/tests/0/result" "crash"
-    test_yaml_regexp "/tests/0/result-details/crashed" True
-    test_yaml_regexp "/tests/0/result-details/core-dump" '(True|False)'
-    test_yaml_numeric "/tests/0/result-details/code" 'value > 0 && value == '$code
-    test_yaml_regexp "/tests/0/result-details/reason" "$reason"
 }
 
 @test "selftest_abortinit" {

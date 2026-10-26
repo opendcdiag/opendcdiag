@@ -17,6 +17,37 @@ extract_from_yaml() {
     value=${yamldump[$1]}
 }
 
+selftest_crash_common() {
+    if $is_asan; then
+        skip "Crashing tests skipped with ASAN"
+    fi
+    if ! declare -p yamldump >/dev/null 2>/dev/null; then
+        declare -A yamldump
+    fi
+
+    local test=$1
+    local code=$2
+    if $is_windows; then
+        code=$3
+        reason=$4
+    elif [[ "$code" != "" ]]; then
+        # transform symbolic name to code
+        reason=`python3 -c "from signal import *; print(strsignal($code)); exit($code)"` || code=$?
+    fi
+    if [[ "$code" == "" ]]; then
+        skip "Test skipped on this platform"
+    fi
+
+    sandstone_selftest --on-crash=kill -vvv -e $test
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/result" "crash"
+    test_yaml_regexp "/tests/0/result-details/crashed" True
+    test_yaml_regexp "/tests/0/result-details/core-dump" '(True|False)'
+    test_yaml_numeric "/tests/0/result-details/code" 'value > 0 && value == '$code
+    test_yaml_regexp "/tests/0/result-details/reason" "$reason"
+}
+
 test_yaml_absent() {
     local query=$1
     local isset=${yamldump[$1]:+1}
