@@ -641,7 +641,7 @@ static std::string create_filtered_message_string(const char *fmt, va_list va)
 }
 
 // function must be async-signal-safe
-void logging_mark_thread_failed(int thread_num) noexcept
+static void logging_mark_thread_failed_on_cpu(int thread_num, LogicalProcessor cpu) noexcept
 {
     PerThreadData::Common *thr = sApp->thread_data(thread_num);
     if (thr->has_failed())
@@ -651,11 +651,17 @@ void logging_mark_thread_failed(int thread_num) noexcept
     // get_monotonic_time_now() because we'll compare to
     // sApp->current_test_starttime.
     thr->fail_time = std::chrono::steady_clock::now();
-    thr->failing_cpu_plus_1 = sched_getcpu() + 1;
+    thr->failing_cpu_plus_1 = int(cpu) + 1;
     if (thread_num >= 0) {
         auto tthr = static_cast<PerThreadData::Test *>(thr);
         tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
     }
+}
+
+void logging_mark_thread_failed(int thread_num) noexcept
+{
+    if (!sApp->thread_data(thread_num)->has_failed())
+        logging_mark_thread_failed_on_cpu(thread_num, LogicalProcessor(sched_getcpu()));
 }
 
 void logging_mark_thread_skipped(int thread_num) noexcept
@@ -1414,6 +1420,36 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     logging_run_callback();
 }
 
+void logging_report_crosscheck_failure(int worker, LogicalProcessor cpu, std::string_view description,
+                                      const SandstoneCrossCheck::CapturedSlot *expected,
+                                      const SandstoneCrossCheck::CapturedSlot *actual)
+{
+    if (sApp->shmem->cfg.ud_on_failure)
+        ud2();
+    auto *thread = sApp->test_thread_data(worker);
+    logging_mark_thread_failed_on_cpu(worker, cpu);
+    thread->thread_state.store(thread_failed, std::memory_order_relaxed);
+
+    // Temporarily set the coordinator's thread_num for formatters and the failure callback.
+    // No worker is live here, and no terminating failure reporter is invoked.
+    int saved_thread = thread_num;
+    thread_num = worker;
+    auto restore_thread = scopeExit([&] { thread_num = saved_thread; });
+    if (actual && expected) {
+        auto formatter = [](const void *token, void *, ptrdiff_t) {
+            return std::string(*static_cast<const std::string_view *>(token));
+        };
+        logging_report_mismatched_data(expected->type,
+                static_cast<const uint8_t *>(actual->storage.get()),
+                static_cast<const uint8_t *>(expected->storage.get()), expected->bytes().size(),
+                SandstoneDataDetails::memcmp_offset(actual->storage.get(), expected->storage.get(),
+                              expected->bytes().size(), expected->type), formatter, &description, nullptr);
+    } else {
+        log_message_preformatted(worker, LOG_LEVEL_QUIET, std::string("E> ") + std::string(description));
+        logging_run_callback();
+    }
+}
+
 void log_thread_context(const char *fmt, ...)
 {
     log_thread_context(va_start_and_stdprintf(fmt));
@@ -1557,6 +1593,11 @@ std::string AbstractLogger::get_skip_message(int thread_num)
         }
     }
     return skip_message;
+}
+
+std::string AbstractLogger::main_skip_message() const
+{
+    return get_skip_message(-1);
 }
 
 static std::string_view format_skip_message(std::string_view message)
@@ -1802,6 +1843,7 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
 
     if (testResult == TestResult::Passed && pc == sc)
         testResult = TestResult::Skipped;       // all threads skipped
+
 }
 
 bool AbstractLogger::is_skip_only(const LogMessagesFile &msgs) const
@@ -2196,11 +2238,11 @@ void YamlLogger::print_result_line()
                            "for details");
         } else {
             // FIXME: multiple main threads
-            std::string init_skip_message = get_skip_message(-1);
-            if (init_skip_message.size() > 0) {
+            std::string skip_message = main_skip_message();
+            if (skip_message.size() > 0) {
                 logging_printf(loglevel, "  skip-category: %s\n",
-                               char_to_skip_category(init_skip_message[0]));
-                std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
+                               char_to_skip_category(skip_message[0]));
+                std::string_view message(&skip_message[1], skip_message.size()-1);
                 if (loglevel <= sApp->shmem->cfg.verbosity && file_log_fd != real_stdout_fd)
                     format_and_print_skip_reason(real_stdout_fd, message);
                 format_and_print_skip_reason(file_log_fd, message);

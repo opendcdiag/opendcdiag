@@ -33,6 +33,7 @@
 #include <sandstone_yaml.h>
 
 #include "gettid.h"
+#include "crosscheck_state.hpp"
 #include "test_data.h"
 #include "topology.h"
 #if SANDSTONE_FREQUENCY_MANAGER
@@ -333,6 +334,7 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     HardwareInfo hwinfo;
     SlicePlans slice_plans;
     std::vector<test_data_per_thread> user_thread_data;
+    SandstoneCrossCheck::CrossCheckState crosscheck_state;
     PerThreadData::Main *main_thread_data_ptr;  // points to somewhere in the shmem
     PerThreadData::Test *test_thread_data_ptr;  // points to somewhere in the shmem
     SharedMemory *shmem = nullptr;
@@ -600,6 +602,7 @@ inline int test_result_to_exit_code(TestResult result)
     case TestResult::Failed:
         return EXIT_FAILURE;
     case TestResult::OperatingSystemError:
+        return EX_SOFTWARE;
     case TestResult::Killed:
     case TestResult::CoreDumped:
     case TestResult::OutOfMemory:
@@ -639,6 +642,12 @@ void logging_mark_thread_skipped(int thread_num) noexcept;
 void logging_mark_knob_used(std::string_view key, YamlFormatter::SimpleValue value, KnobOrigin origin);
 void logging_cleanup_failure_callback() noexcept;
 void logging_run_callback();
+// Post-join only: report without terminating the coordinator. CPU is the saved
+// worker completion CPU. Callbacks run on the coordinator using the target worker's
+// logical identity, not the original worker's TLS or physical CPU context.
+void logging_report_crosscheck_failure(int worker, LogicalProcessor cpu, std::string_view description,
+                                      const SandstoneCrossCheck::CapturedSlot *expected = nullptr,
+                                      const SandstoneCrossCheck::CapturedSlot *actual = nullptr);
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,
                                     size_t size, ptrdiff_t offset,
                                     SandstoneMemcmpOrFail::FormatterCallback formatter,

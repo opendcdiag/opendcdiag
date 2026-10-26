@@ -106,6 +106,7 @@ struct alignas(64) TestCommon : Common
     uint32_t inner_loop_count;
     uint32_t inner_loop_count_at_fail;
     LogicalProcessor previous_cpu;  // used by reschedule
+    LogicalProcessor completion_cpu; // saved before scheduler cleanup for post-join checks
 
     /* Thread ID */
     std::atomic<tid_t> tid;
@@ -115,6 +116,7 @@ struct alignas(64) TestCommon : Common
         Common::init();
         inner_loop_count = inner_loop_count_at_fail = 0;
         previous_cpu = LogicalProcessor::None;
+        completion_cpu = LogicalProcessor::None;
     }
 };
 } // namespace PerThreadData

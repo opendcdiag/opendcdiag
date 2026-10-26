@@ -377,6 +377,12 @@ struct kvm_config;
 typedef struct kvm_config kvm_config_t;
 typedef const kvm_config_t *(*kvmconfigfunc)(void);
 
+enum CrossCheckPolicy {
+    CrossCheckNone = 0,
+    CrossCheckGolden = 1,
+    CrossCheckConsensus = 2,
+};
+
 struct test {
     /* metadata */
     /// filled in by the DECLARE_TEST macro
@@ -439,6 +445,9 @@ struct test {
     /// flags for this test. See enum for possible values
     test_flags flags;
 
+    /// Authority for cross-check verification; omission disables set_input(), get_input(), and submit_output().
+    enum CrossCheckPolicy crosscheck;
+
     /* private fields for test use only */
 
     /// can be used by tests to store a pointer to test specific resources whose lifetime
@@ -464,6 +473,8 @@ extern void _memcmp_fail_report(const void *actual, const void *expected, size_t
 /// time this thread logs an error (with memcmp_or_fail(), log_error(),
 /// report_fail_msg(), throwing an exception, or by returning with error from
 /// the test's run function). The callback is called at most once per thread.
+/// Deferred cross-check failures call it from the coordinator with the target
+/// logical thread identity, not the original worker's TLS or physical CPU context.
 ///
 /// This function must be called from the main thread (usually, from the test's
 /// init function). The @p cleanup callback, if not a null pointer, will be
