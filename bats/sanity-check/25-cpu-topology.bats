@@ -727,6 +727,42 @@ function selftest_cpuset_accumulate() {
     test_yaml_numeric "/tests/0/threads/3/previous-cpu/logical" "value == ${cpuset[3]}"
 }
 
+# A thread that fails before calling reschedule() must not hang its barrier partners
+@test "barrier reschedule with early failing thread" {
+    if $is_windows; then
+        skip "Rescheduling is not supported on Windows"
+    fi
+
+    if (( MAX_PROC < 2 )); then
+        skip "Need at least 2 logical processors to run this test"
+    fi
+
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_before_reschedule --reschedule=barrier --timeout=10s
+    test_yaml_regexp "/tests/0/result" fail
+}
+
+# Barriers must be rebuilt for every retry, otherwise the retry hangs
+@test "barrier reschedule with retries" {
+    if $is_windows; then
+        skip "Rescheduling is not supported on Windows"
+    fi
+
+    if (( MAX_PROC < 2 )); then
+        skip "Need at least 2 logical processors to run this test"
+    fi
+
+    declare -A yamldump
+    sandstone_selftest -e selftest_fail_before_reschedule --reschedule=barrier --timeout=10s \
+        --retest-on-failure=3
+    test_yaml_regexp "/tests/0/result" fail
+    test_yaml_regexp "/tests/0/state/retry" False
+    for i in 1 2 3; do
+        test_yaml_regexp "/tests/$i/result" fail
+        test_yaml_regexp "/tests/$i/state/retry" True
+    done
+}
+
 @test "selftest_fail_after_reschedule_lowest_cpu" {
     run $SANDSTONE --selftests -e selftest_pass --reschedule=queue
     if [[ $status == 64 ]] || [[ "`uname -m`" != "x86_64" ]]; then

@@ -744,6 +744,22 @@ static int selftest_fail_after_reschedule_run(struct test *test, int thread)
     return EXIT_SUCCESS;
 }
 
+// The last thread fails before ever calling reschedule(), while the others
+// wait a bit and then reschedule. With barrier rescheduling, the failed thread
+// must not leave its partners waiting for it forever.
+static int selftest_fail_before_reschedule_run(struct test *test, int thread)
+{
+    if (thread == thread_count() - 1) {
+        report_fail_msg("Failed before reschedule()");
+        return EXIT_FAILURE;
+    }
+
+    usleep(50000);      // let the failing thread finish first
+    for (int i = 0; i < 8; ++i)
+        reschedule();
+    return EXIT_SUCCESS;
+}
+
 static int selftest_fail_after_reschedule_lowest_cpu_run(struct test *test, int thread)
 {
     int n = thread_count();
@@ -2388,6 +2404,14 @@ static struct test selftests_array[] = {
     .test_init = selftest_logs_reschedule_init,
     .test_run = selftest_fail_after_reschedule_run,
     .test_cleanup = selftest_logs_reschedule_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_fail_before_reschedule",
+    .description = "Last thread fails before reschedule(), the others keep calling it",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_fail_before_reschedule_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
