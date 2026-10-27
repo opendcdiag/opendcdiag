@@ -107,6 +107,9 @@ public:
     void finish_reschedule() override;
 
 private:
+    void on_group_completion(int g_idx);
+    void init_groups();
+
     struct GroupInfo
     {
         std::barrier<std::function<void()>> *barrier;
