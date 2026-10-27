@@ -1153,6 +1153,11 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
     s_current_test = test;
     auto resetCurrentTest = scopeExit([&] { s_current_test = nullptr; });
 
+    // Runs in the process that starts the threads, after the topology has been
+    // restricted to this slice, so the scheduler is sized for the right devices.
+    if (device_scheduler)
+        device_scheduler->reset();
+
     TestResult state = [&] {
         int ret = 0;
         test->per_thread = sApp->user_thread_data.data();
