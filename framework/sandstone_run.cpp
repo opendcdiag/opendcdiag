@@ -181,6 +181,8 @@ static void __attribute__((noreturn)) report_fail_common()
     logging_mark_thread_failed(thread_num);
 #ifdef _WIN32
     /* does not call the cleanup handlers */
+    if (device_scheduler)
+        device_scheduler->finish_reschedule();
     _endthread();
 #else
     /* does call the cleanup handalers */
