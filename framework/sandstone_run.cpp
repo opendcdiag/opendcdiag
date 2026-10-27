@@ -1143,8 +1143,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
     s_current_test = test;
     auto resetCurrentTest = scopeExit([&] { s_current_test = nullptr; });
 
-    // Runs in the process that starts the threads, after the topology has been
-    // restricted to this slice, so the scheduler is sized for the right devices.
+    // Initialize/reset rescheduler state
     if (device_scheduler)
         device_scheduler->reset();
 
