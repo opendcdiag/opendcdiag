@@ -168,11 +168,13 @@ void BarrierDeviceScheduler::on_group_completion(int g_idx)
     }
 }
 
-void BarrierDeviceScheduler::init_groups()
+void BarrierDeviceScheduler::reset()
 {
-    // Must be called with groups_mutex locked
-    if (!groups.empty())
-        return;
+    // Barriers are drained by arrive_and_drop(), so rebuild them for every run.
+    // Done before the threads start, so that a thread that finishes without
+    // ever rescheduling still finds its barrier and can drop out of it.
+    std::unique_lock lock(groups_mutex);
+    groups.clear();
 
     int full_groups = device_count() / members_per_group;
     int partial_group_members = device_count() % members_per_group;
@@ -190,7 +192,6 @@ void BarrierDeviceScheduler::init_groups()
 void BarrierDeviceScheduler::reschedule_to_next_device()
 {
     std::unique_lock lock(groups_mutex);
-    init_groups();
 
     // Fill thread info if not done already
     int g_idx = thread_num / members_per_group;
@@ -211,11 +212,6 @@ void BarrierDeviceScheduler::reschedule_to_next_device()
 void BarrierDeviceScheduler::finish_reschedule()
 {
     std::unique_lock lock(groups_mutex);
-
-    // A thread may finish before any other one called reschedule(), so make
-    // sure the barrier exists for it to drop out of; otherwise partners wait
-    // forever for it.
-    init_groups();
 
     // When thread finishes, unsubscribe it from barrier
     // this avoid partners deadlocks
