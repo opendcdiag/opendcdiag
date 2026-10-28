@@ -354,6 +354,27 @@ static int selftest_logs_reschedule_cleanup(struct test *test)
     return EXIT_SUCCESS;
 }
 
+// Thread 0 calls reschedule() once and returns, while thread 1 keeps calling
+// reschedule() after thread 0 has finished. Needs exactly 2 threads.
+static int selftest_barrier_retirement_run(struct test *test, int thread)
+{
+    log_warning("thread %d starting on cpu %d", thread, sched_getcpu());
+
+    if (thread == 0) {
+        reschedule();
+        log_warning("thread %d finished early, now on cpu %d", thread, sched_getcpu());
+        return EXIT_SUCCESS;
+    }
+
+    // thread 1: keep rescheduling after its partner (thread 0) has retired
+    for (int i = 0; i < 10; i++) {
+        reschedule();
+        log_warning("thread %d after reschedule #%d is on cpu %d", thread, i, sched_getcpu());
+    }
+
+    return EXIT_SUCCESS;
+}
+
 static int selftest_random_preinit(struct test *test)
 {
     // use (but not print) 4 ints
@@ -1698,6 +1719,12 @@ END_DECLARE_TEST
 DECLARE_SELFTEST(selftest_reschedule_loop, "Calls reschedule() in a loop and checks that threads move only when rescheduling is enabled")
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_reschedule_loop_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_barrier_retirement, "Demonstrates barrier-pair behavior when one thread retires early (run with --reschedule=barrier --cpuset=0,1)")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_barrier_retirement_run,   // may skip
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST

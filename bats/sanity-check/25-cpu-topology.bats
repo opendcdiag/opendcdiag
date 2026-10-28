@@ -755,6 +755,31 @@ function selftest_cpuset_accumulate() {
     done
 }
 
+# A thread that finishes early must not break its partner's later reschedules
+@test "selftest_barrier_retirement" {
+    $is_debug || skip "Test only works with Debug builds to mock the topology"
+
+    export SANDSTONE_MOCK_TOPOLOGY='p0c0 p0c1'
+    local -a cpuset=(`$SANDSTONE --dump-cpu-info | awk '/^[0-9]/ { print $1 }'`)
+
+    declare -A yamldump
+    sandstone_selftest -e selftest_barrier_retirement --reschedule=barrier \
+        --cpuset=${cpuset[0]},${cpuset[1]} --timeout=10s
+    test_yaml_regexp "/tests/0/result" pass
+
+    # thread 0 retires from its barrier pair after a single reschedule
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" "W> thread 0 starting on cpu ${cpuset[0]}"
+    test_yaml_regexp "/tests/0/threads/0/messages/1/text" "W> thread 0 finished early, now on cpu ${cpuset[1]}"
+
+    # thread 1 keeps rescheduling alone and must alternate between both cpus;
+    # the bug made it read a stale/out-of-bounds slot instead
+    test_yaml_regexp "/tests/0/threads/1/messages/0/text" "W> thread 1 starting on cpu ${cpuset[1]}"
+    test_yaml_regexp "/tests/0/threads/1/messages/1/text" "W> thread 1 after reschedule #0 is on cpu ${cpuset[0]}"
+    test_yaml_regexp "/tests/0/threads/1/messages/2/text" "W> thread 1 after reschedule #1 is on cpu ${cpuset[1]}"
+    test_yaml_regexp "/tests/0/threads/1/messages/3/text" "W> thread 1 after reschedule #2 is on cpu ${cpuset[0]}"
+    test_yaml_regexp "/tests/0/threads/1/messages/4/text" "W> thread 1 after reschedule #3 is on cpu ${cpuset[1]}"
+}
+
 @test "selftest_fail_after_reschedule_lowest_cpu" {
     run $SANDSTONE --selftests -e selftest_pass --reschedule=queue
     if [[ $status == 64 ]] || [[ "`uname -m`" != "x86_64" ]]; then
