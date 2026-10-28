@@ -105,13 +105,16 @@ class BarrierDeviceScheduler : public DeviceScheduler
 public:
     void reschedule_to_next_device() override;
     void finish_reschedule() override;
+    void reset() override;
 
 private:
+    void on_group_completion(int g_idx);
+
     struct GroupInfo
     {
         std::barrier<std::function<void()>> *barrier;
-        std::vector<pid_t> tid;     // Keep track of all members tid
-        std::vector<int> next_cpu;  // Keep track of cpus on the group
+        std::vector<pid_t> tid;     // 0 = not set yet, -1 = thread done, else = live thread id
+        std::vector<int> next_cpu;  // -1 = cpu excluded because its thread failed
 
         GroupInfo(int members_per_group, std::function<void()> on_completion)
         {

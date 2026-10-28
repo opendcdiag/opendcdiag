@@ -153,37 +153,58 @@ void pin_to_next_cpu(int next_cpu, tid_t thread_id = 0)
 }
 } // end anonymous namespace
 
+void BarrierDeviceScheduler::on_group_completion(int g_idx)
+{
+    std::unique_lock lock(groups_mutex);
+    GroupInfo &group = groups[g_idx];
+
+    // Rotate cpus by one position, skipping excluded slots (-1).
+    int first_val = -1; // cpu value of the first non-excluded slot
+    int prev_idx = -1;  // index of the last non-excluded slot seen
+    for (int i = 0; i < (int)group.next_cpu.size(); i++) {
+        if (group.next_cpu[i] < 0)
+            continue;
+        if (prev_idx < 0)
+            first_val = group.next_cpu[i];
+        else
+            group.next_cpu[prev_idx] = group.next_cpu[i];
+        prev_idx = i;
+    }
+    if (prev_idx >= 0)
+        group.next_cpu[prev_idx] = first_val;
+    lock.unlock();
+
+    // Pin only the members that are still running (tid > 0).
+    for (int i = 0; i < (int)group.tid.size(); i++) {
+        if (group.tid[i] > 0)
+            pin_to_next_cpu(device_info[group.next_cpu[i]].cpu_number, group.tid[i]);
+    }
+}
+
+void BarrierDeviceScheduler::reset()
+{
+    // Barriers are drained by arrive_and_drop(), so rebuild them for every run.
+    // Done before the threads start, so that a thread that finishes without
+    // ever rescheduling still finds its barrier and can drop out of it.
+    std::unique_lock lock(groups_mutex);
+    groups.clear();
+
+    int full_groups = device_count() / members_per_group;
+    int partial_group_members = device_count() % members_per_group;
+
+    groups.reserve(full_groups + (partial_group_members > 0));
+    for (int i=0; i<full_groups; i++) {
+        groups.emplace_back(members_per_group, [this, i]() noexcept { on_group_completion(i); });
+    }
+    if (partial_group_members > 0) {
+        int i = full_groups;
+        groups.emplace_back(partial_group_members, [this, i]() noexcept { on_group_completion(i); });
+    }
+}
+
 void BarrierDeviceScheduler::reschedule_to_next_device()
 {
-    auto on_completion = [&]() noexcept {
-        std::unique_lock lock(groups_mutex);
-        int g_idx = thread_num / members_per_group;
-        GroupInfo &group = groups[g_idx];
-
-        // Rotate cpus vector so reschedule group members to a different cpu
-        std::rotate(group.next_cpu.begin(), group.next_cpu.begin() + 1, group.next_cpu.end());
-        lock.unlock();
-
-        // Reschedule group members
-        for (int i=0; i<group.tid.size(); i++) {
-            pin_to_next_cpu(device_info[group.next_cpu[i]].cpu_number, group.tid[i]);
-        }
-    };
-
     std::unique_lock lock(groups_mutex);
-    // Initialize groups on first run
-    if (groups.empty()) {
-        int full_groups = device_count() / members_per_group;
-        int partial_group_members = device_count() % members_per_group;
-
-        groups.reserve(full_groups + (partial_group_members > 0));
-        for (int i=0; i<full_groups; i++) {
-            groups.emplace_back(members_per_group, on_completion);
-        }
-        if (partial_group_members > 0) {
-            groups.emplace_back(partial_group_members, on_completion);
-        }
-    }
 
     // Fill thread info if not done already
     int g_idx = thread_num / members_per_group;
@@ -205,22 +226,19 @@ void BarrierDeviceScheduler::finish_reschedule()
 {
     std::unique_lock lock(groups_mutex);
 
-    // Don't clean up when test does not support rescheduling
-    if (groups.size() == 0) return;
-
     // When thread finishes, unsubscribe it from barrier
     // this avoid partners deadlocks
     int g_idx = thread_num / members_per_group;
     GroupInfo &group = groups[g_idx];
 
-    // Remove thread info from groups
+    // Mark this member as finished, so it no longer gets pinned.
     int thread_info_idx = thread_num % members_per_group;
-    group.tid.erase(group.tid.begin() + thread_info_idx);
+    group.tid[thread_info_idx] = -1;
 
-    // Remove CPU information only if the thread failed, as it likely indicates a problematic device;
-    // otherwise, keep it for execution.
-    if(sApp->test_thread_data(thread_num)->has_failed())
-        group.next_cpu.erase(group.next_cpu.begin() + thread_info_idx);
+    // If the thread failed, exclude its cpu from future rotations.
+    if (sApp->test_thread_data(thread_num)->has_failed())
+        group.next_cpu[thread_info_idx] = -1;
+
     lock.unlock();
 
     group.barrier->arrive_and_drop();
