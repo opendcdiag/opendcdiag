@@ -34,6 +34,7 @@ struct DeviceScheduler
     virtual ~DeviceScheduler() = default;
     virtual void reschedule_to_next_device() = 0;
     virtual void finish_reschedule() = 0;
+    virtual void reset() {}     // called before each test run/retry
 };
 
 using ThreadRatio = std::variant<int, float>;

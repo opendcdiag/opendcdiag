@@ -105,8 +105,11 @@ class BarrierDeviceScheduler : public DeviceScheduler
 public:
     void reschedule_to_next_device() override;
     void finish_reschedule() override;
+    void reset() override;
 
 private:
+    void on_group_completion(int g_idx);
+
     struct GroupInfo
     {
         std::barrier<std::function<void()>> *barrier;
