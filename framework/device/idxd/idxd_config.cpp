@@ -763,6 +763,8 @@ int apply_with_fallback(idxd_config_t::config_t& desired, idxd_config_t::config_
     return ret;
 }
 
+idxd_config_t::config_t* previous;
+
 int apply_global_idxd_config()
 {
     idxd_config_t::config_t desired;
@@ -775,9 +777,10 @@ int apply_global_idxd_config()
         return EXIT_SUCCESS;
 
     expand_default_profile(desired);
-    idxd_config_t::config_t previous{};
-    auto ret = apply_with_fallback(desired, previous);
+    previous = new idxd_config_t::config_t{};
+    auto ret = apply_with_fallback(desired, *previous);
     if (ret != EXIT_SUCCESS) {
+        delete std::exchange(previous, nullptr);
         return ret;
     }
 
@@ -785,4 +788,20 @@ int apply_global_idxd_config()
     rebuild_topology();
 
     return EXIT_SUCCESS;
+}
+
+void idxd_config_cleanup()
+{
+    if (!previous) {
+        return;
+    }
+
+    auto ret = write_config(*previous, true);
+    if (ret == EXIT_SUCCESS) {
+        logging_printf(LOG_LEVEL_QUIET, "# Successfully restored pre-run IDXD configuration.\n");
+    } else {
+        logging_printf(LOG_LEVEL_ERROR, "# warning: Failed to restore pre-run IDXD configuration.\n");
+    }
+
+    delete std::exchange(previous, nullptr);
 }
