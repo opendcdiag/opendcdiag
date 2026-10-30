@@ -263,6 +263,7 @@ struct TestConfig
     bool ud_on_failure = false;
     bool use_strict_runtime = false;
     bool sync_thread_start = false;
+    bool sync_test_loop_start = false;
     RescheduleMode reschedule_mode = RescheduleMode::unset;
     uint32_t random_control_flags = 0;
 

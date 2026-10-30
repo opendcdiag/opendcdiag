@@ -81,6 +81,25 @@ const struct test *current_test() noexcept
     return s_current_test;
 }
 
+// Implements the --sync-test-loop-start option: worker threads synchronize at a
+// barrier the first time they reach TEST_LOOP's test_loop_start(), so the test
+// loop body starts together across all threads. Armed only under parallel
+// scheduling (never sequential, which would self-deadlock -- see run_threads()).
+//
+// Threads that finish test_run() without ever reaching TEST_LOOP (e.g. an early
+// return, or a failure before the loop) drop out of the barrier via
+// test_loop_barrier_drop_if_needed() so the waiting threads never hang.
+static std::barrier<> *test_loop_start_barrier = nullptr;
+static thread_local bool test_loop_barrier_passed = false;
+
+static void test_loop_barrier_drop_if_needed() noexcept
+{
+    if (test_loop_start_barrier && !test_loop_barrier_passed) {
+        test_loop_barrier_passed = true;
+        test_loop_start_barrier->arrive_and_drop();
+    }
+}
+
 static const char *path_to_exe()
 {
 #if defined(__linux__)
@@ -178,6 +197,11 @@ static void merge_test_result(ChildExitStatus &current, const ChildExitStatus& i
 
 static void __attribute__((noreturn)) report_fail_common()
 {
+    // If this thread fails before ever reaching TEST_LOOP, release any siblings
+    // waiting on the --sync-test-loop-start barrier. Done here because on Windows
+    // _endthread() below does not run the thread_runner cleanup (no unwinding).
+    test_loop_barrier_drop_if_needed();
+
     logging_mark_thread_failed(thread_num);
 #ifdef _WIN32
     /* does not call the cleanup handlers */
@@ -678,6 +702,13 @@ int test_run_wrapper_function(const struct test *test, int thread_number)
 // inlines the call away.
 void __attribute__((noinline, noclone)) test_loop_start() noexcept
 {
+    // For --sync-test-loop-start: the first time a thread reaches TEST_LOOP, wait
+    // until every sibling thread has either reached its first loop or dropped out,
+    // so the loop body starts synchronized across all threads.
+    if (test_loop_start_barrier && !test_loop_barrier_passed) {
+        test_loop_barrier_passed = true;
+        test_loop_start_barrier->arrive_and_wait();
+    }
     sApp->at_loop_start(current_test());
     using namespace AssemblyMarker;
     assembly_marker<TestLoop, Start>();
@@ -722,7 +753,14 @@ static uintptr_t thread_runner(int thread_number)
     random_init_thread(thread_number);
     int ret = EXIT_FAILURE;
 
+    // Fresh start for this thread's --sync-test-loop-start accounting.
+    test_loop_barrier_passed = false;
+
     auto cleanup = [&] {
+        // Release any siblings waiting on the --sync-test-loop-start barrier if
+        // this thread finished without ever reaching TEST_LOOP.
+        test_loop_barrier_drop_if_needed();
+
         // let SIGQUIT handler know we're done
         ThreadState new_state = thread_failed;
         if (!this_thread->has_failed()) {
@@ -801,9 +839,16 @@ static void run_threads_in_parallel(const struct test *test)
     int i;
 
     std::barrier launch_barrier(sApp->thread_count);
+    std::barrier loop_start_barrier(sApp->thread_count);
+    
     if (sApp->shmem->cfg.sync_thread_start)
         thread_launch_barrier = &launch_barrier;
-    auto reset_barrier = scopeExit([] { thread_launch_barrier = nullptr; });
+    if (sApp->shmem->cfg.sync_test_loop_start)
+        test_loop_start_barrier = &loop_start_barrier;
+    auto reset_barrier = scopeExit([] {
+        thread_launch_barrier = nullptr;
+        test_loop_start_barrier = nullptr;
+    });
 
     for (i = 0; i < sApp->thread_count; i++) {
         thr[i].start(thread_runner, i);
