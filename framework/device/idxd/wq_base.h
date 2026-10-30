@@ -12,11 +12,14 @@
 
 struct idxd_wq_handle_t
 {
-    int fd;
     void* reg;
+    int fd;
 
+    enum accfg_device_type dev_type;
     void* request;
     void* completion;
+    const void* completion_addr;
+    uintptr_t completion_phys;
 };
 typedef struct idxd_wq_handle_t idxd_wq_handle_t;
 
