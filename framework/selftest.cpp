@@ -124,6 +124,18 @@ static int selftest_timedpass_noloop_run(struct test *test, int)
     return EXIT_SUCCESS;
 }
 
+template <useconds_t Usecs>
+static int selftest_timedpass_even_noloop_run(struct test *test, int thread)
+{
+    // Odd-numbered threads loop for the regular test time; even-numbered threads
+    // return immediately without ever reaching TEST_LOOP. Used to exercise
+    // --sync-test-loop-start's no-hang behavior when some threads finish before
+    // reaching the loop.
+    if (thread % 2 == 0)
+        return EXIT_SUCCESS;
+    return selftest_timedpass_run<Usecs>(test, thread);
+}
+
 template <auto Generator, int LoopCount>
 static int selftest_busywait_random_generation_run(struct test *test, int)
 {
@@ -734,6 +746,105 @@ static int selftest_reportfailmsg_run(struct test *test, int thread)
     report_fail_msg("Failure message from thread %d", thread);
     log_error("We should not reach here");
     abort();
+    return EXIT_SUCCESS;
+}
+
+static int selftest_sync_loop_mixed_earlyout_run(struct test *test, int thread)
+{
+    // Exercises --sync-test-loop-start's no-hang guarantee: thread 0 runs the
+    // test loop to completion while every other thread takes a different
+    // early-out path *before* ever reaching TEST_LOOP (the main failure reports,
+    // a skip, and a plain early return). The loop-start barrier must release
+    // thread 0 once all the other threads have dropped out of it. Run this with
+    // at least 6 threads (-n 6) so each case below is covered.
+
+    switch (thread) {
+    case 0:
+        TEST_LOOP(test, 5) {
+            usleep(10'000);
+        }
+        return EXIT_SUCCESS;
+
+    case 1:
+        report_fail(test);                      // noreturn
+    case 2:
+        report_fail_msg("early-out via report_fail_msg on thread %d", thread);   // noreturn
+    case 3: {
+        const uint32_t actual = 0;
+        const uint32_t expected = 1;
+        memcmp_or_fail(&actual, &expected, 1, "early-out via memcmp_or_fail on thread %d", thread);
+        return EXIT_FAILURE;                     // not reached: the mismatch fails above
+    }
+    case 4:
+        log_skip(SelftestSkipCategory, "early-out via skip on thread %d", thread);
+        return EXIT_SKIP;
+    default:
+        return EXIT_SUCCESS;                      // plain early return without ever looping
+    }
+    __builtin_unreachable();
+}
+
+static int selftest_sync_loop_crash_earlyout_run(struct test *test, int thread)
+{
+    // Companion to selftest_sync_loop_mixed_earlyout for the crash case: thread 0
+    // loops (and blocks in the --sync-test-loop-start barrier) while thread 1
+    // segfaults *before* ever reaching TEST_LOOP. A crashing thread never gets to
+    // drop out of the barrier, but because the SIGSEGV is fatal to the whole
+    // process the run must still terminate (as a crash) rather than deadlocking.
+    // The "before"/"after" logs bracket the fault so the test can confirm the
+    // thread died at the segfault. Run this with at least 2 threads (-n 2).
+    switch (thread) {
+    case 0:
+        TEST_LOOP(test, 5) {
+            usleep(10'000);
+        }
+        return EXIT_SUCCESS;
+
+    case 1:
+        log_info("before segfault on thread %d", thread);
+        {
+            volatile int *p = nullptr;
+            *p = thread;                         // simple segfault (null-page write)
+        }
+        log_info("after segfault on thread %d", thread);   // must never be reached
+        return EXIT_FAILURE;
+
+    default:
+        return EXIT_SUCCESS;                      // plain early return without ever looping
+    }
+}
+
+static std::atomic<int> selftest_loop_arrived_count = 0;
+static int selftest_sync_loop_all_arrive_init(struct test *test)
+{
+    selftest_loop_arrived_count.store(0, std::memory_order_relaxed);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_sync_loop_all_arrive_run(struct test *test, int thread)
+{
+    // Positive check that --sync-test-loop-start really blocks every thread at
+    // the start of the loop (the normal, all-threads-finish case). Stagger the
+    // threads so they reach the barrier at very different times, each recording
+    // its arrival in a shared counter just before entering TEST_LOOP. With the
+    // barrier armed, no thread may run the loop body until all have arrived, so
+    // every thread must observe the full count on the first iteration. Without
+    // the option the staggered threads would legitimately race, so only enforce
+    // the invariant when the barrier is actually active.
+    usleep(thread * 20'000);        // staggered arrival: 0, 20 ms, 40 ms, ...
+    selftest_loop_arrived_count.fetch_add(1, std::memory_order_seq_cst);
+
+    const bool synced = sApp->shmem->cfg.sync_test_loop_start;
+    const int expected = thread_count();
+    TEST_LOOP(test, 1) {
+        if (synced) {
+            int n = selftest_loop_arrived_count.load(std::memory_order_seq_cst);
+            if (n != expected)
+                report_fail_msg("thread %d entered the loop with only %d of %d threads arrived",
+                                thread, n, expected);
+        }
+        usleep(1'000);
+    }
     return EXIT_SUCCESS;
 }
 
@@ -1962,6 +2073,23 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_timedpass_even_noloop",
+    .description = "Odd threads loop for the requested time; even threads return before looping",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
+    .test_run = selftest_timedpass_even_noloop_run<10'000>,
+    .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sync_loop_all_arrive",
+    .description = "Verifies --sync-test-loop-start blocks every thread at the loop start",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
+    .test_init = selftest_sync_loop_all_arrive_init,
+    .test_run = selftest_sync_loop_all_arrive_run,
+    .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_timedpass_no_fracture",
     .description = "Runs for the requested time, but doesn't fracture",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
@@ -2377,6 +2505,22 @@ static struct test selftests_array[] = {
     .test_init = selftest_randomprint_init,
     .test_run = selftest_reportfail_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sync_loop_mixed_earlyout",
+    .description = "Mixed per-thread early-outs before TEST_LOOP while one thread loops to completion",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_sync_loop_mixed_earlyout_run,
+    .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sync_loop_crash_earlyout",
+    .description = "A thread crashes before TEST_LOOP while another loops to completion",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_sync_loop_crash_earlyout_run,
+    .desired_duration = 200,
     .quality_level = TEST_QUALITY_PROD,
 },
 {
