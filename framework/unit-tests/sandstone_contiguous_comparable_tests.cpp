@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// SandstoneCrossCheck::ContiguousComparable and the container memcmp_or_fail
+// SandstoneDataDetails::ContiguousComparable and the container memcmp_or_fail
 // overload. Failure-path coverage lives in the selftest_container_comparefail_*
 // selftests in framework/selftest.cpp. The success-path runtime checks use the
 // stubs in sandstone_report_stubs.cpp.
@@ -32,20 +32,20 @@
 // ContiguousComparable concept checks
 // ---------------------------------------------------------------------------
 
-// Primary targets: contiguous, sized, trivially-copyable element.
-static_assert(SandstoneCrossCheck::ContiguousComparable<std::vector<uint32_t>>);
-static_assert(SandstoneCrossCheck::ContiguousComparable<std::array<float, 4>>);
-static_assert(SandstoneCrossCheck::ContiguousComparable<std::string>);
-static_assert(SandstoneCrossCheck::ContiguousComparable<std::basic_string<char>>);
-static_assert(SandstoneCrossCheck::ContiguousComparable<std::span<int>>);
+// Primary targets: contiguous, sized, const-readable, ValidDataType element.
+static_assert(SandstoneDataDetails::ContiguousComparable<std::vector<uint32_t>>);
+static_assert(SandstoneDataDetails::ContiguousComparable<std::array<float, 4>>);
+static_assert(SandstoneDataDetails::ContiguousComparable<std::string>);
+static_assert(SandstoneDataDetails::ContiguousComparable<std::basic_string<char>>);
+static_assert(SandstoneDataDetails::ContiguousComparable<std::span<int>>);
 
 // Exclusions.
-static_assert(!SandstoneCrossCheck::ContiguousComparable<std::vector<bool>>);      // proxy-reference, not contiguous
-static_assert(!SandstoneCrossCheck::ContiguousComparable<std::vector<std::vector<int>>>); // element not a ValidDataType
-static_assert(!SandstoneCrossCheck::ContiguousComparable<std::list<int>>);         // not contiguous
-static_assert(!SandstoneCrossCheck::ContiguousComparable<int>);                    // not a range
+static_assert(!SandstoneDataDetails::ContiguousComparable<std::vector<bool>>);      // proxy-reference, not contiguous
+static_assert(!SandstoneDataDetails::ContiguousComparable<std::vector<std::vector<int>>>); // element not a ValidDataType
+static_assert(!SandstoneDataDetails::ContiguousComparable<std::list<int>>);         // not contiguous
+static_assert(!SandstoneDataDetails::ContiguousComparable<int>);                    // not a range
 struct NotARange {};
-static_assert(!SandstoneCrossCheck::ContiguousComparable<NotARange>);              // not a range
+static_assert(!SandstoneDataDetails::ContiguousComparable<NotARange>);              // not a range
 
 // Opaque struct element: even though it is trivially copyable, it has no
 // TypeToDataType specialization and so is not a ValidDataType. A container of
@@ -59,7 +59,63 @@ struct OpaqueTrivial {
     uint8_t  pad;
 };
 static_assert(std::is_trivially_copyable_v<OpaqueTrivial>);
-static_assert(!SandstoneCrossCheck::ContiguousComparable<std::vector<OpaqueTrivial>>);
+static_assert(!SandstoneDataDetails::ContiguousComparable<std::vector<OpaqueTrivial>>);
+
+namespace {
+struct MutableOnlyRange {
+    int elements[1] = {};
+    int *begin() { return elements; }
+    int *end() { return elements + 1; }
+};
+
+struct MutableSizeOnlyRange {
+    int elements[1] = {};
+    int *begin() { return elements; }
+    int *end() { return elements + 1; }
+    int *data() { return elements; }
+    const int *data() const { return elements; }
+    size_t size() { return 1; }
+};
+
+template <typename T>
+concept ContainerCompareCallable = requires (const T &range) {
+    memcmp_or_fail(range, range);
+    memcmp_or_fail(range, range, [](ptrdiff_t) { return std::string(); });
+};
+
+}
+
+// Both data and size must be available through the const reference consumers use.
+static_assert(std::ranges::contiguous_range<MutableOnlyRange>);
+static_assert(std::ranges::sized_range<MutableOnlyRange>);
+static_assert(std::ranges::contiguous_range<MutableSizeOnlyRange>);
+static_assert(std::ranges::sized_range<MutableSizeOnlyRange>);
+static_assert(!SandstoneDataDetails::ContiguousComparable<MutableOnlyRange>);
+static_assert(!SandstoneDataDetails::ContiguousComparable<MutableSizeOnlyRange>);
+static_assert(!SandstoneDataDetails::ContiguousComparable<std::span<volatile int>>);
+static_assert(!SandstoneDataDetails::ContiguousComparable<volatile int[4]>);
+static_assert(SandstoneDataDetails::ContiguousComparable<int[4]>);
+static_assert(SandstoneDataDetails::ContiguousComparable<const int[4]>);
+static_assert(SandstoneDataDetails::ContiguousComparable<const std::vector<int>>);
+static_assert(SandstoneDataDetails::ContiguousComparable<const std::array<int, 4>>);
+static_assert(SandstoneDataDetails::ContiguousComparable<std::span<const int>>);
+static_assert(SandstoneDataDetails::ContiguousComparable<const std::span<int>>);
+
+static_assert(ContainerCompareCallable<int[4]>);
+static_assert(ContainerCompareCallable<const int[4]>);
+static_assert(ContainerCompareCallable<std::vector<int>>);
+static_assert(ContainerCompareCallable<const std::vector<int>>);
+static_assert(ContainerCompareCallable<std::array<int, 4>>);
+static_assert(ContainerCompareCallable<const std::array<int, 4>>);
+static_assert(ContainerCompareCallable<std::span<int>>);
+static_assert(ContainerCompareCallable<std::span<const int>>);
+static_assert(ContainerCompareCallable<const std::span<int>>);
+static_assert(!ContainerCompareCallable<MutableOnlyRange>);
+static_assert(!ContainerCompareCallable<MutableSizeOnlyRange>);
+static_assert(!ContainerCompareCallable<std::span<volatile int>>);
+static_assert(!ContainerCompareCallable<volatile int[4]>);
+static_assert(!ContainerCompareCallable<std::vector<bool>>);
+static_assert(!ContainerCompareCallable<std::vector<OpaqueTrivial>>);
 
 // ---------------------------------------------------------------------------
 // Container memcmp_or_fail overload: success-path runtime tests
@@ -82,6 +138,18 @@ TEST(ContiguousComparableMemcmpOrFail, MatchingArrayFloat)
     std::array<float, 4> actual   = {1.0f, 2.0f, 3.0f, 4.0f};
     std::array<float, 4> expected = {1.0f, 2.0f, 3.0f, 4.0f};
     memcmp_or_fail(actual, expected);
+    SUCCEED();
+}
+
+TEST(ContiguousComparableMemcmpOrFail, MatchingConstArraysAndSpans)
+{
+    const int actual[] = {1, 2, 3, 4};
+    const int expected[] = {1, 2, 3, 4};
+    memcmp_or_fail(actual, expected);
+    const std::span<const int> actual_span(actual);
+    const std::span<const int> expected_span(expected);
+    memcmp_or_fail(actual_span, expected_span);
+    memcmp_or_fail(actual_span, expected_span, [](ptrdiff_t) { return std::string(); });
     SUCCEED();
 }
 
