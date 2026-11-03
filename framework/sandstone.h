@@ -685,11 +685,16 @@ namespace SandstoneCrossCheck {
 // copyable), because the comparison is reported through a DataType tag and
 // an opaque struct (padding, pointer members, etc.) cannot be soundly
 // compared via raw memcmp just because it happens to be trivially copyable.
-template <typename T>
+template <typename T, typename Element = void>
 concept ContiguousComparable =
     std::ranges::contiguous_range<T> &&
     std::ranges::sized_range<T> &&
-    SandstoneDataDetails::ValidDataType<std::ranges::range_value_t<T>>;
+    SandstoneDataDetails::ValidDataType<std::ranges::range_value_t<T>> &&
+    (std::same_as<Element, void> || std::same_as<Element, std::ranges::range_value_t<T>>) &&
+    requires (const T &range) {
+        { std::ranges::data(range) } -> std::convertible_to<const std::ranges::range_value_t<T> *>;
+        std::ranges::size(range);
+    };
 
 } // namespace SandstoneCrossCheck
 

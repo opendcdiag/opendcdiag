@@ -61,6 +61,98 @@ struct OpaqueTrivial {
 static_assert(std::is_trivially_copyable_v<OpaqueTrivial>);
 static_assert(!SandstoneCrossCheck::ContiguousComparable<std::vector<OpaqueTrivial>>);
 
+namespace {
+struct MutableOnlyRange {
+    int elements[1] = {};
+    int *begin() { return elements; }
+    int *end() { return elements + 1; }
+};
+
+struct MutableSizeOnlyRange {
+    int elements[1] = {};
+    int *begin() { return elements; }
+    int *end() { return elements + 1; }
+    int *data() { return elements; }
+    const int *data() const { return elements; }
+    size_t size() { return 1; }
+};
+
+template <typename T>
+concept ContainerCompareCallable = requires (const T &range) {
+    memcmp_or_fail(range, range);
+    memcmp_or_fail(range, range, [](ptrdiff_t) { return std::string(); });
+};
+
+template <typename Element, SandstoneCrossCheck::ContiguousComparable<Element> R>
+struct TypedRangeProbe {};
+
+template <typename Element, typename R>
+concept TypedRangeAccepted = requires { typename TypedRangeProbe<Element, R>; };
+}
+
+// Both data and size must be available through the const reference consumers use.
+static_assert(std::ranges::contiguous_range<MutableOnlyRange>);
+static_assert(std::ranges::sized_range<MutableOnlyRange>);
+static_assert(std::ranges::contiguous_range<MutableSizeOnlyRange>);
+static_assert(std::ranges::sized_range<MutableSizeOnlyRange>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<MutableOnlyRange>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<MutableSizeOnlyRange>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<std::span<volatile int>>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<volatile int[4]>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<int[4]>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<const int[4]>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<const std::vector<int>>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<const std::array<int, 4>>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<std::span<const int>>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<const std::span<int>>);
+
+// An expected element type must match exactly, not just share a DataType tag.
+using Uint32Alias = uint32_t;
+static_assert(SandstoneCrossCheck::ContiguousComparable<std::vector<uint32_t>, Uint32Alias>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<std::vector<uint32_t>, void>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<const int[4], int>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<const std::vector<int>, int>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<std::span<const int>, int>);
+static_assert(SandstoneCrossCheck::ContiguousComparable<std::array<bool, 4>, bool>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<std::vector<uint32_t>, uint16_t>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<std::vector<uint32_t>, uint64_t>);
+static_assert(SandstoneDataDetails::TypeToDataType<bool>::Type ==
+              SandstoneDataDetails::TypeToDataType<uint8_t>::Type);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<std::array<bool, 4>, uint8_t>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<std::vector<uint8_t>, bool>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<std::span<const int>, const int>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<std::vector<int>, volatile int>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<int, int>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<NotARange, int>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<MutableOnlyRange, int>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<MutableSizeOnlyRange, int>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<std::span<volatile int>, int>);
+static_assert(!SandstoneCrossCheck::ContiguousComparable<volatile int[4], int>);
+
+static_assert(TypedRangeAccepted<Uint32Alias, std::vector<uint32_t>>);
+static_assert(TypedRangeAccepted<int, std::span<const int>>);
+static_assert(!TypedRangeAccepted<uint16_t, std::vector<uint32_t>>);
+static_assert(!TypedRangeAccepted<uint8_t, std::array<bool, 4>>);
+static_assert(!TypedRangeAccepted<const int, std::span<const int>>);
+static_assert(!TypedRangeAccepted<int, int>);
+static_assert(!TypedRangeAccepted<int, MutableOnlyRange>);
+
+static_assert(ContainerCompareCallable<int[4]>);
+static_assert(ContainerCompareCallable<const int[4]>);
+static_assert(ContainerCompareCallable<std::vector<int>>);
+static_assert(ContainerCompareCallable<const std::vector<int>>);
+static_assert(ContainerCompareCallable<std::array<int, 4>>);
+static_assert(ContainerCompareCallable<const std::array<int, 4>>);
+static_assert(ContainerCompareCallable<std::span<int>>);
+static_assert(ContainerCompareCallable<std::span<const int>>);
+static_assert(ContainerCompareCallable<const std::span<int>>);
+static_assert(!ContainerCompareCallable<MutableOnlyRange>);
+static_assert(!ContainerCompareCallable<MutableSizeOnlyRange>);
+static_assert(!ContainerCompareCallable<std::span<volatile int>>);
+static_assert(!ContainerCompareCallable<volatile int[4]>);
+static_assert(!ContainerCompareCallable<std::vector<bool>>);
+static_assert(!ContainerCompareCallable<std::vector<OpaqueTrivial>>);
+
 // ---------------------------------------------------------------------------
 // Container memcmp_or_fail overload: success-path runtime tests
 // ---------------------------------------------------------------------------
@@ -82,6 +174,18 @@ TEST(ContiguousComparableMemcmpOrFail, MatchingArrayFloat)
     std::array<float, 4> actual   = {1.0f, 2.0f, 3.0f, 4.0f};
     std::array<float, 4> expected = {1.0f, 2.0f, 3.0f, 4.0f};
     memcmp_or_fail(actual, expected);
+    SUCCEED();
+}
+
+TEST(ContiguousComparableMemcmpOrFail, MatchingConstArraysAndSpans)
+{
+    const int actual[] = {1, 2, 3, 4};
+    const int expected[] = {1, 2, 3, 4};
+    memcmp_or_fail(actual, expected);
+    const std::span<const int> actual_span(actual);
+    const std::span<const int> expected_span(expected);
+    memcmp_or_fail(actual_span, expected_span);
+    memcmp_or_fail(actual_span, expected_span, [](ptrdiff_t) { return std::string(); });
     SUCCEED();
 }
 
