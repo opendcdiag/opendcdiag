@@ -700,7 +700,7 @@ template <typename Callback> void install_failure_callback(Callback cb)
     }
 }
 
-namespace SandstoneCrossCheck {
+namespace SandstoneDataDetails {
 
 // range_value_t<T> must itself be a ValidDataType (not merely trivially
 // copyable), because the comparison is reported through a DataType tag and
@@ -710,9 +710,13 @@ template <typename T>
 concept ContiguousComparable =
     std::ranges::contiguous_range<T> &&
     std::ranges::sized_range<T> &&
-    SandstoneDataDetails::ValidDataType<std::ranges::range_value_t<T>>;
+    ValidDataType<std::ranges::range_value_t<T>> &&
+    requires (const T &range) {
+        { std::ranges::data(range) } -> std::convertible_to<const std::ranges::range_value_t<T> *>;
+        std::ranges::size(range);
+    };
 
-} // namespace SandstoneCrossCheck
+} // namespace SandstoneDataDetails
 
 namespace SandstoneMemcmpOrFail {
 using namespace SandstoneDataDetails;
@@ -782,7 +786,7 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count)
 // the same element type and reports a mismatch through the formatter. The
 // element type is already guaranteed to be a ValidDataType by
 // ContiguousComparable, because the failure path reports a DataType tag.
-template <SandstoneCrossCheck::ContiguousComparable T, FormatterFunction Fn>
+template <ContiguousComparable T, FormatterFunction Fn>
 static inline void memcmp_or_fail(const T &actual, const T &expected, Fn formatter)
 {
     using U = std::ranges::range_value_t<T>;
@@ -808,7 +812,7 @@ static inline void memcmp_or_fail(const T &actual, const T &expected, Fn formatt
 }
 
 // Container overload without a formatter.
-template <SandstoneCrossCheck::ContiguousComparable T>
+template <ContiguousComparable T>
 static inline void memcmp_or_fail(const T &actual, const T &expected)
 {
     return memcmp_or_fail(actual, expected, nullptr);
