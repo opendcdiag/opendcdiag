@@ -585,8 +585,15 @@ bool test_is_retry() noexcept
     return sApp->current_iteration_count < 0;
 }
 
-static void init_internal(const struct test *test)
+static void init_internal(const test_cfg_info &test_cfg)
 {
+    if (!test_cfg.seed.empty()) {
+        auto result = random_load_seed_checked(test_cfg.seed);
+        if (result != RandomSeedResult::Success)
+            _Exit(EX_SOFTWARE);
+    }
+    sApp->current_attempt_seed = random_format_seed();
+    const auto *test = test_cfg.test;
     print_temperature_of_device();
 
     logging_init(test);
@@ -1806,7 +1813,7 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
             sApp->frequency_manager->change_uncore_frequency();
 #endif
 
-        init_internal(test);
+        init_internal(test_cfg);
 
         // calculate starttime->endtime, reduce the overhead to have better test runtime calculations
         sApp->shmem->current_test_endtime =
@@ -1862,7 +1869,7 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
             if (sApp->total_retest_count > 0)
                 --sApp->total_retest_count;
             sApp->current_iteration_count = -iterations;
-            init_internal(test);
+            init_internal(test_cfg);
             sApp->shmem->current_test_endtime =
                     calculate_wallclock_deadline(sApp->current_test_duration,
                                                  &sApp->current_test_starttime);

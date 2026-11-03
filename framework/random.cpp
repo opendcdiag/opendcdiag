@@ -7,6 +7,7 @@
 #include "sandstone_p.h"
 
 #include <algorithm>
+#include <charconv>
 #include <memory>
 #include <new>
 #include <random>
@@ -559,6 +560,86 @@ std::string random_format_seed()
     result += ':';
     result += sApp->random_engine->globalState();
     return result;
+}
+
+RandomSeedResult random_load_seed_checked(std::string_view seed, bool apply, std::string *canonical)
+{
+    auto colon = seed.find(':');
+    if (colon == std::string_view::npos || colon + 1 == seed.size())
+        return RandomSeedResult::Invalid;
+    auto name = seed.substr(0, colon);
+    auto state = seed.substr(colon + 1);
+    decltype(sApp->random_engine) candidate;
+    std::string formatted;
+    if (name == "AES") {
+        uint8_t decoded[32];
+        if (state.size() != 2 * sizeof(decoded))
+            return RandomSeedResult::Invalid;
+        for (size_t i = 0; i < sizeof(decoded); ++i) {
+            unsigned value;
+            auto first = state.data() + 2 * i;
+            auto [end, error] = std::from_chars(first, first + 2, value, 16);
+            if (error != std::errc{} || end != first + 2)
+                return RandomSeedResult::Invalid;
+            decoded[i] = value;
+        }
+        if (!haveAes())
+            return RandomSeedResult::Unavailable;
+        if (canonical) {
+            formatted = "AES:";
+            constexpr char hex[] = "0123456789abcdef";
+            for (uint8_t byte : decoded) {
+                formatted += hex[byte >> 4];
+                formatted += hex[byte & 15];
+            }
+        }
+#ifdef RANDOM_HAS_AES
+        static_assert(sizeof(aes_engine::state) == sizeof(decoded));
+        if (apply) {
+            candidate.reset(new EngineWrapper<aes_engine>(AESSequence));
+            memcpy(candidate->per_thread[0].u8, decoded, sizeof(decoded));
+        }
+#endif
+    } else if (name == "Constant" || name == "LCG") {
+        uint32_t value;
+        int base = 10;
+        if (name == "Constant" && state.starts_with("0x")) {
+            base = 16;
+            state.remove_prefix(2);
+        }
+        auto [end, error] = std::from_chars(state.data(), state.data() + state.size(), value, base);
+        if (error != std::errc{} || end != state.data() + state.size())
+            return RandomSeedResult::Invalid;
+        if (name == "Constant") {
+            if (canonical) {
+                std::ostringstream stream;
+                stream << constant_value_engine(value);
+                formatted = "Constant:" + stream.str();
+            }
+            if (apply) {
+                candidate.reset(new EngineWrapper<constant_value_engine>(Constant));
+                new (candidate->per_thread[0].u8) constant_value_engine(value);
+            }
+        } else {
+            if (value < 1 || value > 0x7ffffffe)
+                return RandomSeedResult::Invalid;
+            if (canonical)
+                formatted = "LCG:" + std::to_string(value);
+            if (apply) {
+                candidate.reset(new EngineWrapper<std::minstd_rand>(LCG));
+                new (candidate->per_thread[0].u8) std::minstd_rand(value);
+            }
+        }
+    } else {
+        return RandomSeedResult::Invalid;
+    }
+    if (apply) {
+        candidate->saveEngineState();
+        sApp->random_engine = std::move(candidate);
+    }
+    if (canonical)
+        *canonical = std::move(formatted);
+    return RandomSeedResult::Success;
 }
 
 void random_advance_seed() noexcept

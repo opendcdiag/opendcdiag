@@ -50,6 +50,7 @@ struct test_cfg_info {
     struct test *test = nullptr;
     test_status status = not_found;
     ShortDuration duration = ShortDuration::zero();
+    std::string seed;
 
     /* implicit */ test_cfg_info(struct test *test = nullptr) : test(test) {}
 };

@@ -623,7 +623,8 @@ static int exec_mode_run(int argc, char **argv)
     if (tests_to_run.size() != 1) return EX_DATAERR;
 
     logging_init_global_child();
-    random_init_global(argv[3]);
+    if (random_load_seed_checked(argv[3]) != RandomSeedResult::Success)
+        _Exit(EX_USAGE);
     make_rescheduler(sApp->shmem->cfg.reschedule_mode);
 
     load_test_knob_args({ argv + 4, argv + argc });

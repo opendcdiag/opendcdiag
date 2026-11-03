@@ -352,6 +352,7 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     } current_test_failure_callback = {};
 
     std::unique_ptr<RandomEngineWrapper, RandomEngineDeleter> random_engine;
+    std::string current_attempt_seed;
 #if SANDSTONE_ULOG
     std::array<volatile uint32_t *, UlogCount> ulog_addresses = {};
 #endif
@@ -656,6 +657,9 @@ int log_skip_or_print(SkipCategory cat, const char *fmt, ...) ATTRIBUTE_PRINTF(2
 
 /* random.cpp */
 void random_init_global(const char *argument);
+enum class RandomSeedResult { Success, Invalid, Unavailable };
+RandomSeedResult random_load_seed_checked(std::string_view seed, bool apply = true,
+                                         std::string *canonical = nullptr);
 void random_advance_seed() noexcept;
 void random_restore_seed() noexcept;
 std::string random_format_seed();
