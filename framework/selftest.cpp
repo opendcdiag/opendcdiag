@@ -455,6 +455,71 @@ static int selftest_logs_random_run(struct test *test, int)
     return selftest_logs_random_init(test);
 }
 
+static int selftest_seed_snapshot_init(struct test *test)
+{
+    auto pass_seed = get_testspecific_knob_value_uint(test, "pass_seed", 0);
+    test->data = pass_seed && random_seed_low32() == pass_seed ? test : nullptr;
+    return selftest_logs_random_init(test);
+}
+
+static int selftest_seed_snapshot_run(struct test *test, int thread)
+{
+    selftest_logs_random_run(test, thread);
+    return test->data ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+static int selftest_seed_loader_init(struct test *)
+{
+    std::string original = random_format_seed();
+    for (auto seed : { "Constant:0", "Constant:0xffffffff", "LCG:1", "LCG:2147483646" }) {
+        const char *other = std::string_view(seed).starts_with("Constant:") ? "LCG:1" : "Constant:0";
+        if (random_load_seed_checked(other) != RandomSeedResult::Success)
+            return EXIT_FAILURE;
+        std::string canonical;
+        if (random_load_seed_checked(seed, false, &canonical) != RandomSeedResult::Success
+                || random_format_seed() != other || canonical != seed
+                || random_load_seed_checked(canonical) != RandomSeedResult::Success
+                || random_format_seed() != canonical)
+            return EXIT_FAILURE;
+        if (random_load_seed_checked(original) != RandomSeedResult::Success)
+            return EXIT_FAILURE;
+    }
+    for (auto seed : { "help", "list", "/dev/urandom", "LCG", "LCG:", "LCG:0", "LCG:2147483647",
+                       "LCG:1junk", "LCG:1 2", "Constant:-1", "Constant:4294967296", "Constant:0x",
+                       "AES", "AES:" }) {
+        if (random_load_seed_checked(seed) != RandomSeedResult::Invalid
+                || random_format_seed() != original)
+            return EXIT_FAILURE;
+    }
+    std::string canonical;
+    auto decimal_seed = std::string_view("Constant:00010junk").substr(0, 14);
+    if (random_load_seed_checked(decimal_seed, false, &canonical) != RandomSeedResult::Success
+            || canonical != "Constant:10" || random_format_seed() != original)
+        return EXIT_FAILURE;
+    constexpr auto aes_seed = "AES:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    auto result = random_load_seed_checked(aes_seed, false, &canonical);
+    if (random_format_seed() != original)
+        return EXIT_FAILURE;
+    if (result != RandomSeedResult::Success && result != RandomSeedResult::Unavailable)
+        return EXIT_FAILURE;
+    for (auto seed : { "AES:00", "AES:gg00000000000000000000000000000000000000000000000000000000000000" }) {
+        auto expected = result == RandomSeedResult::Success ? RandomSeedResult::Invalid : RandomSeedResult::Unavailable;
+        if (random_load_seed_checked(seed) != expected || random_format_seed() != original)
+            return EXIT_FAILURE;
+    }
+    if (result == RandomSeedResult::Success) {
+        if (canonical != aes_seed || random_load_seed_checked("LCG:1") != RandomSeedResult::Success)
+            return EXIT_FAILURE;
+        auto upper_seed = std::string_view("AES:000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1Fjunk").substr(0, 68);
+        if (random_load_seed_checked(upper_seed, false, &canonical) != RandomSeedResult::Success
+                || canonical != aes_seed || random_format_seed() != "LCG:1"
+                || random_load_seed_checked(upper_seed) != RandomSeedResult::Success
+                || random_format_seed() != aes_seed)
+            return EXIT_FAILURE;
+    }
+    return random_load_seed_checked(original) == RandomSeedResult::Success ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 static int selftest_cxxthrowcatch_run(struct test *test, int thread)
 {
     try {
@@ -1858,6 +1923,19 @@ END_DECLARE_TEST
 DECLARE_SELFTEST(selftest_logs_random, "Logs some random numbers")
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_logs_random_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_seed_snapshot, "Logs random samples and passes only for a configured seed")
+    .test_init = selftest_seed_snapshot_init,
+    .test_run = selftest_seed_snapshot_run,
+    .fracture_loop_count = 1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_seed_loader, "Checks serialized random states without changing the state on rejection")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_seed_loader_init,
+    .test_run = selftest_pass_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST

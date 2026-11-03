@@ -91,7 +91,8 @@ jobs:
         shell: bash
         run: |
           ulimit -St 120
-          SANDSTONE="builddir/opendcdiag -fexec" bats -t bats/sanity-check-fexec
+          binary=$(realpath builddir/opendcdiag)
+          SANDSTONE_BIN="$binary" SANDSTONE="$binary -fexec" bats -t bats/sanity-check-fexec
       - name: run tests quickly
         shell: bash
         run: |
