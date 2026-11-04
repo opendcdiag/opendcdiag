@@ -69,8 +69,8 @@ inline std::span<struct test> regular_tests()
 inline std::span<struct test> selftests()
 {
     // Weak extern resolves to a null pointer, so need to guard against
-    /// constructing a span from an invalid (null, null) range when no extra
-    /// selftests are defined via the DECLARE_SELFTEST macro.
+    // constructing a span from an invalid (null, null) range when no
+    // selftests are linked in (NO_SELF_TESTS, i.e. selftest.cpp isn't built).
     static std::span<struct test> value = (&__start_selftests)
         ? std::span<struct test>{ &__start_selftests, &__stop_selftests }
         : std::span<struct test>{};
