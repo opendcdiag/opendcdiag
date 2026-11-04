@@ -270,6 +270,34 @@ selftest_log_skip_init_socket_common() {
     selftest_log_skip_init_socket_common 'main 1' selftest_log_skip_init_socket1
 }
 
+selftest_log_skip_init_socket_result() {
+    local socket=$1 worker_result=$2 expected_result=$3
+    local testname=selftest_log_skip_init_socket$socket
+    declare -A yamldump
+    test_run_fakesockets sandstone_selftest --max-cores-per-slice=2 -e "$testname" \
+        -O "$testname.run_result=$worker_result" --fatal-skips
+    [[ "$status" -eq 1 ]]
+    test_yaml_numeric "/tests@len" 'value == 1'
+    test_yaml_regexp "/tests/0/result" "$expected_result"
+    test_yaml_regexp "/exit" fail
+}
+
+@test "init-skipped socket0 and all remaining workers skipped" {
+    selftest_log_skip_init_socket_result 0 -1 skip
+}
+
+@test "init-skipped socket1 and all remaining workers skipped" {
+    selftest_log_skip_init_socket_result 1 -1 skip
+}
+
+@test "init-skipped socket0 preserves worker failure" {
+    selftest_log_skip_init_socket_result 0 1 fail
+}
+
+@test "init-skipped socket1 preserves worker failure" {
+    selftest_log_skip_init_socket_result 1 1 fail
+}
+
 @test "selftest_failinit_socket1 --max-cores-per-slice" {
     declare -A yamldump
     test_fail_socket1 sandstone_selftest -e selftest_failinit_socket1 --max-cores-per-slice=2

@@ -473,10 +473,13 @@ static int selftest_logerror_cleanup(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int selftest_run_result;
+
 template <int PackageId> static int selftest_log_skip_socket_init(struct test *test)
 {
     if (num_packages() == 1 && device_info[0].package_id == PackageId)
         return selftest_log_skip_init(test);
+    selftest_run_result = get_testspecific_knob_value_int(test, "run_result", EXIT_SUCCESS);
     return EXIT_SUCCESS;
 }
 
@@ -484,7 +487,9 @@ template <int PackageId> static int selftest_log_skip_socket_run(struct test *te
 {
     if (num_packages() == 1 && device_info[0].package_id == PackageId)
         return selftest_skip_run(test, thread);
-    return EXIT_SUCCESS;
+    if (selftest_run_result == EXIT_SKIP)
+        return selftest_skip_run(test, thread);
+    return selftest_run_result;
 }
 
 static int selftest_log_skip_run_all_threads(struct test *test, int)
