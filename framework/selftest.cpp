@@ -471,10 +471,13 @@ static int selftest_logerror_cleanup(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int selftest_run_result;
+
 template <int PackageId> static int selftest_log_skip_socket_init(struct test *test)
 {
     if (num_packages() == 1 && device_info[0].package_id == PackageId)
         return selftest_log_skip_init(test);
+    selftest_run_result = get_testspecific_knob_value_int(test, "run_result", EXIT_SUCCESS);
     return EXIT_SUCCESS;
 }
 
@@ -482,7 +485,25 @@ template <int PackageId> static int selftest_log_skip_socket_run(struct test *te
 {
     if (num_packages() == 1 && device_info[0].package_id == PackageId)
         return selftest_skip_run(test, thread);
+    if (selftest_run_result == EXIT_SKIP)
+        return selftest_skip_run(test, thread);
+    return selftest_run_result;
+}
+
+static int selftest_result_sequence_init(struct test *test)
+{
+    const char *knob = sApp->current_iteration_count < 0 ? "retry" :
+                       sApp->current_iteration_count == 0 ? "first" : "later";
+    selftest_run_result = get_testspecific_knob_value_int(test, knob,
+                            sApp->current_iteration_count > 0 ? EXIT_SKIP : EXIT_SUCCESS);
     return EXIT_SUCCESS;
+}
+
+static int selftest_result_sequence_run(struct test *test, int thread)
+{
+    if (selftest_run_result == EXIT_SKIP)
+        return selftest_skip_run(test, thread);
+    return selftest_run_result;
 }
 
 static int selftest_log_skip_run_all_threads(struct test *test, int)
@@ -1572,6 +1593,15 @@ static struct test selftests_array[] = {
     .description = "Loops around usleep() for the regular test time",
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_timedpass_run<10'000>,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_result_sequence",
+    .description = "Selects results for the first fracture, later fractures, and retries",
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_result_sequence_init,
+    .test_run = selftest_result_sequence_run,
+    .fracture_loop_count = 1,
     .quality_level = TEST_QUALITY_PROD,
 },
 #ifdef __unix__
