@@ -1068,7 +1068,7 @@ void logging_init(const struct test *test)
     case SandstoneApplication::OutputFormat::key_value:
     case SandstoneApplication::OutputFormat::tap:
         logging_printf(LOG_LEVEL_VERBOSE(2), "# Executing test %s '%s'\n", test->id, test->description);
-        logging_printf(LOG_LEVEL_VERBOSE(2), "# Seed: %s \n", random_format_seed().c_str());
+        logging_printf(LOG_LEVEL_VERBOSE(2), "# Seed: %s \n", sApp->current_attempt_seed.c_str());
         break;
     case SandstoneApplication::OutputFormat::yaml:
         YamlLogger::print_tests_header(YamlLogger::AtStart);
@@ -1076,7 +1076,7 @@ void logging_init(const struct test *test)
         logging_printf(LOG_LEVEL_VERBOSE(3), "  details: { quality: %s, description: \"%s\" }\n",
                        YamlLogger::quality_string(test), test->description);
         logging_printf(LOG_LEVEL_VERBOSE(3), "  state: { seed: '%s', iteration: %d, retry: %s }\n",
-                       random_format_seed().c_str(), abs(sApp->current_iteration_count),
+                       sApp->current_attempt_seed.c_str(), abs(sApp->current_iteration_count),
                        sApp->current_iteration_count < 0 ? "true" : "false");
         logging_printf(LOG_LEVEL_VERBOSE(2), "  time-at-start: %s\n", YamlLogger::get_current_time().c_str());
         break;
@@ -1900,7 +1900,7 @@ std::string YamlLogger::fail_info_details()
         }
     };
 
-    std::string seed = random_format_seed();
+    const std::string &seed = sApp->current_attempt_seed;
     std::string time = format_duration(earliest_fail, FormatDurationOptions::WithoutUnit);
     std::string fail_mask = build_failure_mask_for_topology(test);
 
@@ -1916,6 +1916,8 @@ std::string YamlLogger::fail_info_details()
     add_value(time, '\0');
     result += ", seed: ";
     add_value(seed, '\'');
+    result += ", ";
+    result += format_yaml("test-list-line", std::string(test->id) + " seed=" + seed);
     result += "}\n";
     return result;
 }

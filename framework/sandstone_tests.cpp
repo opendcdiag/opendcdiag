@@ -179,54 +179,56 @@ static inline bool is_ignored(char c) {
     }
 }
 
-static inline bool is_terminator(char c) {
-    switch (c) {
-        case '#':
-        case ':':
-            return true;
-        default:
-            return false;
-    }
-}
-
 enum line_type {
     LT_VALID_TEST,
     LT_TEST_NOT_FOUND,
     LT_SYNTAX_ERROR,
+    LT_INVALID_SEED,
     LT_EMPTY,
 };
 
 static line_type parse_test_list_line(std::string line, SandstoneTestSet *test_set, struct test_cfg_info &ti)
 {
-    std::vector<std::string> tokens;
-    auto it = line.begin();
-    while (is_ignored(*it)) ++it;
-    if (*it == '#' || it == line.end()) return LT_EMPTY;
-    for (; ; ++it) {
-        // skip ignored characters before token contents
-        while (it != line.end() && is_ignored(*it)) ++it;
-        if (it == line.end()) break;
-        auto cit = it;
-        /* scroll while it's valid token contents: till end of line, a
-         * terminator, or a space. */
-        while (cit != line.end() && !is_terminator(*cit) && !is_ignored(*cit)) ++cit;
-        auto tend = cit;
-        while (cit != line.end() && is_ignored(*cit)) ++cit;
-        if (cit != line.end() && !is_terminator(*cit)) return LT_SYNTAX_ERROR;
-        tokens.emplace_back(it, tend);
-        if (cit == line.end() || *cit == '#') break;
-        it = cit;
+    std::string_view remaining(line);
+    remaining = remaining.substr(0, remaining.find('#'));
+    auto skip_space = [&] {
+        while (!remaining.empty() && is_ignored(remaining.front()))
+            remaining.remove_prefix(1);
+    };
+    auto token = [&] {
+        auto end = remaining.find_first_of(" \t");
+        auto result = remaining.substr(0, end);
+        remaining.remove_prefix(result.size());
+        return result;
+    };
+    skip_space();
+    if (remaining.empty()) return LT_EMPTY;
+    auto end = remaining.find_first_of(": \t");
+    std::string name(remaining.substr(0, end));
+    remaining.remove_prefix(name.size());
+    skip_space();
+    std::string_view duration;
+    if (remaining.starts_with(':')) {
+        remaining.remove_prefix(1);
+        bool separated = !remaining.empty() && is_ignored(remaining.front());
+        skip_space();
+        duration = separated && remaining.starts_with("seed=") ? std::string_view{} : token();
+        skip_space();
     }
-    if (!tokens.size()) __builtin_unreachable();
-    if (tokens.size() > 2) return LT_SYNTAX_ERROR;
-    SandstoneTestSet::TestSet set = test_set->lookup(tokens[0].c_str());
+    if (!remaining.empty()) {
+        auto seed = token();
+        if (!seed.starts_with("seed=")) return LT_SYNTAX_ERROR;
+        if (random_load_seed_checked(seed.substr(5), false, &ti.seed) != RandomSeedResult::Success)
+            return LT_INVALID_SEED;
+        skip_space();
+        if (!remaining.empty()) return LT_SYNTAX_ERROR;
+    }
+    SandstoneTestSet::TestSet set = test_set->lookup(name.c_str());
     if (!set.size()) return LT_TEST_NOT_FOUND;
     if (set.size() != 1) return LT_SYNTAX_ERROR; /* Artificially do not allow specifying wildcards or groups in the list file. */
     ti.test = set[0];
-    if (tokens.size() == 2) {
-        if (tokens[1].size() && strcasecmp(tokens[1].c_str(), "default") != 0)
-            ti.duration = string_to_millisecs(tokens[1]);
-    }
+    if (!duration.empty() && strcasecmp(std::string(duration).c_str(), "default") != 0)
+        ti.duration = string_to_millisecs(duration);
     return LT_VALID_TEST;
 }
 
@@ -238,14 +240,17 @@ static std::vector<struct test_cfg_info> load_test_list(std::ifstream &fstream, 
     int lineno = 1;
     while (std::getline(fstream, line)) {
         struct test_cfg_info ti;
-        switch (parse_test_list_line(line, test_set, ti)) {
+        auto type = parse_test_list_line(line, test_set, ti);
+        switch (type) {
             case LT_VALID_TEST:
                 res.push_back(ti);
                 break;
             case LT_SYNTAX_ERROR:
+            case LT_INVALID_SEED:
             {
                 std::stringstream msg_strm;
-                msg_strm <<  "Syntax error: line " << lineno << ": " << line;
+                msg_strm << (type == LT_INVALID_SEED ? "Invalid seed: line " : "Syntax error: line ")
+                         << lineno << ": " << line;
                 errors.push_back(msg_strm.str());
                 error = true;
                 break;

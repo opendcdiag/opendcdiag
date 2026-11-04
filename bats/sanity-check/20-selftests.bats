@@ -1250,6 +1250,194 @@ test_list_file() {
     test_list_file selftest_pass
 }
 
+@test "--test-list-file seed checked loader" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_seed_loader -s LCG:1234
+    [[ "$status" -eq 0 ]]
+    test_yaml_expr /tests/0/result = pass
+}
+
+@test "--test-list-file seed rejects incomplete states and extra tokens" {
+    local file=$(mktempfile list.XXXXXX)
+    local seed
+    for seed in help list /dev/urandom LCG LCG: LCG:0 LCG:2147483647 LCG:1junk \
+                Constant:-1 Constant:4294967296 Constant:0x AES:00 \
+                'LCG:1 seed=LCG:2' 'LCG:1 junk'; do
+        printf '# comment\nselftest_pass seed=%s\n' "$seed" > "$file"
+        run $SANDSTONE --selftests --test-list-file "$file"
+        [[ "$status" -eq 64 ]]
+        [[ "$output" = *"line 2:"* ]]
+    done
+}
+
+@test "--test-list-file seed canonical failure line for Constant and AES" {
+    declare -A yamldump
+    local file=$(mktempfile list.XXXXXX)
+    printf 'selftest_seed_snapshot seed=Constant:1234\n' > "$file"
+    sandstone_selftest -vvv --test-list-file "$file" --fork-mode=exec
+    [[ "$status" -eq 1 ]]
+    test_yaml_expr /tests/0/fail/seed = Constant:0x4d2
+    test_yaml_expr /tests/0/fail/test-list-line = 'selftest_seed_snapshot seed=Constant:0x4d2'
+    test_yaml_expr /tests/0/threads/0/messages/0/text = 'I> 1234 1234 1234 1234'
+
+    local state=87608D752B11FB972C8F0B4C19CDECF7789F728AD4EE0468D370F4B3E6321308
+    printf 'selftest_seed_snapshot seed=AES:%s\n' "$state" > "$file"
+    run $SANDSTONE -s list
+    [[ "$status" -eq 0 ]]
+    local aes_available=false
+    if [[ "$output" = *'  AES'* ]]; then
+        run $SANDSTONE --selftests -e selftest_pass --disable @special -n1 \
+            --retest-on-failure=0 -s "AES:${state,,}"
+        if [[ "$status" -eq 0 ]]; then
+            aes_available=true
+        else
+            [[ "$status" -eq 64 ]]
+            [[ "$output" = *"engine type 'AES' not available on this system."* ]]
+        fi
+    fi
+    if $aes_available; then
+        sandstone_selftest -vvv --test-list-file "$file" --fork-mode=exec
+        [[ "$status" -eq 1 ]]
+        test_yaml_expr /tests/0/fail/seed = "AES:${state,,}"
+        test_yaml_expr /tests/0/fail/test-list-line = "selftest_seed_snapshot seed=AES:${state,,}"
+        test_yaml_expr /tests/0/threads/0/messages/0/text = 'I> 1242137224 1378217084 1525375882 474233533'
+    else
+        run $SANDSTONE --selftests --test-list-file "$file"
+        [[ "$status" -eq 64 ]]
+        [[ "$output" = *'Invalid seed: line 1:'* ]]
+    fi
+}
+
+@test "--test-list-file seed precedence and outgoing unseeded state" {
+    declare -A yamldump
+    local file=$(mktempfile list.XXXXXX)
+    printf '\n \t # comment\nselftest_logs_random_init : default seed=LCG:1348219713 # row override\nselftest_logs_random\n' > "$file"
+    local mode outgoing_seed
+    for mode in no yes exec; do
+        if $is_windows && [[ "$mode" != exec ]]; then continue; fi
+        sandstone_selftest -vvv --fork-mode="$mode" -s LCG:1348219713 \
+            -e selftest_logs_random_init -e selftest_logs_random
+        [[ "$status" -eq 0 ]]
+        outgoing_seed=${yamldump[/tests/1/state/seed]}
+        sandstone_selftest -vvv --fork-mode="$mode" -s Constant:7 --test-list-file "$file"
+        [[ "$status" -eq 0 ]]
+        test_yaml_expr /tests/0/state/seed = LCG:1348219713
+        test_yaml_expr /tests/0/threads/0/messages/0/text = 'I> 421843888 386376794 2046232626 184745881'
+        test_yaml_expr /tests/1/state/seed = "$outgoing_seed"
+        test_yaml_absent /tests/0/fail/test-list-line
+    done
+}
+
+@test "--test-list-file seed serialized state is not a filename in exec mode" {
+    declare -A yamldump
+    local file=$(mktempfile list.XXXXXX)
+    printf 'selftest_logs_random_init seed=LCG:1348219713\n' > "$file"
+    local binary=$(realpath "$SANDSTONE_BIN")
+    local SANDSTONE=${SANDSTONE/"$SANDSTONE_BIN"/"$binary"}
+    local SANDSTONE_BIN=$binary
+    cd "$BATS_TEST_TMPDIR"
+    if ! $is_windows; then
+        printf 'not a random state\n' > LCG:1348219713
+    fi
+    sandstone_selftest -vvv --fork-mode=exec --test-list-file "$file"
+    [[ "$status" -eq 0 ]]
+    test_yaml_expr /tests/0/state/seed = LCG:1348219713
+    test_yaml_expr /tests/0/threads/0/messages/0/text = 'I> 421843888 386376794 2046232626 184745881'
+}
+
+@test "--test-list-file seed duplicates remain associated through shuffle and cycles" {
+    declare -A yamldump
+    local file=$(mktempfile list.XXXXXX)
+    printf 'selftest_logs_random_init: seed=LCG:1348219713\nselftest_logs_random_init:default seed=LCG:1234\nselftest_logs_random_init\n' > "$file"
+    sandstone_selftest -vvv --test-list-file "$file" --test-list-randomize -T500ms -s LCG:3
+    [[ "$status" -eq 0 ]]
+    local i j seed value sample count1=0 count2=0
+    test_yaml_numeric /tests@len 'value > 6'
+    for ((i = 0; i < yamldump[/tests@len]; ++i)); do
+        seed=${yamldump[/tests/$i/state/seed]#LCG:}
+        value=$seed
+        sample='I>'
+        for ((j = 0; j < 4; ++j)); do
+            value=$((value * 48271 % 2147483647))
+            sample+=" $value"
+        done
+        test_yaml_expr /tests/$i/threads/0/messages/0/text = "$sample"
+        if [[ "$seed" = 1348219713 ]]; then count1=$((count1 + 1)); fi
+        if [[ "$seed" = 1234 ]]; then count2=$((count2 + 1)); fi
+    done
+    ((count1 > 1 && count2 > 1))
+}
+
+@test "--test-list-file seed pinned fractures retries and failure YAML roundtrip" {
+    declare -A yamldump
+    local file=$(mktempfile list.XXXXXX)
+    local mode i line
+    for mode in no yes exec; do
+        if $is_windows && [[ "$mode" != exec ]]; then continue; fi
+        printf 'selftest_seed_snapshot:100ms seed=LCG:1348219713\n' > "$file"
+        sandstone_selftest -vvv -n1 --fork-mode="$mode" --test-list-file "$file" \
+            -O selftest_seed_snapshot.pass_seed=1348219713
+        [[ "$status" -eq 0 ]]
+        test_yaml_numeric /tests@len 'value > 1'
+        for ((i = 0; i < yamldump[/tests@len]; ++i)); do
+            test_yaml_expr /tests/$i/state/seed = LCG:1348219713
+            test_yaml_expr /tests/$i/threads/0/messages/0/text = 'I> 421843888 386376794 2046232626 184745881'
+            test_yaml_absent /tests/$i/fail/test-list-line
+        done
+        sandstone_selftest -vvv -n1 --fork-mode="$mode" --test-list-file "$file" \
+            --retest-on-failure=2
+        [[ "$status" -eq 1 ]]
+        test_yaml_numeric /tests@len 'value >= 3'
+        for ((i = 0; i < yamldump[/tests@len]; ++i)); do
+            test_yaml_expr /tests/$i/state/seed = LCG:1348219713
+            test_yaml_expr /tests/$i/threads/0/messages/0/text = 'I> 421843888 386376794 2046232626 184745881'
+            test_yaml_expr /tests/$i/fail/seed = LCG:1348219713
+            test_yaml_expr /tests/$i/fail/test-list-line = 'selftest_seed_snapshot seed=LCG:1348219713'
+        done
+        line=${yamldump[/tests/1/fail/test-list-line]}
+        printf '%s\n' "$line" > "$file"
+        sandstone_selftest -q --fork-mode="$mode" --test-list-file "$file"
+        [[ "$status" -eq 1 ]]
+        test_yaml_expr /tests/0/fail/seed = LCG:1348219713
+        test_yaml_expr /tests/0/fail/test-list-line = "$line"
+    done
+}
+
+@test "--test-list-file seed unseeded later-fracture failure uses attempt-start snapshot" {
+    declare -A yamldump
+    local mode seed
+    for mode in no yes exec; do
+        if $is_windows && [[ "$mode" != exec ]]; then continue; fi
+        sandstone_selftest -vvv -n1 --fork-mode="$mode" -e selftest_seed_snapshot \
+            -s LCG:1348219713 -t1s -O selftest_seed_snapshot.pass_seed=1348219713
+        [[ "$status" -eq 1 ]]
+        test_yaml_expr /tests/0/result = pass
+        test_yaml_expr /tests/1/result = fail
+        seed=${yamldump[/tests/1/state/seed]}
+        [[ "$seed" != LCG:1348219713 ]]
+        test_yaml_expr /tests/1/fail/seed = "$seed"
+        test_yaml_expr /tests/1/fail/test-list-line = "selftest_seed_snapshot seed=$seed"
+    done
+}
+
+@test "--test-list-file seed failure metadata for errors crashes timeouts but not pass skip" {
+    declare -A yamldump
+    local name
+    for name in selftest_failinit selftest_sigsegv selftest_freeze selftest_pass selftest_skip; do
+        sandstone_selftest -q -n1 -e "$name" -s LCG:1234 --timeout=100ms --on-crash=kill --on-hang=kill
+        case "$name" in
+            selftest_pass | selftest_skip)
+                test_yaml_absent /tests/0/fail/test-list-line
+                ;;
+            *)
+                [[ "$status" -eq 1 || "$status" -eq 2 ]]
+                test_yaml_expr /tests/0/fail/seed = LCG:1234
+                test_yaml_expr /tests/0/fail/test-list-line = "$name seed=LCG:1234"
+                ;;
+        esac
+    done
+}
+
 @test "--test-list-file with duplicate test" {
     test_list_file selftest_pass selftest_logs selftest_pass
 }
@@ -1292,6 +1480,11 @@ test_list_file() {
     local name=`mktemp -u selftest_XXXXXX`
     test_list_file_common "selftest_pass\\n$name\\nselftest_logs" --ignore-unknown-tests -- \
                           selftest_pass selftest_logs
+}
+
+@test "--test-list-file --ignore-unknown-tests ignores invalid duration on unknown test" {
+    local name=$(mktemp -u selftest_XXXXXX)
+    test_list_file_common "selftest_pass\n$name:invalid_duration\n" --ignore-unknown-tests -- selftest_pass
 }
 
 test_list_randomize() {
@@ -2388,6 +2581,7 @@ selftest_interrupt_common() {
 
     test_yaml_regexp "/exit" interrupted
     test_yaml_regexp "/tests/0/result" interrupted
+    test_yaml_absent "/tests/0/fail/test-list-line"
     test_yaml_numeric "/tests/0/threads/0/runtime" "value >= 0 && value < $timeout"
     test_yaml_numeric "/tests/0/threads/0/resource-usage/cpuavg" 'value >= 0'
     test_yaml_numeric "/tests/0/test-runtime" "value < $timeout"

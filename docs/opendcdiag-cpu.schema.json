@@ -436,6 +436,10 @@
             },
             "seed": {
               "type": "string"
+            },
+            "test-list-line": {
+              "type": "string",
+              "description": "Test-list entry containing the test name and canonical attempt-start seed."
             }
           },
           "required": [
