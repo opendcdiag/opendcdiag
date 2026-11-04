@@ -1541,6 +1541,10 @@ const static test_group group_test_hw_features = {
 };
 #endif
 
+// Merge the built-in selftests into the same linker section used by
+// DECLARE_SELFTEST, so that __start_selftests/__stop_selftests span both
+// this array and any selftests contributed by device-specific applications.
+__attribute__((aligned(alignof(struct test)), used, section(SANDSTONE_SECTION_PREFIX "selftests")))
 static struct test selftests_array[] = {
 {
     .id = "selftest_pass",
@@ -2877,6 +2881,3 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
 },
 #endif
 };
-
-extern const std::span<struct test> selftests;
-const std::span<struct test> selftests = { std::begin(selftests_array), std::end(selftests_array) };

@@ -20,6 +20,7 @@ ___stop_\name\():
 
         add_section_symbols tests
         add_section_symbols test_group
+        add_section_symbols selftests
 #endif // __MACH__
 
 #ifdef __ELF__
