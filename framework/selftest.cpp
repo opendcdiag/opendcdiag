@@ -34,7 +34,13 @@
 #include "topology.h"
 
 #include <exception>
+#include <memory>
+#include <string>
+#include <string_view>
 #include <unordered_map>
+#include <vector>
+
+#include <boost/algorithm/string.hpp>
 
 #ifdef __x86_64__
 #  include "amx_common.h"
@@ -122,6 +128,18 @@ static int selftest_timedpass_noloop_run(struct test *test, int)
     if (Usecs)
         usleep(Usecs);
     return EXIT_SUCCESS;
+}
+
+template <useconds_t Usecs>
+static int selftest_timedpass_even_noloop_run(struct test *test, int thread)
+{
+    // Odd-numbered threads loop for the regular test time; even-numbered threads
+    // return immediately without ever reaching TEST_LOOP. Used to exercise
+    // --sync-test-loop-start's no-hang behavior when some threads finish before
+    // reaching the loop.
+    if (thread % 2 == 0)
+        return EXIT_SUCCESS;
+    return selftest_timedpass_run<Usecs>(test, thread);
 }
 
 template <auto Generator, int LoopCount>
@@ -734,6 +752,157 @@ static int selftest_reportfailmsg_run(struct test *test, int thread)
     report_fail_msg("Failure message from thread %d", thread);
     log_error("We should not reach here");
     abort();
+    return EXIT_SUCCESS;
+}
+
+// Per-thread exit kinds exercised by the selftest_sync_loop_*_earlyout tests.
+// Each name is a distinct way a worker thread can leave test_run(): either by
+// running the test loop to completion ("loop") or by taking one of several
+// early-out paths *before* ever reaching TEST_LOOP. To add a new case, add a
+// branch to the if-else chain in selftest_sync_loop_earlyout_run().
+
+static std::vector<std::string> get_testspecific_knob_value_string_list(const struct test *test, const char *key, const char *value_if_not_present)
+{
+    std::vector<std::string> values;
+    const std::string list = get_testspecific_knob_value_string(test, key, value_if_not_present);
+    if (!list.empty())
+        boost::split(values, list, boost::is_any_of(","));
+    return values;
+}
+
+static int selftest_sync_loop_earlyout_init(struct test *test)
+{
+    // The exit kind each thread takes is selected by the EXIT_KINDS test knob: a
+    // comma-separated list of exit-kind names mapped onto threads 0..N. Knobs may
+    // only be read on the main thread (here in init), so parse the list once and
+    // hand the per-thread assignment to the worker threads via test->data.
+    auto exit_kinds = std::make_unique<std::vector<std::string>>(
+            get_testspecific_knob_value_string_list(test, "EXIT_KINDS", ""));
+    test->data = exit_kinds.release();
+    return EXIT_SUCCESS;
+}
+
+static int selftest_sync_loop_earlyout_cleanup(struct test *test)
+{
+    delete static_cast<std::vector<std::string> *>(test->data);
+    test->data = nullptr;
+    return EXIT_SUCCESS;
+}
+
+static int selftest_sync_loop_earlyout_run(struct test *test, int thread)
+{
+    // Exercises --sync-test-loop-start's no-hang guarantee: at least one thread
+    // runs the test loop to completion while the others take an early-out path
+    // *before* ever reaching TEST_LOOP. The loop-start barrier must release the
+    // looping thread(s) once all the early-out threads have dropped out of it.
+    //
+    // Thread i takes the i-th exit kind from the EXIT_KINDS list parsed in init;
+    // threads past the end of the list take a plain early return. For example
+    //   -O EXIT_KINDS=loop,report_fail,report_fail_msg,memcmp_or_fail
+    // makes thread 0 loop while threads 1..3 exercise three distinct early-outs,
+    // covering each case with just four threads (-n4). Any thread can be the one
+    // that loops, so the caller controls which thread waits in the barrier. The
+    // selftest_sync_loop_*_earlyout tests split the exit kinds across two runs so
+    // every kind (including skip and plain_return) is exercised at -n4 or fewer.
+    const auto &exit_kinds = *static_cast<const std::vector<std::string> *>(test->data);
+    const size_t index = size_t(thread);
+    if (index >= exit_kinds.size())
+        return EXIT_SUCCESS;                      // plain early return without ever looping
+
+    const std::string &kind = exit_kinds[index];
+    if (kind == "loop") {
+        TEST_LOOP(test, 5) {
+            usleep(10'000);
+        }
+        return EXIT_SUCCESS;
+
+    } else if (kind == "report_fail") {
+        report_fail(test);                      // noreturn
+
+    } else if (kind == "report_fail_msg") {
+        report_fail_msg("early-out via report_fail_msg on thread %d", thread);   // noreturn
+
+    } else if (kind == "memcmp_or_fail") {
+        const uint32_t actual = 0;
+        const uint32_t expected = 1;
+        memcmp_or_fail(&actual, &expected, 1, "early-out via memcmp_or_fail on thread %d", thread);
+        return EXIT_FAILURE;                     // not reached: the mismatch fails above
+
+    } else if (kind == "skip") {
+        log_skip(SelftestSkipCategory, "early-out via skip on thread %d", thread);
+        return EXIT_SKIP;
+
+    } else if (kind == "plain_return") {
+        return EXIT_SUCCESS;                      // plain early return without ever looping
+        
+    }
+
+    // Any other value is a typo in the EXIT_KINDS knob: fail loudly rather than
+    // silently doing nothing.
+    report_fail_msg("unrecognized EXIT_KINDS value \"%s\" on thread %d", kind.c_str(), thread);   // noreturn
+}
+
+static int selftest_sync_loop_crash_earlyout_run(struct test *test, int thread)
+{
+    // Companion to the selftest_sync_loop_*_earlyout tests for the crash case:
+    // thread 0 loops (and blocks in the --sync-test-loop-start barrier) while
+    // thread 1 segfaults *before* ever reaching TEST_LOOP. A crashing thread never
+    // gets to drop out of the barrier, but because the SIGSEGV is fatal to the
+    // whole process the run must still terminate (as a crash) rather than
+    // deadlocking. The "before"/"after" logs bracket the fault so the test can
+    // confirm the thread died at the segfault. Run with at least 2 threads (-n2).
+    switch (thread) {
+    case 0:
+        TEST_LOOP(test, 5) {
+            usleep(10'000);
+        }
+        return EXIT_SUCCESS;
+
+    case 1:
+        log_info("before segfault on thread %d", thread);
+        {
+            volatile int *p = nullptr;
+            *p = thread;                         // simple segfault (null-page write)
+        }
+        log_info("after segfault on thread %d", thread);   // must never be reached
+        return EXIT_FAILURE;
+
+    default:
+        return EXIT_SUCCESS;                      // plain early return without ever looping
+    }
+}
+
+static std::atomic<int> selftest_loop_arrived_count = 0;
+static int selftest_sync_loop_all_arrive_init(struct test *test)
+{
+    selftest_loop_arrived_count.store(0, std::memory_order_relaxed);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_sync_loop_all_arrive_run(struct test *test, int thread)
+{
+    // Positive check that --sync-test-loop-start really blocks every thread at
+    // the start of the loop (the normal, all-threads-finish case). Stagger the
+    // threads so they reach the barrier at very different times, each recording
+    // its arrival in a shared counter just before entering TEST_LOOP. With the
+    // barrier armed, no thread may run the loop body until all have arrived, so
+    // every thread must observe the full count on the first iteration. Without
+    // the option the staggered threads would legitimately race, so only enforce
+    // the invariant when the barrier is actually active.
+    usleep(thread * 20'000);        // staggered arrival: 0, 20 ms, 40 ms, ...
+    selftest_loop_arrived_count.fetch_add(1, std::memory_order_seq_cst);
+
+    const bool synced = sApp->shmem->cfg.sync_test_loop_start;
+    const int expected = thread_count();
+    TEST_LOOP(test, 1) {
+        if (synced) {
+            int n = selftest_loop_arrived_count.load(std::memory_order_seq_cst);
+            if (n != expected)
+                report_fail_msg("thread %d entered the loop with only %d of %d threads arrived",
+                                thread, n, expected);
+        }
+        usleep(1'000);
+    }
     return EXIT_SUCCESS;
 }
 
@@ -1962,6 +2131,23 @@ static struct test selftests_array[] = {
     .quality_level = TEST_QUALITY_PROD,
 },
 {
+    .id = "selftest_timedpass_even_noloop",
+    .description = "Odd threads loop for the requested time; even threads return before looping",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
+    .test_run = selftest_timedpass_even_noloop_run<10'000>,
+    .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sync_loop_all_arrive",
+    .description = "Verifies --sync-test-loop-start blocks every thread at the loop start",
+    .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
+    .test_init = selftest_sync_loop_all_arrive_init,
+    .test_run = selftest_sync_loop_all_arrive_run,
+    .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
     .id = "selftest_timedpass_no_fracture",
     .description = "Runs for the requested time, but doesn't fracture",
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_fail_test_the_test),
@@ -2377,6 +2563,34 @@ static struct test selftests_array[] = {
     .test_init = selftest_randomprint_init,
     .test_run = selftest_reportfail_run,
     .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sync_loop_fail_earlyout",
+    .description = "Failing per-thread early-outs before TEST_LOOP while one thread loops to completion",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_sync_loop_earlyout_init,
+    .test_run = selftest_sync_loop_earlyout_run,
+    .test_cleanup = selftest_sync_loop_earlyout_cleanup,
+    .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sync_loop_benign_earlyout",
+    .description = "Benign per-thread early-outs before TEST_LOOP while one thread loops to completion",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_sync_loop_earlyout_init,
+    .test_run = selftest_sync_loop_earlyout_run,
+    .test_cleanup = selftest_sync_loop_earlyout_cleanup,
+    .desired_duration = 200,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_sync_loop_crash_earlyout",
+    .description = "A thread crashes before TEST_LOOP while another loops to completion",
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_sync_loop_crash_earlyout_run,
+    .desired_duration = 200,
     .quality_level = TEST_QUALITY_PROD,
 },
 {

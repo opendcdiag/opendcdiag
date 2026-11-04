@@ -696,6 +696,110 @@ function selftest_log_skip_init_common() {
     test_yaml_regexp "/tests/0/result" pass
 }
 
+@test "selftest_pass --sync-test-loop-start" {
+    # The --sync-test-loop-start barrier must not hang under normal operation:
+    # the run should complete and pass just like without the option.
+    declare -A yamldump
+    selftest_pass -e selftest_pass --sync-test-loop-start
+}
+
+@test "selftest_timedpass -t 200 --sync-test-loop-start" {
+    # Exercise the barrier with a timed, looping test (so threads actually
+    # synchronize at the start of the loop) and confirm it finishes within the
+    # timeout (no hang) and passes.
+    declare -A yamldump
+    sandstone_selftest -e selftest_timedpass -t 200 --sync-test-loop-start
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_timedpass
+    test_yaml_regexp "/tests/0/result" pass
+}
+
+@test "selftest_timedpass_even_noloop -t 200 --sync-test-loop-start" {
+    # Some threads return before ever reaching TEST_LOOP while others loop. The
+    # barrier must not hang: threads that finish early drop out so the looping
+    # threads are released. The run should complete within the timeout and pass.
+    declare -A yamldump
+    sandstone_selftest -e selftest_timedpass_even_noloop -t 200 --sync-test-loop-start
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_timedpass_even_noloop
+    test_yaml_regexp "/tests/0/result" pass
+}
+
+@test "selftest_sync_loop_all_arrive --sync-test-loop-start" {
+    # Positive synchronization check: threads arrive at the loop-start barrier at
+    # staggered times and each asserts that every thread has arrived before it
+    # runs the loop body. This passes only if --sync-test-loop-start genuinely
+    # blocks all threads at the start of the loop (a no-op/racing barrier would
+    # make the early threads see a partial count and fail).
+    declare -A yamldump
+    sandstone_selftest -e selftest_sync_loop_all_arrive -n4 --sync-test-loop-start
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_sync_loop_all_arrive
+    test_yaml_regexp "/tests/0/result" pass
+}
+
+@test "selftest_sync_loop_fail_earlyout --sync-test-loop-start" {
+    # One thread loops to completion while the others take the *failing* early-out
+    # paths before ever reaching TEST_LOOP. The EXIT_KINDS knob maps a
+    # comma-separated list of exit kinds onto threads 0..N, so thread 0 loops
+    # while threads 1..3 exercise report_fail, report_fail_msg and memcmp_or_fail.
+    # The --sync-test-loop-start barrier must not hang: every early-out drops out 
+    # so the looping thread is released and the run completes (as a failure) well 
+    # within the timeout.
+    declare -A yamldump
+    sandstone_selftest -e selftest_sync_loop_fail_earlyout --sync-test-loop-start \
+                       -O selftest_sync_loop_fail_earlyout.EXIT_KINDS=loop,report_fail,report_fail_msg,memcmp_or_fail
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/test" selftest_sync_loop_fail_earlyout
+    test_yaml_regexp "/tests/0/result" fail
+    # confirm the distinct early-out paths actually executed (proving the barrier
+    # released the looping thread rather than hanging on the ones that left early)
+    grep -qe 'early-out via report_fail_msg' $outputfile
+    grep -qe 'early-out via memcmp_or_fail' $outputfile
+}
+
+@test "selftest_sync_loop_benign_earlyout --sync-test-loop-start" {
+    # Companion to selftest_sync_loop_fail_earlyout covering the *benign* exit
+    # kinds: thread 0 loops to completion while thread 1 skips and thread 2 takes
+    # a plain early return, neither of which fails the test.
+    # The --sync-test-loop-start barrier must still release the looping thread once
+    # the others drop out, so the run completes (passing) well within the timeout.
+    declare -A yamldump
+    sandstone_selftest -e selftest_sync_loop_benign_earlyout --sync-test-loop-start \
+                       -O selftest_sync_loop_benign_earlyout.EXIT_KINDS=loop,skip,plain_return
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_regexp "/tests/0/test" selftest_sync_loop_benign_earlyout
+    test_yaml_regexp "/tests/0/result" pass
+    # confirm the skip early-out actually executed (proving the barrier released
+    # the looping thread rather than hanging on the ones that left early)
+    grep -qe 'early-out via skip' $outputfile
+}
+
+@test "selftest_sync_loop_crash_earlyout --sync-test-loop-start" {
+    if $is_asan; then
+        skip "Crashing tests skipped with ASAN"
+    fi
+    # Thread 0 loops (and blocks in the --sync-test-loop-start barrier) while
+    # thread 1 segfaults before ever reaching TEST_LOOP. A crashing thread never
+    # drops out of the barrier, but the fatal SIGSEGV must still bring the whole
+    # run down (as a crash) well within the timeout instead of deadlocking.
+    declare -A yamldump
+    sandstone_selftest --on-crash=kill -e selftest_sync_loop_crash_earlyout -n2 --sync-test-loop-start
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_regexp "/tests/0/test" selftest_sync_loop_crash_earlyout
+    test_yaml_regexp "/tests/0/result" crash
+    # the crashing thread must die at the segfault: the "before" line is logged
+    # but the "after" line must never appear
+    grep -qe 'before segfault' $outputfile
+    ! grep -qe 'after segfault' $outputfile
+}
+
 @test "selftest_logs" {
     # Run the test twice to ensure one run doesn't clobber the next
     declare -A yamldump
