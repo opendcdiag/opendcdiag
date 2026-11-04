@@ -45,6 +45,8 @@ jobs:
         - { name: Clang-x86_64, unittests: "unittests", env: "CC=clang-19 CXX=clang++-19", meson_args: "-Dssl_link_type=loaded" }
         - { name: GCC-arm64, archsuffix: "-arm", selftests: "selftests" }
     steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
       - name: Checkout the PR merge point
         uses: actions/checkout@v6
       - name: Build for CPU (Linux)
@@ -151,6 +153,8 @@ jobs:
         - { name: GCC, unittests: "unittests", env: "CC=gcc-16 CXX=g++-16" }
         - { name: GCC-NoLogging, unittests: "unittests", env: "CC=gcc-16 CXX=g++-16", meson_args: "-Dlogging_format=no_output" }
     steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
       - name: Checkout the PR merge point
         uses: actions/checkout@v6
       - name: Build for GPU
@@ -177,6 +181,8 @@ jobs:
         - { name: GCC, unittests: "unittests" }
         - { name: GCC-NoLogging, unittests: "unittests", meson_args: "-Dlogging_format=no_output" }
     steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
       - name: Checkout the PR merge point
         uses: actions/checkout@v6
       - name: Build for IDXD
