@@ -181,6 +181,19 @@ typedef enum TestQuality {
     DECLARE_TEST_SECTION(test_id, TEST_ID_ ## test_id)                  \
     DECLARE_TEST_INNER(test_id, TEST_ID_ ## test_id, test_description)
 
+/// Same as DECLARE_TEST_SECTION, but places the test in the "selftests"
+/// section instead of "tests": only reachable when --selftests option is used.
+/// May be used by device-specific applications to implement custom self-tests
+/// which tie into the framework's existing self-test capabilities.
+#define DECLARE_SELFTEST_SECTION(test_id, test_short_id) \
+    extern const char SANDSTONE_CONCAT(_testid_, test_short_id); \
+    __attribute__((used)) const char SANDSTONE_CONCAT(_testid_, test_short_id) = 0; \
+    __attribute__((aligned(alignof(struct test)), used, section(SANDSTONE_SECTION_PREFIX "selftests")))
+
+#define DECLARE_SELFTEST(test_id, test_description)                    \
+    DECLARE_SELFTEST_SECTION(test_id, TEST_ID_ ## test_id)             \
+    DECLARE_TEST_INNER(test_id, TEST_ID_ ## test_id, test_description)
+
 #define DECLARE_MANUAL_TEST(test_id, test_description)                  \
     DECLARE_TEST_INNER(test_id, TEST_ID_ ## test_id, test_description)
 

@@ -25,6 +25,9 @@ extern "C" {
 extern struct test __start_tests __attribute__((weak));
 extern struct test __stop_tests __attribute__((weak));
 
+extern struct test __start_selftests __attribute__((weak));
+extern struct test __stop_selftests __attribute__((weak));
+
 extern struct test _test_mce_check;
 #if defined(__linux__) && defined(__x86_64__)
 extern struct test _test_smi_count;
@@ -62,11 +65,17 @@ inline std::span<struct test> regular_tests()
     static std::span<struct test> value = { &__start_tests, &__stop_tests };
     return value;
 }
-#ifdef NO_SELF_TESTS
-constexpr const std::span<struct test> selftests = {};
-#else
-extern const std::span<struct test> selftests;
-#endif
+
+inline std::span<struct test> selftests()
+{
+    // Weak extern resolves to a null pointer, so need to guard against
+    /// constructing a span from an invalid (null, null) range when no extra
+    /// selftests are defined via the DECLARE_SELFTEST macro.
+    static std::span<struct test> value = (&__start_selftests)
+        ? std::span<struct test>{ &__start_selftests, &__stop_selftests }
+        : std::span<struct test>{};
+    return value;
+}
 
 class SandstoneTestSet
 {
@@ -148,7 +157,7 @@ private:
     {
 #ifndef NO_SELF_TESTS
         if (!SandstoneConfig::RestrictedCommandLine && cfg.is_selftest)
-            return selftests;
+            return selftests();
 #endif
         return regular_tests();
     }
