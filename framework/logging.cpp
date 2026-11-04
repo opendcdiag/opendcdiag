@@ -1788,6 +1788,18 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
     for_each_main_thread(message_checker, slices.size());
     for_each_test_thread(message_checker, slices.size());
 
+    for (size_t slice = 0; slice < slices.size(); ++slice) {
+        if (slices[slice].result != TestResult::Skipped)
+            continue;
+        // An init-skipped slice never starts its workers; they aren't successes.
+        auto range = sApp->main_thread_data(slice)->thread_range;
+        for (int i = 0; i < range.thread_count; ++i) {
+            auto data = sApp->test_thread_data(range.starting_thread + i);
+            if (!data->has_failed() && data->thread_state.load(std::memory_order_relaxed) == thread_not_started)
+                ++sc;
+        }
+    }
+
     if (testResult == TestResult::Passed && pc == sc)
         testResult = TestResult::Skipped;       // all threads skipped
 }
