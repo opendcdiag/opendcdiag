@@ -98,6 +98,7 @@ function run_sandstone_yaml()
     # Strip CR from CRLF
     sed 's/\r$//' $yamlfile > $outputfile
     rm -- $yamlfile
+    output=$(<"$outputfile")
     (echo ---; cat $outputfile) | \
         tee -a total_log_output.yaml # for bats' logger
 

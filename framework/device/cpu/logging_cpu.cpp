@@ -43,13 +43,12 @@ void KeyValuePairLogger::print(int tc)
         logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = %s\n", test->id,
                        "All CPUs skipped while executing 'test_run()' function, check log for details");
     } else if (testResult == TestResult::Skipped) {
-        // skipped in the test_init()
         // FIXME: multiple main threads
-        std::string init_skip_message = get_skip_message(-1);
-        if (init_skip_message.size() > 0) {
-            logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, char_to_skip_category(init_skip_message[0]));
+        std::string skip_message = main_skip_message();
+        if (skip_message.size() > 0) {
+            logging_printf(LOG_LEVEL_QUIET, "%s_skip_category = %s\n", test->id, char_to_skip_category(skip_message[0]));
             logging_printf(LOG_LEVEL_QUIET, "%s_skip_reason = ", test->id);
-            std::string_view message(&init_skip_message[1], init_skip_message.size()-1);
+            std::string_view message(&skip_message[1], skip_message.size()-1);
             AbstractLogger::format_and_print_message(real_stdout_fd, message, false);
             if (file_log_fd != real_stdout_fd)
                 AbstractLogger::format_and_print_message(file_log_fd, message, false);
@@ -171,10 +170,10 @@ void TapFormatLogger::print(int tc)
         extra += "SKIP";
         if (skipInMainThread) {
             // FIXME: multiple main threads
-            std::string init_skip_message = get_skip_message(-1);
-            if (init_skip_message.size() != 0)
-                extra += "(" + std::string(char_to_skip_category(init_skip_message[0])) +
-                        " : " + init_skip_message.substr(1,init_skip_message.size()) + ")";
+            std::string skip_message = main_skip_message();
+            if (skip_message.size() != 0)
+                extra += "(" + std::string(char_to_skip_category(skip_message[0])) +
+                        " : " + skip_message.substr(1,skip_message.size()) + ")";
             else
                 extra += "(Unknown: check main thread message for details or "
                             "use -vv option for more info)";
