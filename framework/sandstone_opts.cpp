@@ -120,6 +120,7 @@ enum {
     beta_option,
 #if SANDSTONE_DEVICE_IDXD
     idxd_default_config_option,
+    idxd_restore_option,
 #endif
 
     // syntethic values to track which of conflicting opts is currently active
@@ -226,6 +227,7 @@ static struct option long_options[]  = {
     { "yaml", optional_argument, nullptr, 'Y' },
 #if SANDSTONE_DEVICE_IDXD
     { "idxd-default-config", no_argument, nullptr, idxd_default_config_option },
+    { "idxd-restore", no_argument, nullptr, idxd_restore_option },
 #endif
 
 #if defined(__SANITIZE_ADDRESS__)
@@ -937,6 +939,7 @@ struct ProgramOptionsParser {
         opts.shmem_cfg.ud_on_failure = opts_map.contains(ud_on_failure_option);
 #if SANDSTONE_DEVICE_IDXD
         opts.idxd_default_config = opts_map.contains(idxd_default_config_option);
+        opts.idxd_restore = opts_map.contains(idxd_restore_option);
 #endif
 
 #ifndef NDEBUG
