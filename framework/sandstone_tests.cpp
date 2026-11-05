@@ -41,13 +41,32 @@ void SandstoneTestSet::load_all_tests()
         }
     };
 
-    for (struct test &t : known_tests) {
-        all_tests.push_back(&t);
+    std::vector<struct test *> ordered_tests;
+    ordered_tests.reserve(known_tests.size());
+    for (struct test &t : known_tests)
+        ordered_tests.push_back(&t);
+
+    if (is_selftest()) {
+        // Self-tests from the "selftest" section can be reordered when compiler
+        // optimization is enabled (behavior varies from compiler to compiler).
+        // On the other hand, the self-test plumbing in bats expects them to
+        // execute in the order of definition.
+        // To restore the order, the selftests are automatically numbered using
+        // the __COUNTER__ macro, with values intermittently stored as the short_id.
+        // Here we sort the selftests and assign them a standard short ID.
+        std::stable_sort(ordered_tests.begin(), ordered_tests.end(),
+                          [](struct test *a, struct test *b) {
+                              return a->shortid < b->shortid;
+                          });
+    }
+
+    for (struct test *t : ordered_tests) {
+        all_tests.push_back(t);
         if (is_selftest()) {
             // self tests don't have hardcoded test IDs, so add them now
-            t.shortid = std::hash<std::string_view>()(t.id) & 0xffffff;
+            t->shortid = std::hash<std::string_view>()(t->id) & 0xffffff;
         }
-        add_to_all_group_map(t);
+        add_to_all_group_map(*t);
     }
 
     /* add "special" tests */
@@ -101,15 +120,19 @@ SandstoneTestSet::SandstoneTestSet(struct test_set_cfg cfg, unsigned int flags)
     load_all_tests(); /* initialize the catalog */
     if (!(flags & enable_all_tests)) return;
 
-    for (struct test &test : test_source()) {
-        if ((test.flags & test_is_optional) && !sApp->include_optional)
+    // Iterate all_tests (populated by load_all_tests(), already restored to
+    // declaration order for self-tests) rather than test_source() directly,
+    // so --list-tests/--list-group-members/full-catalog mode agree with the
+    // rest of the test set.
+    for (struct test *test : all_tests) {
+        if ((test->flags & test_is_optional) && !sApp->include_optional)
             continue;
-        if (test.quality_level < sApp->requested_quality)
+        if (test->quality_level < sApp->requested_quality)
             continue;
         struct test_cfg_info ti;
         ti.status = test_cfg_info::enabled;
-        ti.test = &test;
-        test_set.push_back(&test);
+        ti.test = test;
+        test_set.push_back(test);
     }
 };
 
