@@ -730,6 +730,8 @@ static uintptr_t thread_runner(int thread_number)
                 new_state = thread_succeeded;
         }
         this_thread->thread_state.store(new_state, std::memory_order_relaxed);
+        int thrleft = sApp->main_thread_data()->active_threads.fetch_sub(1, std::memory_order_relaxed);
+        assert(thrleft >= 0); (void) thrleft;
 
         if (new_state == thread_failed) {
             if (sApp->shmem->cfg.ud_on_failure)
@@ -831,6 +833,7 @@ static void run_threads_sequentially(const struct test *test)
 
 static void run_threads(const struct test *test)
 {
+    sApp->main_thread_data()->active_threads.store(sApp->thread_count, std::memory_order_relaxed);
     switch (test->flags & test_schedule_mask) {
     default:
         run_threads_in_parallel(test);
