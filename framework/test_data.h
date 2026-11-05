@@ -91,6 +91,13 @@ struct alignas(64) Main : Common
 {
     DeviceRange device_range;
     ThreadRange thread_range;
+    std::atomic_int active_threads;
+
+    void init() /*override*/
+    {
+        Common::init();
+        active_threads.store(0, std::memory_order_relaxed);
+    }
 };
 
 struct alignas(64) TestCommon : Common
