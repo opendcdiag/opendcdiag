@@ -113,7 +113,7 @@ private:
     struct GroupInfo
     {
         std::barrier<std::function<void()>> *barrier;
-        std::vector<pid_t> tid;     // Keep track of all members tid
+        std::vector<pid_t> tid;     // 0 = not set yet, -1 = thread done, else = live thread id
         std::vector<int> next_cpu;  // Keep track of cpus on the group
 
         GroupInfo(int members_per_group, std::function<void()> on_completion)

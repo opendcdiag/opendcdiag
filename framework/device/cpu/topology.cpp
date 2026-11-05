@@ -160,11 +160,11 @@ void BarrierDeviceScheduler::on_group_completion(int g_idx)
 
     // Rotate cpus vector so reschedule group members to a different cpu
     std::rotate(group.next_cpu.begin(), group.next_cpu.begin() + 1, group.next_cpu.end());
-    lock.unlock();
 
-    // Reschedule group members
-    for (int i=0; i<group.tid.size(); i++) {
-        pin_to_next_cpu(device_info[group.next_cpu[i]].cpu_number, group.tid[i]);
+    // Pin only the members that are still running (tid > 0).
+    for (int i = 0; i < (int)group.tid.size(); i++) {
+        if (group.tid[i] > 0)
+            pin_to_next_cpu(device_info[group.next_cpu[i]].cpu_number, group.tid[i]);
     }
 }
 
@@ -218,14 +218,10 @@ void BarrierDeviceScheduler::finish_reschedule()
     int g_idx = thread_num / members_per_group;
     GroupInfo &group = groups[g_idx];
 
-    // Remove thread info from groups
+    // Mark this member as finished, so it no longer gets pinned.
     int thread_info_idx = thread_num % members_per_group;
-    group.tid.erase(group.tid.begin() + thread_info_idx);
+    group.tid[thread_info_idx] = -1;
 
-    // Remove CPU information only if the thread failed, as it likely indicates a problematic device;
-    // otherwise, keep it for execution.
-    if(sApp->test_thread_data(thread_num)->has_failed())
-        group.next_cpu.erase(group.next_cpu.begin() + thread_info_idx);
     lock.unlock();
 
     group.barrier->arrive_and_drop();
