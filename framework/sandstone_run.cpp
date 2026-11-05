@@ -179,15 +179,13 @@ static void merge_test_result(ChildExitStatus &current, const ChildExitStatus& i
 static void __attribute__((noreturn)) report_fail_common()
 {
     logging_mark_thread_failed(thread_num);
-#ifdef _WIN32
-    /* does not call the cleanup handlers */
-    _endthread();
-#else
-    /* does call the cleanup handalers */
+
+    // Runs the pthread_cleanup_push() handlers. On Linux, this also unwinds
+    // the stack and runs C++ destructors; elsewhere (including winpthreads),
+    // it doesn't.
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, nullptr);
     pthread_cancel(pthread_self());
-#endif
     __builtin_unreachable();
 }
 
@@ -754,7 +752,10 @@ static uintptr_t thread_runner(int thread_number)
 #endif
 
     {
-        auto e = scopeExit(std::move(cleanup));
+        // Not scopeExit(): report_fail() doesn't unwind the stack on all OSes
+        auto cleanup_handler = +[](void *ptr) { (*static_cast<decltype(cleanup) *>(ptr))(); };
+        pthread_cleanup_push(cleanup_handler, &cleanup);
+
         // indicate to SIGQUIT handler that we're running
         this_thread->thread_state.store(thread_running, std::memory_order_relaxed);
 
@@ -769,6 +770,7 @@ static uintptr_t thread_runner(int thread_number)
         ret = test_run_wrapper_function(current_test(), thread_number);
 
         // cleanup resets thread_state
+        pthread_cleanup_pop(1);
     }
 
 #if SANDSTONE_DEVICE_CPU

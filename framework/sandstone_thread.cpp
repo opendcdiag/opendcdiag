@@ -109,12 +109,21 @@ void SandstoneTestThread::start(RunnerFunction *f, int t)
     assert(check_run_from_correct_thread());
 
     static SandstoneTestThreadAttributes thread_attributes;
+    static const auto clear_tid = +[](void *ptr) {
+        auto this_thread = static_cast<PerThreadData::Test *>(ptr);
+        this_thread->tid.store(0, std::memory_order_relaxed);
+    };
     auto runner = +[](void *ptr) {
         auto self = static_cast<SandstoneTestThread *>(ptr);
         ::thread_num = self->thread_num;
-        sApp->test_thread_data(self->thread_num)->tid.store(gettid());
-        auto clear_tid = scopeExit([self] { sApp->test_thread_data(self->thread_num)->tid.store(0, std::memory_order_relaxed); });
-        return reinterpret_cast<void *>(self->target(self->thread_num));
+        PerThreadData::Test *this_thread = sApp->test_thread_data(self->thread_num);
+        this_thread->tid.store(gettid(), std::memory_order_relaxed);
+
+        uintptr_t result;
+        pthread_cleanup_push(clear_tid, this_thread);
+        result = self->target(self->thread_num);
+        pthread_cleanup_pop(1);
+        return reinterpret_cast<void *>(result);
     };
 
     thread_num = t;
