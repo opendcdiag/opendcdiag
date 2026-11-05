@@ -10,7 +10,9 @@
 #include <float.h>
 #include <stddef.h>
 
-#if LDBL_MANT_DIG == 53
+#ifdef SANDSTONE_LDBL_PADDED
+_Static_assert(DATATYPEFORTYPE(0.L) == Float80Data, "SYCL binary64 long double with extended storage");
+#elif LDBL_MANT_DIG == 53
 _Static_assert(DATATYPEFORTYPE(0.L) == Float64Data, "binary64 long double");
 #elif LDBL_MANT_DIG == 64
 _Static_assert(DATATYPEFORTYPE(0.L) == Float80Data, "x87 long double");

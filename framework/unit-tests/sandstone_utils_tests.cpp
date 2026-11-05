@@ -435,7 +435,9 @@ static_assert(TypeToDataType<long>::Type ==
 static_assert(TypeToDataType<unsigned long long>::Type == UInt64Data);
 static_assert(TypeToDataType<long long>::Type == Int64Data);
 static_assert(FLT_RADIX == 2);
-#if LDBL_MANT_DIG == 53
+#ifdef SANDSTONE_LDBL_PADDED
+static_assert(TypeToDataType<long double>::Type == Float80Data);
+#elif LDBL_MANT_DIG == 53
 static_assert(TypeToDataType<long double>::Type == Float64Data);
 static_assert(LDBL_MIN_EXP == -1021 && LDBL_MAX_EXP == 1024);
 #elif LDBL_MANT_DIG == 64

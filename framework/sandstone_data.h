@@ -50,7 +50,12 @@ enum DataType {
 #   define SANDSTONE_LONG_TYPE Int32Data
 #endif
 
-#if FLT_RADIX == 2 && LDBL_MANT_DIG == 53 && LDBL_MIN_EXP == -1021 && LDBL_MAX_EXP == 1024
+/* DPC++ with -fsycl reports 8 bytes precision for long double but still
+ * stores it in 16 bytes. Mark it as a padded Float80Data type. */
+#if defined(__SYCL_DEVICE_ONLY__) && FLT_RADIX == 2 && LDBL_MANT_DIG == 53 && LDBL_MIN_EXP == -1021 && LDBL_MAX_EXP == 1024
+#   define SANDSTONE_LDBL_PADDED 1
+#   define SANDSTONE_LONG_DOUBLE_TYPE Float80Data
+#elif FLT_RADIX == 2 && LDBL_MANT_DIG == 53 && LDBL_MIN_EXP == -1021 && LDBL_MAX_EXP == 1024
 #   define SANDSTONE_LONG_DOUBLE_TYPE Float64Data
 #elif FLT_RADIX == 2 && LDBL_MANT_DIG == 64 && LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384
 #   define SANDSTONE_LONG_DOUBLE_TYPE Float80Data
@@ -58,6 +63,21 @@ enum DataType {
 #   define SANDSTONE_LONG_DOUBLE_TYPE Float128Data
 #else
 #   error "Unsupported long double representation"
+#endif
+
+/* Fail loudly if the detection above disagrees with the real storage size. */
+#ifdef __cplusplus
+#  ifdef SANDSTONE_LDBL_PADDED
+static_assert(sizeof(long double) == 16, "padded binary64 long double must occupy 16 bytes");
+#  elif LDBL_MANT_DIG == 53
+static_assert(sizeof(long double) == 8, "binary64 long double must occupy 8 bytes");
+#  endif
+#else
+#  ifdef SANDSTONE_LDBL_PADDED
+_Static_assert(sizeof(long double) == 16, "padded binary64 long double must occupy 16 bytes");
+#  elif LDBL_MANT_DIG == 53
+_Static_assert(sizeof(long double) == 8, "binary64 long double must occupy 8 bytes");
+#  endif
 #endif
 
 // T(ctype, tag, suffix): tag is the DataType enumerator; suffix is a unique
@@ -176,7 +196,11 @@ static constexpr const char *type_name(DataType type)
     case BFloat16Data: return "_BFloat16";
     case Float32Data: return "float";
     case Float64Data: return "double";
+#ifdef SANDSTONE_LDBL_PADDED
+    case Float80Data: return "long double";
+#else
     case Float80Data: return "_Float64x";   // long double is IEEE-754 extended precision binary64
+#endif
     case Float128Data: return "_Float128";
 
     //case DataIsSigned:
@@ -241,6 +265,12 @@ SANDSTONE_DATA_INLINE size_t type_real_size(enum DataType type)
             return 1;
         case BFloat16Data:
             return 2;
+        case Float80Data:
+#ifdef SANDSTONE_LDBL_PADDED
+            return 8;
+#else
+            return 10;
+#endif
         default:
             return (type & SizeMask) + 1;
     }
@@ -297,8 +327,10 @@ static inline int memcmp_equal_bytes(const void *actual, const void *expected, s
 
 static inline int memcmp_equal_long_double(const void *actual, const void *expected, size_t size)
 {
-#if FLT_RADIX == 2 && LDBL_MANT_DIG == 64 && LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384
-    return memcmp_offset_strided(actual, expected, size, sizeof(long double), type_real_size(Float80Data)) < 0;
+#if (FLT_RADIX == 2 && LDBL_MANT_DIG == 64 && LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384) || \
+    defined(SANDSTONE_LDBL_PADDED)
+    return memcmp_offset_strided(actual, expected, size, sizeof(long double),
+                                 type_real_size(SANDSTONE_LONG_DOUBLE_TYPE)) < 0;
 #else
     return memcmp_equal_bytes(actual, expected, size);
 #endif
