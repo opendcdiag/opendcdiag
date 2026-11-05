@@ -291,12 +291,12 @@ TEST(PrepareTestForDevice, IaxRequirementPassesWithMatchingWq)
     EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Passed);
 }
 
-TEST(PrepareTestForDevice, DeviceAgnosticTestSkipsWithoutTargetableWq)
+TEST(PrepareTestForDevice, DeviceAgnosticTestPassessWithoutTargetableWq)
 {
     PrepareTestFixture fixture;
     topo_global.devices.clear();
 
-    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Skipped);
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Passed);
 }
 
 TEST(PrepareTestForDevice, WrongDeviceFamilySkips)
