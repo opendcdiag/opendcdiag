@@ -191,7 +191,9 @@ int test_floats_prototypes_c(void)
     if (AS_FP(f) != 0.0) return __LINE__;
     if (AS_FP(float64) != 0.0) return __LINE__;
     if (AS_FP(d) != 0.0) return __LINE__;
+#ifdef SANDSTONE_NATIVE_FLOAT80
     if (AS_FP(float80) != 0.0) return __LINE__;
+#endif
 
     new_random_hfloat8();
     new_random_bfloat8();

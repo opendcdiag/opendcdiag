@@ -14,6 +14,7 @@
 #include <float.h>
 #include <locale.h>
 #include <inttypes.h>
+#include <type_traits>
 
 #ifdef __x86_64__
 #pragma GCC diagnostic push
@@ -207,7 +208,7 @@ TEST(DataCompare, Float128)
 
 TEST(DataCompare, Float80)
 {
-#if LDBL_MANT_DIG == 64
+#ifdef SANDSTONE_NATIVE_FLOAT80
     using namespace SandstoneDataDetails;
     setlocale(LC_ALL, "C");     // ensure C locale, so we get periods as decimal separators
     EXPECT_STREQ(type_name(Float80Data), "_Float64x");
@@ -224,6 +225,36 @@ TEST(DataCompare, Float80)
     EXPECT_EQ(format_type_helper(std::numeric_limits<long double>::signaling_NaN()), "7fffa000000000000000 (nan)");
 #else
     GTEST_SKIP() << "long double is not x87 extended precision";
+#endif
+}
+
+namespace {
+template<typename T>
+concept HasNativeFloat80 = requires(T value) {
+    value.as_float;
+    value.as_fp();
+};
+
+#ifdef SANDSTONE_NATIVE_FLOAT80
+static_assert(HasNativeFloat80<Float80>);
+static_assert(std::is_constructible_v<Float80, long double>);
+#else
+static_assert(!HasNativeFloat80<Float80>);
+static_assert(!std::is_constructible_v<Float80, long double>);
+#endif
+}
+
+TEST(FloatGeneration, Float80Representation)
+{
+    const Float80 one = new_float80(0, FLOAT80_EXPONENT_BIAS, 1, 0);
+    EXPECT_EQ(one.as_hex.low64, uint64_t(1) << FLOAT80_MANTISSA_BITS);
+    EXPECT_EQ(one.as_hex.high16, FLOAT80_EXPONENT_BIAS);
+    EXPECT_TRUE(one.is_finite());
+    EXPECT_TRUE(Float80::max().is_max());
+#ifdef SANDSTONE_NATIVE_FLOAT80
+    EXPECT_EQ(one.as_fp(), 1.L);
+    EXPECT_EQ(Float80_as_fp(one), 1.L);
+    EXPECT_EQ(Float80(1.L).as_hex.high16, one.as_hex.high16);
 #endif
 }
 
@@ -817,7 +848,9 @@ int test_floats_prototypes_cpp(void)
     if (AS_FP(f) != 0.0) return __LINE__;
     if (AS_FP(float64) != 0.0) return __LINE__;
     if (AS_FP(d) != 0.0) return __LINE__;
+#ifdef SANDSTONE_NATIVE_FLOAT80
     if (AS_FP(float80) != 0.0) return __LINE__;
+#endif
 
     hfloat8 = new_random_hfloat8();
     bfloat8 = new_random_bfloat8();
