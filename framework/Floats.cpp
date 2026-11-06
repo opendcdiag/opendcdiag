@@ -156,8 +156,9 @@ static_assert(MASK(FLOAT64_MANTISSA_BITS) == FLOAT64_MANTISSA_MASK, "Float64 man
 static_assert(QUIET(FLOAT64) == FLOAT64_MANTISSA_QUIET_NAN_MASK, "Quiet bit is MSB of the mantissa");
 static_assert(FLOAT64_SIGN_BITS + FLOAT64_EXPONENT_BITS + FLOAT64_MANTISSA_BITS == 64, "Bitfields sums to type size");
 
-static_assert(sizeof(double) < sizeof(long double), "Compiler does not support long double");
+#ifdef SANDSTONE_NATIVE_FLOAT80
 static_assert(sizeof(Float80) == sizeof(long double), "Float80 structure is not of the correct size");
+#endif
 static_assert(FLOAT80_NAN_EXPONENT == FLOAT80_EXPONENT_MASK, "All Float80::NaNs have all exponent bits set");
 static_assert(FLOAT80_INFINITY_EXPONENT == FLOAT80_EXPONENT_MASK, "Float80::Inf has all exponent bits set");
 static_assert(MASK(FLOAT80_EXPONENT_BITS) == FLOAT80_EXPONENT_MASK, "Float80 exponent mask has different size than the field");

@@ -1390,10 +1390,9 @@ Float80  simple_vectors_float80[] = {
 
    // special data
     {.sign=0, .exponent=0x7fff, .jbit=1, .mantissa=0x0000000000000000},
-    {.as_float = 0.0},
+    {.sign=0, .exponent=0, .jbit=0, .mantissa=0},
 };
 const int num_simple_vectors_float80 = 497;
-
 
 
 
