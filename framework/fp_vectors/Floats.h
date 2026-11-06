@@ -8,10 +8,15 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <float.h>
 
 #ifdef __cplusplus
-#include <cfloat>
 #include <limits>
+#endif
+
+// Only expose native Float80 conversions when long double has the x87 format.
+#if FLT_RADIX == 2 && LDBL_MANT_DIG == 64 && LDBL_MIN_EXP == -16381 && LDBL_MAX_EXP == 16384
+#define SANDSTONE_NATIVE_FLOAT80 1
 #endif
 
 #ifdef __F16C__
@@ -787,18 +792,24 @@ struct Float80 {
             uint32_t high32;
             uint16_t extra16;
         } as_hex32;
+#ifdef SANDSTONE_NATIVE_FLOAT80
         long double as_float;
+#endif
     };
 
 #ifdef __cplusplus
     constexpr inline Float80() = default;
+#ifdef SANDSTONE_NATIVE_FLOAT80
     constexpr inline Float80(long double f) : as_float(f) { }
+#endif
     constexpr inline Float80(uint64_t s, uint64_t e, uint64_t j, uint64_t m): mantissa(m), jbit(j), exponent(e), sign(s) { }
     constexpr inline Float80(uint64_t s, uint64_t e, uint64_t m): mantissa(m), jbit(e == 0 ? 0 : 1), exponent(e), sign(s) { }
 
+#ifdef SANDSTONE_NATIVE_FLOAT80
     constexpr inline long double as_fp() const {
         return as_float;
     }
+#endif
 
     static constexpr inline Float80 max()     { return { 0, FLOAT80_INFINITY_EXPONENT - 1, FLOAT80_MANTISSA_MASK }; }
 
@@ -830,7 +841,9 @@ STATIC_INLINE bool Float80_is_snan(Float80 f)     { return Float80_is_nan(f) && 
 STATIC_INLINE bool Float80_is_qnan(Float80 f)     { return Float80_is_nan(f) && ((f.mantissa & FLOAT80_QUIET_BITS) != 0); }
 
 STATIC_INLINE uint64_t Float80_get_nan_payload(Float80 f) { return f.as_nan.payload; }
+#ifdef SANDSTONE_NATIVE_FLOAT80
 STATIC_INLINE long double Float80_as_fp(Float80 f) { return f.as_float; }
+#endif
 
 /**
  * @brief C/C++ builders (inlined)
@@ -1279,6 +1292,11 @@ inline float AS_FP(double d) {
     return d;
 }
 #else
+#ifdef SANDSTONE_NATIVE_FLOAT80
+#define AS_FP_FLOAT80_CASE Float80: Float80_as_fp,
+#else
+#define AS_FP_FLOAT80_CASE
+#endif
 #define AS_FP(v) \
     _Generic((v),\
         HFloat8:  HFloat8_as_fp,\
@@ -1287,7 +1305,7 @@ inline float AS_FP(double d) {
         BFloat16: BFloat16_as_fp,\
         Float32:  Float32_as_fp,\
         Float64:  Float64_as_fp,\
-        Float80:  Float80_as_fp,\
+        AS_FP_FLOAT80_CASE \
         double:   double_as_fp,\
         float:    float_as_fp\
     )(v)
