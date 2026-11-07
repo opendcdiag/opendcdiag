@@ -319,6 +319,8 @@ static void attach_shmem_internal(int fd, size_t size)
 static void init_shmem()
 {
     using namespace PerThreadData;
+    static_assert(std::is_trivially_copyable_v<PerThreadData::Main>);
+    static_assert(std::is_trivially_copyable_v<PerThreadData::Test>);
     static_assert(sizeof(PerThreadData::Main) == 64,
             "PerThreadData::Main size grew, please check if it was intended");
     static_assert(sizeof(PerThreadData::Test) == 64,
