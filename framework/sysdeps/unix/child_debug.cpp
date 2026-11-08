@@ -1168,8 +1168,9 @@ void debug_crashed_child(std::span<const pid_t> children)
         // find out which slice this context is for
         int slice = find_slice_by_pid(ctx.fixed.pid, children);
         if (slice < 0) {
-            log_message(-1, "Received a context dump from PID %ld that doesn't seem to match any "
-                            "child slice", long(ctx.fixed.pid));
+            log_message(-1, SANDSTONE_LOG_WARNING
+                        "Received a context dump from PID %ld that doesn't seem to match any "
+                        "child slice", long(ctx.fixed.pid));
             continue;
         }
 
