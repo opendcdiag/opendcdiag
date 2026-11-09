@@ -513,6 +513,23 @@ template <int PackageId> static int selftest_log_skip_socket_run(struct test *te
     return selftest_run_result;
 }
 
+static int selftest_result_sequence_init(struct test *test)
+{
+    const char *knob = sApp->current_iteration_count < 0 ? "retry" :
+                       sApp->current_iteration_count == 0 ? "first" : "later";
+    selftest_run_result = get_testspecific_knob_value_int(test, knob,
+                            sApp->current_iteration_count > 0 ? EXIT_SKIP : EXIT_SUCCESS);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_result_sequence_run(struct test *test, int thread)
+{
+    log_info("Retry: %s", test_is_retry() ? "true" : "false");
+    if (selftest_run_result == EXIT_SKIP)
+        return selftest_skip_run(test, thread);
+    return selftest_run_result;
+}
+
 static int selftest_log_skip_run_all_threads(struct test *test, int)
 {
     log_skip(SelftestSkipCategory, "Skipping on all threads");
@@ -1613,6 +1630,13 @@ END_DECLARE_TEST
 DECLARE_SELFTEST(selftest_timedpass, "Loops around usleep() for the regular test time")
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_timedpass_run<10'000>,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_result_sequence, "Selects results for the first fracture, later fractures, and retries")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_result_sequence_init,
+    .test_run = selftest_result_sequence_run,
+    .fracture_loop_count = 1,
     .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
 #ifdef __unix__
