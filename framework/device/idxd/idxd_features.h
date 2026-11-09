@@ -55,29 +55,36 @@ typedef unsigned __int128 device_features_t;
 #define device_feature_op_dual_cast         IDXD_FEATURE_CONSTANT(23)
 #define device_feature_op_create_delta      IDXD_FEATURE_CONSTANT(24)
 #define device_feature_op_apply_delta       IDXD_FEATURE_CONSTANT(25)
+#define device_feature_op_type_conv         IDXD_FEATURE_CONSTANT(26)
+#define device_feature_op_reduce            IDXD_FEATURE_CONSTANT(27)
+#define device_feature_op_reduce_dualcast   IDXD_FEATURE_CONSTANT(28)
+#define device_feature_op_gather_reduce     IDXD_FEATURE_CONSTANT(29)
+#define device_feature_op_gather_copy       IDXD_FEATURE_CONSTANT(30)
+#define device_feature_op_scatter_copy      IDXD_FEATURE_CONSTANT(31)
+#define device_feature_op_scatter_fill      IDXD_FEATURE_CONSTANT(32)
 
-#define IDXD_DSA_FEATURES_END 25
+#define IDXD_DSA_FEATURES_END 32
 
 // IAX common operations
-#define device_feature_iax_op_noop          IDXD_FEATURE_CONSTANT(26)
-#define device_feature_iax_op_batch         IDXD_FEATURE_CONSTANT(27)
-#define device_feature_iax_op_drain         IDXD_FEATURE_CONSTANT(28)
-#define device_feature_iax_op_xlat_fetch    IDXD_FEATURE_CONSTANT(29)
+#define device_feature_iax_op_noop          IDXD_FEATURE_CONSTANT(33)
+#define device_feature_iax_op_batch         IDXD_FEATURE_CONSTANT(34)
+#define device_feature_iax_op_drain         IDXD_FEATURE_CONSTANT(35)
+#define device_feature_iax_op_xlat_fetch    IDXD_FEATURE_CONSTANT(36)
 
 // IAX-specific operations
-#define device_feature_op_crc64             IDXD_FEATURE_CONSTANT(30)
-#define device_feature_op_scan              IDXD_FEATURE_CONSTANT(31)
-#define device_feature_op_extract           IDXD_FEATURE_CONSTANT(32)
-#define device_feature_op_select            IDXD_FEATURE_CONSTANT(33)
-#define device_feature_op_expand            IDXD_FEATURE_CONSTANT(34)
-#define device_feature_op_compress          IDXD_FEATURE_CONSTANT(35)
-#define device_feature_op_decompress        IDXD_FEATURE_CONSTANT(36)
-#define device_feature_op_decrypt           IDXD_FEATURE_CONSTANT(37)
-#define device_feature_op_encrypt           IDXD_FEATURE_CONSTANT(38)
+#define device_feature_op_crc64             IDXD_FEATURE_CONSTANT(37)
+#define device_feature_op_scan              IDXD_FEATURE_CONSTANT(38)
+#define device_feature_op_extract           IDXD_FEATURE_CONSTANT(39)
+#define device_feature_op_select            IDXD_FEATURE_CONSTANT(40)
+#define device_feature_op_expand            IDXD_FEATURE_CONSTANT(41)
+#define device_feature_op_compress          IDXD_FEATURE_CONSTANT(42)
+#define device_feature_op_decompress        IDXD_FEATURE_CONSTANT(43)
+#define device_feature_op_decrypt           IDXD_FEATURE_CONSTANT(44)
+#define device_feature_op_encrypt           IDXD_FEATURE_CONSTANT(45)
 
-#define IDXD_IAX_FEATURES_END 38
+#define IDXD_IAX_FEATURES_END 45
 
-#define IDXD_FEATURE_SIZE  39
+#define IDXD_FEATURE_SIZE  46
 
 #define IDXD_OPCODE_NOOP              0x00
 #define IDXD_OPCODE_BATCH             0x01
@@ -96,6 +103,13 @@ typedef unsigned __int128 device_features_t;
 #define IDXD_OPCODE_DIF_INSERT        0x13
 #define IDXD_OPCODE_DIF_STRIP         0x14
 #define IDXD_OPCODE_DIF_UPDATE        0x15
+#define IDXD_OPCODE_TYPE_CONV         0x18
+#define IDXD_OPCODE_REDUCE            0x19
+#define IDXD_OPCODE_REDUCE_DUALCAST   0x1a
+#define IDXD_OPCODE_GATHER_REDUCE     0x1b
+#define IDXD_OPCODE_GATHER_COPY       0x1c
+#define IDXD_OPCODE_SCATTER_COPY      0x1d
+#define IDXD_OPCODE_SCATTER_FILL      0x1e
 #define IDXD_OPCODE_CACHE_FLUSH       0x20
 #define IDXD_OPCODE_DECRYPT           0x40
 #define IDXD_OPCODE_ENCRYPT           0x41
@@ -126,6 +140,8 @@ static constexpr const char* features_names[IDXD_FEATURE_SIZE] = {
     "op_crc_gen", "op_copy_with_crc_gen", "op_dif_check", "op_dif_insert",
     "op_dif_strip", "op_dif_update", "op_cache_flush",
     "op_dual_cast", "op_create_delta", "op_apply_delta",
+    "op_type_conv", "op_reduce", "op_reduce_dualcast", "op_gather_reduce",
+    "op_gather_copy", "op_scatter_copy", "op_scatter_fill",
     "iax_op_noop", "iax_op_batch", "iax_op_drain", "iax_op_xlat_fetch",
     "op_crc64", "op_scan", "op_extract", "op_select", "op_expand",
     "op_compress", "op_decompress", "op_decrypt", "op_encrypt",
@@ -158,6 +174,13 @@ feature_to_opcode_map[] = {
     { device_feature_op_dual_cast,          IDXD_OPCODE_DUAL_CAST,          ACCFG_DEVICE_DSA },
     { device_feature_op_create_delta,       IDXD_OPCODE_CREATE_DELTA_REC,   ACCFG_DEVICE_DSA },
     { device_feature_op_apply_delta,        IDXD_OPCODE_APPLY_DELTA_REC,    ACCFG_DEVICE_DSA },
+    { device_feature_op_type_conv,          IDXD_OPCODE_TYPE_CONV,          ACCFG_DEVICE_DSA },
+    { device_feature_op_reduce,             IDXD_OPCODE_REDUCE,             ACCFG_DEVICE_DSA },
+    { device_feature_op_reduce_dualcast,    IDXD_OPCODE_REDUCE_DUALCAST,    ACCFG_DEVICE_DSA },
+    { device_feature_op_gather_reduce,      IDXD_OPCODE_GATHER_REDUCE,      ACCFG_DEVICE_DSA },
+    { device_feature_op_gather_copy,        IDXD_OPCODE_GATHER_COPY,        ACCFG_DEVICE_DSA },
+    { device_feature_op_scatter_copy,       IDXD_OPCODE_SCATTER_COPY,       ACCFG_DEVICE_DSA },
+    { device_feature_op_scatter_fill,       IDXD_OPCODE_SCATTER_FILL,       ACCFG_DEVICE_DSA },
 
     { device_feature_op_crc64,              IDXD_OPCODE_CRC64,              ACCFG_DEVICE_IAX },
     { device_feature_op_scan,               IDXD_OPCODE_SCAN,               ACCFG_DEVICE_IAX },

@@ -416,6 +416,20 @@ static device_features_t detect_features(accfg_device* device)
                 features |= device_feature_op_create_delta;
             if (has_opcode(op_cap, IDXD_OPCODE_APPLY_DELTA_REC))
                 features |= device_feature_op_apply_delta;
+            if (has_opcode(op_cap, IDXD_OPCODE_TYPE_CONV))
+                features |= device_feature_op_type_conv;
+            if (has_opcode(op_cap, IDXD_OPCODE_REDUCE))
+                features |= device_feature_op_reduce;
+            if (has_opcode(op_cap, IDXD_OPCODE_REDUCE_DUALCAST))
+                features |= device_feature_op_reduce_dualcast;
+            if (has_opcode(op_cap, IDXD_OPCODE_GATHER_REDUCE))
+                features |= device_feature_op_gather_reduce;
+            if (has_opcode(op_cap, IDXD_OPCODE_GATHER_COPY))
+                features |= device_feature_op_gather_copy;
+            if (has_opcode(op_cap, IDXD_OPCODE_SCATTER_COPY))
+                features |= device_feature_op_scatter_copy;
+            if (has_opcode(op_cap, IDXD_OPCODE_SCATTER_FILL))
+                features |= device_feature_op_scatter_fill;
             if (has_opcode(op_cap, IDXD_OPCODE_XLAT_FETCH))
                 features |= device_feature_dsa_op_xlat_fetch;
         } else if (dev_type == ACCFG_DEVICE_IAX) {
