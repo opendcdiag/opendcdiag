@@ -585,15 +585,16 @@ static bool wait_delay_between_tests()
 
 static int exec_mode_run(int argc, char **argv)
 {
-    if (argc < 4)
+    if (argc < 5)
         return EX_DATAERR;
 
-    auto parse_int = [](const char *arg) {
+    auto parse_int = [](const char *arg, bool allow_negative = false) {
         char *end;
+        errno = 0;
         long n = strtol(arg, &end, 10);
-        if (__builtin_expect(int(n) != n || n < 0 || *end, false)) {
+        if (__builtin_expect(int(n) != n || (!allow_negative && n < 0) || *end || errno == ERANGE, false)) {
 #if defined(_WIN32)
-           if (*arg == 'h') {
+           if (!allow_negative && *arg == 'h') {
                // a handle
                n = _open_osfhandle(strtoll(arg + 1, &end, 16), O_RDWR);
                if (n >= 0)
@@ -606,6 +607,8 @@ static int exec_mode_run(int argc, char **argv)
         return int(n);
     };
     int child_number = parse_int(argv[0]);
+
+    sApp->current_iteration_count = parse_int(argv[4], true);
 
     attach_shmem(parse_int(argv[1]));
 #if SANDSTONE_DEVICE_IDXD
@@ -628,7 +631,7 @@ static int exec_mode_run(int argc, char **argv)
     random_init_global(argv[3]);
     make_rescheduler(sApp->shmem->cfg.reschedule_mode);
 
-    load_test_knob_args({ argv + 4, argv + argc });
+    load_test_knob_args({ argv + 5, argv + argc });
 
     return test_result_to_exit_code(child_run(tests_to_run.at(0), child_number));
 }

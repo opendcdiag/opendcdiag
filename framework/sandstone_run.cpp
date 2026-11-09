@@ -1415,7 +1415,7 @@ static StartedChild spawn_child(const char *test_id, int child_number,
 
     StartedChild ret = {};
 
-    // argument order must match exec_mode_run()
+    // argument order must match exec_mode_run(): child, shmem, test, seed, iteration, knobs
     std::vector argv = {
         static_cast<const char *>(program_invocation_name), "-x", childnumstr.c_str(),
     };
@@ -1557,7 +1557,10 @@ static void run_one_test_children(ChildrenList &children, const struct test *tes
     } else {
         std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
         std::string random_seed = random_format_seed();
-        std::vector<const char *> common_args = { shmemfdstr.c_str(), test->id, random_seed.c_str() };
+        std::string iteration = stdprintf("%d", sApp->current_iteration_count);
+        std::vector<const char *> common_args = {
+            shmemfdstr.c_str(), test->id, random_seed.c_str(), iteration.c_str()
+        };
         save_test_knob_args(common_args, test->id);
         common_args.push_back(nullptr);
         for (int i = 0; i < child_count; ++i)

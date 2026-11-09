@@ -652,6 +652,83 @@ function selftest_log_skip_init_common() {
     done
 }
 
+result_sequence_entry() {
+    local entry=$1 result=$2 iteration=$3 retry=$4
+    test_yaml_regexp "/tests/$entry/test" selftest_result_sequence
+    test_yaml_regexp "/tests/$entry/result" "$result"
+    test_yaml_numeric "/tests/$entry/state/iteration" "value == $iteration"
+    test_yaml_regexp "/tests/$entry/state/retry" "$retry"
+    test_yaml_regexp "/tests/$entry/threads/1/messages/0/text" "I> Retry: ${retry,,}"
+}
+
+result_sequence_skip_fracture() {
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_result_sequence -t 10s \
+        -O selftest_result_sequence.later=-1 --retest-on-failure=2 --fatal-skips "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 2'
+    result_sequence_entry 0 pass 0 False
+    result_sequence_entry 1 skip 1 False
+}
+
+result_sequence_fail_fracture() {
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_result_sequence -t 10s \
+        -O selftest_result_sequence.later=1 "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 2'
+    result_sequence_entry 0 pass 0 False
+    result_sequence_entry 1 fail 1 False
+}
+
+@test "result sequence: skip after a passing fracture stops immediately" {
+    result_sequence_skip_fracture
+}
+
+@test "result sequence: failure after a passing fracture remains failed" {
+    result_sequence_fail_fracture
+}
+
+result_sequence_retries() {
+    local retry_result=$1 expected_result=$2
+    shift 2
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_result_sequence \
+        -O selftest_result_sequence.first=1 -O "selftest_result_sequence.retry=$retry_result" \
+        --retest-on-failure=1 --total-retest-on-failure=2 "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    # Nonfailing retries consume the doubled budget without erasing the failure.
+    test_yaml_numeric "/tests@len" 'value == 3'
+    result_sequence_entry 0 fail 0 False
+    result_sequence_entry 1 "$expected_result" 1 True
+    result_sequence_entry 2 "$expected_result" 2 True
+}
+
+@test "result sequence: passing retries preserve failure and consume budget" {
+    result_sequence_retries 0 pass
+}
+
+@test "result sequence: skipped retries preserve failure and consume budget" {
+    result_sequence_retries -1 skip
+}
+
+@test "result sequence: resets the iteration after retries" {
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_result_sequence \
+        -e selftest_result_sequence -O selftest_result_sequence.first=1 \
+        -O selftest_result_sequence.retry=0 --retest-on-failure=1 --total-retest-on-failure=2
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 4'
+    result_sequence_entry 0 fail 0 False
+    result_sequence_entry 1 pass 1 True
+    result_sequence_entry 2 pass 2 True
+    result_sequence_entry 3 fail 0 False
+}
+
 @test "selftest_timedpass_no_fracture --max-test-loop-count=1" {
     # With just one loop, this should have very predictable timing
     declare -A yamldump
