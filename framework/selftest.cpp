@@ -1272,7 +1272,7 @@ static int selftest_fork_run(struct test *test, int thread)
         log_info("Child pid: %d", pid);
         return ParentFunc(test, thread);
     } else {
-        return ChildFunc(test, thread);
+        _exit(ChildFunc(test, thread));
     }
 }
 #endif
