@@ -351,6 +351,71 @@ selftest_pass() {
     test_yaml_regexp "/tests/1/result" skip
 }
 
+@test "selftest -t none bounds a timed test by --max-test-loop-count" {
+    # selftest_timedpass normally loops around usleep() until the wallclock
+    # deadline expires. With "-t none" the per-test wallclock check is
+    # disabled, so the only thing that bounds the run is the loop iteration
+    # count. With --max-test-loop-count=N every worker thread must therefore
+    # stop after exactly N iterations, regardless of how much wallclock time
+    # that takes -- proving the clock no longer governs the run.
+    declare -A yamldump
+    local loops=16
+    sandstone_selftest -vvv -t none --max-test-loop-count=$loops -e selftest_timedpass
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/tests/0/result" pass
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        test_yaml_numeric "/tests/0/threads/$i/loop-count" "value == $loops"
+    done
+}
+
+@test "selftest -t none runs a single fracture" {
+    # selftest_timedpass would normally auto-fracture: run multiple times with
+    # different random seeds for the default test duration (each fracture shows
+    # up as a separate /tests entry). Under "-t none" the run is bounded purely
+    # by the loop iteration count, so it must run exactly one fracture even
+    # though the test has a non-zero duration.
+    declare -A yamldump
+    sandstone_selftest -t none -e selftest_timedpass
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_numeric "/tests@len" 'value == 1'
+    test_yaml_regexp "/tests/0/test" selftest_timedpass
+    test_yaml_regexp "/tests/0/result" pass
+    test_yaml_numeric "/tests/0/state/iteration" 'value == 0'
+}
+
+@test "selftest per-test-list duration overrides -t none" {
+    # A per-test duration from the test list takes precedence over "-t none":
+    # the wallclock check is re-enabled for that test, so it is bounded by time
+    # (and fractures) rather than running a single loop-count-bounded fracture.
+    # selftest_timedpass sleeps 10 ms per loop and auto-fractures ~40 loops
+    # (~400 ms) at a time, so a 900 ms duration forces at least two fractures.
+    declare -A yamldump
+    local testlistfile=`mktempfile list.XXXXXX`
+    echo "selftest_timedpass:900" > "$testlistfile"
+    sandstone_selftest -t none --test-list-file "$testlistfile"
+    rm -f -- "$testlistfile"
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_numeric "/tests@len" 'value > 1'
+    for ((i = 0; i < yamldump[/tests@len]; ++i)); do
+        test_yaml_regexp "/tests/$i/test" selftest_timedpass
+        test_yaml_regexp "/tests/$i/result" pass
+    done
+}
+
+@test "selftest -t none with a run-once test" {
+    # selftest_pass has desired_duration == -1 (runs once). Under "-t none" it
+    # must still run exactly once and pass, without hanging.
+    declare -A yamldump
+    sandstone_selftest -t none -e selftest_pass
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_numeric "/tests@len" 'value == 1'
+    test_yaml_regexp "/tests/0/test" selftest_pass
+    test_yaml_regexp "/tests/0/result" pass
+}
+
 @test "selftest_pass YAML has main thread and loop-count at -vvv" {
     # Verify that at least 1 main thread exists with runtime
     # and resource-usage when running at -vvv verbosity.
