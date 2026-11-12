@@ -1159,11 +1159,11 @@ int main(int argc, char **argv)
         }
     }
 
-    /* Add device-specific monitoring tests to the set. They will be kept last by
+    /* Add the postexec tests to the set. They will be kept last by
      * SandstoneTestSet in case randomization is requested. */
-    for (auto special_test : test_set->get_special_tests()) {
-        if (special_test != &_test_mce_check || (special_test == &_test_mce_check && !sApp->ignore_mce_errors))
-            test_set->add(special_test);
+    for (auto postexec_test : test_set->get_postexec_tests()) {
+        if (postexec_test != &_test_mce_check || (postexec_test == &_test_mce_check && !sApp->ignore_mce_errors))
+            test_set->add(postexec_test);
     }
 
     /* Remove all the tests we were told to disable */
