@@ -11,17 +11,18 @@
  * by repetitively solving general matrix matrix multiplication.  The
  * multiplication function is from the 3rd party library Eigen.  A
  * pair of random matrices are generated as inputs and then multiplied
- * using Eigen's gemm. The multiplication result is compared against a
- * golden result that is computed during init.  This particular
- * version of the test goes for double precision input matrices. This
- * variation adds extra copies and consistency checks.
+ * using Eigen's gemm. Init and workers submit multiplication results for
+ * cross-checking, and each worker's later results must match its first.
+ * Init's result participates in verification, not as a trusted reference.
+ * This particular version of the test goes for double precision input
+ * matrices. This variation adds extra copies and consistency checks.
  *
- * @note Although the test should run fine on a single thread, it is
- * only expected to catch defects if run on at least 2 cores.
+ * @note One successful worker plus init provides cross-check coverage.
  * @endparblock
  */
 
 #include <sandstone.h>
+#include "crosscheck.h"
 
 #include <Eigen/Core>
 using namespace Eigen;
@@ -30,22 +31,27 @@ using namespace Eigen;
 
 typedef Matrix < double, Dynamic, Dynamic > Mat;
 
-namespace {
-struct eigen_test_data {
-    Mat lhs;
-    Mat rhs;
-    Mat prod;
-};
-}
-
-#define CAST(_x) static_cast<struct eigen_test_data *>(_x)
+CROSSCHECK_INPUT(gemm_double14_lhs, double);
+CROSSCHECK_INPUT(gemm_double14_rhs, double);
+CROSSCHECK_OUTPUT(gemm_double14_lhs_copy, double);
+CROSSCHECK_OUTPUT(gemm_double14_rhs_copy, double);
+CROSSCHECK_OUTPUT(gemm_double14_product, double);
 
 static int eigen_gemm_double14_init(struct test *test) {
-    test->data = new(eigen_test_data);
     try {
-        CAST(test->data)->lhs = Mat::Random(M_DIM, M_DIM);
-        CAST(test->data)->rhs = Mat::Random(M_DIM, M_DIM);
-        CAST(test->data)->prod = CAST(test->data)->lhs * CAST(test->data)->rhs;
+        Mat scratch = Mat::Random(M_DIM, M_DIM);
+        set_input(gemm_double14_lhs, scratch.data(), scratch.size(), "Left operand");
+        scratch = Mat::Random(M_DIM, M_DIM);
+        set_input(gemm_double14_rhs, scratch.data(), scratch.size(), "Right operand");
+
+        auto lhs_input = get_input(gemm_double14_lhs);
+        auto rhs_input = get_input(gemm_double14_rhs);
+        Mat lhs = Map<const Mat>(lhs_input.data(), M_DIM, M_DIM);
+        Mat rhs = Map<const Mat>(rhs_input.data(), M_DIM, M_DIM);
+        Mat prod = lhs * rhs;
+        submit_output(gemm_double14_lhs_copy, lhs_input, "Left operand copy");
+        submit_output(gemm_double14_rhs_copy, rhs_input, "Right operand copy");
+        submit_output(gemm_double14_product, prod.data(), prod.size(), "Matrix product");
     } catch (...) {
         report_fail_msg("Exception on Eigen code, most probably OOM");
     }
@@ -53,35 +59,22 @@ static int eigen_gemm_double14_init(struct test *test) {
 }
 
 static int eigen_gemm_double14_run(struct test *test, int cpu) {
+    auto lhs_input = get_input(gemm_double14_lhs);
+    auto rhs_input = get_input(gemm_double14_rhs);
+    Mat lhs = Map<const Mat>(lhs_input.data(), M_DIM, M_DIM);
+    Mat rhs = Map<const Mat>(rhs_input.data(), M_DIM, M_DIM);
     do {
-        auto testdata = CAST(test->data);
         Mat _x;
-        _x = testdata->lhs;
+        _x = lhs;
         Mat _y;
-        _y = testdata->rhs;
+        _y = rhs;
         Mat _prod;
         _prod = _x * _y;
 
-        if (!_x.isApprox(testdata->lhs)) {
-                report_fail_msg("_x.isApprox failed");
-        }
-        memcmp_or_fail(_x.data(), testdata->lhs.data(), M_DIM * M_DIM);
-
-        if (!_y.isApprox(testdata->rhs)) {
-                report_fail_msg("_y.isApprox failed");
-        }
-        memcmp_or_fail(_y.data(), testdata->rhs.data(), M_DIM * M_DIM);
-
-        if (!_prod.isApprox(testdata->prod)) {
-                report_fail_msg("_prod.isApprox failed");
-        }
-        memcmp_or_fail(_prod.data(), testdata->prod.data(), M_DIM * M_DIM);
+        submit_output(gemm_double14_lhs_copy, _x.data(), _x.size(), "Left operand copy");
+        submit_output(gemm_double14_rhs_copy, _y.data(), _y.size(), "Right operand copy");
+        submit_output(gemm_double14_product, _prod.data(), _prod.size(), "Matrix product");
     } while (test_time_condition(test));
-    return EXIT_SUCCESS;
-}
-
-static int eigen_gemm_double14_finish(struct test *test) {
-    delete(CAST(test->data));
     return EXIT_SUCCESS;
 }
 
@@ -89,7 +82,6 @@ DECLARE_TEST(eigen_gemm_double14, "Eigen GEMM payload (double, dynamic, square)"
   .groups = DECLARE_TEST_GROUPS(&group_math),
   .test_init = eigen_gemm_double14_init,
   .test_run = eigen_gemm_double14_run,
-  .test_cleanup = eigen_gemm_double14_finish,
   .fracture_loop_count = 4,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
