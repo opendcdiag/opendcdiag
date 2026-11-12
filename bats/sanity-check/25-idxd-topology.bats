@@ -68,7 +68,7 @@ check_deviceset_type() {
     "$SANDSTONE_BIN" \
         --on-crash=core --on-hang=kill --ignore-mce-errors \
         -Y -o - -vvv \
-        --disable='@special' --selftests --timeout=20s --retest-on-failure=0 \
+        --disable='@postexec' --selftests --timeout=20s --retest-on-failure=0 \
         -e selftest_pass > "$yamlfile"
     [[ "$?" -eq 0 ]]
 

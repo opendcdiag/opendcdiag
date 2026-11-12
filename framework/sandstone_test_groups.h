@@ -17,7 +17,7 @@ extern const struct test_group
         group_compression,
         group_math,
         group_fuzzing,
-        group_special;
+        group_postexec;
 
 #if defined(SANDSTONE_DEVICE_CPU) && defined(__x86_64__)
 extern const struct test_group

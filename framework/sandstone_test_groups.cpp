@@ -26,9 +26,9 @@ constexpr struct test_group group_fuzzing = {
                "Tests that fuzz framework functions using AFL++ persistent mode"),
 };
 
-constexpr struct test_group group_special = {
-    TEST_GROUP("special",
-               "Special framework-inserted tests"),
+constexpr struct test_group group_postexec = {
+    TEST_GROUP("postexec",
+               "Framework-inserted tests that run after all other tests"),
 };
 
 #if defined(SANDSTONE_DEVICE_CPU) && defined(__x86_64__)

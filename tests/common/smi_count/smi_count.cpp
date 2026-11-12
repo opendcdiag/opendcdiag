@@ -66,7 +66,7 @@ int smi_count_run(struct test *test, int thread)
 } // end anonymous namespace
 
 DECLARE_MANUAL_TEST(smi_count, "Counts SMI events")
-    .groups = DECLARE_TEST_GROUPS(&group_special),
+    .groups = DECLARE_TEST_GROUPS(&group_postexec),
     .test_preinit = initialize_smi_counts,
     .test_init = [](struct test *t) { return EXIT_SUCCESS; },
     .test_run = smi_count_run,
