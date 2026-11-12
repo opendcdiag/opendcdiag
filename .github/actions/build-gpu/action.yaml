@@ -62,11 +62,13 @@ runs:
     - name: Install Level Zero 1.32.0
       shell: bash
       run: |
-        add-apt-repository -y ppa:kobuk-team/intel-graphics
-        DEBIAN_FRONTEND=noninteractive apt-get -y update
+        wget -q -O /tmp/libze1_1.32.0+u24.04_amd64.deb \
+          'https://github.com/oneapi-src/level-zero/releases/download/v1.32.0/libze1_1.32.0+u24.04_amd64.deb'
+        wget -q -O /tmp/libze-dev_1.32.0+u24.04_amd64.deb \
+          'https://github.com/oneapi-src/level-zero/releases/download/v1.32.0/libze-dev_1.32.0+u24.04_amd64.deb'
         DEBIAN_FRONTEND=noninteractive apt-get -y install \
-            'libze1=1.32.0-1~24.04~ppa1' \
-            'libze-dev=1.32.0-1~24.04~ppa1'
+          /tmp/libze1_1.32.0+u24.04_amd64.deb \
+          /tmp/libze-dev_1.32.0+u24.04_amd64.deb
     - uses: actions/checkout@v6
     - name: meson setup
       shell: bash
