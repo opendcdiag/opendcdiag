@@ -4,29 +4,41 @@
  * Copyright 2022 Intel Corporation.
  * SPDX-License-Identifier: Apache-2.0
  *
- * @test ssl_sha
+ * @test openssl_sha
  *
+ * @parblock
  * The test calculates 3 different checksums (sha256, sha384 and sha512) for a
- * given random-generated buffer and compares the results against
- * pre-calculated golden values.
+ * corpus of 1,024 randomly generated 512-byte buffers. Init and workers get
+ * the plaintext inputs and submit digest arrays for cross-checking. Later
+ * submissions on a CPU must match that CPU's first. Init's results participate in
+ * verification, not as trusted references. Each worker completes at least one
+ * corpus sweep, using randomized traversal and odd buffer offsets, before
+ * checking whether to repeat.
+ *
+ * @note Cross-owner comparison requires at least two published CPU owners
+ * within the same execution slice/pass.
+ * Init and a worker on the same CPU provide same-owner checking, not extra votes.
+ * @endparblock
  *
  */
 
 #include "sandstone.h"
+#include "crosscheck.h"
 
 #if SANDSTONE_SSL_BUILD
 
 #include "sandstone_ssl.h"
 
-#include <assert.h>
+#include <array>
 #include <string.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <sys/mman.h>
+#include <vector>
 
 #define PLAINTEXT_SIZE              (512UL)
 #define SHA_GOLDEN_ELEMS            (1024UL)
 #define SHA_MAX_OFFSET              (512UL)
+
+namespace {
 
 struct sha_elem
 {
@@ -36,83 +48,105 @@ struct sha_elem
     uint8_t sha512sum[SHA512_DIGEST_LENGTH];
 };
 
-struct sha_test
+CROSSCHECK_INPUT(sha_plaintexts, uint8_t);
+CROSSCHECK_OUTPUT(sha256_digests, uint8_t);
+CROSSCHECK_OUTPUT(sha384_digests, uint8_t);
+CROSSCHECK_OUTPUT(sha512_digests, uint8_t);
+
+struct sha_digests
 {
-    uint8_t *arena;
-    uint8_t arena_size;
-    sha_elem golden_elements[SHA_GOLDEN_ELEMS];
+    std::array<uint8_t, SHA_GOLDEN_ELEMS * SHA256_DIGEST_LENGTH> sha256;
+    std::array<uint8_t, SHA_GOLDEN_ELEMS * SHA384_DIGEST_LENGTH> sha384;
+    std::array<uint8_t, SHA_GOLDEN_ELEMS * SHA512_DIGEST_LENGTH> sha512;
 };
 
-static void ssl_sha256(sha_elem *target)
+static int calculate_sha(const char *algorithm, const uint8_t *plaintext, uint8_t *digest,
+                         unsigned int expected_length, size_t index)
 {
-    /* Create Context */
+    const EVP_MD *md = s_EVP_get_digestbyname(algorithm);
+    if (!md) {
+        log_skip(TestResourceIssueSkipCategory,
+                 "%s EVP_get_digestbyname unavailable at corpus index %zu", algorithm, index);
+        return EXIT_SKIP;
+    }
+
     EVP_MD_CTX *mdctx = s_EVP_MD_CTX_new();
+    if (!mdctx) {
+        log_skip(TestResourceIssueSkipCategory,
+                 "%s EVP_MD_CTX_new failed at corpus index %zu", algorithm, index);
+        return EXIT_SKIP;
+    }
 
-    /* Fetch algorithm */
-    const EVP_MD *md = s_EVP_get_digestbyname("sha256");
-
-    /* Digest */
+    int result = EXIT_SUCCESS;
     unsigned int md_len = 0;
-    s_EVP_DigestInit_ex(mdctx, md, NULL);
-    s_EVP_DigestUpdate(mdctx, &target->plain_text[0], PLAINTEXT_SIZE);
-    s_EVP_DigestFinal_ex(mdctx, &target->sha256sum[0], &md_len);
+    if (s_EVP_DigestInit_ex(mdctx, md, NULL) != 1) {
+        log_skip(TestResourceIssueSkipCategory,
+                 "%s EVP_DigestInit_ex failed at corpus index %zu", algorithm, index);
+        result = EXIT_SKIP;
+    } else if (s_EVP_DigestUpdate(mdctx, plaintext, PLAINTEXT_SIZE) != 1) {
+        log_error("%s EVP_DigestUpdate failed at corpus index %zu", algorithm, index);
+        result = EXIT_FAILURE;
+    } else if (s_EVP_DigestFinal_ex(mdctx, digest, &md_len) != 1) {
+        log_error("%s EVP_DigestFinal_ex failed at corpus index %zu", algorithm, index);
+        result = EXIT_FAILURE;
+    } else if (md_len != expected_length) {
+        log_error("%s EVP_DigestFinal_ex wrong length at corpus index %zu: got %u, expected %u",
+                  algorithm, index, md_len, expected_length);
+        result = EXIT_FAILURE;
+    }
+    s_EVP_MD_CTX_free(mdctx);
+    return result;
 }
 
-static void ssl_sha384(sha_elem *target)
+static int calculate_sha_corpus(sha_digests &digests)
 {
-    /* Create Context */
-    EVP_MD_CTX *mdctx = s_EVP_MD_CTX_new();
-
-    /* Fetch algorithm */
-    const EVP_MD *md = s_EVP_get_digestbyname("sha384");
-
-    /* Digest */
-    unsigned int md_len = 0;
-    s_EVP_DigestInit_ex(mdctx, md, NULL);
-    s_EVP_DigestUpdate(mdctx, &target->plain_text[0], PLAINTEXT_SIZE);
-    s_EVP_DigestFinal_ex(mdctx, &target->sha384sum[0], &md_len);
+    auto plaintexts = get_input(sha_plaintexts);
+    uint8_t arena[SHA_MAX_OFFSET + sizeof(sha_elem)];
+    size_t index = random64() & (SHA_GOLDEN_ELEMS - 1);
+    // An odd stride visits every member of this power-of-two corpus once.
+    const size_t stride = (random64() & (SHA_GOLDEN_ELEMS - 1)) | 1;
+    for (size_t i = 0; i < SHA_GOLDEN_ELEMS; ++i) {
+        const size_t offset = (random64() & 0x1ff) | 1;
+        sha_elem *elem = reinterpret_cast<sha_elem *>(&arena[offset]);
+        memcpy(elem->plain_text, &plaintexts[index * PLAINTEXT_SIZE], PLAINTEXT_SIZE);
+        int result = calculate_sha("sha256", elem->plain_text, elem->sha256sum, SHA256_DIGEST_LENGTH, index);
+        if (result != EXIT_SUCCESS)
+            return result;
+        result = calculate_sha("sha384", elem->plain_text, elem->sha384sum, SHA384_DIGEST_LENGTH, index);
+        if (result != EXIT_SUCCESS)
+            return result;
+        result = calculate_sha("sha512", elem->plain_text, elem->sha512sum, SHA512_DIGEST_LENGTH, index);
+        if (result != EXIT_SUCCESS)
+            return result;
+        memcpy(&digests.sha256[index * SHA256_DIGEST_LENGTH], elem->sha256sum, SHA256_DIGEST_LENGTH);
+        memcpy(&digests.sha384[index * SHA384_DIGEST_LENGTH], elem->sha384sum, SHA384_DIGEST_LENGTH);
+        memcpy(&digests.sha512[index * SHA512_DIGEST_LENGTH], elem->sha512sum, SHA512_DIGEST_LENGTH);
+        index = (index + stride) & (SHA_GOLDEN_ELEMS - 1);
+    }
+    return EXIT_SUCCESS;
 }
 
-static void ssl_sha512(sha_elem *target)
+static void submit_sha_digests(const sha_digests &digests)
 {
-    /* Create Context */
-    EVP_MD_CTX *mdctx = s_EVP_MD_CTX_new();
-
-    /* Fetch algorithm */
-    const EVP_MD *md = s_EVP_get_digestbyname("sha512");
-
-    /* Digest */
-    unsigned int md_len = 0;
-    s_EVP_DigestInit_ex(mdctx, md, NULL);
-    s_EVP_DigestUpdate(mdctx, &target->plain_text[0], PLAINTEXT_SIZE);
-    s_EVP_DigestFinal_ex(mdctx, &target->sha512sum[0], &md_len);
+    submit_output(sha256_digests, digests.sha256, "SHA-256 corpus digests");
+    submit_output(sha384_digests, digests.sha384, "SHA-384 corpus digests");
+    submit_output(sha512_digests, digests.sha512, "SHA-512 corpus digests");
 }
 
 #pragma GCC diagnostic ignored "-Waddress" // for builds we've linked to OpenSSL
 static int ssl_sha_init(struct test* test)
 {
-    if (s_EVP_DigestInit_ex && s_EVP_DigestUpdate && s_EVP_DigestFinal_ex && s_EVP_get_digestbyname) {
-        const size_t sha_offset = (random64() & 0x1ff) | 1;
-        const size_t sha_arena_size = sha_offset + sizeof(sha_test);
-        uint8_t *sha_arena = (uint8_t *) mmap(NULL, sha_arena_size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+    if (s_EVP_MD_CTX_new && s_EVP_MD_CTX_free && s_EVP_DigestInit_ex && s_EVP_DigestUpdate
+            && s_EVP_DigestFinal_ex && s_EVP_get_digestbyname) {
+        std::vector<uint8_t> plaintexts(SHA_GOLDEN_ELEMS * PLAINTEXT_SIZE);
+        memset_random(plaintexts.data(), plaintexts.size());
+        set_input(sha_plaintexts, plaintexts, "Plaintext corpus");
 
-        sha_test *sha_test_ptr = (sha_test *)(&sha_arena[sha_offset]);
-        test->data = sha_test_ptr;
-
-        sha_test_ptr->arena = sha_arena;
-        sha_test_ptr->arena_size = sha_arena_size;
-
-        for (size_t i=0; i<SHA_GOLDEN_ELEMS; i++)
-        {
-            sha_elem *cursor = &sha_test_ptr->golden_elements[i];
-            memset_random(&cursor->plain_text[0], PLAINTEXT_SIZE);
-
-            /* Calculate sha checksums */
-            ssl_sha256(cursor);
-            ssl_sha384(cursor);
-            ssl_sha512(cursor);
-        }
-
+        sha_digests digests;
+        int result = calculate_sha_corpus(digests);
+        if (result != EXIT_SUCCESS)
+            return result;
+        submit_sha_digests(digests);
         return EXIT_SUCCESS;
     }
     else {
@@ -123,36 +157,17 @@ static int ssl_sha_init(struct test* test)
 
 static int ssl_sha_run(struct test* test, int cpu)
 {
-    sha_test *sha_test_ptr = (sha_test *) test->data;
-    sha_elem *golden_elements = &sha_test_ptr->golden_elements[0];
-
-    const size_t our_arena_size = SHA_MAX_OFFSET + sizeof(sha_elem);
-    uint8_t *our_arena = (uint8_t *) mmap(NULL, our_arena_size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
-
-
-    TEST_LOOP(test, 2) {
-        const size_t our_offset = (random64() & 0x1ff) | 1;
-        const size_t golden_idx = random64() & (SHA_GOLDEN_ELEMS - 1);
-        sha_elem *golden_elem = &golden_elements[golden_idx];
-
-        sha_elem *our_elem = (sha_elem *) (&our_arena[our_offset]);
-        memcpy(&our_elem->plain_text, &golden_elem->plain_text[0], PLAINTEXT_SIZE);
-
-        /* Calculate sha checksums */
-        ssl_sha256(our_elem);
-        ssl_sha384(our_elem);
-        ssl_sha512(our_elem);
-
-        /* Check result against golden values */
-        memcmp_or_fail(&our_elem->sha256sum[0], &golden_elem->sha256sum[0], SHA256_DIGEST_LENGTH,
-                "sha256sum values does not match.");
-        memcmp_or_fail(&our_elem->sha384sum[0], &golden_elem->sha384sum[0], SHA384_DIGEST_LENGTH,
-                "sha384sum values does not match.");
-        memcmp_or_fail(&our_elem->sha512sum[0], &golden_elem->sha512sum[0], SHA512_DIGEST_LENGTH,
-                "sha512sum values does not match.");
+    sha_digests digests;
+    TEST_LOOP(test, 1) {
+        int result = calculate_sha_corpus(digests);
+        if (result != EXIT_SUCCESS)
+            return result;
+        submit_sha_digests(digests);
     }
     return EXIT_SUCCESS;
 }
+
+} // namespace
 
 #else // !SANDSTONE_SSL_BUILD
 
