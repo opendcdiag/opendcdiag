@@ -12,17 +12,17 @@
  * decomposition problem on given input matrices, which involve a lot
  * of matrix multiplication operations underneath.
  *
- * The logic comes from the 3rd party library Eigen. The first thread
- * that gets to run computes a "golden value" of the results, those
- * being output matrices "U" and "V". Subsequent runs have results
- * contrasted to those golden values and, whenever they differ, an
- * error is flagged.
+ * The logic comes from the 3rd party library Eigen. Init and workers get
+ * the input matrix and compute and submit output matrices "U" and "V"
+ * for cross-checking. Later submissions on a CPU must match that CPU's first.
+ * Init's results participate in verification, not as trusted references.
  *
  * This particular version of the Eigen SVD tests go for double
  * precision input matrices and the (divide and conquer)
  * bi-diagonalization SVD algorithm.
  *
- * @note This test requires at least 2 threads to run.
+ * @note Cross-owner comparison requires at least two distinct eligible CPUs.
+ * Init and a worker on the same CPU provide same-owner checking, not extra votes.
  * @endparblock
  */
 
@@ -40,7 +40,6 @@ DECLARE_TEST(eigen_svd_double, "Eigen SVD (Singular Value Decomposition) solving
   .groups = DECLARE_TEST_GROUPS(&group_math),
   .test_init = eigen_svd_double_test::init,
   .test_run = eigen_svd_double_test::run,
-  .test_cleanup = eigen_svd_double_test::cleanup,
   .fracture_loop_count = 5,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
@@ -52,7 +51,6 @@ DECLARE_TEST(eigen_svd_double2, "Eigen SVD (Singular Value Decomposition) solvin
   .groups = DECLARE_TEST_GROUPS(&group_math),
   .test_init = eigen_svd_double2_test::init,
   .test_run = eigen_svd_double2_test::run,
-  .test_cleanup = eigen_svd_double2_test::cleanup,
   .fracture_loop_count = 5,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST

@@ -12,16 +12,16 @@
  * decomposition problem on given input matrices, which involve a lot
  * of matrix multiplication operations underneath.
  *
- * The logic comes from the 3rd party library Eigen. The first thread
- * that gets to run computes a "golden value" of the results, those
- * being output matrices "U" and "V". Subsequent runs have results
- * contrasted to those golden values and, whenever they differ, an
- * error is flagged.
+ * The logic comes from the 3rd party library Eigen. Init and workers get
+ * the input matrix and compute and submit output matrices "U" and "V"
+ * for cross-checking. Later submissions on a CPU must match that CPU's first.
+ * Init's results participate in verification, not as trusted references.
  *
  * This particular version of the Eigen SVD tests go for single
  * precision input matrices and the "Jacobi" SVD algorithm.
  *
- * This test requires at least 2 threads to run.
+ * @note Cross-owner comparison requires at least two distinct eligible CPUs.
+ * Init and a worker on the same CPU provide same-owner checking, not extra votes.
  * @endparblock
  */
 
@@ -39,6 +39,5 @@ DECLARE_TEST(eigen_svd_jacobi, "Eigen SVD (Singular Value Decomposition, Jacobi 
   .groups = DECLARE_TEST_GROUPS(&group_math),
   .test_init = eigen_svd_jacobi_test::init,
   .test_run = eigen_svd_jacobi_test::run,
-  .test_cleanup = eigen_svd_jacobi_test::cleanup,
   .quality_level = TEST_QUALITY_SKIP,
 END_DECLARE_TEST
