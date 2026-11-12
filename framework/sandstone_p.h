@@ -136,10 +136,9 @@ inline auto operator==(LogLevelVerbosity a, int b) noexcept
 
 /*
 * Returns a vector with device-specific tests that should be
-* added as last tests to the test list. An example of such
-* test (device-agnostic, however) is mce_check.
+* added as last tests to the test list.
 */
-std::vector<struct test*> special_tests_for_device();
+std::vector<struct test*> postexec_tests_for_device();
 
 /*
 * Returns formatted string, with comma separated features

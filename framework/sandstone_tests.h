@@ -98,7 +98,7 @@ public:
         if (cfg.randomize) {
             /* Do not shuffle special tests if present. */
             auto end = test_set.end();
-            auto last = end - special_tests.size();
+            auto last = end - postexec_tests.size();
             std::shuffle(test_set.begin(), last, SandstoneURBG());
         }
         return test_set.begin();
@@ -124,9 +124,9 @@ public:
 
     std::vector<struct test_cfg_info> add_builtin_test_list(const char *name, std::vector<std::string> &errors);
 
-    const TestSet& get_special_tests() const noexcept
+    const TestSet& get_postexec_tests() const noexcept
     {
-        return special_tests;
+        return postexec_tests;
     }
 
 private:
@@ -142,7 +142,7 @@ private:
     /* list of all available tests. */
     TestSet all_tests;
     /* list of all 'special' tests. */
-    TestSet special_tests;
+    TestSet postexec_tests;
     /* maps group name to a vector of tests it contains. */
     std::map<std::string_view, std::vector<struct test *>> all_group_map;
 

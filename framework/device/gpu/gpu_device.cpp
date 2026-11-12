@@ -59,7 +59,7 @@ void finish_test_for_device(struct test *test)
 
 extern struct test _test_event_monitor;
 
-std::vector<struct test*> special_tests_for_device()
+std::vector<struct test*> postexec_tests_for_device()
 {
     return {
         &_test_event_monitor,
