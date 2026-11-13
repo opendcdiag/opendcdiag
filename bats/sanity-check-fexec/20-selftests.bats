@@ -1,0 +1,1 @@
+../sanity-check/20-selftests.bats
