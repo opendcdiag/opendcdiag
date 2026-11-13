@@ -1,0 +1,1 @@
+../sanity-check/25-cpu-topology.bats
