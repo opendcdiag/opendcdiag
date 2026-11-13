@@ -11,18 +11,18 @@
  * by repetitively solving general matrix matrix multiplication.  The
  * multiplication function is from the 3rd party library Eigen.  A
  * pair of random matrices are generated as inputs and then multiplied
- * using Eigen's gemm. The multiplication result is compared against a
- * golden result that is computed during init.  This particular
- * version of the test goes for double precision, complex numbers
- * input matrices.  Although the test should run fine on a single
- * thread, it is only expected to catch defects if run on at least 2
- * cores.
+ * using Eigen's gemm. Init and workers submit multiplication results for
+ * cross-checking, and each worker's later results must match its first.
+ * Init's result participates in verification, not as a trusted reference.
+ * This particular version of the test goes for double precision, complex
+ * numbers input matrices.
  *
- * @note This test requires at least 2 threads to run.
+ * @note One successful worker plus init provides cross-check coverage.
  * @endparblock
  */
 
 #include <sandstone.h>
+#include "crosscheck.h"
 
 #include <Eigen/Core>
 using namespace Eigen;
@@ -31,22 +31,33 @@ using namespace Eigen;
 
 typedef Matrix < std::complex < double >, Dynamic, Dynamic > Mat;
 
-namespace {
-struct eigen_test_data {
-    Mat lhs;
-    Mat rhs;
-    Mat prod;
-};
+CROSSCHECK_INPUT(gemm_cdouble_lhs, double);
+CROSSCHECK_INPUT(gemm_cdouble_rhs, double);
+CROSSCHECK_OUTPUT(gemm_cdouble_product, double);
+
+static Mat matrix_from_input(std::span<const double> input)
+{
+    // Captured doubles are not std::complex<double> objects.
+    Mat result(M_DIM, M_DIM);
+    for (Index i = 0; i < result.size(); ++i)
+        result.data()[i] = std::complex<double>(input[2 * i], input[2 * i + 1]);
+    return result;
 }
 
-#define CAST(_x) static_cast<struct eigen_test_data *>(_x)
-
 static int eigen_gemm_cdouble_dynamic_square_init(struct test *test) {
-    test->data = new(eigen_test_data);
     try {
-        CAST(test->data)->lhs = Mat::Random(M_DIM, M_DIM);
-        CAST(test->data)->rhs = Mat::Random(M_DIM, M_DIM);
-        CAST(test->data)->prod = CAST(test->data)->lhs * CAST(test->data)->rhs;
+        Mat scratch = Mat::Random(M_DIM, M_DIM);
+        set_input(gemm_cdouble_lhs, reinterpret_cast<const double *>(scratch.data()),
+                  2 * scratch.size(), "Left operand (interleaved real/imaginary)");
+        scratch = Mat::Random(M_DIM, M_DIM);
+        set_input(gemm_cdouble_rhs, reinterpret_cast<const double *>(scratch.data()),
+                  2 * scratch.size(), "Right operand (interleaved real/imaginary)");
+
+        Mat lhs = matrix_from_input(get_input(gemm_cdouble_lhs));
+        Mat rhs = matrix_from_input(get_input(gemm_cdouble_rhs));
+        Mat prod = lhs * rhs;
+        submit_output(gemm_cdouble_product, reinterpret_cast<const double *>(prod.data()),
+                      2 * prod.size(), "Matrix product (interleaved real/imaginary)");
     } catch (...) {
         report_fail_msg("Exception on Eigen code, most probably OOM");
     }
@@ -54,22 +65,15 @@ static int eigen_gemm_cdouble_dynamic_square_init(struct test *test) {
 }
 
 static int eigen_gemm_cdouble_dynamic_square_run(struct test *test, int cpu) {
-    //int i=0;
+    Mat lhs = matrix_from_input(get_input(gemm_cdouble_lhs));
+    Mat rhs = matrix_from_input(get_input(gemm_cdouble_rhs));
     do {
-        //++i;
-        auto testdata = CAST(test->data);
         Mat x;
-        x = testdata->lhs * testdata->rhs;
+        x = lhs * rhs;
 
-        memcmp_or_fail(reinterpret_cast<double *>(x.data()),
-                       reinterpret_cast<double *>(testdata->prod.data()), 2 * M_DIM * M_DIM);
+        submit_output(gemm_cdouble_product, reinterpret_cast<const double *>(x.data()),
+                      2 * x.size(), "Matrix product (interleaved real/imaginary)");
     } while (test_time_condition(test));
-    //log_info("Num iters = %i\n", i);
-    return EXIT_SUCCESS;
-}
-
-static int eigen_gemm_cdouble_dynamic_square_finish(struct test *test) {
-    delete(CAST(test->data));
     return EXIT_SUCCESS;
 }
 
@@ -77,7 +81,6 @@ DECLARE_TEST(eigen_gemm_cdouble_dynamic_square, "Eigen GEMM payload (cplx double
   .groups = DECLARE_TEST_GROUPS(&group_math),
   .test_init = eigen_gemm_cdouble_dynamic_square_init,
   .test_run = eigen_gemm_cdouble_dynamic_square_run,
-  .test_cleanup = eigen_gemm_cdouble_dynamic_square_finish,
   .fracture_loop_count = 5,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST

@@ -15,6 +15,7 @@
 #define EIGEN_NO_DEPRECATED_WARNING
 
 #include <sandstone.h>
+#include "crosscheck.h"
 
 #include <boost/type_traits/is_complex.hpp>
 #include <Eigen/Eigenvalues>
@@ -23,11 +24,13 @@ namespace {
 template <typename SVD, int Dim> struct EigenSVDTest
 {
     using Mat = typename SVD::MatrixType;
-    struct eigen_test_data {
-        Mat orig_matrix;
-        Mat u_matrix;
-        Mat v_matrix;
-    };
+    using Scalar = typename Mat::Scalar;
+    using RealScalar = typename Mat::RealScalar;
+    static constexpr bool IsComplex = boost::is_complex<Scalar>::value;
+
+    CROSSCHECK_INPUT(eigen_svd_original, RealScalar);
+    CROSSCHECK_OUTPUT(eigen_svd_u, RealScalar);
+    CROSSCHECK_OUTPUT(eigen_svd_v, RealScalar);
 
     [[gnu::noinline]] static void calculate_once(const Mat &orig_matrix, Mat &u, Mat &v)
     {
@@ -36,44 +39,54 @@ template <typename SVD, int Dim> struct EigenSVDTest
         v = fullSvd.matrixV();
     }
 
-    template <typename FP> static inline std::enable_if_t<boost::is_complex<FP>::value>
-    compare_or_fail(const FP *actual, const FP *expected, const char *name)
+    static const RealScalar *matrix_data(const Mat &matrix)
     {
-        memcmp_or_fail(reinterpret_cast<const typename FP::value_type *>(actual),
-                       reinterpret_cast<const typename FP::value_type *>(expected),
-                       2 * Dim * Dim, name);
+        return reinterpret_cast<const RealScalar *>(matrix.data());
     }
 
-    template <typename FP> static inline std::enable_if_t<!boost::is_complex<FP>::value>
-    compare_or_fail(const FP *actual, const FP *expected, const char *name)
+    static Mat original_matrix()
     {
-        memcmp_or_fail(actual, expected, Dim * Dim, name);
+        auto input = get_input(eigen_svd_original);
+        if constexpr (IsComplex) {
+            // Captured real components are not complex objects.
+            Mat result(Dim, Dim);
+            for (Eigen::Index i = 0; i < result.size(); ++i)
+                result.data()[i] = Scalar(input[2 * i], input[2 * i + 1]);
+            return result;
+        } else {
+            return Eigen::Map<const Mat>(input.data(), Dim, Dim);
+        }
     }
 
-    static int init(struct test *test)
+    static void submit_matrices(const Mat &u, const Mat &v)
     {
-        auto d = new eigen_test_data;
-        d->orig_matrix = Mat::Random(Dim, Dim);
-        calculate_once(d->orig_matrix, d->u_matrix, d->v_matrix);
-        test->data = d;
+        submit_output(eigen_svd_u, matrix_data(u), (IsComplex ? 2 : 1) * u.size(), "Matrix U");
+        submit_output(eigen_svd_v, matrix_data(v), (IsComplex ? 2 : 1) * v.size(), "Matrix V");
+    }
+
+    static int init_matrix(const Mat &matrix)
+    {
+        set_input(eigen_svd_original, matrix_data(matrix), (IsComplex ? 2 : 1) * matrix.size(),
+                  "Original matrix");
+        Mat original = original_matrix();
+        Mat u, v;
+        calculate_once(original, u, v);
+        submit_matrices(u, v);
         return EXIT_SUCCESS;
     }
 
-    static int cleanup(struct test *test)
+    static int init(struct test *)
     {
-        delete static_cast<eigen_test_data *>(test->data);
-        return EXIT_SUCCESS;
+        return init_matrix(Mat::Random(Dim, Dim));
     }
 
     static int run(struct test *test, int)
     {
-        auto d = static_cast<eigen_test_data *>(test->data);
+        Mat original = original_matrix();
         do {
             Mat u, v;
-            calculate_once(d->orig_matrix, u, v);
-
-            compare_or_fail(u.data(), d->u_matrix.data(), "Matrix U");
-            compare_or_fail(v.data(), d->v_matrix.data(), "Matrix V");
+            calculate_once(original, u, v);
+            submit_matrices(u, v);
         } while (test_time_condition(test));
         return EXIT_SUCCESS;
     }
