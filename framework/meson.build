@@ -252,7 +252,8 @@ endif
 
 if get_option('selftests')
     framework_files += files(
-        'selftest.cpp'
+        'selftest.c',
+        'selftest.cpp',
     )
 else
     default_c_flags += [
