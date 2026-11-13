@@ -1785,6 +1785,29 @@ function selftest_cxxthrow_common() {
     fail_callback_common
 }
 
+@test "selftest_memcmp_c" {
+    declare -A yamldump
+    sandstone_selftest -vvv -e selftest_memcmp_c
+    set -e
+    fail_common
+    test_yaml_regexp "/tests/0/threads/0/thread" '^main$'
+    test_yaml_regexp "/tests/0/threads/0/messages/0/text" '^I> C worker memcmp cleanup after join$'
+    [[ "$output" != *"C worker unexpectedly continued after memcmp_or_fail"* ]]
+    for ((i = 1; i <= MAX_PROC; ++i)); do
+        local found=0
+        for ((j = 0; !found && j < ${yamldump[/tests/0/threads/$i/messages@len]}; ++j)); do
+            [[ "${yamldump[/tests/0/threads/$i/messages/$j/level]}" = error ]] || continue
+            found=1
+            local path="/tests/0/threads/$i/messages/$j/data-miscompare"
+            test_yaml_regexp "$path/type" '^uint32_t$'
+            test_yaml_regexp "$path/description" '^C worker stack-local mismatch$'
+            test_yaml_regexp "$path/actual" '^0x11111111( \(286331153\))?$'
+            test_yaml_regexp "$path/expected" '^0x22222222( \(572662306\))?$'
+        done
+        ((found))
+    done
+}
+
 @test "selftest_datacompare" {  # also "_with_cb" version
     declare -A yamldump
     local dataregexp='0x[0-9a-f]+( \(([-0-9]+|[-+0-9a-fpx.]+)\))?'
