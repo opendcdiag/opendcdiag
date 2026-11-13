@@ -199,8 +199,11 @@ endif
 default_c_flags += [
     '-DSANDSTONE',
     '-fno-associative-math',
-    '-fno-asynchronous-unwind-tables',
 ]
+
+if target_machine.system() != 'windows'
+    default_c_flags += ['-fno-asynchronous-unwind-tables']
+endif
 
 default_cpp_flags += [
     '-DSANDSTONE',
