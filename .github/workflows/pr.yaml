@@ -86,6 +86,12 @@ jobs:
         run: |
           ulimit -St 120
           SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
+      - name: run some selftests in -fexec mode
+        if: ${{ matrix.selftests }}
+        shell: bash
+        run: |
+          ulimit -St 120
+          SANDSTONE="builddir/opendcdiag -fexec" bats -t bats/sanity-check-fexec
       - name: run tests quickly
         shell: bash
         run: |

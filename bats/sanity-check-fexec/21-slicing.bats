@@ -1,0 +1,1 @@
+../sanity-check/21-slicing.bats
