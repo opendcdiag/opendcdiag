@@ -35,6 +35,7 @@
 #include <functional>
 #include <memory>
 #include <ranges>
+#include <concepts>
 #include <span>
 #include <string>
 #include <type_traits>
@@ -464,6 +465,8 @@ extern void _memcmp_fail_report(const void *actual, const void *expected, size_t
 /// time this thread logs an error (with memcmp_or_fail(), log_error(),
 /// report_fail_msg(), throwing an exception, or by returning with error from
 /// the test's run function). The callback is called at most once per thread.
+/// Deferred cross-check failures call it from the coordinator with the target
+/// logical thread identity, not the original worker's TLS or physical CPU context.
 ///
 /// This function must be called from the main thread (usually, from the test's
 /// init function). The @p cleanup callback, if not a null pointer, will be
@@ -706,11 +709,16 @@ namespace SandstoneCrossCheck {
 // copyable), because the comparison is reported through a DataType tag and
 // an opaque struct (padding, pointer members, etc.) cannot be soundly
 // compared via raw memcmp just because it happens to be trivially copyable.
-template <typename T>
+template <typename T, typename Element = void>
 concept ContiguousComparable =
     std::ranges::contiguous_range<T> &&
     std::ranges::sized_range<T> &&
-    SandstoneDataDetails::ValidDataType<std::ranges::range_value_t<T>>;
+    SandstoneDataDetails::ValidDataType<std::ranges::range_value_t<T>> &&
+    (std::same_as<Element, void> || std::same_as<Element, std::ranges::range_value_t<T>>) &&
+    requires (const T &range) {
+        { std::ranges::data(range) } -> std::convertible_to<const std::ranges::range_value_t<T> *>;
+        std::ranges::size(range);
+    };
 
 } // namespace SandstoneCrossCheck
 

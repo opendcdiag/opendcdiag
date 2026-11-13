@@ -17,6 +17,7 @@
 #include <mutex>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1886,6 +1887,18 @@ std::string Topology::build_failure_mask(const struct test *test) const
     if (!isValid())
         return result;
 
+    std::set<int> failing_cpus;
+    auto collect_failure = [&](PerThreadData::Common *data, int thread) {
+        // Init/cleanup errors are not hardware attribution. An init data
+        // comparison, unlike those errors, records an implicated processor.
+        if (thread < 0 && !(data->thread_flags & PerThreadData::Common::Flag::CrossCheckFailure))
+            return;
+        if (data->has_failed())
+            failing_cpus.insert(data->failing_cpu_plus_1 - 1);
+    };
+    for_each_main_thread(collect_failure);
+    for_each_test_thread(collect_failure);
+
     // Get the number of cores to use in the mask. Physically, this is the same
     // in all the packages, but may be weird configurations depending on the
     // cpuset mask we've been run with. We must also avoid the case where we
@@ -1910,8 +1923,8 @@ std::string Topology::build_failure_mask(const struct test *test) const
             int threadcount = 0;
             int failcount = 0;
             for (const Thread &t : core.threads) {
-                int cpu_id = t.cpu();
-                if (sApp->thread_data(cpu_id)->has_failed()) {
+                int cpu_id = t.cpu_number;
+                if (failing_cpus.contains(cpu_id)) {
                     threadmask |= 1U << t.thread_id;
                     ++failcount;
                 }

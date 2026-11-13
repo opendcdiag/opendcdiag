@@ -20,44 +20,41 @@ A [very simple test](../tests/examples/simple_add.c) is presented below
  * @test @b simple_add
  * @parblock
  * simple_add repeatedly adds the same two random numbers on each thread
- * and checks all thread produce the same result.
+ * and checks all threads produce the same result.
  * @endparblock
  */
 
 #include "sandstone.h"
-
 static unsigned int value1;
 static unsigned int value2;
 static unsigned int golden_sum;
 
 static int simple_add_init(struct test *test)
 {
-        value1 = random32();
-        value2 = random32();
-        golden_sum = value1 + value2;
+    value1 = random32();
+    value2 = random32();
+    golden_sum = value1 + value2;
 
-        return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 static int simple_add_run(struct test *test, int cpu)
 {
-        unsigned int sum;
+    unsigned int sum;
 
-        TEST_LOOP(test, 1 << 20) {
-                sum = value1 + value2;
-                if (sum != golden_sum) {
-                        report_fail_msg("Add failed.  Expected %u got %u",
-                                        golden_sum, sum);
-                }
-        }
+    TEST_LOOP(test, 1 << 20) {
+        sum = value1 + value2;
+        if (sum != golden_sum)
+            report_fail_msg("Add failed.  Expected %u got %u", golden_sum, sum);
+    }
 
-        return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 DECLARE_TEST(simple_add, "Repeatedly add two integer numbers")
-        .test_init = simple_add_init,
-        .test_run = simple_add_run,
-        .quality_level = TEST_QUALITY_BETA,
+    .test_init = simple_add_init,
+    .test_run = simple_add_run,
+    .quality_level = TEST_QUALITY_BETA,
 END_DECLARE_TEST
 ```
 
@@ -68,7 +65,7 @@ followed by some global variables\*, two static functions, and a declarative
 section that registers the test with the OpenDCDiag framework.
 
 :warning: \* Normally, it is not good practice to store test-specific data in global
-  variables.  The reason for this and an alternative method for managing test
+  variables. The reason for this and an alternative method for managing test
   data are presented later in the document.
 
 ### Declaring a new test
@@ -85,16 +82,22 @@ which will be explained below. For now, let's build and run our test.
 
 ### Building and running the test
 
-To build the test, we need to add it to the OpenDCDiag build system. This can be
-done by modifying the [tests/meson.build](../tests/meson.build) file in the tests
-directory. Add the following lines to this file after the last `tests_set_base.add`
-block and rebuild.
+The examples are not registered in the build. To build simple_add, add the
+following block to [tests/cpu/meson.build](../tests/cpu/meson.build) before
+`tests_set_base.apply(tests_config)`, then rebuild:
 
-```
+```meson
 tests_set_base.add(
-        'examples/simple_add.c'
+    files(
+        '../examples/simple_add.c',
+    )
 )
 ```
+
+For a new CPU test, add its source to the appropriate source set in that file
+before the source set is applied. Paths passed to `files()` are relative to
+`tests/cpu/`, so an example source uses `../examples/`, while a source under
+`tests/cpu/<testname>/` uses `<testname>/<filename>`.
 
 Now let's check to see if our test is available. A list of tests can be
 obtained by passing the --list to the opendcdiag binary. Let's search for
@@ -171,54 +174,51 @@ the opendcdiag command line and setting it to 0, e.g.,
 
 ### Test execution
 
-When running a test, the OpenDCDiag performs the following steps (by default):
+By default, the OpenDCDiag framework runs a test as follows:
 
 1. It creates a new process.
-2. It calls the test's test_init function on the main thread of the new process.
-The test_init function is optional and so is only invoked if provided. Our
-simple_add test provides a small init function and we'll discuss its purpose
-later.
-3. It creates one software thread for each hardware thread in the system under
-test that it can see and it pins each software thread to a hardware thread.
-4. It invokes the test's test_run function in each thread, including the main
-thread.
-5. It waits for each of the test threads to finish executing and reports the
-status of the test to the user.
-6. It may then re-execute the test once more in a new process if time permits,
-as we have seen.
+2. It calls test_init() if supplied, normally on the new process's main thread.
+3. It creates a worker for each hardware thread selected for this execution and
+pins each worker to its hardware thread.
+4. It invokes test_run() on each worker, not on the coordinator.
+5. It joins the workers and verifies outputs submitted through the optional
+cross-check API.
+6. It calls test_cleanup() if supplied, then reports the test's outcome,
+including verification and cleanup results.
+7. It may re-execute the test in a new process if time permits, as we have seen.
+
+A failed or skipped test_init() returns before workers or test_cleanup() run.
+A crash or hang can also prevent verification and cleanup from completing.
+Tests that use [slicing](#slicing) follow this lifecycle separately in each slice.
 
 To put this in the context of our simple_add test, the framework creates a new
-process and calls our init_test function on the main thread of this process.
-Our test function generates two random integers, computes the sum of those
-integers and stores all three values in global variables. Our init function
-returns EXIT_SUCCESS to indicate that all is well and that the test can proceed.
-The framework then creates one thread for each hardware thread, pins software to
-hardware thread, and then invokes the test_run function on each of these
-threads. Our test_run function is simple; it sums the two random numbers
-generated in the test_init function and then compares the result to the
-pre-computed *golden_sum*. If there is a mismatch, an error is signaled to the
-framework via the call to report_fail_msg. In addition to signaling and
-logging an error, report_fail_msg causes the thread to exit. Our computation
-and comparison are executed repeatedly in a loop, generated by the TEST_LOOP
-macro. TEST_LOOP executes its body continuously until it is asked to terminate
-by the OpenDCDiag framework. The second parameter to TEST_LOOP specifies the
-granularity of our loop. In our simple_add test, we set the granularity to 1 <<
-20. TEST_LOOP will perform 1 << 20 iterations and then ask the framework whether it's okay
-to continue executing.  If there is some more time left in the test's time slot
-TEST_LOOP performs another 1 << 20 iterations before checking with the
-framework again. The process continues until the framework asks the test to
-exit. If all instances of the test's test_run functions exit without error, the
-test passes. By convention, the second parameter to TEST_LOOP is always a
+process and calls our simple_add_init function on the main thread of this
+process. Our init function generates two random integers, computes their sum,
+and stores all three values in global variables. It returns EXIT_SUCCESS to
+indicate that the test can proceed. The framework creates and pins the workers,
+then invokes test_run() on each worker. Our run function sums the two random
+numbers and compares the result to the precomputed *golden_sum*. A mismatch
+signals an error through report_fail_msg, which logs the error and exits the
+thread. Our computation and comparison run repeatedly in a loop generated by
+the TEST_LOOP macro.
+TEST_LOOP executes its body continuously until it is asked to terminate by the
+OpenDCDiag framework. The second parameter to TEST_LOOP specifies the
+granularity of our loop. In our simple_add test, we set the granularity to
+`1 << 20`. TEST_LOOP will perform `1 << 20` iterations and then ask the framework
+whether it's okay to continue executing. If there is some more time left in the
+test's time slot TEST_LOOP performs another `1 << 20` iterations before checking
+with the framework again. The process continues until the framework asks the
+test to exit. By convention, the second parameter to TEST_LOOP is always a
 power of two. The OpenDCDiag framework includes a facility to help test writers
-select an appropriate value for the second parameter of TEST_LOOP. For more
-information, see the [Test Tuning](#test-tuning) section below.
+select an appropriate value for the second parameter of TEST_LOOP. For
+more information, see the [Test Tuning](#test-tuning) section below.
 
 Our simple_add test is trivial and is unlikely to detect any real
 problems. It does, however, illustrate the pattern used by most OpenDCDiag
 tests. It computes a golden value in the *test_init* function, and then recomputes
-that value in the test_run function that is executed on multiple hardware threads. The
-values computed by the test_run functions are compared to the initial golden
-value and, if there is a mismatch, an error is reported.
+that value in the test_run function that is executed on multiple hardware threads.
+The values computed by test_run are compared to the initial golden value and,
+if there is a mismatch, an error is reported.
 
 
 ### Random numbers
@@ -260,11 +260,12 @@ using the framework and hence reproducible.
 
 ## A second test
 
-Now that we've covered the basics of creating an OpenDCDiag test, let's try something
-a little bit more complex. Our new test is still going to test the system's
-ability to add numbers, but rather than adding two numbers per thread on each
-iteration of the test, we're going to add 1024 numbers, and we're going to do the
-addition using SIMD instructions. Here's our [new test](../tests/examples/simple_add.c).
+Now that we've covered the basics of creating an OpenDCDiag test, let's try
+something a little bit more complex. Our new test is still going to test the
+system's ability to add numbers, but rather than adding two numbers per thread
+on each iteration of the test, we're going to add 1024 numbers, and we're going
+to do the addition using SIMD instructions.
+Here's our [new test](../tests/examples/vector_add.c).
 
 ```c
 /**
@@ -282,130 +283,129 @@ addition using SIMD instructions. Here's our [new test](../tests/examples/simple
 #include "sandstone.h"
 
 #include <immintrin.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 #define VECTOR_ADD_ELEMENTS (1u << 10)
 #define VECTOR_ADD_BUF_SIZE (VECTOR_ADD_ELEMENTS * sizeof(uint32_t))
 
 struct vector_add_t_ {
-        uint32_t *a;
-        uint32_t *b;
-        uint32_t *golden;
+    uint32_t *a;
+    uint32_t *b;
+    uint32_t *golden;
 };
 typedef struct vector_add_t_ vector_add_t;
 
 static void prv_do_add(const uint32_t *a, const uint32_t *b, uint32_t *res)
 {
-        for (size_t i = 0; i < VECTOR_ADD_ELEMENTS / 16; i++) {
-                __m512i r1 = _mm512_load_epi32(&a[i*16]);
-                __m512i r2 = _mm512_load_epi32(&b[i*16]);
-                __m512i r3 = _mm512_add_epi32(r1, r2);
-                _mm512_store_epi32(&res[i*16], r3);
-        }
+    for (size_t i = 0; i < VECTOR_ADD_ELEMENTS / 16; i++) {
+        __m512i r1 = _mm512_load_epi32(&a[i*16]);
+        __m512i r2 = _mm512_load_epi32(&b[i*16]);
+        __m512i r3 = _mm512_add_epi32(r1, r2);
+        _mm512_store_epi32(&res[i*16], r3);
+    }
 }
 
 static int vector_add_init(struct test *test)
 {
-        vector_add_t *va = malloc(sizeof(*va));
+    vector_add_t *va = malloc(sizeof(*va));
+    va->a = aligned_alloc(64, VECTOR_ADD_BUF_SIZE);
+    va->b = aligned_alloc(64, VECTOR_ADD_BUF_SIZE);
+    va->golden = aligned_alloc_safe(64, VECTOR_ADD_BUF_SIZE);
+    memset_random(va->a, VECTOR_ADD_BUF_SIZE);
+    memset_random(va->b, VECTOR_ADD_BUF_SIZE);
+    prv_do_add(va->a, va->b, va->golden);
+    test->data = va;
 
-        va->a = aligned_alloc(64, VECTOR_ADD_BUF_SIZE);
-        va->b = aligned_alloc(64, VECTOR_ADD_BUF_SIZE);
-        va->golden = aligned_alloc_safe(64, VECTOR_ADD_BUF_SIZE);
-
-        memset_random(va->a, VECTOR_ADD_BUF_SIZE);
-        memset_random(va->b, VECTOR_ADD_BUF_SIZE);
-        prv_do_add(va->a, va->b, va->golden);
-
-        test->data = va;
-
-        return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 static int vector_add_run(struct test *test, int cpu)
 {
-        vector_add_t *va = test->data;
-        uint32_t *res = aligned_alloc(64, VECTOR_ADD_BUF_SIZE);
+    vector_add_t *va = test->data;
+    uint32_t *res = aligned_alloc(64, VECTOR_ADD_BUF_SIZE);
 
-        TEST_LOOP(test, 1 << 13) {
-                memset(res, 0, VECTOR_ADD_BUF_SIZE);
-                prv_do_add(va->a, va->b, res);
-                memcmp_or_fail(res, va->golden, VECTOR_ADD_ELEMENTS);
-        }
+    TEST_LOOP(test, 1 << 13) {
+        memset(res, 0, VECTOR_ADD_BUF_SIZE);
+        prv_do_add(va->a, va->b, res);
+        memcmp_or_fail(res, va->golden, VECTOR_ADD_ELEMENTS);
+    }
 
-        free(res);
+    free(res);
 
-        return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 static int vector_add_cleanup(struct test *test)
 {
-        vector_add_t *va = test->data;
-
-        if (va) {
-                free(va->golden);
-                free(va->b);
-                free(va->a);
-                free(va);
-        }
-
-        return EXIT_SUCCESS;
+    vector_add_t *va = test->data;
+    if (va) {
+        free(va->golden);
+        free(va->b);
+        free(va->a);
+        free(va);
+    }
+    return EXIT_SUCCESS;
 }
 
 DECLARE_TEST(vector_add, "Repeatedly add arrays of unsigned integers using AVX-512 instructions")
-        .test_init = vector_add_init,
-        .test_run = vector_add_run,
-        .test_cleanup = vector_add_cleanup,
-        .minimum_cpu = cpu_skylake_avx512,
-        .quality_level = TEST_QUALITY_BETA,
+    .test_init = vector_add_init,
+    .test_run = vector_add_run,
+    .test_cleanup = vector_add_cleanup,
+    .minimum_cpu = cpu_skylake_avx512,
+    .quality_level = TEST_QUALITY_BETA,
 END_DECLARE_TEST
 ```
 
-This new test makes more use of the OpenDCDiag framework than the first test
-and we'll discuss each of the differences below. First, however, let's build
-it. This can be done by adding the following lines to the
-[meson.build](../tests/meson.build) file in the tests directory after the last
-`tests_set_base.add` block and rebuilding.
+This new test makes more use of the OpenDCDiag framework than the first test and
+we'll discuss each of the differences below. To build vector_add, add the
+following block to [tests/cpu/meson.build](../tests/cpu/meson.build) before
+`tests_set_skx.apply(tests_config)`, then rebuild:
 
-```
+```meson
 tests_set_skx.add(
-        'examples/vector_add.c'
+    files(
+        '../examples/vector_add.c',
+    )
 )
 ```
 
 ### Base architecture, mixed builds, and C++ global statics
 
-Note this addition to the meson.build file is slightly different from the addition
-we made for the first test; we use tests_base_skx_set.add instead of
-tests_base_set.add.  This is required as our new test makes use of
-Intel® Advanced Vector Extensions 512 (Intel® AVX-512)
-intrinsics and will only build if our test source file is compiled with the
-correct compiler options, in this case -march=skylake-avx512. This command line
-option is not specified when compiling the files added to tests_base_set. It
-follows then that not all the source files in an OpenDCDiag build are compiled
-with the same compile options and this has some implications.
+Note this registration uses tests_set_skx.add instead of tests_set_base.add.
+This is required as our new test makes use of Intel® Advanced Vector Extensions
+512 (Intel® AVX-512) intrinsics and will only build if our test source file is
+compiled with the correct compiler options, in this case -march=skylake-avx512.
+This command line option is not specified when compiling the files added to
+tests_set_base. It follows then that not all the source files in an OpenDCDiag
+build are compiled with the same compile options and this has some implications.
 
-1. The framework and tests added to tests_base_set are compiled with
--march=haswell by default.  This default can be overridden via the march_base
-meson option.
+1. The framework and tests added to tests_set_base use the configured base
+   architecture. On x86-64, this is selected through the march_base Meson
+   option; tests_set_skx adds the Skylake AVX-512 target unless the base already
+   supports AVX-512. This source set is built only for x86-64.
 2. The OpenDCDiag binary is only guaranteed to run correctly on machines that
-support the base architecture or greater. If run on older machines, it will
-crash with SIGILL.
-3. Test writers adding new tests that use features of the CPU not present in
-the base architecture need to inform the framework that their test requires a
-specific CPU feature. This is done using the DECLARE_TEST macro, which is shown
-later. The framework checks the capabilities of the CPU on which it is
-executed at runtime and skips any tests requiring features that the CPU
-does not support.
+   support the base architecture or greater. If run on older machines, it will
+   crash with SIGILL.
+3. Test writers adding new tests that use features of the CPU not present in the
+   base architecture need to inform the framework that their test requires a
+   specific CPU feature. This is done using the DECLARE_TEST macro, which is
+   shown later. The framework checks the capabilities of the CPU on which it is
+   executed at runtime and skips any tests requiring features that the CPU does
+   not support.
 4. Tests that are compiled with an -march greater than the base -march cannot
-define global static variables that generate code. This is just an
-issue for C++ tests that might define a global static instance of a class that
-has a constructor. The compiler may generate code for the constructor that uses
-instructions that are not present in the base architecture, and as this code is
-run at program startup before the framework itself starts, the framework cannot
-prevent it from executing. The end result could be that OpenDCDiag would fail
-to start when run on a machine that just supported the base architecture. For this reason,
-global statics are not allowed in OpenDCDiag tests. Note that some of the C++
-standard library header files define global statics, e.g., \<iostream\>, so the
-inclusion of such files in OpenDCDiag tests is not permitted.
+   define global static variables that generate code. This is just an issue for
+   C++ tests that might define a global static instance of a class that has a
+   constructor. The compiler may generate code for the constructor that uses
+   instructions that are not present in the base architecture, and as this code
+   is run at program startup before the framework itself starts, the framework
+   cannot prevent it from executing. The end result could be that OpenDCDiag
+   would fail to start when run on a machine that just supported the base
+   architecture. For this reason, global statics are not allowed in OpenDCDiag
+   tests. Note that some of the C++ standard library header files define global
+   statics, e.g., \<iostream\>, so the inclusion of such files in OpenDCDiag
+   tests is not permitted.
 
 ### Running vector_add
 
@@ -429,9 +429,9 @@ ok   4 mce_check
 exit: pass
 ```
 
-This output was generated on a machine that supports Intel AVX-512 and so our test ran
-and passed.  When run on a machine that does not support Intel AVX-512 you should see
-something like this.
+This output was generated on a machine that supports Intel AVX-512 and so our test
+ran and passed. On a machine without Intel AVX-512 support, you should see
+something like this instead.
 
 ```
 # opendcdiag --beta -v -e vector_add --output-format=tap
@@ -461,23 +461,21 @@ folder.
 
 ### Memory allocation and cleanup
 
-Our new test, vector_add allocates memory dynamically in both its *test_init*
-and *test_run* functions. Memory is allocated using three different functions;
-*malloc*, *aligned_alloc*, and *aligned_alloc_safe*.  *malloc* and
-*aligned_alloc* should be familiar to the reader as they are part of the C
-standard library and [POSIX](https://pubs.opengroup.org/onlinepubs/9699919799.2018edition/)
-respectively. The third function, *aligned_alloc_safe*
-is a framework function that calls *aligned_alloc* but before it does so, it
-ensures that the size of the memory being allocated is a multiple of the
-requested alignment, a requirement of *aligned_alloc*. If it is not, the size
-of the requested memory is increased so that the constraints of *aligned_alloc*
-are met. Note that the test does not check the return value of any of the
-memory allocation functions. The reason for this is that the OpenDCDiag
-framework actually overrides the standard C library and Posix memory allocation
-functions, so that any allocation failure results in the calling thread
-exiting. The overridden functions also fill the allocated memory with zeros
-before returning, so there is no need to memset dynamically allocated buffers to
-zero in OpenDCDiag tests.
+Our new test, vector_add, allocates memory dynamically in both its *test_init*
+and *test_run* functions using the C standard library functions *malloc* and
+*aligned_alloc*. The latter requires the allocation size to be a multiple of the
+requested alignment; VECTOR_ADD_BUF_SIZE is 4096 bytes, a multiple of 64. The
+framework also provides *aligned_alloc_safe*, which calls *aligned_alloc* but
+before it does so, it ensures that the size of the memory being allocated is a
+multiple of the requested alignment, a requirement of *aligned_alloc*. If it is
+not, the size of the requested memory is increased so that the constraints of
+*aligned_alloc* are met. Note that the test does not check the return value of
+any of the memory allocation functions. The reason for this is that the
+OpenDCDiag framework actually overrides the standard C library and Posix memory
+allocation functions, so that any allocation failure results in the calling
+thread exiting. The overridden functions also fill the allocated memory with
+zeros before returning, so newly allocated buffers do not need an explicit
+memset to initialize them to zero.
 
 The *test_init* function allocates three buffers. These buffers are 64-byte
 aligned as required by the *prv_do_add* function that actually performs the
@@ -499,38 +497,34 @@ global static data introduced by one test are borne by all tests and the main
 OpenDCDiag process itself, even if the test that created the global static data
 is never actually run.**
 
-The dynamically-allocated data is freed in the *test_cleanup* function. This
-function is run in the test's process on the main thread once the test has
-finished. It is run if the test passed and it is run if it failed cleanly
-(i.e., didn't crash or hang). In most cases, it is not actually necessary to
-free memory in *test_cleanup* that was dynamically allocated in the init
-function when a test completes. The reason is that each invocation of a test is
-run in a separate process that exits directly after *test_cleanup* is run.
-Any memory not freed by the test is reclaimed by the OS once the test completes.
-Thus, it's not really possible for a test to leak memory in a way that affectn
-the main OpenDCDiag process or any of the other tests it runs. There is
-one exception though, test slicing, which is discussed below.
+The optional test_cleanup() function runs on the coordinating main thread after
+workers join and submitted outputs are verified, including when workers fail
+cleanly. It does not run if test_init() fails or skips, and a crash or hang may
+prevent it from running. In normal fork and exec modes, each execution slice
+runs in its own child process. The OS reclaims that process's private heap when
+it exits, including allocations the test did not free. Without process
+isolation, allocations can persist unless freed: this applies to
+-fno-fork/--fork-mode=no, described in [Debugging tests](#debugging-tests), and
+tests run in the parent process.
 
 ### memcmp_or_fail
 
-Our new test performs the same vectorized additions on the same data on each
-thread. To determine if the test has passed, we need to compare the
-results computed in the *test_run* function to the golden result computed in the
-*test_init* function. The OpenDCDiag framework provides a convenience function
-for performing this comparison; memcmp_or_fail. memcmp_or_fail accepts at
-least three parameters in the following order; the newly computed data, the
-expected data, and the number of elements to compare. The interesting thing
-about memcmp_or_fail is that it is type aware even when called from C code. So
-the third parameter needs to be set to the number of elements and not the number
-of bytes. In our new test, we pass it two arrays of 32-bit unsigned integers and
-pass the number of integers in those arrays as the third argument. memcmp_or_fail
-then compares the elements in the actual and expected arrays and fails
-the test with some detailed log information if there is an error. If
-memcmp_or_fail detects an error, it stops the normal execution of the
-current thread. The attentive reader may notice that if this were to happen, we
-would actually leak the *res* buffer, but as the test has failed, its process
-is terminated and the memory is reclaimed by the OS. This sort of
-memory leak is acceptable in OpenDCDiag code.
+Our vector_add example compares each worker's result to the golden result
+computed in test_init(). The framework's convenience function memcmp_or_fail
+performs this comparison. It accepts at least three
+parameters in the following order; the newly computed data, the expected data,
+and the number of elements to compare. The interesting thing about
+memcmp_or_fail is that it is type aware even when called from C code. So the
+third parameter needs to be set to the number of elements and not the number of
+bytes. For arrays of 32-bit unsigned integers, pass the number of integers in
+those arrays as the third argument. memcmp_or_fail then compares the elements in
+the actual and expected arrays and fails the test with detailed log information
+if there is a data mismatch. If memcmp_or_fail detects a mismatch, it stops the
+normal execution of the current thread. In vector_add this bypasses the free of
+*res*, but as the
+isolated child process exits, the OS reclaims its private heap. This relies on
+process isolation: in no-fork mode or parent-process tests, unfreed allocations
+can persist, as described in [Memory allocation and cleanup](#memory-allocation-and-cleanup).
 
 
 If your test contains multiple calls to *memcmp_or_fail* that compare the same
@@ -556,8 +550,8 @@ explicit log file name. OpenDCDiag will not remove log files specified with the
 OpenDCDiag to log to standard output with '-o -'.  This is useful when debugging.
 
 At this stage, it's instructive to look at what an OpenDCDiag test looks like
-when it fails.  Let's modify our *test_run* function to induce a failure by
-adding the following two lines
+when it fails. Let's modify our *test_run* function to induce a failure by
+adding the following two lines:
 
 ```c
          TEST_LOOP(test, 1 << 13) {
@@ -568,14 +562,14 @@ adding the following two lines
 ```
 
 These two lines corrupt the computed result in the first test thread. This
-causes the call to memcmp_or_fail to fail and log an error. If you re-build
-and re-run openDCDiag, e.g., by typing
+causes the call to memcmp_or_fail to fail and log an error. If you rebuild
+and rerun OpenDCDiag, for example by typing:
 
 ```
 ./opendcdiag --beta -e vector_add -o -
 ```
 
-you should see something like this on your screen.
+you should see something like this on your screen:
 
 ```
 [    0.400017] not ok   1 vector_add           # (beta test)
@@ -600,18 +594,17 @@ you should see something like this on your screen.
         c9 00 a6 6c  c1 4e 81 9e  90 c5 58 10  0b ad 73 21   46 15 7d 73  54 7f ea 44  71 c9 00 f1  c2 5f 19 1c
 ```
 
-You should also see that the test has been re-run by the framework and that it
-consistently fails. When a test fails, OpenDCDiag re-runs the test in an
-attempt to discover whether the failure is specific to a core or a hardware
-thread. In this case, it is because we've deliberately induced a failure on the
-first hardware thread discovered by OpenDCDiag.
+You should also see that the test has been rerun by the framework and that it
+consistently fails. When a test fails, OpenDCDiag reruns it to investigate
+whether the failure is specific to a core or hardware thread. Here, we
+deliberately induced a failure on the first hardware thread discovered.
 
-In addition to memcmp_or_fail, the OpenDCDiag has some additional logging
-functions that can be used. Among these functions are *log_skip*, *log_debug*, *log_info*,
-*log_warning* and *log_error*. They all behave like printf and are declared in
-[sandstone.h](../framework/sandstone.h). OpenDCDiag also provides an additional
-function that is useful for logging binary data, *log_data*, also declared and
-documented in [sandstone.h](../framework/sandstone.h).
+In addition to the mismatch diagnostics, OpenDCDiag has some additional logging
+functions that can be used. Among these functions are *log_skip*, *log_debug*,
+*log_info*, *log_warning* and *log_error*. They all behave like printf and are
+declared in [sandstone.h](../framework/sandstone.h). OpenDCDiag also provides an
+additional function that is useful for logging binary data, *log_data*, also
+declared and documented in [sandstone.h](../framework/sandstone.h).
 
 There is one golden rule of logging in OpenDCDiag tests. Tests are only allowed
 to log information on their error paths.  A test that completes successfully
@@ -637,6 +630,254 @@ want to see debug output in your logs, use the logging functions provided.
 Information written to standard error will appear in the logs.  However,
 test writers are expected to use the framework's logging functions rather than
 writing to standard error directly.
+
+## Named inputs and cross-checked outputs
+
+The API in [crosscheck.h](../framework/crosscheck.h) is an alternative to managing
+immutable input and reference buffers yourself. Existing explicit comparisons,
+including the examples above, remain supported. API use enables capture without
+a `.crosscheck` field or mode declaration.
+
+Declare named, typed arrays with `CROSSCHECK_INPUT(name, type)` and
+`CROSSCHECK_OUTPUT(name, type)`. These declarations establish names and element
+types; they do not store test data or capture anything until set_input() or
+submit_output() is called.
+
+Tests **set inputs**, **get inputs**, and **submit outputs**. The framework
+**captures snapshots** and verifies submitted outputs; capture describes its
+ownership mechanism, not a separate public test operation.
+
+| Test operation | Public API | Framework behavior |
+| --- | --- | --- |
+| Set inputs | `set_input()` | Copy the supplied elements into an owned immutable input snapshot |
+| Get inputs | `get_input()` | Return a typed, read-only view of the input snapshot |
+| Submit outputs | `submit_output()` | Capture the participant's first submission and check later submissions against it |
+
+### C declarations and type inference
+
+In C, `CROSSCHECK_INPUT(addends, uint32_t)` generates an element typedef and a
+named view struct:
+
+```c
+typedef uint32_t crosscheck_input_type_addends;
+struct CrossCheckInputView_addends {
+    const uint32_t *const data;
+    const size_t count;
+};
+```
+
+The macro also checks that the element type is supported and generates typed
+set/get helper functions. The public set_input() and get_input() macros select
+those helpers for the declared name. get_input(addends) returns
+`struct CrossCheckInputView_addends`; `.data` points to immutable captured
+elements and `.count` is their element count. Both members are const, even when
+the local struct itself is not declared const.
+
+`CROSSCHECK_OUTPUT(sum, uint32_t)` generates the element typedef
+`crosscheck_output_type_sum` and a typed submit helper. It does not generate a
+view struct: output capture belongs to the framework and submit_output() returns
+void. The typed set/submit macros reject incompatible element pointers at
+compile time.
+
+Use the GCC and Clang `__auto_type` extension to infer the generated input view
+type instead of spelling its struct name:
+
+```c
+__auto_type input = get_input(addends);
+uint32_t first = input.data[0];
+size_t count = input.count;
+```
+
+The project uses GNU C17; `__auto_type` provides type inference without requiring
+C23. An explicit `struct CrossCheckInputView_addends` declaration also works.
+Do not modify captured elements or free the view's pointer.
+
+### C++ declarations and type inference
+
+In C++, the macros declare static constexpr instances of these key structs in
+the SandstoneCrossCheck namespace:
+
+```cpp
+template <InputElement T> struct InputKey { const char *name; };
+template <InputElement T> struct OutputKey { const char *name; };
+```
+
+For example, the declarations expand to:
+
+```cpp
+static constexpr SandstoneCrossCheck::InputKey<uint32_t> addends{"addends"};
+static constexpr SandstoneCrossCheck::OutputKey<uint32_t> sum{"sum"};
+```
+
+These structs contain only the capture name, not input or output buffers.
+The InputElement constraint checks the supported element type. get_input(addends)
+returns `std::span<const uint32_t>`; use standard C++ `auto` for inference:
+
+```cpp
+const auto input = get_input(addends);
+uint32_t first = input[0];
+size_t count = input.size();
+```
+
+set_input() and submit_output() use typed overloads rather than C dispatch
+macros. They accept pointer/count pairs or supported contiguous, sized ranges.
+
+### A cross-checked test
+
+For example, [crosschecked_add.c](../tests/examples/crosschecked_add.c) uses
+framework-owned snapshots and a golden computation in init. The named tags
+identify captures; unlike the legacy simple_add example, no static variable
+stores inputs or reference data:
+
+```c
+#include "crosscheck.h"
+
+CROSSCHECK_INPUT(addends, uint32_t);
+CROSSCHECK_OUTPUT(sum, uint32_t);
+
+static int crosschecked_add_init(struct test *test)
+{
+    uint32_t scratch[] = {random32(), random32()};
+    set_input(addends, scratch, 2, "Addends");
+    __auto_type input = get_input(addends);
+    uint32_t result = input.data[0] + input.data[1];
+    submit_output(sum, &result, 1, "Golden sum computed in init");
+    return EXIT_SUCCESS;
+}
+
+static int crosschecked_add_run(struct test *test, int cpu)
+{
+    __auto_type input = get_input(addends);
+    TEST_LOOP(test, 1 << 20) {
+        uint32_t result = input.data[0] + input.data[1];
+        submit_output(sum, &result, 1, "Worker sum");
+    }
+    return EXIT_SUCCESS;
+}
+
+DECLARE_TEST(crosschecked_add, "Cross-check repeated integer additions")
+    .test_init = crosschecked_add_init,
+    .test_run = crosschecked_add_run,
+    .quality_level = TEST_QUALITY_BETA,
+END_DECLARE_TEST
+```
+
+Both **golden** and **consensus** patterns are supported. Golden submits an init
+computation alongside worker computations; consensus omits init's output
+submission and compares workers only. Init has one ordinary vote for each name
+it submits, not an authoritative reference. It may submit only some names.
+
+### Worker-only consensus
+
+The same source file also includes consensus_add, which shares the input/output
+declarations and crosschecked_add_run() above but uses an init function that only
+sets inputs:
+
+```c
+static int consensus_add_init(struct test *test)
+{
+    uint32_t scratch[] = {random32(), random32()};
+    set_input(addends, scratch, 2, "Addends");
+    return EXIT_SUCCESS;
+}
+
+DECLARE_TEST(consensus_add, "Cross-check integer additions among workers")
+    .test_init = consensus_add_init,
+    .test_run = crosschecked_add_run,
+    .quality_level = TEST_QUALITY_BETA,
+END_DECLARE_TEST
+```
+
+Init still supplies framework-owned inputs, but does not submit a sum. Workers
+compute from the same captured inputs and submit their sums as before. This
+pattern needs at least two successful workers per output; a single worker has
+no other participant to cross-check against and resource-skips after cleanup.
+
+### Verification policy and its limits
+
+Golden and consensus use the same verification algorithm. Here, **golden means
+an additional computation submitted from init, not a trusted expected value**.
+The framework can implicate an incorrect golden producer when workers agree,
+but it can also implicate a correct golden producer when a strict majority of
+workers agree on an incorrect result. Majority agreement establishes agreement,
+not correctness. Tests needing authoritative expected-data checks can still use
+explicit comparisons such as memcmp_or_fail, as in the earlier examples.
+
+Each output name denotes one invariant array per execution slice and pass.
+The framework captures each participant's first submission; later submissions
+must match that snapshot immediately. Repeated submissions never add votes.
+After joining, verification compares successful participants separately for each
+name. A strict majority (more than half) implicates outlying producers. Without
+a strict majority, every conflicting producer has a failed data comparison and
+is implicated; none is labeled correct. Majority agreement cannot detect values
+that are wrong in the same way on all participants. Votes count computations,
+not distinct hardware threads: init and a worker can execute on the same CPU.
+
+For these examples, **T (true)** means the correct output and **F (false)** means
+the same incorrect output wherever F appears. These are illustrative correctness
+labels, not Boolean values submitted through the API. The framework does not
+know which output is correct; it compares the submitted arrays. All submissions
+have the same element type and count, and all participants complete successfully:
+
+| Init submission | Worker submissions | Post-join outcome |
+| --- | --- | --- |
+| T | T, T | Agreement; no comparison failure |
+| F | T, T | Init's producing logical processor is implicated |
+| T | F, F | Init's producing logical processor is still implicated; the majority is not proof of correctness |
+| None | T, T, F | The F worker's producing logical processor is implicated |
+| None | T, F | Processors producing T or F are implicated; neither array is established as correct |
+
+Implicated processors are suspects based on failed data comparisons, not proof
+that each processor is defective. Repeating a submission checks invariance but
+does not strengthen its participant's vote.
+
+Skipped and failed workers do not vote, even if they submitted before exiting.
+Their original diagnostics and already-recorded failures remain intact. Init
+failure or skip stops execution before workers and cleanup, as usual. If all
+workers skip, init alone cannot make the test pass. Fewer than two successful
+participants for any output causes an insufficient-resource skip after cleanup,
+unless a failure already exists. A later-submission mismatch can still fail a
+single-participant execution.
+
+Every successful worker must submit all names discovered from successful workers
+or init. Missing submissions and incompatible types/counts are contract errors,
+not values to vote on or CPU-attributed data mismatches. These post-join contract
+errors follow cleanup and report OperatingSystemError/EXIT_INVALID; `--ignore-os-errors`
+may waive those errors, but cannot waive a data comparison failure. A failure on
+another name takes precedence over contract errors and insufficient coverage.
+Zero-length outputs are valid. Declarations alone do not register required names,
+so a name omitted by everyone is undetectable. Input-only use is permitted.
+
+Immediate API misuse is different from a post-join contract error. Calling an
+API in the wrong phase, setting an input twice, looking up a missing input or
+one with a different element type, passing a null data pointer with a nonzero
+count or an overflowing extent, and changing the type/count of a participant's
+later submission terminate execution as invalid. These paths do not guarantee
+normal cleanup or callback unwinding. A later submission with matching type/count
+but different data is a comparison failure instead, and implicates the logical
+processor executing that failed comparison.
+
+Set each input once in test_init(), and compute outputs from get_input() snapshots
+rather than the original randomized scratch storage. Lookup is allowed in init
+and run; submission is allowed in init and run; cleanup must not call these APIs.
+Views and snapshots remain alive through cleanup, including post-join failure
+and skip paths. State resets for each slice, retry, and fracture pass and is not
+shared across processes. Source buffers remain test-owned and may be reused or
+freed after set_input() or submit_output() returns. Counts are elements, not bytes. Captured storage
+has element alignment, not arbitrary SIMD alignment; use unaligned loads when
+needed. The API does not write capture files.
+
+Element types must be unqualified, non-void, trivially copyable types recognized
+by [sandstone_data.h](../framework/sandstone_data.h). C supports
+SANDSTONE_SCALAR_TYPES, including uint32_t, float, and BFloat16. C++ also supports
+TypeToDataType mappings such as Float32 and contiguous, sized containers.
+Comparison preserves meaningful representation bytes, including NaN payloads
+and signed zero, while ignoring trailing scalar padding such as x87 padding.
+Supply meaningful output descriptions; each first submission owns its metadata.
+Deferred worker callbacks run on the coordinator under the target worker identity,
+not the worker's original TLS or physical execution context. Init does not run
+worker failure callbacks. Deferred attribution records the logical processor at
+the first submission, not the coordinator or the worker's later completion CPU.
 
 ## Additional information
 
@@ -800,7 +1041,9 @@ the -Dbuildtype=debugoptimized option to the meson command, e.g.:
 meson builddir -Dbuildtype=debugoptimized
 ```
 
-Next, let's re-run our first test with this option enabled.
+Run the functionally complete test with this option enabled. The following
+historical excerpts illustrate the tuning workflow; measure timings and tune
+loop counts for your test on the target hardware.
 
 ```
 ./opendcdiag --beta -v -e simple_add --output-format=tap --test-tests
@@ -812,10 +1055,9 @@ ok   2 mce_check
 exit: pass
 ```
 
-With a bit of luck, our test should still pass. Now, for
-the sake of demonstration, let's modify the second parameter to
-TEST_LOOP from 1<<20 to 1<<10, rebuild our test, and re-run it with the
---test-tests option. The test should now fail with an error message.
+Reducing the second parameter to TEST_LOOP from 1<<20 to 1<<10, rebuilding, and
+re-running with --test-tests can expose excessive loop-check overhead. For
+example, the historical version reported:
 
 ```
 tests:
@@ -831,19 +1073,12 @@ tests:
 # Test failed 1 out of 1 times (100.0%)
 ```
 
-We sped up our test loop by 1024 times and the OpenDCDiag framework is
-informing us that it is now too fast. When run without the
---test-tests option, the test will still pass. Interestingly, the
-framework is recommending that our sped-up test loop be slowed down by
-5431x and not 1024x. The reason for this is that the initial value
-for *simple_add* was manually chosen, i.e., not chosen by using
---test-tests, and that the chosen value was too small. Our original
-test still passes when run with --test-tests, as --test-tests has a
-high degree of tolerance. Nevertheless, the recommendation is for
-test developers to use --test-tests to tune their tests once the tests
-are functionally complete. Doing so improves the effectiveness of
-their tests. Note the use of --test-tests for test tuning is not
-needed for tests that disable fracturing.
+The loop granularity was reduced by 1024, but the historical diagnostic suggested
+an increase of 5431: the original value was manually chosen, and --test-tests
+allows considerable tolerance. Measure the current workload on your target
+machine rather than reusing those numbers. Use --test-tests to tune tests once
+they are functionally complete; tests that disable fracturing do not need this
+tuning.
 
 
 ### CPU info
@@ -880,48 +1115,39 @@ version microcode the thread is running.
 
 ### Slicing
 
-By default, when running a test, OpenDCDiag creates a new process, calls the
-*test_init* function on the main thread of that process, creates a new software
-thread for each hardware thread visible to it and then executes the *test_run*
-function on each of these threads. This model of execution does not suit all
-tests. One example of such a test is one that allocates a lot of memory in its
-*test_run* function. Such tests may run fine on a single socket machine with 8
-threads but may struggle on multi-socket machines with say 96 threads as all
-of the allocations happen in parallel. If each *test_run* thread allocates 1GB
-of memory the test would allocate 96GB on our hypothetical machine when
-running. The framework provides support for tests like this that cannot run
-their *test_run* function on all hardware threads at the same time via a feature
-call slicing.  Slicing is enabled by specifying the *max_threads* field when
-declaring the test using the DECLARE_TEST macro. It specifies the maximum
-number of parallel invocations of the test's *test_run* function. For example,
-if max_threads is set to 4, the framework will ensure that the *test_run*
-function will not run on any more than four threads at any one time.  When the
-*max_threads* field is specified the model of test execution is altered.   The
-framework runs the test as follows.
+Tests normally run test_run() on workers pinned to the selected hardware
+threads. Some tests need to limit the number of workers sharing resources in one
+process, for example when test_run() allocates a large buffer for each worker.
+The framework supports this through slicing. The test's scheduling flags select
+a slice plan; by default, the framework chooses a plan heuristically. For
+example, setting *flags* to test_schedule_isolate_socket in DECLARE_TEST selects
+one slice per socket. These flags are documented in
+[sandstone.h](../framework/sandstone.h). Separate slices can run concurrently,
+so slicing does not impose a global limit on worker count or memory use.
 
-1. It creates a new process.
-2. It identifies a set of hardware threads on which the *test_run* function has
-not yet been run. The size of this set will be no greater than *max_threads*,
-although it may be smaller.
-3. It calls the init function on the main thread. The framework ensures that
-the return value of the framework's *num_cpu* function will return a value of no
-greater than *max_threads* and that the *device_info* structure contains the
-correct information for the current set of hardware threads.
-4. It then runs the *test_run* function on each of these threads.
-5. The *test_cleanup* function is called.
-6. If there are still some hardware threads on which the *test_run* functions
-have not yet been executed, we go back to step 2.
-7. Otherwise the test completes.
+In normal fork and exec modes, the framework runs a sliced test as follows:
 
-The interesting thing to note is that, when slicing is used, a test's
-*test_init* function may be called multiple times in the same process and the
-test needs to be able to cope with this. For example, the advice given above
-about not needing to free dynamically allocated memory in the *test_cleanup*
-function does not apply when slicing is employed. Doing so may lead to a memory
-leak that could impact the running of the test. Note this behavior is
-different from fracturing. A test's *test_init* function can be called multiple
-times when a test is fractured, but each invocation takes place in a separate
-process.
+1. It divides the selected hardware threads into slices according to the
+selected plan.
+2. It creates a separate child process for each slice. Within that process,
+num_cpus() and *device_info* describe only the current slice.
+3. Each child calls test_init() if supplied, then starts its pinned workers and
+calls test_run() on each worker.
+4. Each child joins its workers and verifies submitted outputs within that slice
+using successful worker submissions and any init submissions as ordinary participants.
+5. Each child calls test_cleanup() if supplied and exits. As in
+[Test execution](#test-execution), failed or skipped initialization returns early,
+and a crash or hang may prevent verification or cleanup.
+6. The parent collects the child results and reports the aggregate outcome.
+
+Slicing does not repeatedly call test_init() in the same child process.
+The no-fork debugging mode supports only a single slice. Captured inputs, golden
+outputs, and saved first submissions belong to one execution slice of one
+invocation, including retries and fracture passes. They are not shared between
+processes or reused across passes. The examples free their test-owned scratch
+and result buffers locally and therefore need no test_cleanup() callback.
+Test-owned resources kept in *test->data* can be released in test_cleanup(), as
+described above.
 
 ### Debugging tests
 
@@ -938,8 +1164,11 @@ This can be achieved using the -n option. Thus a typical command line for
 debugging a test might be.
 
 ```console
-gdb --args ./opendcdiag --beta -e vector_add --fork-mode=no -n1
+gdb --args ./opendcdiag --beta -e simple_add --fork-mode=no -n1
 ```
+
+For vector_add, retain at least two workers in the slice (-n2 or more) and use an
+AVX-512-capable machine; consensus skips a one-worker slice.
 
 The framework also provides support for debugging hung tests. By default the
 framework will kill tests that have not responded after 5 minutes. You'll
@@ -963,10 +1192,9 @@ The default behavior can be overridden via the --on-hang development option.
 The option --on-hang=gdb can be used automatically launch gdb to debug the hung
 test. This option may require administrator privileges to work.
 
-### sandstone.h
+### API reference
 
-OpenDCDiag's public API can be found in
-[sandstone.h](../framework/sandstone.h). Most of the functions and structures
-in this file are documented. Readers should consult
-[sandstone.h](../framework/sandstone.h) for information about OpenDCDiag's API
-that is not covered in this guide.
+OpenDCDiag's test APIs are declared in [sandstone.h](../framework/sandstone.h)
+and [crosscheck.h](../framework/crosscheck.h). Consult these headers for
+documentation of functions, structures, and cross-check requirements not covered in
+this guide.

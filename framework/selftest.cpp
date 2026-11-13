@@ -26,6 +26,8 @@
 #endif
 
 #include "sandstone.h"
+#include "crosscheck.h"
+#include "selftest_crosscheck_outputs.h"
 #ifndef _WIN32
 #include "sandstone_asm.h"
 #include "sandstone_kvm.h"
@@ -33,8 +35,15 @@
 #include "sandstone_p.h"
 #include "topology.h"
 
+#include <algorithm>
+#include <array>
 #include <exception>
+#include <iterator>
+#include <memory>
+#include <span>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #ifdef __x86_64__
 #  include "amx_common.h"
@@ -93,6 +102,174 @@ static int selftest_pass_init(struct test *test)
 static int selftest_pass_run(struct test * test, int)
 {
     printf("# This was printed from the test. YOU SHOULD NOT SEE THIS!\n");
+    return EXIT_SUCCESS;
+}
+
+extern "C" int selftest_memcmp_c_run(struct test *, int);
+extern "C" int selftest_crosscheck_inputs_c_init(struct test *);
+extern "C" int selftest_crosscheck_inputs_c_run(struct test *, int);
+
+CROSSCHECK_INPUT(crosscheck_numbers, uint32_t);
+CROSSCHECK_INPUT(crosscheck_weights, uint32_t);
+CROSSCHECK_INPUT(crosscheck_text, char);
+CROSSCHECK_INPUT(crosscheck_flags, bool);
+CROSSCHECK_INPUT(crosscheck_empty, uint32_t);
+CROSSCHECK_INPUT(crosscheck_long_doubles, long double);
+CROSSCHECK_OUTPUT(crosscheck_sum, uint32_t);
+CROSSCHECK_OUTPUT(crosscheck_padded_output, long double);
+static uint32_t crosscheck_input_generation;
+static uint32_t crosscheck_input_golden_sum;
+static std::weak_ptr<const void> crosscheck_input_previous_storage;
+
+static uint32_t selftest_crosscheck_input_sum()
+{
+    auto numbers = get_input(crosscheck_numbers);
+    auto weights = get_input(crosscheck_weights);
+    uint32_t sum = 0;
+    for (size_t i = 0; i < numbers.size(); ++i)
+        sum += numbers[i] * weights[i];
+    return sum;
+}
+
+static int selftest_crosscheck_input_containers_check()
+{
+    auto numbers = get_input(crosscheck_numbers);
+    auto weights = get_input(crosscheck_weights);
+    auto text = get_input(crosscheck_text);
+    auto flags = get_input(crosscheck_flags);
+    if (numbers.size() != 3 || weights.size() != 3 || text.size() != 6 || flags.size() != 3
+            || !get_input(crosscheck_empty).empty())
+        report_fail_msg("Cross-check input sizes changed");
+    uint32_t sum = selftest_crosscheck_input_sum();
+    if (sum != crosscheck_input_golden_sum || sum != crosscheck_input_generation * 2 + 31
+            || std::string(text.begin(), text.end()) != "inputs"
+            || !flags[0] || flags[1] || !flags[2])
+        report_fail_msg("Cross-check inputs did not preserve the captured values");
+    submit_output(crosscheck_sum, &sum, 1, "captured input computation");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_containers_init(struct test *)
+{
+    if (!crosscheck_input_previous_storage.expired())
+        report_fail_msg("Cross-check input storage survived the previous pass");
+    std::vector<uint32_t> numbers = { ++crosscheck_input_generation, 3, 5 };
+    std::array<uint32_t, 3> weights = { 2, 2, 5 };
+    std::string text = "inputs";
+    bool flags[] = { true, false, true };
+    set_input(crosscheck_numbers, numbers, "Owned vector snapshot");
+    set_input(crosscheck_weights, std::span<const uint32_t>(weights));
+    set_input(crosscheck_text, text);
+    set_input(crosscheck_flags, flags, std::size(flags), "Boolean array");
+    set_input(crosscheck_empty, static_cast<const uint32_t *>(nullptr), 0);
+    crosscheck_input_golden_sum = selftest_crosscheck_input_sum();
+    crosscheck_input_previous_storage = sApp->crosscheck_state.inputs.at(crosscheck_numbers.name).storage;
+    std::fill(numbers.begin(), numbers.end(), 0);
+    weights.fill(0);
+    text.assign(text.size(), '?');
+    std::fill(std::begin(flags), std::end(flags), false);
+    return selftest_crosscheck_input_containers_check();
+}
+
+static int selftest_crosscheck_input_containers_run(struct test *, int)
+{
+    return selftest_crosscheck_input_containers_check();
+}
+
+static int selftest_crosscheck_input_containers_cleanup(struct test *)
+{
+    if (crosscheck_input_previous_storage.expired())
+        report_fail_msg("Cross-check input storage was released before cleanup");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_skip_init(struct test *test)
+{
+    selftest_crosscheck_input_containers_init(test);
+    log_skip(SelftestSkipCategory, "Skip after capturing cross-check inputs");
+    return EXIT_SKIP;
+}
+
+static int selftest_crosscheck_input_error_init(struct test *test)
+{
+    selftest_crosscheck_input_containers_init(test);
+    return 1;
+}
+
+static int selftest_crosscheck_input_get_cleanup(struct test *)
+{
+    (void)get_input(crosscheck_numbers);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_long_double_check()
+{
+    auto values = get_input(crosscheck_long_doubles);
+    if (values.size() != 2 || values[0] != 1.25L || values[1] != -2.5L)
+        report_fail_msg("Cross-check long double values changed");
+    constexpr size_t real_size = SandstoneDataDetails::type_real_size(SANDSTONE_LONG_DOUBLE_TYPE);
+    for (const long double &value : values) {
+        auto bytes = reinterpret_cast<const unsigned char *>(&value);
+        for (size_t i = real_size; i < sizeof(value); ++i) {
+            if (bytes[i] != 0)
+                report_fail_msg("Cross-check long double padding was not normalized");
+        }
+    }
+    submit_output(crosscheck_padded_output, values, "captured padded input");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_long_double_init(struct test *)
+{
+    long double values[] = { 1.25L, -2.5L };
+    constexpr size_t real_size = SandstoneDataDetails::type_real_size(SANDSTONE_LONG_DOUBLE_TYPE);
+    for (long double &value : values)
+        memset(reinterpret_cast<unsigned char *>(&value) + real_size, 0xa5,
+               sizeof(value) - real_size);
+    set_input(crosscheck_long_doubles, values);
+    memset(values, 0, sizeof(values));
+    return selftest_crosscheck_input_long_double_check();
+}
+
+static int selftest_crosscheck_input_long_double_run(struct test *, int)
+{
+    return selftest_crosscheck_input_long_double_check();
+}
+
+static int selftest_crosscheck_input_duplicate_init(struct test *)
+{
+    const uint32_t value = 42;
+    set_input(crosscheck_numbers, &value, 1);
+    set_input(crosscheck_numbers, &value, 1);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_set_run(struct test *, int)
+{
+    const uint32_t value = 42;
+    set_input(crosscheck_numbers, &value, 1);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_missing_run(struct test *, int)
+{
+    (void)get_input(crosscheck_numbers);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_type_mismatch_init(struct test *)
+{
+    CROSSCHECK_INPUT(shared, bool);
+    const bool value = true;
+    set_input(shared, &value, 1);
+    submit_output(crosscheck_sum, static_cast<const uint32_t *>(nullptr), 0, nullptr);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_type_mismatch_run(struct test *, int)
+{
+    CROSSCHECK_INPUT(shared, uint8_t);
+    (void)get_input(shared);
     return EXIT_SUCCESS;
 }
 
@@ -492,10 +669,13 @@ static int selftest_logerror_cleanup(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int selftest_run_result;
+
 template <int PackageId> static int selftest_log_skip_socket_init(struct test *test)
 {
     if (num_packages() == 1 && device_info[0].package_id == PackageId)
         return selftest_log_skip_init(test);
+    selftest_run_result = get_testspecific_knob_value_int(test, "run_result", EXIT_SUCCESS);
     return EXIT_SUCCESS;
 }
 
@@ -503,7 +683,26 @@ template <int PackageId> static int selftest_log_skip_socket_run(struct test *te
 {
     if (num_packages() == 1 && device_info[0].package_id == PackageId)
         return selftest_skip_run(test, thread);
+    if (selftest_run_result == EXIT_SKIP)
+        return selftest_skip_run(test, thread);
+    return selftest_run_result;
+}
+
+static int selftest_result_sequence_init(struct test *test)
+{
+    const char *knob = sApp->current_iteration_count < 0 ? "retry" :
+                       sApp->current_iteration_count == 0 ? "first" : "later";
+    selftest_run_result = get_testspecific_knob_value_int(test, knob,
+                            sApp->current_iteration_count > 0 ? EXIT_SKIP : EXIT_SUCCESS);
     return EXIT_SUCCESS;
+}
+
+static int selftest_result_sequence_run(struct test *test, int thread)
+{
+    log_info("Retry: %s", test_is_retry() ? "true" : "false");
+    if (selftest_run_result == EXIT_SKIP)
+        return selftest_skip_run(test, thread);
+    return selftest_run_result;
 }
 
 static int selftest_log_skip_run_all_threads(struct test *test, int)
@@ -747,6 +946,12 @@ static int selftest_reportfail_run(struct test *test, int)
     report_fail(test);
     log_error("We should not reach here");
     abort();
+    return EXIT_SUCCESS;
+}
+
+static int selftest_memcmp_c_cleanup(struct test *)
+{
+    log_info("C worker memcmp cleanup after join");
     return EXIT_SUCCESS;
 }
 
@@ -1578,6 +1783,34 @@ const static test_group group_test_hw_features = {
 };
 #endif
 
+#define CROSSCHECK_OUTPUT_SELFTEST(suffix, description_text, group, duration, flags_value) \
+DECLARE_SELFTEST(SANDSTONE_CONCAT(selftest_crosscheck_output_, suffix), description_text) \
+    .groups = DECLARE_TEST_GROUPS(&group), \
+    .test_init = selftest_crosscheck_outputs_init, \
+    .test_run = selftest_crosscheck_outputs_run, \
+    .test_cleanup = selftest_crosscheck_outputs_cleanup, \
+    .desired_duration = duration, \
+    .fracture_loop_count = duration == 0 ? 10 : 0, \
+    .quality_level = TEST_QUALITY_PROD, \
+    .flags = flags_value, \
+END_DECLARE_TEST
+
+DECLARE_SELFTEST(selftest_crosscheck_votes, "Exercises golden and consensus participants, majorities, and execution states")
+    .test_init = selftest_crosscheck_votes_init,
+    .test_run = selftest_crosscheck_votes_run,
+    .test_cleanup = selftest_crosscheck_votes_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_votes_sequential, "Preserves submission CPU attribution after sequential rescheduling")
+    .test_init = selftest_crosscheck_votes_init,
+    .test_run = selftest_crosscheck_votes_run,
+    .test_cleanup = selftest_crosscheck_votes_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_schedule_sequential,
+END_DECLARE_TEST
+
 DECLARE_SELFTEST(selftest_pass, "Just pass")
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
     .test_init = selftest_init_installcallback,
@@ -1600,6 +1833,13 @@ END_DECLARE_TEST
 DECLARE_SELFTEST(selftest_timedpass, "Loops around usleep() for the regular test time")
     .groups = DECLARE_TEST_GROUPS(&group_positive),
     .test_run = selftest_timedpass_run<10'000>,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_result_sequence, "Selects results for the first fracture, later fractures, and retries")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_result_sequence_init,
+    .test_run = selftest_result_sequence_run,
+    .fracture_loop_count = 1,
     .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
 #ifdef __unix__
@@ -1997,6 +2237,84 @@ DECLARE_SELFTEST(kvm_real_setup_check, "Checks the setup and check handlers are 
 END_DECLARE_TEST
 #endif // __linux__
 
+CROSSCHECK_OUTPUT_SELFTEST(consensus_only_skip_init, "Skips before activating consensus verification",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_zero_length, "Accepts a present named zero-length consensus output",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_only_skip_diagnostic, "Preserves explicit consensus worker skip diagnostics",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_only_states, "Exercises configurable consensus completion, outlier, and skip states",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_only_slice, "Verifies outputs separately in each execution slice",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_mixed_slice, "Preserves skips and failures across execution slices",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_only_reference_skip, "Preserves worker 0's skip while comparing successful workers",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_pass, "Verifies unanimous worker observations",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_sequential, "Verifies consensus with sequential workers",
+                          group_positive, -1, test_schedule_sequential)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_skip, "Preserves a worker's skip during consensus verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(containers_pass, "Submits and verifies outputs from C++ containers",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_pass, "Verifies C worker outputs alongside golden outputs",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_golden_pass, "Verifies C++ worker outputs alongside C golden outputs",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(wrapper_pass, "Verifies floating-point wrapper outputs across translation units",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(nan_pass, "Accepts identical NaN payloads and signed zeros",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(padding_pass, "Ignores trailing long double padding when verifying outputs",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(fracture_pass, "Releases captured storage between fracture passes",
+                          group_positive, 0, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(skip_init, "Releases captured storage after test_init() skips",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(parent_skip_init, "Releases captured storage after parent test_init() skips",
+                          group_positive, -1, test_init_in_parent)
+CROSSCHECK_OUTPUT_SELFTEST(skip_return, "Preserves a worker's skip return",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(negative_return, "Preserves a worker's negative return",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(skip_flag, "Preserves a worker's skip flag",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(bad_first_skip_flag, "Excludes a skipped worker's output from verification",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(missing_golden, "Accepts additional worker outputs without golden submissions",
+                          group_positive, -1, test_schedule_default)
+DECLARE_SELFTEST(selftest_crosscheck_input_skip_init, "Releases cross-check inputs after test_init() skips")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_crosscheck_input_skip_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_containers_pass, "Cross-check inputs own container snapshots in test_init() and test_run()")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_crosscheck_input_containers_init,
+    .test_run = selftest_crosscheck_input_containers_run,
+    .test_cleanup = selftest_crosscheck_input_containers_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_long_double_pass, "Cross-check inputs normalize long double padding")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_crosscheck_input_long_double_init,
+    .test_run = selftest_crosscheck_input_long_double_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_c_pass, "C cross-check inputs own snapshots in test_init() and test_run()")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_crosscheck_inputs_c_init,
+    .test_run = selftest_crosscheck_inputs_c_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+
     /* Randomly failing tests */
 
 DECLARE_SELFTEST(selftest_randomfail_50pct, "Fails about 50% of the time, randomly")
@@ -2083,6 +2401,140 @@ DECLARE_SELFTEST(selftest_sigsegv_socket1, "Crashes with SIGSEGV (data) derefere
 END_DECLARE_TEST
 
     /* Negative tests */
+
+CROSSCHECK_OUTPUT_SELFTEST(consensus_empty, "Accepts execution without cross-check outputs",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_input_only, "Accepts input-only capture",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(mixed_structural, "Reports structural output errors",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(retry_invalid, "Stops on invalid verification during failure retries",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_only_reference_error, "Preserves worker 0's error while comparing successful workers",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_only_reference_noreturn, "Preserves worker 0's nonreturning failure",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_zero_outlier, "Implicates worker 0 when it is a majority outlier",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_single, "Implicates producers of conflicting output data",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_distinct, "Implicates all producers when consensus has no majority",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_missing, "Reports missing worker submissions during consensus verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_reference_missing, "Reports missing worker 0 submissions during consensus verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_count, "Reports element count mismatches during consensus verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_type, "Reports element type mismatches during consensus verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_later, "Rejects changed later submissions before consensus verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_error, "Preserves a worker's error during consensus verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_noreturn, "Preserves a worker's nonreturning failure during consensus verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(consensus_sequential_exit, "Preserves a sequential worker's nonreturning failure",
+                          group_negative, -1, test_schedule_sequential)
+CROSSCHECK_OUTPUT_SELFTEST(bad_first, "Defers golden output verification until workers finish",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(mixed_bad_first_skip_flag, "Preserves a skipped worker while a peer fails golden verification",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(bad_later, "Rejects later submissions that differ from the first submission",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(golden_count, "Reports element count mismatches against golden outputs",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(sequential_bad_first, "Attributes deferred golden output failures to producers",
+                          group_negative, -1, test_schedule_sequential)
+CROSSCHECK_OUTPUT_SELFTEST(later_count, "Reports element count changes after the first submission",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(nan_fail, "Rejects changed NaN payloads",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(zero_fail, "Distinguishes positive and negative zero",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(padding_fail, "Rejects changed meaningful long double bytes",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(fail_return, "Preserves a worker's failure return",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(fail_flag, "Preserves a worker's error flag",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(bad_first_fail_flag, "Preserves an error after a wrong first submission",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(noreturn, "Preserves a worker's nonreturning failure",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(error_init, "Releases captured storage after test_init() errors",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(retry, "Submits fresh golden outputs and first submissions on retries",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(duplicate, "Checks repeated golden output submission for invariance",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(missing_all, "Reports workers missing all required golden outputs",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(missing_partial, "Reports workers missing some required golden outputs",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_conflict, "Reports C element type conflicts across translation units",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(wrapper_conflict, "Distinguishes wrapper and native element types",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(submit_cleanup, "Rejects output submission in test_cleanup()",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(invalid_pointer, "Rejects null golden output data with a nonzero count",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(invalid_count, "Rejects excessive golden output counts",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(worker_invalid_pointer, "Rejects null worker output data with a nonzero count",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(worker_invalid_count, "Rejects excessive worker output counts",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_bad_first, "Defers C golden output verification until workers finish",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_bad_later, "Rejects changed later C submissions",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_golden_count, "Reports C element count mismatches against golden outputs",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_later_count, "Reports C element count changes after the first submission",
+                          group_negative, -1, test_schedule_default)
+DECLARE_SELFTEST(selftest_crosscheck_input_error_init, "Releases cross-check inputs after test_init() errors")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_input_error_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_get_cleanup, "Rejects cross-check input lookup during test_cleanup()")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_input_containers_init,
+    .test_run = selftest_crosscheck_input_containers_run,
+    .test_cleanup = selftest_crosscheck_input_get_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_duplicate, "Rejects duplicate cross-check input setting")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_input_duplicate_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_set_run, "Rejects cross-check input setting outside test_init()")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crosscheck_input_set_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_missing, "Rejects missing cross-check input lookup")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crosscheck_input_missing_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_type_mismatch, "Rejects different cross-check tag types with the same name and DataType")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_input_type_mismatch_init,
+    .test_run = selftest_crosscheck_input_type_mismatch_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
 
 DECLARE_SELFTEST(selftest_failinit, "Fails in the init function")
     .groups = DECLARE_TEST_GROUPS(&group_negative),
@@ -2236,6 +2688,13 @@ DECLARE_SELFTEST(selftest_reportfail_with_cb, "Fails by calling report_fail() (c
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_init_installcallback,
     .test_run = selftest_reportfail_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_memcmp_c, "Fails by calling memcmp_or_fail() from a C worker")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_memcmp_c_run,
+    .test_cleanup = selftest_memcmp_c_cleanup,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST

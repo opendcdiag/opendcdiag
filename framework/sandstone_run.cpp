@@ -11,6 +11,7 @@
 #endif
 
 #include "sandstone.h"
+#include "crosscheck.h"
 #include "sandstone_p.h"
 #include "sandstone_system.h"
 #include "sandstone_thread.h"
@@ -721,6 +722,7 @@ static uintptr_t thread_runner(int thread_number)
     int ret = EXIT_FAILURE;
 
     auto cleanup = [&] {
+        this_thread->completion_cpu = LogicalProcessor(sched_getcpu());
         // let SIGQUIT handler know we're done
         ThreadState new_state = thread_failed;
         if (!this_thread->has_failed()) {
@@ -1156,6 +1158,11 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
         init_per_thread_data();
 
+        sApp->crosscheck_state.reset(size_t(sApp->thread_count));
+        auto release_crosscheck = scopeExit([&] {
+            sApp->crosscheck_state.reset();
+        });
+
         TestResult state = prepare_test_common(test);
         auto finish_test = scopeExit([&] { finish_test_common(test); }); // we can return early
         if (state != TestResult::Passed) {
@@ -1164,6 +1171,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         sApp->prepare_test_tests(test);
 
         if (test->test_init) {
+            sApp->crosscheck_state.phase = SandstoneCrossCheck::CrossCheckState::Phase::Initializing;
             if (init_in_aux_thread) {
                 // ensure the init function is run pinned to a specific logical
                 // processor but its pinning doesn't affect this control thread
@@ -1182,6 +1190,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
             } else {
                 ret = test->test_init(test);
             }
+            sApp->crosscheck_state.phase = SandstoneCrossCheck::CrossCheckState::Phase::Inactive;
             if (ret > 0) {
                 state = TestResult::Failed;
             } else if (ret < 0) {
@@ -1208,8 +1217,11 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
             return TestResult::Skipped;
         }
 
+        sApp->crosscheck_state.phase = SandstoneCrossCheck::CrossCheckState::Phase::Running;
         sApp->at_run_threads_start(test);
         run_threads(test);
+        auto verification = SandstoneCrossCheck::verify_outputs();
+        sApp->crosscheck_state.phase = SandstoneCrossCheck::CrossCheckState::Phase::Inactive;
 
         if (test->test_cleanup) {
             ret = test->test_cleanup(test);
@@ -1226,6 +1238,19 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         }
 
         sApp->test_tests_finish(test);
+        using SandstoneCrossCheck::VerificationResult;
+        if (verification == VerificationResult::Failed || state == TestResult::Failed)
+            return TestResult::Failed;
+        if (verification == VerificationResult::Invalid) {
+            log_message_preformatted(-1, LOG_LEVEL_QUIET,
+                    std::string("E> Cross-check invalid execution: deferred verification did not complete"));
+            return TestResult::OperatingSystemError;
+        }
+        if (verification == VerificationResult::Insufficient) {
+            log_skip(TestResourceIssueSkipCategory,
+                     "Cross-check requires at least two successful participants per output");
+            return TestResult::Skipped;
+        }
         return state;
     }();
 
@@ -1415,7 +1440,7 @@ static StartedChild spawn_child(const char *test_id, int child_number,
 
     StartedChild ret = {};
 
-    // argument order must match exec_mode_run()
+    // argument order must match exec_mode_run(): child, shmem, test, seed, iteration, knobs
     std::vector argv = {
         static_cast<const char *>(program_invocation_name), "-x", childnumstr.c_str(),
     };
@@ -1548,7 +1573,8 @@ static void run_one_test_children(ChildrenList &children, const struct test *tes
                 if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::fork_each_test)
                     _exit(test_result_to_exit_code(result));
 
-                children.results.emplace_back(ChildExitStatus{ result });
+                children.results.emplace_back(ChildExitStatus{ result,
+                        result == TestResult::OperatingSystemError ? EX_SOFTWARE : 0U });
                 return;
             } else {
                 children.add(ret);
@@ -1557,7 +1583,10 @@ static void run_one_test_children(ChildrenList &children, const struct test *tes
     } else {
         std::string shmemfdstr = stdprintf("%d", sApp->shmemfd);
         std::string random_seed = random_format_seed();
-        std::vector<const char *> common_args = { shmemfdstr.c_str(), test->id, random_seed.c_str() };
+        std::string iteration = stdprintf("%d", sApp->current_iteration_count);
+        std::vector<const char *> common_args = {
+            shmemfdstr.c_str(), test->id, random_seed.c_str(), iteration.c_str()
+        };
         save_test_knob_args(common_args, test->id);
         common_args.push_back(nullptr);
         for (int i = 0; i < child_count; ++i)
@@ -1579,7 +1608,13 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
 
     TestResult res;
     init_per_thread_data();
+    sApp->crosscheck_state.reset(size_t(sApp->thread_count));
+    sApp->crosscheck_state.phase = SandstoneCrossCheck::CrossCheckState::Phase::Initializing;
+    auto release_crosscheck = scopeExit([&] {
+        sApp->crosscheck_state.reset();
+    });
     int ret = test->test_init(const_cast<struct test *>(test));
+    sApp->crosscheck_state.phase = SandstoneCrossCheck::CrossCheckState::Phase::Inactive;
 
     PerThreadData::Main *main = sApp->main_thread_data();
     if (ret < 0) [[likely]] {
@@ -1610,7 +1645,8 @@ static void run_one_test_in_parent(ChildrenList &children, const struct test *te
     sApp->main_thread_data()->device_range = { 0, sApp->device_count };
     sApp->main_thread_data()->thread_range = { 0, sApp->thread_count };
     auto state = run_one_test_inner(const_cast<struct test*>(test));
-    children.results.emplace_back(ChildExitStatus{ state });
+    children.results.emplace_back(ChildExitStatus{ state,
+            state == TestResult::OperatingSystemError ? EX_SOFTWARE : 0U });
 }
 
 static TestResult run_one_test_once(const struct test *test)
