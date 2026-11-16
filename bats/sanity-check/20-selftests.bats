@@ -652,6 +652,82 @@ function selftest_log_skip_init_common() {
     done
 }
 
+lifecycle_fork_modes() {
+    local mode
+    for mode in no yes exec; do
+        if $is_windows && [[ "$mode" == yes ]]; then
+            continue
+        fi
+        "$@" -f "$mode"
+    done
+}
+
+lifecycle_callbacks() {
+    declare -A yamldump
+    sandstone_selftest -n2 --no-slicing -e selftest_lifecycle -e selftest_lifecycle \
+        -e selftest_lifecycle_no_init -e selftest_lifecycle_no_cleanup \
+        -e selftest_lifecycle_sequential -e selftest_lifecycle_parent "$@"
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric "/tests@len" 'value == 6'
+    local i
+    for ((i = 0; i < 6; ++i)); do
+        test_yaml_regexp "/tests/$i/result" pass
+    done
+    [[ $(grep -c 'I> Lifecycle init' "$outputfile") -eq 5 ]]
+    [[ $(grep -c 'I> Lifecycle cleanup' "$outputfile") -eq 5 ]]
+    [[ $(grep -c 'I> Lifecycle callback destroyed' "$outputfile") -eq 5 ]]
+}
+
+@test "lifecycle: callbacks, omitted callbacks, sequential workers, and repeated attempts" {
+    lifecycle_fork_modes lifecycle_callbacks
+}
+
+lifecycle_init_result() {
+    local test=$1 ret=$2 result=$3
+    shift 3
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing --max-messages=10 -e "$test" -e "$test" \
+        -O "$test.init_result=$ret" "$@"
+    if [[ "$result" == fail ]]; then
+        [[ "$status" -eq 1 ]]
+    else
+        [[ "$status" -eq 0 ]]
+    fi
+    test_yaml_numeric "/tests@len" 'value == 2'
+    test_yaml_regexp "/tests/0/result" "$result"
+    test_yaml_regexp "/tests/1/result" "$result"
+    ! grep -q 'I> Lifecycle worker\|I> Lifecycle cleanup' "$outputfile"
+    if [[ "$test" == selftest_lifecycle ]]; then
+        [[ $(grep -c 'I> Lifecycle callback destroyed' "$outputfile") -eq 2 ]]
+    fi
+}
+
+@test "lifecycle: init failure and skip reset without workers or cleanup" {
+    lifecycle_fork_modes lifecycle_init_result selftest_lifecycle 1 fail
+    lifecycle_fork_modes lifecycle_init_result selftest_lifecycle -1 skip
+}
+
+@test "lifecycle: init-only parent failure and skip reset" {
+    lifecycle_fork_modes lifecycle_init_result selftest_lifecycle_init_parent 1 fail
+    lifecycle_fork_modes lifecycle_init_result selftest_lifecycle_init_parent -1 skip
+}
+
+lifecycle_worker_failure() {
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_lifecycle \
+        -O selftest_lifecycle.run_result=1 --retest-on-failure=1 --total-retest-on-failure=2 "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_numeric "/tests@len" 'value == 2'
+    test_yaml_regexp "/tests/0/result" fail
+    test_yaml_regexp "/tests/1/result" fail
+    [[ $(grep -c 'I> Lifecycle cleanup' "$outputfile") -eq 2 ]]
+    [[ $(grep -c 'I> Lifecycle callback destroyed' "$outputfile") -eq 2 ]]
+}
+
+@test "lifecycle: cleanup after worker failure and retries" {
+    lifecycle_fork_modes lifecycle_worker_failure
+}
+
 @test "selftest_timedpass_no_fracture --max-test-loop-count=1" {
     # With just one loop, this should have very predictable timing
     declare -A yamldump
