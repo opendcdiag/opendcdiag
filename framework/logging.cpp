@@ -1076,8 +1076,8 @@ void logging_init(const struct test *test)
         logging_printf(LOG_LEVEL_VERBOSE(3), "  details: { quality: %s, description: \"%s\" }\n",
                        YamlLogger::quality_string(test), test->description);
         logging_printf(LOG_LEVEL_VERBOSE(3), "  state: { seed: '%s', iteration: %d, retry: %s }\n",
-                       random_format_seed().c_str(), abs(sApp->current_iteration_count),
-                       sApp->current_iteration_count < 0 ? "true" : "false");
+                       random_format_seed().c_str(), abs(sApp->shmem->current_iteration_count),
+                       sApp->shmem->current_iteration_count < 0 ? "true" : "false");
         logging_printf(LOG_LEVEL_VERBOSE(2), "  time-at-start: %s\n", YamlLogger::get_current_time().c_str());
         break;
     case SandstoneApplication::OutputFormat::no_output:
