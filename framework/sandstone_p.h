@@ -346,7 +346,6 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
     int shmemfd = -1;
 
     static constexpr auto DefaultTestDuration = std::chrono::seconds(1);
-    int current_iteration_count;        // iterations of the same test (positive for fracture; negative for retest)
     int current_test_count;
     ShortDuration current_test_duration;
     MonotonicTimePoint current_test_starttime;         // at entering run_one_test_once()
@@ -410,6 +409,7 @@ struct SandstoneApplication::SharedMemory
     // test execution
     MonotonicTimePoint current_test_endtime = {};
     int current_max_loop_count = 0;
+    int current_iteration_count = 0;     // iterations of the same test (positive for fracture; negative for retest)
     std::chrono::duration<int, std::micro> current_test_sleep_duration = {};
 
     // child debugging
