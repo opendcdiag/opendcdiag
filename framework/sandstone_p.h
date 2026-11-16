@@ -329,6 +329,14 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
 
     struct SharedMemory;
 
+    enum class TestPhase { inactive, initializing, running, cleanup };
+
+    // Process-local: only the coordinator writes, before launching or after joining threads.
+    // Phases cover per-attempt callbacks, not preparation, device finishing, or
+    // failure-callback destruction. The current test remains set through all of those.
+    const struct test *current_test = nullptr;
+    TestPhase test_phase = TestPhase::inactive;
+
     HardwareInfo hwinfo;
     SlicePlans slice_plans;
     std::vector<test_data_per_thread> user_thread_data;

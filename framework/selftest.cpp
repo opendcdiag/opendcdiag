@@ -96,6 +96,59 @@ static int selftest_pass_run(struct test * test, int)
     return EXIT_SUCCESS;
 }
 
+static void selftest_lifecycle_check(const struct test *test, SandstoneApplication::TestPhase phase)
+{
+    if (current_test() != test || sApp->current_test != test || sApp->test_phase != phase)
+        report_fail_msg("Unexpected current test or lifecycle phase (expected %d, got %d)",
+                        int(phase), int(sApp->test_phase));
+}
+
+static int selftest_lifecycle_outside(struct test *)
+{
+    // postcleanup must not change the result, even if the last attempt failed or skipped.
+    if (current_test() || sApp->test_phase != SandstoneApplication::TestPhase::inactive) {
+        log_platform_message(SANDSTONE_LOG_ERROR "Lifecycle still active outside an attempt");
+        abort();
+    }
+    return EXIT_SUCCESS;
+}
+
+static int selftest_lifecycle_run_result;
+
+static int selftest_lifecycle_init(struct test *test)
+{
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::initializing);
+    log_info("Lifecycle init");
+    if (!(test->flags & test_init_in_parent)) {
+        install_failure_callback(+[](void *) {}, test, +[](void *ptr) {
+            selftest_lifecycle_check(static_cast<struct test *>(ptr), SandstoneApplication::TestPhase::inactive);
+            log_info("Lifecycle callback destroyed");
+        });
+    }
+    selftest_lifecycle_run_result = get_testspecific_knob_value_int(test, "run_result", EXIT_SUCCESS);
+    int ret = get_testspecific_knob_value_int(test, "init_result",
+                    test->flags & test_init_in_parent ? EXIT_SKIP : EXIT_SUCCESS);
+    if (ret < 0)
+        log_skip(SelftestSkipCategory, "Lifecycle init skip");
+    else if (ret > 0)
+        log_error("Lifecycle init failure");
+    return ret;
+}
+
+static int selftest_lifecycle_run(struct test *test, int)
+{
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::running);
+    log_info("Lifecycle worker");
+    return test->test_init ? selftest_lifecycle_run_result : EXIT_SUCCESS;
+}
+
+static int selftest_lifecycle_cleanup(struct test *test)
+{
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::cleanup);
+    log_info("Lifecycle cleanup");
+    return EXIT_SUCCESS;
+}
+
 extern "C" int selftest_memcmp_c_run(struct test *, int);
 
 template <useconds_t Usecs>
@@ -1597,6 +1650,61 @@ DECLARE_SELFTEST(selftest_pass, "Just pass")
     .test_run = selftest_pass_run,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_lifecycle, "Checks process-local per-attempt lifecycle phases")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_preinit = selftest_lifecycle_outside,
+    .test_init = selftest_lifecycle_init,
+    .test_run = selftest_lifecycle_run,
+    .test_cleanup = selftest_lifecycle_cleanup,
+    .test_postcleanup = selftest_lifecycle_outside,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_lifecycle_no_init, "Checks lifecycle without an init callback")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_run = selftest_lifecycle_run,
+    .test_cleanup = selftest_lifecycle_cleanup,
+    .test_postcleanup = selftest_lifecycle_outside,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_lifecycle_no_cleanup, "Checks lifecycle without a cleanup callback")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_lifecycle_init,
+    .test_run = selftest_lifecycle_run,
+    .test_postcleanup = selftest_lifecycle_outside,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_lifecycle_sequential, "Checks lifecycle with sequential workers")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_lifecycle_init,
+    .test_run = selftest_lifecycle_run,
+    .test_cleanup = selftest_lifecycle_cleanup,
+    .test_postcleanup = selftest_lifecycle_outside,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_schedule_sequential,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_lifecycle_parent, "Checks lifecycle with the test in the parent")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_lifecycle_init,
+    .test_run = selftest_lifecycle_run,
+    .test_cleanup = selftest_lifecycle_cleanup,
+    .test_postcleanup = selftest_lifecycle_outside,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_in_parent,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_lifecycle_init_parent, "Checks lifecycle with only init in the parent")
+    .test_init = selftest_lifecycle_init,
+    .test_run = selftest_lifecycle_run,
+    .test_cleanup = selftest_lifecycle_cleanup,
+    .test_postcleanup = selftest_lifecycle_outside,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_init_in_parent,
 END_DECLARE_TEST
 DECLARE_SELFTEST(selftest_pass_beta, "Just pass")
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),

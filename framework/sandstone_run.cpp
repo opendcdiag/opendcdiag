@@ -68,8 +68,6 @@ using namespace std::chrono_literals;
 
 device_features_t device_features;
 
-static const struct test *s_current_test = nullptr;
-
 #ifdef __llvm__
 thread_local int thread_num __attribute__((tls_model("initial-exec")));
 #else
@@ -78,7 +76,7 @@ thread_local int thread_num = 0;
 
 const struct test *current_test() noexcept
 {
-    return s_current_test;
+    return sApp->current_test;
 }
 
 static const char *path_to_exe()
@@ -1143,8 +1141,12 @@ static void finish_test_common(struct test *test)
 
 static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
 {
-    s_current_test = test;
-    auto resetCurrentTest = scopeExit([&] { s_current_test = nullptr; });
+    sApp->current_test = test;
+    sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+    auto resetCurrentTest = scopeExit([] {
+        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+        sApp->current_test = nullptr;
+    });
 
     // Initialize/reset rescheduler state
     if (device_scheduler)
@@ -1164,6 +1166,8 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         sApp->prepare_test_tests(test);
 
         if (test->test_init) {
+            sApp->test_phase = SandstoneApplication::TestPhase::initializing;
+            auto resetPhase = scopeExit([] { sApp->test_phase = SandstoneApplication::TestPhase::inactive; });
             if (init_in_aux_thread) {
                 // ensure the init function is run pinned to a specific logical
                 // processor but its pinning doesn't affect this control thread
@@ -1209,9 +1213,13 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         }
 
         sApp->at_run_threads_start(test);
+        sApp->test_phase = SandstoneApplication::TestPhase::running;
         run_threads(test);
+        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
 
         if (test->test_cleanup) {
+            sApp->test_phase = SandstoneApplication::TestPhase::cleanup;
+            auto resetPhase = scopeExit([] { sApp->test_phase = SandstoneApplication::TestPhase::inactive; });
             ret = test->test_cleanup(test);
             PerThreadData::Main *thr = sApp->main_thread_data();
             if (ret > EXIT_SUCCESS || thr->has_failed()) {
@@ -1574,12 +1582,17 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
     sApp->main_thread_data()->device_range = { 0, sApp->device_count };
     sApp->main_thread_data()->thread_range = { 0, sApp->thread_count };
 
-    s_current_test = test;
-    auto resetCurrentTest = scopeExit([&] { s_current_test = nullptr; });
+    sApp->current_test = test;
+    auto resetCurrentTest = scopeExit([] {
+        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+        sApp->current_test = nullptr;
+    });
 
     TestResult res;
     init_per_thread_data();
+    sApp->test_phase = SandstoneApplication::TestPhase::initializing;
     int ret = test->test_init(const_cast<struct test *>(test));
+    sApp->test_phase = SandstoneApplication::TestPhase::inactive;
 
     PerThreadData::Main *main = sApp->main_thread_data();
     if (ret < 0) [[likely]] {
