@@ -172,7 +172,7 @@ void ulog_update(const struct test *test)
         return;
 
     uint32_t current_seed = random_seed_low32();
-    int iteration = -sApp->current_iteration_count;
+    int iteration = -sApp->shmem->current_iteration_count;
     *sApp->ulog_addresses[0] = (test->shortid << 8) | (iteration >= 0 ? uint8_t(iteration) : 0);
     *sApp->ulog_addresses[1] = current_seed;
     *sApp->ulog_addresses[2] = CurrentSchemaVersion & 0xf;

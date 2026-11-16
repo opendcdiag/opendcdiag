@@ -578,7 +578,7 @@ bool test_loop_condition(int N) noexcept
 bool test_is_retry() noexcept
 {
     // negative values indicate a retry
-    return sApp->current_iteration_count < 0;
+    return sApp->shmem->current_iteration_count < 0;
 }
 
 static void init_internal(const struct test *test)
@@ -1816,7 +1816,7 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
     assert(sApp->retest_count >= 0);
 
     /* First we go to do our -- possibly fractured -- normal run, we'll do retries after */
-    for (sApp->current_iteration_count = 0;; ++sApp->current_iteration_count) {
+    for (sApp->shmem->current_iteration_count = 0;; ++sApp->shmem->current_iteration_count) {
 
 #if SANDSTONE_FREQUENCY_MANAGER
         //change frequency per fracture
@@ -1883,7 +1883,7 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
             // reset for the next retry iteration
             if (sApp->total_retest_count > 0)
                 --sApp->total_retest_count;
-            sApp->current_iteration_count = -iterations;
+            sApp->shmem->current_iteration_count = -iterations;
             init_internal(test);
             sApp->shmem->current_test_endtime =
                     calculate_wallclock_deadline(sApp->current_test_duration,
