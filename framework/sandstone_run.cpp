@@ -11,6 +11,7 @@
 #endif
 
 #include "sandstone.h"
+#include "crosscheck.h"
 #include "sandstone_p.h"
 #include "sandstone_system.h"
 #include "sandstone_thread.h"
@@ -1142,9 +1143,9 @@ static void finish_test_common(struct test *test)
 static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
 {
     sApp->current_test = test;
-    sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+    sApp->test_phase = SandstoneApplication::TestPhase::Framework;
     auto resetCurrentTest = scopeExit([] {
-        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+        sApp->test_phase = SandstoneApplication::TestPhase::Framework;
         sApp->current_test = nullptr;
     });
 
@@ -1158,6 +1159,11 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
         init_per_thread_data();
 
+        sApp->crosscheck_state.reset(size_t(device_count()));
+        auto release_crosscheck = scopeExit([&] {
+            sApp->crosscheck_state.reset();
+        });
+
         TestResult state = prepare_test_common(test);
         auto finish_test = scopeExit([&] { finish_test_common(test); }); // we can return early
         if (state != TestResult::Passed) {
@@ -1166,8 +1172,8 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         sApp->prepare_test_tests(test);
 
         if (test->test_init) {
-            sApp->test_phase = SandstoneApplication::TestPhase::initializing;
-            auto resetPhase = scopeExit([] { sApp->test_phase = SandstoneApplication::TestPhase::inactive; });
+            sApp->test_phase = SandstoneApplication::TestPhase::Init;
+            auto resetPhase = scopeExit([] { sApp->test_phase = SandstoneApplication::TestPhase::Framework; });
             if (init_in_aux_thread) {
                 // ensure the init function is run pinned to a specific logical
                 // processor but its pinning doesn't affect this control thread
@@ -1213,13 +1219,19 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         }
 
         sApp->at_run_threads_start(test);
-        sApp->test_phase = SandstoneApplication::TestPhase::running;
+        sApp->test_phase = SandstoneApplication::TestPhase::Run;
         run_threads(test);
-        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+        sApp->test_phase = SandstoneApplication::TestPhase::Framework;
+        for (int worker = 0; worker < sApp->thread_count; ++worker) {
+            auto *data = sApp->test_thread_data(worker);
+            if (data->has_failed())
+                data->thread_flags |= uint32_t(PerThreadData::Common::Flag::WorkerFailed);
+        }
+        auto verification = SandstoneCrossCheck::verify_outputs();
 
         if (test->test_cleanup) {
-            sApp->test_phase = SandstoneApplication::TestPhase::cleanup;
-            auto resetPhase = scopeExit([] { sApp->test_phase = SandstoneApplication::TestPhase::inactive; });
+            sApp->test_phase = SandstoneApplication::TestPhase::Cleanup;
+            auto resetPhase = scopeExit([] { sApp->test_phase = SandstoneApplication::TestPhase::Framework; });
             ret = test->test_cleanup(test);
             PerThreadData::Main *thr = sApp->main_thread_data();
             if (ret > EXIT_SUCCESS || thr->has_failed()) {
@@ -1234,6 +1246,11 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         }
 
         sApp->test_tests_finish(test);
+        using SandstoneCrossCheck::VerificationResult;
+        if (verification == VerificationResult::Failed || state == TestResult::Failed)
+            return TestResult::Failed;
+        if (verification == VerificationResult::Invalid)
+            SandstoneCrossCheck::invalid_operation("deferred verification did not complete");
         return state;
     }();
 
@@ -1584,15 +1601,19 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
 
     sApp->current_test = test;
     auto resetCurrentTest = scopeExit([] {
-        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+        sApp->test_phase = SandstoneApplication::TestPhase::Framework;
         sApp->current_test = nullptr;
     });
 
     TestResult res;
     init_per_thread_data();
-    sApp->test_phase = SandstoneApplication::TestPhase::initializing;
+    sApp->crosscheck_state.reset(size_t(device_count()));
+    auto release_crosscheck = scopeExit([&] {
+        sApp->crosscheck_state.reset();
+    });
+    sApp->test_phase = SandstoneApplication::TestPhase::Init;
     int ret = test->test_init(const_cast<struct test *>(test));
-    sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+    sApp->test_phase = SandstoneApplication::TestPhase::Framework;
 
     PerThreadData::Main *main = sApp->main_thread_data();
     if (ret < 0) [[likely]] {
@@ -1629,6 +1650,13 @@ static void run_one_test_in_parent(ChildrenList &children, const struct test *te
 static TestResult run_one_test_once(const struct test *test)
 {
     ChildrenList children;
+
+    // Reset before launching children, including attempts that fail before child setup.
+    for (int owner = 0; owner < device_count(); ++owner)
+        sApp->crosscheck_failures[owner].store(false, std::memory_order_relaxed);
+    for_each_main_thread([](PerThreadData::Main *data, int) {
+        data->thread_flags &= ~uint32_t(PerThreadData::Common::Flag::CrossCheckNoMajority);
+    });
 
     sApp->current_test_count++;
     if (device_features_t missing = (test->compiler_minimum_device | test->minimum_cpu) & ~device_features) {
@@ -1694,18 +1722,20 @@ static TestResult run_one_test_once(const struct test *test)
 }
 
 static void analyze_test_failures(const struct test *test, int fail_count, int attempt_count,
-                                  const PerThreadFailures &per_thread_failures)
+                                  const PerThreadFailures &per_thread_failures,
+                                  const PerDeviceFailures &per_device_failures,
+                                  bool has_crosscheck_failures, bool has_crosscheck_no_majority)
 {
     logging_printf(LOG_LEVEL_VERBOSE(1), "# Test failed %d out of %d times"
                                          " (%.1f%%)\n", fail_count, attempt_count,
                    fail_count * 100.0 / attempt_count);
     logging_restricted(LOG_LEVEL_QUIET, "Test failed (#%s%x).", test->id, fail_count - 1);
 
-    // First, determine if all threads failed the exact same way
+    // First, determine if all workers failed the exact same way.
     bool all_threads_failed_equally = true;
     PerThreadFailures::value_type fail_pattern = 0;
-    int nfailures = 0;
-    for (size_t i = 0; i < sApp->thread_count && all_threads_failed_equally; ++i) {
+    size_t nfailures = 0;
+    for (size_t i = 0; i < per_thread_failures.size() && all_threads_failed_equally; ++i) {
         if (per_thread_failures[i]) {
             if (++nfailures == 1)
                 fail_pattern = per_thread_failures[i];
@@ -1713,12 +1743,17 @@ static void analyze_test_failures(const struct test *test, int fail_count, int a
                 all_threads_failed_equally = false;
         }
     }
-    if (all_threads_failed_equally && nfailures == sApp->thread_count) {
+    if (all_threads_failed_equally && nfailures == per_thread_failures.size()) {
         logging_printf(LOG_LEVEL_VERBOSE(1), "# All threads failed equally. This is highly unlikely (SW bug?)\n");
-        return;
+        if (!has_crosscheck_failures)
+            return;
     }
 
-    analyze_test_failures_for_topology(test, per_thread_failures);
+    if (has_crosscheck_no_majority)
+        logging_printf(LOG_LEVEL_VERBOSE(1), "# Cross-check had no strict majority: conflicting owners are suspects. "
+                       "Topology analysis shows observed implicated-owner patterns, not independent proof of faulty hardware, "
+                       "and does not identify which conflicting group is incorrect.\n");
+    analyze_test_failures_for_topology(test, per_device_failures);
 }
 
 static ShortDuration test_duration(const test_cfg_info &test_cfg)
@@ -1766,21 +1801,37 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
     bool auto_fracture = false;
     Duration runtime = 0ms;
 
-    // resize and zero the storage
-    if (per_thread_failures.size() == sApp->thread_count) {
+    // Worker outcomes and hardware attribution have independent indices and histories.
+    if (per_thread_failures.size() == size_t(sApp->thread_count)) {
         std::fill_n(per_thread_failures.begin(), sApp->thread_count, 0);
     } else {
         per_thread_failures.clear();
         per_thread_failures.resize(sApp->thread_count, 0);
     }
-    auto mark_up_per_thread_fail = [&per_thread_failures, &fail_count](int attempt) {
+    PerDeviceFailures per_device_failures(device_count(), 0);
+    bool has_crosscheck_failures = false;
+    bool has_crosscheck_no_majority = false;
+    auto mark_up_failures = [&](int attempt) {
         ++fail_count;
+        for (int owner = 0; owner < device_count(); ++owner)
+            has_crosscheck_failures |= sApp->crosscheck_failures[owner].load(std::memory_order_relaxed);
+        for_each_main_thread([&](PerThreadData::Main *data, int) {
+            has_crosscheck_no_majority |= bool(data->thread_flags & PerThreadData::Common::Flag::CrossCheckNoMajority);
+        });
         if (attempt >= SandstoneApplication::MaxRetestCount)
             return;
-        for_each_test_thread([&](PerThreadData::Test *data, int thread) {
-            using U = PerThreadFailures::value_type;
-            if (data->has_failed())
+        using U = PerDeviceFailures::value_type;
+        for (int owner = 0; owner < device_count(); ++owner) {
+            if (sApp->crosscheck_failures[owner].load(std::memory_order_relaxed))
+                per_device_failures[owner] |= U(1) << attempt;
+        }
+        for_each_test_thread([&](PerThreadData::Test *data, int thread, int device) {
+            if (data->has_non_crosscheck_failure()
+                    || (data->thread_flags & PerThreadData::Common::Flag::WorkerFailed))
                 per_thread_failures[thread] |= U(1) << attempt;
+            // Ordinary failures keep initial-device attribution, unlike crosscheck reporting contexts.
+            if (data->has_non_crosscheck_failure())
+                per_device_failures[device] |= U(1) << attempt;
         });
     };
 
@@ -1849,7 +1900,7 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
 
         if (state != TestResult::Passed) {
             // this counts as the first failure regardless of how many fractures we've run
-            mark_up_per_thread_fail(0);
+            mark_up_failures(0);
             break;
         }
 
@@ -1892,10 +1943,11 @@ TestResult run_one_test(const test_cfg_info &test_cfg, PerThreadFailures &per_th
             cleanup_internal(test);
 
             if (state > TestResult::Passed)
-                mark_up_per_thread_fail(iterations);
+                mark_up_failures(iterations);
         }
 
-        analyze_test_failures(test, fail_count, iterations, per_thread_failures);
+        analyze_test_failures(test, fail_count, iterations, per_thread_failures,
+                              per_device_failures, has_crosscheck_failures, has_crosscheck_no_majority);
         state = TestResult::Failed;
     }
 
