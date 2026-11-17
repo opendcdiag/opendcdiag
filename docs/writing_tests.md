@@ -640,14 +640,26 @@ writing to standard error directly.
 
 ## Named inputs and cross-checked outputs
 
-The C++ API in [crosscheck.h](../framework/crosscheck.h) is an alternative to
+The C and C++ API in [crosscheck.h](../framework/crosscheck.h) is an alternative to
 managing immutable input and reference buffers yourself. Existing explicit
 comparisons, including the examples above, remain supported.
+
+The C API forwards to the same implementation as C++. Both languages use the
+same capture state, phase and ownership restrictions, and verification policy;
+matching names and scalar types interoperate across C and C++ translation units.
 
 Declare named, typed arrays with `CROSSCHECK_INPUT(name, type)` and
 `CROSSCHECK_OUTPUT(name, type)`. These declarations establish names and element
 types; they do not store test data or capture anything until set_input() or
 submit_output() is called.
+
+For tests spanning multiple translation units, put shared tag declarations in a
+shared header. Names match by string contents, not the address of a declaration
+or string literal. Inputs and outputs have separate name namespaces within each
+attempt, so an input and an output may use the same name. Within either namespace,
+use distinct names for unrelated values: reusing the same name, element type, and
+count cannot be detected as misuse. Type/count contracts are checked when the APIs
+are used, not when tags are declared; see the API error rules below.
 
 Tests **set inputs**, **get inputs**, and **submit outputs**. The framework
 **captures snapshots** and verifies submitted outputs; capture describes its
@@ -658,6 +670,54 @@ ownership mechanism, not a separate public test operation.
 | Set inputs | `set_input()` | Copy the supplied elements into an owned immutable input snapshot |
 | Get inputs | `get_input()` | Return a typed, read-only view of the input snapshot |
 | Submit outputs | `submit_output()` | Capture the first submission for a name and CPU/device, then check later submissions on that owner against it |
+
+### C declarations and type inference
+
+In C, `CROSSCHECK_INPUT(addends, uint32_t)` generates an element typedef and a
+named view struct:
+
+```c
+typedef uint32_t crosscheck_input_type_addends;
+struct CrossCheckInputView_addends {
+    const uint32_t *data;
+    size_t count;
+};
+```
+
+The macro checks that the element type is supported and generates typed set/get
+helpers. The public set_input() and get_input() macros select those helpers for
+the declared name. get_input(addends) returns `struct CrossCheckInputView_addends`;
+`.data` points to immutable captured elements and `.count` is their element count.
+The local view can be assigned or its pointer/count changed without changing the
+framework-owned snapshot. Do not modify captured elements or free the pointer.
+
+`CROSSCHECK_OUTPUT(sum, uint32_t)` generates the element typedef
+`crosscheck_output_type_sum` and a typed submit helper, but no view struct.
+submit_output() returns void. Both set_input() and submit_output() require four
+explicit arguments: name, data pointer, element count, and description. The
+description may be NULL. Arrays decay to pointers; counts are not inferred.
+Pointer element types must be compatible with the declared C type, optionally
+adding const; volatile pointers, void pointers, and bool/uint8_t substitutions
+are rejected even when their representations match. Typedef aliases of the same
+type remain compatible. Counts are elements, not bytes.
+
+Use the GCC and Clang `__auto_type` extension to infer the generated input view
+type instead of spelling its struct name:
+
+```c
+uint32_t values[] = {1, 2};
+set_input(addends, values, 2, "Addends");
+__auto_type input = get_input(addends);
+uint32_t result = input.data[0] + input.data[1];
+submit_output(sum, &result, 1, NULL);
+```
+
+The project uses GNU C17; `__auto_type` does not require C23. An explicit
+`struct CrossCheckInputView_addends` declaration also works. Empty captures need
+a typed null data pointer and an explicit zero count, for example
+`set_input(addends, (const uint32_t *)NULL, 0, NULL)` instead of bare NULL.
+The same rule applies to submit_output(). A null data pointer with a nonzero
+count is invalid.
 
 ### C++ declarations and type inference
 
@@ -677,14 +737,6 @@ static constexpr SandstoneCrossCheck::OutputKey<uint32_t> sum{"sum"};
 ```
 
 These structs contain only the capture name, not input or output buffers.
-For tests spanning multiple translation units, put shared tag declarations in a
-shared header. Names match by string contents, not the address of a declaration
-or string literal. Inputs and outputs have separate name namespaces within each
-attempt, so an input and an output may use the same name. Within either namespace,
-use distinct names for unrelated values: reusing the same name, element type, and
-count cannot be detected as misuse. Type/count contracts are checked when the APIs
-are used, not when tags are declared; see the API error rules below.
-
 The InputElement constraint checks the supported element type. get_input(addends)
 returns `std::span<const uint32_t>`; use standard C++ `auto` for inference:
 
@@ -767,6 +819,17 @@ and does not itself cause a skip or failure. After joining, the framework logs
 per singleton output name. Worker count is not the vote count:
 one worker can visit distinct CPUs, and multiple workers can share one CPU's slot.
 
+The C counterpart is [crosschecked_add_c.c](../tests/examples/crosschecked_add_c.c),
+with distinct test IDs consensus_add_c and crosschecked_add_c. It is also unbuilt
+by default. To build both versions together, use:
+
+```meson
+tests_set_base.add(files('../examples/crosschecked_add.cpp', '../examples/crosschecked_add_c.c'))
+```
+
+After rebuilding, run with `--beta -e consensus_add_c` or
+`--beta -e crosschecked_add_c` for C, or the C++ IDs above.
+
 ### CPU-owned output from init
 
 The same source file also includes crosschecked_add, which shares the input/output
@@ -796,7 +859,8 @@ is a CPU-owned observation: it uses the slot for the CPU observed at submission,
 just like a worker output on that CPU. Init has no separate slot, extra vote, or
 authority to establish the correct result. A worker submitting a different value
 on that CPU fails its local self-check immediately; this is not a two-vote tie.
-Init is not assumed to run on worker zero's CPU.
+Init is not assumed to run on worker zero's CPU. These rules apply equally to C
+and C++ submissions.
 
 ### Output ownership and local self-checks
 
@@ -939,11 +1003,17 @@ abort the invocation rather than produce a normal child-result report. Valid
 API use with those flags is permitted in no-fork mode.
 
 Element types must be unqualified, non-void, trivially copyable types recognized
-by [sandstone_data.h](../framework/sandstone_data.h), including uint32_t, float,
-BFloat16, and TypeToDataType mappings such as Float32.
+by [sandstone_data.h](../framework/sandstone_data.h). C supports
+SANDSTONE_SCALAR_TYPES, including uint32_t, float, and BFloat16. C++ also supports
+TypeToDataType mappings such as Float32, with range overloads for contiguous,
+sized containers of supported elements.
 Captured slots retain both a representation type for byte comparison and diagnostic
 formatting and an exact language-type identity. The latter distinguishes types
 that share a representation, such as bool and uint8_t or Float32 and float.
+C scalar calls forward using the corresponding C++ scalar type, so C and C++
+captures of that scalar share an identity. A C++ wrapper such as Float32 remains
+distinct from C float despite sharing its representation; typedef aliases do
+not create distinct types.
 Comparison preserves meaningful representation bytes, including NaN payloads
 and signed zero, while ignoring trailing scalar padding such as x87 padding.
 Supply meaningful output descriptions; each owner's first submission retains its

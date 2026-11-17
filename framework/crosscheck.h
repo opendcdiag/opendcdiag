@@ -19,8 +19,8 @@
 // - Counts are element counts. The framework owns snapshots, so source buffers may be reused.
 // - Element types must be unqualified (no const/volatile), non-void, trivially
 //   copyable types recognized by sandstone_data.h, not arbitrary language scalars.
-//   Supported types include uint32_t, float, BFloat16, and TypeToDataType mappings
-//   such as Float32.
+//   C supports SANDSTONE_SCALAR_TYPES (e.g., uint32_t, float, BFloat16); C++ also
+//   supports TypeToDataType mappings (e.g., Float32).
 //
 // Comparison and lifecycle details
 // - Each selected CPU/device owns one snapshot per name; later submissions there must match.
@@ -49,6 +49,7 @@
 // - Deferred failure callbacks run on the coordinator with the first submitter's
 //   worker identity, separately from hardware ownership, not its TLS or CPU context.
 
+#ifdef __cplusplus
 #include "crosscheck_state.hpp"
 
 #include <concepts>
@@ -145,5 +146,95 @@ inline void submit_output(SandstoneCrossCheck::OutputKey<T> tag, const R &values
 {
     submit_output(tag, std::ranges::data(values), std::ranges::size(values), description);
 }
+
+extern "C" {
+#endif
+
+struct CrossCheckInputView
+{
+    const void *data;
+    size_t count;
+};
+
+#define CROSSCHECK_INPUT_PROTOTYPES(ctype, tag, suffix) \
+    void _crosscheck_set_input_##suffix(const char *name, const ctype *data, size_t count, \
+                                      const char *description); \
+    struct CrossCheckInputView _crosscheck_get_input_##suffix(const char *name);
+SANDSTONE_SCALAR_TYPES(CROSSCHECK_INPUT_PROTOTYPES)
+#undef CROSSCHECK_INPUT_PROTOTYPES
+
+#define CROSSCHECK_OUTPUT_PROTOTYPES(ctype, tag, suffix) \
+    void _crosscheck_submit_output_##suffix(const char *name, const ctype *data, size_t count, \
+                                          const char *description);
+SANDSTONE_SCALAR_TYPES(CROSSCHECK_OUTPUT_PROTOTYPES)
+#undef CROSSCHECK_OUTPUT_PROTOTYPES
+
+#ifdef __cplusplus
+} // extern "C"
+#else
+
+#define CROSSCHECK_INPUT_SET_ASSOC(ctype, tag, suffix) \
+    , ctype *: _crosscheck_set_input_##suffix \
+    , const ctype *: _crosscheck_set_input_##suffix
+#define CROSSCHECK_INPUT_GET_ASSOC(ctype, tag, suffix) \
+    , const ctype *: _crosscheck_get_input_##suffix
+#define CROSSCHECK_ELEMENT_TYPE_ASSOC(ctype, tag, suffix) , ctype *: 1
+
+#define CROSSCHECK_INPUT_SET_FN(data) \
+    _Generic((data) SANDSTONE_SCALAR_TYPES(CROSSCHECK_INPUT_SET_ASSOC))
+#define CROSSCHECK_INPUT_GET_FN(data) \
+    _Generic((data) SANDSTONE_SCALAR_TYPES(CROSSCHECK_INPUT_GET_ASSOC))
+
+// Tags used only in unevaluated type checks do not need either generated helper.
+#define CROSSCHECK_INPUT(name, type) \
+    _Static_assert(_Generic((type *)0 SANDSTONE_SCALAR_TYPES(CROSSCHECK_ELEMENT_TYPE_ASSOC)), \
+                   "input elements must be unqualified recognized scalars"); \
+    typedef type crosscheck_input_type_##name; \
+    struct CrossCheckInputView_##name { const type *data; size_t count; }; \
+    static inline __attribute__((unused)) void crosscheck_set_input_##name( \
+            const type *data, size_t count, const char *description) \
+    { \
+        CROSSCHECK_INPUT_SET_FN(data)(#name, data, count, description); \
+    } \
+    static inline __attribute__((unused)) struct CrossCheckInputView_##name \
+    crosscheck_get_input_##name(void) \
+    { \
+        struct CrossCheckInputView view = CROSSCHECK_INPUT_GET_FN((const type *)0)(#name); \
+        return (struct CrossCheckInputView_##name){view.data, view.count}; \
+    } \
+    _Static_assert(1, "input declaration")
+
+// No default association: an incompatible pointer is a compile-time error,
+// including void pointers and other scalar types with the same DataType.
+#define set_input(name, data, count, description) \
+    ((void)sizeof(_Generic((data), \
+        crosscheck_input_type_##name *: 0, const crosscheck_input_type_##name *: 0)), \
+     crosscheck_set_input_##name((data), (count), (description)))
+#define get_input(name) \
+    ((void)sizeof(crosscheck_input_type_##name), crosscheck_get_input_##name())
+
+#define CROSSCHECK_OUTPUT_SUBMIT_ASSOC(ctype, tag, suffix) \
+    , ctype *: _crosscheck_submit_output_##suffix \
+    , const ctype *: _crosscheck_submit_output_##suffix
+#define CROSSCHECK_OUTPUT_SUBMIT_FN(data) \
+    _Generic((data) SANDSTONE_SCALAR_TYPES(CROSSCHECK_OUTPUT_SUBMIT_ASSOC))
+
+#define CROSSCHECK_OUTPUT(name, type) \
+    _Static_assert(_Generic((type *)0 SANDSTONE_SCALAR_TYPES(CROSSCHECK_ELEMENT_TYPE_ASSOC)), \
+                   "output elements must be unqualified recognized scalars"); \
+    typedef type crosscheck_output_type_##name; \
+    static inline __attribute__((unused)) void crosscheck_submit_output_##name( \
+            const type *data, size_t count, const char *description) \
+    { \
+        CROSSCHECK_OUTPUT_SUBMIT_FN(data)(#name, data, count, description); \
+    } \
+    _Static_assert(1, "output declaration")
+
+#define submit_output(name, data, count, description) \
+    ((void)sizeof(_Generic((data), \
+        crosscheck_output_type_##name *: 0, const crosscheck_output_type_##name *: 0)), \
+     crosscheck_submit_output_##name((data), (count), (description)))
+
+#endif // __cplusplus
 
 #endif // CROSSCHECK_H
