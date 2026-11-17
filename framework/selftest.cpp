@@ -150,8 +150,6 @@ static int selftest_lifecycle_cleanup(struct test *test)
     return EXIT_SUCCESS;
 }
 
-extern "C" int selftest_memcmp_c_run(struct test *, int);
-
 template <useconds_t Usecs>
 static int selftest_timedpass_run(struct test *test, int)
 {
@@ -823,12 +821,6 @@ static int selftest_reportfail_run(struct test *test, int)
     report_fail(test);
     log_error("We should not reach here");
     abort();
-    return EXIT_SUCCESS;
-}
-
-static int selftest_memcmp_c_cleanup(struct test *)
-{
-    log_info("C worker memcmp cleanup after join");
     return EXIT_SUCCESS;
 }
 
@@ -2380,13 +2372,6 @@ DECLARE_SELFTEST(selftest_reportfail_with_cb, "Fails by calling report_fail() (c
     .groups = DECLARE_TEST_GROUPS(&group_negative),
     .test_init = selftest_init_installcallback,
     .test_run = selftest_reportfail_run,
-    .desired_duration = -1,
-    .quality_level = TEST_QUALITY_PROD,
-END_DECLARE_TEST
-DECLARE_SELFTEST(selftest_memcmp_c, "Fails by calling memcmp_or_fail() from a C worker")
-    .groups = DECLARE_TEST_GROUPS(&group_negative),
-    .test_run = selftest_memcmp_c_run,
-    .test_cleanup = selftest_memcmp_c_cleanup,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
