@@ -225,6 +225,97 @@ TEST(ProgramOptionsParser, times_correctly_parsed)
     sb.check_eq(EMPTY_STR); // no messages printed
 }
 
+TEST(ProgramOptionsParser, test_time_none)
+{
+    for (const char *arg : { "--test-time=none", "--test-time=NONE", "-tNoNe" }) {
+        StreamBuffer sb;
+        ProgramOptions opts;
+        SandstoneApplicationConfig cfg{};
+        char* argv[] = {
+            (char*)"foo-bar", // binary name
+            (char*)arg,
+        };
+        auto ret = opts.parse(2, argv, &cfg);
+        EXPECT_EQ(ret, EXIT_SUCCESS);
+        EXPECT_TRUE(cfg.no_wallclock_check);
+        EXPECT_EQ(cfg.test_time, ShortDuration::zero());   // "none" must not set a test time
+        sb.check_eq(EMPTY_STR); // no messages printed
+    }
+}
+
+TEST(ProgramOptionsParser, test_time_not_none)
+{
+    // When -t is given a normal duration (or omitted), the wallclock check
+    // must stay enabled.
+    for (const char *arg : { "--test-time=5s", "-t100ms", (const char *) nullptr }) {
+        StreamBuffer sb;
+        ProgramOptions opts;
+        SandstoneApplicationConfig cfg{};
+        char* argv[] = {
+            (char*)"foo-bar", // binary name
+            (char*)arg,
+        };
+        int argc = arg ? 2 : 1;
+        auto ret = opts.parse(argc, argv, &cfg);
+        EXPECT_EQ(ret, EXIT_SUCCESS);
+        EXPECT_FALSE(cfg.no_wallclock_check);
+        sb.check_eq(EMPTY_STR); // no messages printed
+    }
+}
+
+TEST(ProgramOptionsParser, test_time_value_then_none)
+{
+    // "-t 5s -t none": the later "none" wins -- the wallclock check is disabled
+    // and the earlier duration is dropped.
+    StreamBuffer sb;
+    ProgramOptions opts;
+    SandstoneApplicationConfig cfg{};
+    char* argv[] = {
+        (char*)"foo-bar", // binary name
+        (char*)"--test-time=5s",
+        (char*)"--test-time=none",
+    };
+    auto ret = opts.parse(3, argv, &cfg);
+    EXPECT_EQ(ret, EXIT_SUCCESS);
+    EXPECT_TRUE(cfg.no_wallclock_check);
+    EXPECT_EQ(cfg.test_time, ShortDuration::zero());
+    sb.check_eq(EMPTY_STR); // no messages printed
+}
+
+TEST(ProgramOptionsParser, test_time_none_then_value)
+{
+    // "-t none -t 5s": the later duration wins -- the wallclock check stays
+    // enabled and the duration is applied.
+    StreamBuffer sb;
+    ProgramOptions opts;
+    SandstoneApplicationConfig cfg{};
+    char* argv[] = {
+        (char*)"foo-bar", // binary name
+        (char*)"--test-time=none",
+        (char*)"--test-time=5s",
+    };
+    auto ret = opts.parse(3, argv, &cfg);
+    EXPECT_EQ(ret, EXIT_SUCCESS);
+    EXPECT_FALSE(cfg.no_wallclock_check);
+    EXPECT_EQ(cfg.test_time, std::chrono::seconds(5));
+    sb.check_eq(EMPTY_STR); // no messages printed
+}
+
+TEST(ProgramOptionsParser, total_time_none_is_invalid)
+{
+    // "none" is only special for -t / --test-time, never for -T / --total-time,
+    // where it must be rejected as an invalid time.
+    ProgramOptions opts;
+    SandstoneApplicationConfig cfg{};
+    char* argv[] = {
+        (char*)"foo-bar", // binary name
+        (char*)"--total-time=none",
+    };
+    EXPECT_EXIT(opts.parse(2, argv, &cfg),
+                ::testing::ExitedWithCode(EX_USAGE),
+                "invalid time .none.");
+}
+
 TEST(ProgramOptionsParser, last_option_takes_precedence__duration)
 {
     {
