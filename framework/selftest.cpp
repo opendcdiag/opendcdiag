@@ -5,6 +5,8 @@
 
 #define SANDSTONE_FAKE_FLOAT16
 
+#include "selftest_p.h"
+
 #include <inttypes.h>
 #include <limits.h>
 #include <sched.h>
@@ -1601,44 +1603,44 @@ static initfunc group_init_skip_init() noexcept
     };
 }
 
-const static test_group group_positive = {
+const test_group group_positive = {
     .id = "positive",
     .description = "Self-tests that succeed (positive results)"
 };
 
-const static test_group group_selftest_passes = {
+const test_group group_selftest_passes = {
     .id = "selftest_passes",
     .description = "Group for selftest_pass* tests"
 };
 
-const static test_group group_init_skip = {
+const test_group group_init_skip = {
     .id = "group_init_skip",
     .description = "Self-tests whose group_init function make it skip",
     .group_init = group_init_skip_init,
 };
 
-const static test_group group_fail_test_the_test = {
+const test_group group_fail_test_the_test = {
     .id = "fail_test_the_test",
     .description = "Self-tests that fail --test-tests"
 };
 
-const static test_group group_negative = {
+const test_group group_negative = {
     .id = "negative",
     .description = "Self-tests that are expected to fail (negative results)"
 };
 
-const static test_group group_random = {
+const test_group group_random = {
     .id = "random",
     .description = "Self-tests that use random input and may or may not fail"
 };
 
-const static test_group group_test_is_optional = {
+const test_group group_test_is_optional = {
     .id = "test_is_optional",
     .description = "Self-tests used to test test_is_optional flag"
 };
 
 #if defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
-const static test_group group_test_hw_features = {
+const test_group group_test_hw_features = {
     .id = "test_hw_features",
     .description = "Self-tests that depend on CPU features"
 };
