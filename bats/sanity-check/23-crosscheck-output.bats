@@ -751,15 +751,15 @@ check_escaped_crosscheck_details() {
     [[ "$output" != *"snapshots survived"* ]]
 }
 
-@test "crosscheck C++ containers wrappers and meaningful representation comparisons" {
+@test "crosscheck C C++ containers wrappers and meaningful representation comparisons" {
     declare -A yamldump
     local suffix
-    for suffix in containers_pass wrapper_pass nan_pass padding_pass; do
+    for suffix in containers_pass c_pass c_init_pass wrapper_pass nan_pass padding_pass; do
         sandstone_selftest -vvv -e "selftest_crosscheck_output_$suffix" --max-test-loop-count=2
         [[ "$status" -eq 0 ]]
         crosscheck_no_mismatch
     done
-    for suffix in bad_later nan_fail zero_fail padding_fail; do
+    for suffix in c_bad_later bad_later nan_fail zero_fail padding_fail; do
         sandstone_selftest -vvv -e "selftest_crosscheck_output_$suffix"
         if [[ "$suffix" = padding_fail && "$status" -eq 0 ]]; then
             test_yaml_regexp /tests/0/result skip
@@ -777,11 +777,51 @@ check_escaped_crosscheck_details() {
     done
 }
 
+@test "crosscheck C init and worker sharing a CPU fail immediately on disagreement" {
+    declare -A yamldump
+    sandstone_selftest -vvv -n1 -e selftest_crosscheck_output_c_bad_first
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result fail
+    vote_expect_mask 0
+    test_yaml_regexp /tests/0/threads/1/state failed
+    local crosscheck_mismatch
+    find_crosscheck_mismatch 1 output_words 0
+    test_yaml_expr "$crosscheck_mismatch/details/comparison" = 'later submission vs first submission'
+    test_crosscheck_message 1 'I> output post-submit sentinel' 0
+    test_crosscheck_message 0 'I> output test cleanup retained storage'
+    test_crosscheck_message 1 'I> output failure callback fired for worker 0'
+    vote_no_deferred
+}
+
+@test "crosscheck C init snapshot count mismatch aborts immediately and cannot be waived" {
+    declare -A yamldump
+    sandstone_selftest -vvv -n1 -fexec --ignore-os-errors -e selftest_crosscheck_output_c_init_snapshot_count
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result crash
+    test_crosscheck_message 1 'E> Cross-check invalid execution: later output submission count mismatch'
+    test_crosscheck_message 1 'I> output post-submit sentinel' 0
+    test_crosscheck_message 0 'I> output test cleanup retained storage' 0
+    test_crosscheck_message 1 'I> output failure callback fired for worker 0' 0
+    crosscheck_no_mismatch
+}
+
+@test "crosscheck C bool byte conflict aborts immediately and cannot be waived" {
+    declare -A yamldump
+    sandstone_selftest -vvv -n1 -fexec --ignore-os-errors -e selftest_crosscheck_output_c_conflict
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result crash
+    test_crosscheck_message 1 'E> Cross-check invalid execution: output element type mismatch'
+    test_crosscheck_message 1 'I> output post-submit sentinel' 0
+    test_crosscheck_message 0 'I> output test cleanup retained storage' 0
+    test_crosscheck_message 1 'I> output failure callback fired for worker 0' 0
+    crosscheck_no_mismatch
+}
+
 @test "crosscheck API misuse aborts and cannot be waived" {
     declare -A yamldump
     local suffix thread reason
     for suffix in invalid_pointer invalid_count worker_invalid_pointer worker_invalid_count \
-                  init_snapshot_count wrapper_conflict later_count submit_cleanup; do
+                  init_snapshot_count wrapper_conflict later_count c_later_count submit_cleanup; do
         sandstone_selftest -vvv -n1 -fexec --ignore-os-errors -e "selftest_crosscheck_output_$suffix"
         [[ "$status" -eq 1 ]]
         test_yaml_regexp /tests/0/result crash
@@ -793,7 +833,7 @@ check_escaped_crosscheck_details() {
         case "$suffix" in
             invalid_pointer|worker_invalid_pointer) reason='null data pointer with nonzero count' ;;
             invalid_count|worker_invalid_count) reason='data extent overflows' ;;
-            init_snapshot_count|later_count) reason='later output submission count mismatch' ;;
+            init_snapshot_count|later_count|c_later_count) reason='later output submission count mismatch' ;;
             wrapper_conflict) reason='output element type mismatch' ;;
             submit_cleanup) reason='submit_output() must be called from test_init() or test_run()' ;;
         esac
@@ -1094,5 +1134,113 @@ check_escaped_crosscheck_details() {
             -O selftest_crosscheck_votes.values=1
         [[ "$status" -eq 1 ]]
         [[ "$output" != *"failure mask includes inconclusive attribution"* ]]
+    done
+}
+
+@test "crosscheck C and C++ submissions on one CPU retain legal singleton diagnostics" {
+    declare -A yamldump
+    local suffix name
+    for suffix in c_pass c_init_pass; do
+        sandstone_selftest -vvv --max-messages=100 -n1 -e "selftest_crosscheck_output_$suffix"
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp /tests/0/result pass
+        crosscheck_no_mismatch
+        for name in output_words output_flags output_empty; do
+            test_crosscheck_message 0 "I> Cross-check output '$name': one published owner; no cross-owner comparison"
+        done
+    done
+}
+
+@test "crosscheck C first submission and C++ peer tie retain no-majority attribution" {
+    ((MAX_PROC >= 2)) || skip "Requires two workers"
+    declare -A yamldump
+    local mode crosscheck_mismatch
+    for mode in no yes exec; do
+        $is_windows && [[ "$mode" = yes ]] && continue
+        vote_run 2 -f"$mode" --no-slicing -O selftest_crosscheck_votes.c_worker=0 \
+            -O selftest_crosscheck_votes.values=4
+        vote_failure 0 1
+        test_yaml_expr /tests/0/fail/crosscheck-no-majority = True
+        find_crosscheck_mismatch 1 vote_a 0
+        test_yaml_expr "$crosscheck_mismatch/details/first_description" = 'worker computation in C'
+        test_yaml_expr "$crosscheck_mismatch/details/comparison" = 'no strict majority; conflicting peer'
+    done
+}
+
+@test "crosscheck C first submission retains strict-majority outlier attribution" {
+    ((MAX_PROC >= 3)) || skip "Requires three workers"
+    declare -A yamldump
+    local mode crosscheck_mismatch
+    for mode in no yes exec; do
+        $is_windows && [[ "$mode" = yes ]] && continue
+        vote_run 3 -f"$mode" --no-slicing -O selftest_crosscheck_votes.c_worker=0 \
+            -O selftest_crosscheck_votes.values=1
+        vote_failure 0
+        test_yaml_absent /tests/0/fail/crosscheck-no-majority
+        find_crosscheck_mismatch 1 vote_a 0
+        test_yaml_expr "$crosscheck_mismatch/details/first_description" = 'worker computation in C'
+        test_yaml_expr "$crosscheck_mismatch/details/comparison" = 'strict majority baseline (not proven correct)'
+    done
+}
+
+@test "crosscheck C published outputs vote after skip with all-skip and prior-failure guards" {
+    ((MAX_PROC >= 3)) || skip "Requires three workers"
+    declare -A yamldump
+    vote_run 3 -O selftest_crosscheck_votes.c_worker=0 -O selftest_crosscheck_votes.after=1 \
+        -O selftest_crosscheck_votes.skips=1 -O selftest_crosscheck_votes.values=1
+    vote_failure 0
+    test_crosscheck_message 1 'original vote worker skip'
+    local crosscheck_mismatch
+    find_crosscheck_mismatch 1 vote_a 0
+    test_yaml_expr "$crosscheck_mismatch/details/first_description" = 'worker computation in C'
+    test_yaml_expr "$crosscheck_mismatch/details/comparison" = 'strict majority baseline (not proven correct)'
+
+    vote_run 2 -O selftest_crosscheck_votes.c_worker=0 -O selftest_crosscheck_votes.after=1 \
+        -O selftest_crosscheck_votes.skips=3 -O selftest_crosscheck_votes.values=4
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp /tests/0/result skip
+    crosscheck_no_mismatch
+    vote_no_deferred
+
+    vote_run 3 -O selftest_crosscheck_votes.c_worker=0 -O selftest_crosscheck_votes.after=1 \
+        -O selftest_crosscheck_votes.failures=1 -O selftest_crosscheck_votes.values=1
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result fail
+    test_yaml_regexp /tests/0/threads/1/state failed
+    crosscheck_no_mismatch
+    vote_no_deferred
+}
+
+@test "crosscheck C and C++ output snapshots reset between no-fork attempts" {
+    declare -A yamldump
+    sandstone_selftest -vvv -fno -n1 --max-messages=100 \
+        -e selftest_crosscheck_output_c_pass -e selftest_crosscheck_output_c_init_pass \
+        -e selftest_crosscheck_output_c_pass -e selftest_crosscheck_output_c_init_pass
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric /tests@len 'value == 4'
+    local attempt
+    for attempt in 0 1 2 3; do
+        test_yaml_regexp "/tests/$attempt/result" pass
+        test_crosscheck_message 0 "I> output init generation $((attempt + 1))" 1 "$attempt"
+        test_crosscheck_message 0 'I> output callback cleanup released storage' 1 "$attempt"
+    done
+    crosscheck_no_mismatch
+    [[ "$output" != *"storage survived"* ]]
+}
+
+@test "crosscheck C and C++ count incompatibility aborts after cleanup without data attribution" {
+    ((MAX_PROC >= 2)) || skip "Requires two workers"
+    declare -A yamldump
+    local mode
+    for mode in yes exec; do
+        $is_windows && [[ "$mode" = yes ]] && continue
+        vote_run 2 -f"$mode" --no-slicing --ignore-os-errors \
+            -O selftest_crosscheck_votes.c_worker=0 -O selftest_crosscheck_votes.shape=2
+        [[ "$status" -eq 1 ]]
+        test_yaml_regexp /tests/0/result crash
+        test_yaml_absent /tests/0/fail/crosscheck-no-majority
+        crosscheck_no_mismatch
+        test_crosscheck_message 1 "E> Cross-check output 'vote_a': element type or count mismatch"
+        test_crosscheck_message 0 'I> vote cleanup retained snapshots'
     done
 }

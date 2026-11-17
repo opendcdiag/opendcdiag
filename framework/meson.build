@@ -256,8 +256,11 @@ if get_option('selftests')
     framework_files += files(
         'selftest.c',
         'selftest.cpp',
+        'selftest_crosscheck_inputs.c',
         'selftest_crosscheck_outputs.cpp',
+        'selftest_crosscheck_outputs.c',
         'selftest_crosscheck_outputs_peer.cpp',
+        'selftest_crosscheck_outputs_conflict.c',
     )
 else
     default_c_flags += [
@@ -363,6 +366,7 @@ unittests_sources += files(
     'test_knobs.cpp',
     'unit-tests/tests_dummy.cpp',
     'unit-tests/test_knob_tests.cpp',
+    'unit-tests/crosscheck_input_tests.c',
     'unit-tests/crosscheck_input_tests.cpp',
     'unit-tests/crosscheck_output_peer.cpp',
     'unit-tests/crosscheck_output_tests.cpp',

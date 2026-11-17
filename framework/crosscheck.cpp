@@ -226,3 +226,26 @@ VerificationResult verify_outputs()
 }
 
 } // namespace SandstoneCrossCheck
+
+#define CROSSCHECK_INPUT_GLUE(ctype, tag, suffix) \
+    extern "C" void _crosscheck_set_input_##suffix(const char *name, const ctype *data, \
+                                                size_t count, const char *description) \
+    { \
+        set_input(SandstoneCrossCheck::InputKey<ctype>{name}, data, count, description); \
+    } \
+    extern "C" CrossCheckInputView _crosscheck_get_input_##suffix(const char *name) \
+    { \
+        auto view = get_input(SandstoneCrossCheck::InputKey<ctype>{name}); \
+        return {view.data(), view.size()}; \
+    }
+SANDSTONE_SCALAR_TYPES(CROSSCHECK_INPUT_GLUE)
+#undef CROSSCHECK_INPUT_GLUE
+
+#define CROSSCHECK_OUTPUT_GLUE(ctype, tag, suffix) \
+    extern "C" void _crosscheck_submit_output_##suffix(const char *name, const ctype *data, \
+                                                    size_t count, const char *description) \
+    { \
+        submit_output(SandstoneCrossCheck::OutputKey<ctype>{name}, data, count, description); \
+    }
+SANDSTONE_SCALAR_TYPES(CROSSCHECK_OUTPUT_GLUE)
+#undef CROSSCHECK_OUTPUT_GLUE
