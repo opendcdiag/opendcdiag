@@ -1141,18 +1141,14 @@ static void finish_test_common(struct test *test)
 
 static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread = false)
 {
-    sApp->current_test = test;
-    sApp->test_phase = SandstoneApplication::TestPhase::inactive;
-    auto resetCurrentTest = scopeExit([] {
-        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
-        sApp->current_test = nullptr;
-    });
+    ScopedValueRollback resetCurrentTest(sApp->current_test, test, nullptr);
 
     // Initialize/reset rescheduler state
     if (device_scheduler)
         device_scheduler->reset();
 
     TestResult state = [&] {
+        using TestPhase = SandstoneApplication::TestPhase;
         int ret = 0;
         test->per_thread = sApp->user_thread_data.data();
         std::fill_n(test->per_thread, sApp->thread_count, test_data_per_thread{});
@@ -1166,8 +1162,7 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         sApp->prepare_test_tests(test);
 
         if (test->test_init) {
-            sApp->test_phase = SandstoneApplication::TestPhase::initializing;
-            auto resetPhase = scopeExit([] { sApp->test_phase = SandstoneApplication::TestPhase::inactive; });
+            ScopedValueRollback resetCurrentPhase(sApp->test_phase, TestPhase::initializing, TestPhase::inactive);
             if (init_in_aux_thread) {
                 // ensure the init function is run pinned to a specific logical
                 // processor but its pinning doesn't affect this control thread
@@ -1213,14 +1208,15 @@ static TestResult run_one_test_inner(struct test *test, bool init_in_aux_thread 
         }
 
         sApp->at_run_threads_start(test);
-        sApp->test_phase = SandstoneApplication::TestPhase::running;
+        sApp->test_phase = TestPhase::running;
         run_threads(test);
-        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
+        sApp->test_phase = TestPhase::inactive;
 
         if (test->test_cleanup) {
-            sApp->test_phase = SandstoneApplication::TestPhase::cleanup;
-            auto resetPhase = scopeExit([] { sApp->test_phase = SandstoneApplication::TestPhase::inactive; });
+            sApp->test_phase = TestPhase::cleanup;
             ret = test->test_cleanup(test);
+            sApp->test_phase = TestPhase::inactive;
+
             PerThreadData::Main *thr = sApp->main_thread_data();
             if (ret > EXIT_SUCCESS || thr->has_failed()) {
                 state = TestResult::Failed;
@@ -1582,11 +1578,7 @@ static void run_one_test_init_in_parent(ChildrenList &children, const struct tes
     sApp->main_thread_data()->device_range = { 0, sApp->device_count };
     sApp->main_thread_data()->thread_range = { 0, sApp->thread_count };
 
-    sApp->current_test = test;
-    auto resetCurrentTest = scopeExit([] {
-        sApp->test_phase = SandstoneApplication::TestPhase::inactive;
-        sApp->current_test = nullptr;
-    });
+    ScopedValueRollback resetCurrentTest(sApp->current_test, test, nullptr);
 
     TestResult res;
     init_per_thread_data();

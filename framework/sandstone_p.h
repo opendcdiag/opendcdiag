@@ -577,6 +577,32 @@ private:
     }
 };
 
+template <typename T> requires std::is_nothrow_move_assignable_v<T>
+struct ScopedValueRollback
+{
+    ScopedValueRollback(T &var) noexcept(std::is_nothrow_copy_assignable_v<T>)
+        : var(var), oldval(var)
+    {}
+    template <typename X>
+    ScopedValueRollback(T &var, X &&newval = {}) noexcept(std::is_nothrow_assignable_v<T, X>)
+        requires std::assignable_from<T &, X>
+        : var(var), oldval(std::exchange(var, std::forward<X>(newval)))
+    {}
+    template <typename X, typename O>
+    ScopedValueRollback(T &var, X &&newval, O &&oldval) noexcept(std::is_nothrow_assignable_v<T, X>)
+        requires std::assignable_from<T &, X> && std::assignable_from<T &, O>
+        : var(var = std::forward<X>(newval)), oldval(std::move(oldval))
+    {}
+    ~ScopedValueRollback()
+    {
+        var = std::move(oldval);
+    }
+
+private:
+    T &var;
+    T oldval;
+};
+
 template <typename F> inline auto scopeExit(F &&f)
 {
     struct Scope {
