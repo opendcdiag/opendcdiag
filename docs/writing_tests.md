@@ -638,6 +638,346 @@ Information written to standard error will appear in the logs.  However,
 test writers are expected to use the framework's logging functions rather than
 writing to standard error directly.
 
+## Named inputs and cross-checked outputs
+
+The C++ API in [crosscheck.h](../framework/crosscheck.h) is an alternative to
+managing immutable input and reference buffers yourself. Existing explicit
+comparisons, including the examples above, remain supported.
+
+Declare named, typed arrays with `CROSSCHECK_INPUT(name, type)` and
+`CROSSCHECK_OUTPUT(name, type)`. These declarations establish names and element
+types; they do not store test data or capture anything until set_input() or
+submit_output() is called.
+
+Tests **set inputs**, **get inputs**, and **submit outputs**. The framework
+**captures snapshots** and verifies submitted outputs; capture describes its
+ownership mechanism, not a separate public test operation.
+
+| Test operation | Public API | Framework behavior |
+| --- | --- | --- |
+| Set inputs | `set_input()` | Copy the supplied elements into an owned immutable input snapshot |
+| Get inputs | `get_input()` | Return a typed, read-only view of the input snapshot |
+| Submit outputs | `submit_output()` | Capture the first submission for a name and CPU/device, then check later submissions on that owner against it |
+
+### C++ declarations and type inference
+
+The macros declare static constexpr instances of these key structs in
+the SandstoneCrossCheck namespace:
+
+```cpp
+template <InputElement T> struct InputKey { const char *name; };
+template <InputElement T> struct OutputKey { const char *name; };
+```
+
+For example, the declarations expand to:
+
+```cpp
+static constexpr SandstoneCrossCheck::InputKey<uint32_t> addends{"addends"};
+static constexpr SandstoneCrossCheck::OutputKey<uint32_t> sum{"sum"};
+```
+
+These structs contain only the capture name, not input or output buffers.
+For tests spanning multiple translation units, put shared tag declarations in a
+shared header. Names match by string contents, not the address of a declaration
+or string literal. Inputs and outputs have separate name namespaces within each
+attempt, so an input and an output may use the same name. Within either namespace,
+use distinct names for unrelated values: reusing the same name, element type, and
+count cannot be detected as misuse. Type/count contracts are checked when the APIs
+are used, not when tags are declared; see the API error rules below.
+
+The InputElement constraint checks the supported element type. get_input(addends)
+returns `std::span<const uint32_t>`; use standard C++ `auto` for inference:
+
+```cpp
+const auto input = get_input(addends);
+uint32_t first = input[0];
+size_t count = input.size();
+```
+
+set_input() and submit_output() accept pointer/count pairs or contiguous, sized
+ranges with the same element type as the key. Supported ranges include raw
+arrays, std::array, std::vector (except std::vector<bool>), std::span, and
+std::string for char keys. set_input() accepts an optional description;
+submit_output() requires a description argument, which may be nullptr:
+
+```cpp
+uint32_t values[] = {1, 2};
+set_input(addends, values, 2, "Addends");
+// Equivalently: set_input(addends, values, "Addends");
+uint32_t result[] = {3};
+submit_output(sum, result, "Worker sum");
+// Equivalently: submit_output(sum, result, 1, "Worker sum");
+```
+
+### A cross-checked test
+
+For new tests, start with init setting inputs and workers computing outputs.
+
+For example, [crosschecked_add.cpp](../tests/examples/crosschecked_add.cpp) uses
+framework-owned snapshots. Its consensus_add test sets inputs in init and computes
+outputs only in workers. The named tags identify captures; unlike the simple_add
+example above, no static variable stores inputs or reference data:
+
+```cpp
+#include "crosscheck.h"
+
+CROSSCHECK_INPUT(addends, uint32_t);
+CROSSCHECK_OUTPUT(sum, uint32_t);
+
+static int consensus_add_init(struct test *)
+{
+    uint32_t scratch[] = {random32(), random32()};
+    set_input(addends, scratch, "Addends");
+    return EXIT_SUCCESS;
+}
+
+static int crosschecked_add_run(struct test *test, int)
+{
+    const auto input = get_input(addends);
+    TEST_LOOP(test, 1 << 20) {
+        uint32_t result = input[0] + input[1];
+        submit_output(sum, &result, 1, "Worker sum");
+    }
+    return EXIT_SUCCESS;
+}
+
+DECLARE_TEST(consensus_add, "Cross-check worker integer additions across CPUs")
+    .test_init = consensus_add_init,
+    .test_run = crosschecked_add_run,
+    .quality_level = TEST_QUALITY_BETA,
+END_DECLARE_TEST
+```
+
+Like the other worked examples, this source is not built by default. To try it
+in a CPU build, add the following before `tests_set_base.apply(tests_config)` in
+[tests/cpu/meson.build](../tests/cpu/meson.build), then rebuild:
+
+```meson
+tests_set_base.add(files('../examples/crosschecked_add.cpp'))
+```
+
+Run with `--beta -e consensus_add` or `--beta -e crosschecked_add`.
+
+Init supplies framework-owned inputs, but does not submit a sum. Workers
+compute from the same captured inputs and submit their sums. This
+pattern compares outputs when at least two distinct CPUs publish the
+same name. A single CPU provides local self-checking without cross-CPU comparison
+and does not itself cause a skip or failure. After joining, the framework logs
+`Cross-check output 'NAME': one published owner; no cross-owner comparison` once
+per singleton output name. Worker count is not the vote count: init can publish a
+CPU observation before workers launch, and participation is optional per name.
+
+### CPU-owned output from init
+
+The same source file also includes crosschecked_add, which shares the input/output
+declarations and crosschecked_add_run() above but also computes and submits a sum
+in init:
+
+```cpp
+static int crosschecked_add_init(struct test *)
+{
+    uint32_t scratch[] = {random32(), random32()};
+    set_input(addends, scratch, "Addends");
+    const auto input = get_input(addends);
+    uint32_t result = input[0] + input[1];
+    submit_output(sum, &result, 1, "Sum computed in init");
+    return EXIT_SUCCESS;
+}
+
+DECLARE_TEST(crosschecked_add, "Cross-check repeated integer additions")
+    .test_init = crosschecked_add_init,
+    .test_run = crosschecked_add_run,
+    .quality_level = TEST_QUALITY_BETA,
+END_DECLARE_TEST
+```
+
+In a CPU build, init may submit a computation or only set inputs. An init output
+is a CPU-owned observation: it uses the slot for the CPU observed at submission,
+just like a worker output on that CPU. Init has no separate slot, extra vote, or
+authority to establish the correct result. A worker submitting a different value
+on that CPU fails its local self-check immediately; this is not a two-vote tie.
+Init is not assumed to run on worker zero's CPU.
+
+### Output ownership and local self-checks
+
+Each output name denotes one invariant typed array per logical CPU or device
+within an execution attempt. A CPU build resolves ownership from the observed
+CPU at submission, not the worker number or initial assignment. Submitting on a
+CPU outside the selected slice is a structural API error, including in release
+builds. In GPU builds, the owner is the worker's assigned GPU endpoint/tile; in
+IDXD builds, it is the assigned work queue, not merely its parent accelerator.
+Distinct devices retain separate slots even when their workers share a host CPU.
+
+The framework keeps an immutable deep copy of the first submission
+for each name and owner, including its first description and actual worker/init
+reporting context. Later submissions on that owner must match the original
+snapshot immediately, including a worker checking its CPU's init snapshot. Repetition
+never replaces the snapshot or adds a vote. A same-type/count data mismatch is an
+immediate failure implicating that CPU/device and indicating a possible silent
+data error; deferred consensus cannot erase or downgrade it.
+
+Each owner uses a single-publisher append-only atomic output registry. A repeat borrows
+the immutable snapshot without capture, allocation, reference-count changes, or
+metadata writes. The sole publisher fully initializes each new node before a
+release store; acquire readers can inspect immutable partial chains while capture
+continues. Pointer loads/stores are required to be lock-free, but this is not a
+multi-publisher algorithm. First submissions require readable buffers for their
+declared extent.
+When a snapshot is already observed, exact type and count checks precede any
+actual-data access. Readers do not wait for an in-progress capture.
+Allocation, payload destruction, and reporting are
+not an unconditional lock-free-progress guarantee for the entire API.
+
+CPU output tests require successful, stable, unique worker placement throughout
+worker execution. Do not call `reschedule()`, change affinity, or launch additional
+output-submitting threads. Init must finish all submissions before worker launch
+and must not leave output-submitting helper threads running. The no-overlap
+contract covers the entire submission to one owner, across all names: owner
+observation, lookup, capture, and publication. Merely running on one CPU does not
+prevent calls from interleaving through preemption. Unsupported overlap can lose
+records, leak unreachable captures, or miss a mismatch; it is not guaranteed to
+produce a diagnosed API error. Caller-coordinated migration is not supported usage.
+
+Normal CPU execution pins each worker to a distinct selected CPU, and `TEST_LOOP`
+does not automatically reschedule. The framework currently ignores initial
+worker affinity failures in `thread_runner()`; external affinity changes and CPU
+availability changes can also invalidate unique placement. Handling affinity
+failures and hardening rescheduling are separate framework limitations, not
+provided by this API. The framework observes submission placement; it cannot
+infer where an arbitrary buffer was computed.
+
+In accelerator builds, submit only results computed by the worker's assigned
+device, with one submitting worker per device and the same no-overlap contract.
+Host migration alone does not merge device owners.
+Init may set and retrieve inputs but must not submit GPU/IDXD outputs;
+such submissions are structural API errors, not an implicit device-zero or host
+reference vote. Reports retain the observed host CPU for diagnostics and
+correlation, separately from device ownership. That association alone does not
+establish a host CPU or cache fault.
+
+### Verification policy and its limits
+
+Any failure already recorded in init or a worker, including a local self-check
+mismatch or an unrelated worker error, suppresses deferred consensus for the
+entire attempt. The original failure and diagnostics remain; failed slots do not
+enter a separate voting policy. Workers are still joined and cleanup follows the
+normal execution path. Init failure or skip prevents worker launch and does not
+introduce a new cleanup or deferred-verification path.
+
+Otherwise, after joining, if any worker succeeded, every published snapshot votes
+for its name and owner, even if its submitters later skipped. Worker identity and
+first-publication context are reporting metadata, not voting eligibility. No
+successful confirmation is required. Init alone cannot rescue an all-workers-skipped
+run. Multiple submissions on one owner still supply exactly one vote.
+
+Participation is optional per name. Missing submissions are neither votes nor
+evidence of agreement. Declarations alone do not register required output names,
+so a name omitted by everyone is undetectable. Input-only use is permitted. A
+name with fewer than two published owners needs no deferred comparison and does
+not itself change the test result; a later local mismatch still fails it. Exactly
+one published owner produces the informational diagnostic above, subject to normal
+verbosity and message limits. Unused names and input-only captures do not produce
+this diagnostic; all-workers-skipped runs and preexisting failures do not enter
+deferred verification.
+
+Verification groups equal **whole named outputs**, not individual elements or
+bits. A strict majority (more than half of published owner slots for that name)
+implicates the outlying CPUs/devices. A tie or unique plurality without a strict
+majority implicates all conflicting owners; none is labeled correct. Conclusions
+for all names are determined before reporting, so a newly discovered disagreement
+does not change another name's votes or suppress its diagnostics. Agreement
+on one name cannot clear a failure on another.
+
+Here A, B, and C represent different whole arrays with the same exact type and
+count. Each entry is one snapshot from a distinct CPU/device, regardless of how many
+workers submitted there:
+
+| Submitted outputs | Post-join outcome |
+| --- | --- |
+| A, A, A | Agreement; no comparison failure |
+| A, A, B | Strict majority; the B owner is implicated |
+| A, A, A, B, C | Strict majority; B and C owners are implicated as distinct groups |
+| A, A, B, B | Tie; all conflicting owners are implicated |
+| A, B, C | No strict majority; all conflicting owners are implicated |
+| A, A, A, B, B, C, C | Plurality only; all conflicting owners are implicated |
+
+A majority snapshot is a comparison baseline, not proven correct data. Without a
+majority, reports identify conflicting peers/groups rather than an oracle.
+Implicated CPUs/devices are suspects based on failed data comparisons, not proof
+that each part is defective. Agreement cannot detect results that are wrong in
+the same way on every owner. Tests needing authoritative expected-data checks can
+still use explicit comparisons such as memcmp_or_fail, as in the earlier examples.
+
+When any named output has conflicting groups without a strict majority, the YAML
+`fail` summary includes `crosscheck-no-majority: true` beside the owner mask. This
+field survives quiet output and message limits. It means the attempt contains
+inconclusive cross-check attribution, not that all its evidence is unlocalized;
+ordinary failures and majority-based comparisons retain their usual attribution.
+Other text formats qualify the failure mask in a summary message. Owner masks,
+retry decisions, and topology calculations remain unchanged. If any failed attempt
+has this qualification, retry topology analysis explains that conflicting owners
+are suspects and that observed implicated-owner patterns are not independent
+proof of faulty hardware or evidence identifying which conflicting group is
+incorrect. The qualification appears at the same verbosity as topology analysis.
+Each new attempt resets the summary flag, independently across slices and retries.
+
+### API errors, lifetimes, and representation
+
+Actual submitters of a name must use the same exact element type and count.
+Incompatible types/counts are test bugs, not values to vote on or hardware-attributed
+data mismatches. These post-join contract errors abort after cleanup and cannot
+be waived by `--ignore-os-errors`. Verification still checks other names, and a
+data comparison failure or cleanup failure takes precedence over these errors.
+Zero-length inputs and outputs, including null storage with zero count, are valid.
+
+Immediate API misuse is different from a post-join contract error. Calling an
+API in the wrong phase, setting an input twice, looking up a missing input or
+one with a different element type, passing a null data pointer with a nonzero
+count or an overflowing extent, and changing the type/count of an owner's
+later submission abort execution as a test bug, including in release builds.
+Out-of-slice CPU submissions and GPU/IDXD init output submissions are also
+immediate misuse. These paths do not guarantee normal cleanup or callback
+unwinding. A later submission with matching type/count
+but different data is a comparison failure instead, and implicates the logical
+CPU or assigned device owning that slot, not necessarily the worker's initial
+hardware assignment.
+
+Set each input once in test_init(), and compute outputs from get_input() snapshots
+rather than the original randomized scratch storage. Lookup is allowed in init,
+run, and cleanup; submission is allowed in CPU init and run, but only in run for
+GPU/IDXD outputs.
+Views and snapshots remain alive through cleanup, including post-join failure
+and skip paths where cleanup normally runs. Each attempt (one slice's execution
+of a pass, including fractures and retries) has independent capture state
+established before init. Captures are discarded at attempt end and never reused across
+slices, fractures, retries, or repeated no-fork executions. State is not shared
+across processes. Source buffers remain test-owned and may be reused or freed
+after set_input() or submit_output() returns. Counts are elements, not bytes.
+Captured storage has element alignment, not arbitrary SIMD alignment; use
+unaligned loads when needed. The API does not write capture files.
+
+Under process isolation, all cross-check APIs reject calls in the actual main
+process, including test_in_parent and test_init_in_parent execution. These calls
+abort the invocation rather than produce a normal child-result report. Valid
+API use with those flags is permitted in no-fork mode.
+
+Element types must be unqualified, non-void, trivially copyable types recognized
+by [sandstone_data.h](../framework/sandstone_data.h), including uint32_t, float,
+BFloat16, and TypeToDataType mappings such as Float32.
+Captured slots retain both a representation type for byte comparison and diagnostic
+formatting and an exact language-type identity. The latter distinguishes types
+that share a representation, such as bool and uint8_t or Float32 and float.
+Comparison preserves meaningful representation bytes, including NaN payloads
+and signed zero, while ignoring trailing scalar padding such as x87 padding.
+Supply meaningful output descriptions; each owner's first submission retains its
+metadata. Deferred reports and callbacks use that first submission's actual
+worker/init context, separately from hardware ownership. Worker callbacks run on
+the coordinator under that worker identity, not its original TLS or physical
+execution context; init does not run worker failure callbacks. An owner index is
+not a worker index, and the reporting worker's initial assignment or completion
+CPU does not replace the owning CPU/device. Immediate mismatches use the
+encountering worker/init reporting context while implicating the resolved owner.
+
 ## Additional information
 
 ### Test groups

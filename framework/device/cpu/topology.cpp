@@ -17,6 +17,7 @@
 #include <mutex>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1785,7 +1786,7 @@ void rebuild_topology()
     // implement once it's needed
 }
 
-void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
+void analyze_test_failures_for_topology(const struct test *test, const PerDeviceFailures &per_device_failures)
 {
     Topology topology  = Topology::topology();
     if (!topology.isValid()) {
@@ -1811,7 +1812,7 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
             for (size_t c = 0; c < pkg->cores.size(); ++c) {
                 Topology::Core *core = &pkg->cores[c];
                 for (const Topology::Thread &thr : core->threads) {
-                    if (per_thread_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
+                    if (per_device_failures[thr.cpu()] && (pkg_failures[p] == -1)) {
                         last_bad_package = pkg->id();
                         failed_packages++;
                         pkg_failures[p] = pkg->id();
@@ -1838,9 +1839,9 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
                 bool all_threads_failed_once = true;
                 bool all_threads_failed_equally = true;
                 int nthreads = 0;
-                PerThreadFailures::value_type fail_pattern = 0;
+                PerDeviceFailures::value_type fail_pattern = 0;
                 for (const Topology::Thread &thr : core->threads) {
-                    auto this_pattern = per_thread_failures[thr.cpu()];
+                    auto this_pattern = per_device_failures[thr.cpu()];
                     if (this_pattern == 0)
                         all_threads_failed_once = false;
                     if (++nthreads == 1) {
@@ -1886,6 +1887,20 @@ std::string Topology::build_failure_mask(const struct test *test) const
     if (!isValid())
         return result;
 
+    std::set<int> failing_cpus;
+    auto collect_failure = [&](PerThreadData::Common *data, int thread) {
+        if (thread < 0)
+            return;
+        if (data->has_non_crosscheck_failure())
+            failing_cpus.insert(data->failing_cpu_plus_1 - 1);
+    };
+    for_each_main_thread(collect_failure);
+    for_each_test_thread(collect_failure);
+    for (int owner = 0; owner < device_count(); ++owner) {
+        if (sApp->crosscheck_failures[owner].load(std::memory_order_relaxed))
+            failing_cpus.insert(device_info[owner].cpu_number);
+    }
+
     // Get the number of cores to use in the mask. Physically, this is the same
     // in all the packages, but may be weird configurations depending on the
     // cpuset mask we've been run with. We must also avoid the case where we
@@ -1910,8 +1925,8 @@ std::string Topology::build_failure_mask(const struct test *test) const
             int threadcount = 0;
             int failcount = 0;
             for (const Thread &t : core.threads) {
-                int cpu_id = t.cpu();
-                if (sApp->thread_data(cpu_id)->has_failed()) {
+                int cpu_id = t.cpu_number;
+                if (failing_cpus.contains(cpu_id)) {
                     threadmask |= 1U << t.thread_id;
                     ++failcount;
                 }
