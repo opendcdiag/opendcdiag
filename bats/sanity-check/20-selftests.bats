@@ -432,13 +432,14 @@ selftest_pass() {
 @test "selftest_crosscheck_input resets between no-fork passes" {
     declare -A yamldump
     sandstone_selftest -fno -e selftest_crosscheck_input_containers_pass \
-        -e selftest_crosscheck_input_long_double_pass -e selftest_crosscheck_input_containers_pass \
-        -e selftest_crosscheck_input_long_double_pass
+        -e selftest_crosscheck_input_long_double_pass -e selftest_crosscheck_input_c_pass \
+        -e selftest_crosscheck_input_containers_pass -e selftest_crosscheck_input_long_double_pass \
+        -e selftest_crosscheck_input_c_pass
     [[ "$status" -eq 0 ]]
     test_yaml_regexp "/exit" pass
-    test_yaml_numeric "/tests@len" 'value == 4'
+    test_yaml_numeric "/tests@len" 'value == 6'
     local i
-    for ((i = 0; i < 4; ++i)); do
+    for ((i = 0; i < 6; ++i)); do
         test_yaml_regexp "/tests/$i/result" pass
     done
 }

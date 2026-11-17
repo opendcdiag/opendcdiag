@@ -738,29 +738,31 @@ check_escaped_crosscheck_details() {
 
 @test "crosscheck reschedule preserves test thread snapshots with all modes" {
     ((MAX_PROC >= 2)) || skip "Need at least 2 logical processors to run this test"
-    local mode thread message text cpu
-    for mode in none queue random barrier; do
-        declare -A yamldump
-        vote_run 2 --no-slicing --reschedule="$mode" --timeout=10s \
-            -O selftest_crosscheck_votes.cpu_case=15
-        if [[ "$status" -eq 0 && "$output" = *"Cannot pin cross-check fixture"* ]]; then
-            skip "Cannot pin cross-check fixture to the required CPUs"
-        fi
-        [[ "$status" -eq 0 ]]
-        test_yaml_regexp /tests/0/result pass
-        test_crosscheck_message 0 'I> reschedule retained 2 test thread snapshots and completion devices'
-        [[ "$output" != *"one test thread submitted; no deferred comparison"* ]]
-        crosscheck_no_mismatch
-        for thread in 0 1; do
-            cpu=
-            for ((message=0; message<${yamldump[/tests/0/threads/$((thread + 1))/messages@len]:-0}; ++message)); do
-                text=${yamldump[/tests/0/threads/$((thread + 1))/messages/$message/text]:-}
-                if [[ "$text" = "I> reschedule test thread $thread finished on CPU "* ]]; then
-                    cpu=${text##* }
-                fi
+    local mode c_worker thread message text cpu
+    for c_worker in -1 0; do
+        for mode in none queue random barrier; do
+            declare -A yamldump
+            vote_run 2 --no-slicing --reschedule="$mode" --timeout=10s \
+                -O selftest_crosscheck_votes.cpu_case=15 -O selftest_crosscheck_votes.c_worker="$c_worker"
+            if [[ "$status" -eq 0 && "$output" = *"Cannot pin cross-check fixture"* ]]; then
+                skip "Cannot pin cross-check fixture to the required CPUs"
+            fi
+            [[ "$status" -eq 0 ]]
+            test_yaml_regexp /tests/0/result pass
+            test_crosscheck_message 0 'I> reschedule retained 2 test thread snapshots and completion devices'
+            [[ "$output" != *"one test thread submitted; no deferred comparison"* ]]
+            crosscheck_no_mismatch
+            for thread in 0 1; do
+                cpu=
+                for ((message=0; message<${yamldump[/tests/0/threads/$((thread + 1))/messages@len]:-0}; ++message)); do
+                    text=${yamldump[/tests/0/threads/$((thread + 1))/messages/$message/text]:-}
+                    if [[ "$text" = "I> reschedule test thread $thread finished on CPU "* ]]; then
+                        cpu=${text##* }
+                    fi
+                done
+                [[ -n "$cpu" ]]
+                test_crosscheck_message 0 "I> reschedule test thread $thread completion CPU $cpu"
             done
-            [[ -n "$cpu" ]]
-            test_crosscheck_message 0 "I> reschedule test thread $thread completion CPU $cpu"
         done
     done
 }
@@ -816,7 +818,7 @@ check_escaped_crosscheck_details() {
         [[ "$status" -eq 0 ]]
         crosscheck_no_mismatch
     done
-    for suffix in bad_later nan_fail zero_fail padding_fail; do
+    for suffix in c_bad_later bad_later nan_fail zero_fail padding_fail; do
         sandstone_selftest -vvv -e "selftest_crosscheck_output_$suffix"
         if [[ "$suffix" = padding_fail && "$status" -eq 0 ]]; then
             test_yaml_regexp /tests/0/result skip
@@ -834,11 +836,23 @@ check_escaped_crosscheck_details() {
     done
 }
 
+@test "crosscheck C bool byte conflict aborts immediately and cannot be waived" {
+    declare -A yamldump
+    sandstone_selftest -vvv -n1 --ignore-os-errors -e selftest_crosscheck_output_c_conflict
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result crash
+    test_crosscheck_message 1 'E> Cross-check invalid execution: output element type mismatch'
+    test_crosscheck_message 1 'I> output post-submit sentinel' 0
+    test_crosscheck_message 0 'I> output test cleanup retained storage' 0
+    test_crosscheck_message 1 'I> output failure callback fired for worker 0' 0
+    crosscheck_no_mismatch
+}
+
 @test "crosscheck API misuse aborts and cannot be waived" {
     declare -A yamldump
     local suffix thread reason
     for suffix in invalid_pointer invalid_count worker_invalid_pointer worker_invalid_count \
-                  init_snapshot_count wrapper_conflict later_count; do
+                  init_snapshot_count wrapper_conflict later_count c_later_count; do
         sandstone_selftest -vvv -n1 --ignore-os-errors -e "selftest_crosscheck_output_$suffix"
         [[ "$status" -eq 1 ]]
         test_yaml_regexp /tests/0/result crash
@@ -849,7 +863,7 @@ check_escaped_crosscheck_details() {
         case "$suffix" in
             invalid_pointer|worker_invalid_pointer) reason='null data pointer with nonzero count' ;;
             invalid_count|worker_invalid_count) reason='data extent overflows' ;;
-            init_snapshot_count|later_count) reason='later output submission count mismatch' ;;
+            init_snapshot_count|later_count|c_later_count) reason='later output submission count mismatch' ;;
             wrapper_conflict) reason='output element type mismatch' ;;
         esac
         test_crosscheck_message "$thread" "E> Cross-check invalid execution: $reason"
@@ -1187,4 +1201,61 @@ check_escaped_crosscheck_details() {
         [[ "$status" -eq 1 ]]
         [[ "$output" != *"failure mask includes inconclusive attribution"* ]]
     done
+}
+
+@test "crosscheck C and C++ submissions on one test thread retain legal singleton diagnostics" {
+    declare -A yamldump
+    local suffix name
+    for suffix in c_pass c_init_pass; do
+        sandstone_selftest -vvv --max-messages=100 -n1 -e "selftest_crosscheck_output_$suffix"
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp /tests/0/result pass
+        crosscheck_no_mismatch
+        for name in output_words output_flags output_empty; do
+            test_crosscheck_message 0 "I> Cross-check output '$name': one test thread submitted; no deferred comparison"
+        done
+    done
+}
+
+@test "crosscheck C first submission and C++ peer tie retain no-majority attribution" {
+    ((MAX_PROC >= 2)) || skip "Requires two workers"
+    declare -A yamldump
+    local crosscheck_mismatch
+    vote_run 2 --no-slicing -O selftest_crosscheck_votes.c_worker=0 \
+        -O selftest_crosscheck_votes.values=4
+    vote_failure 0 1
+    test_yaml_expr /tests/0/fail/crosscheck-no-majority = True
+    find_crosscheck_mismatch 1 vote_a 0
+    test_yaml_expr "$crosscheck_mismatch/details/first_description" = 'worker computation in C'
+    test_yaml_expr "$crosscheck_mismatch/details/comparison_description" = 'no strict majority; conflicting peer'
+}
+
+@test "crosscheck C and C++ output snapshots reset between no-fork attempts" {
+    declare -A yamldump
+    sandstone_selftest -vvv -fno -n1 --max-messages=100 \
+        -e selftest_crosscheck_output_c_pass -e selftest_crosscheck_output_c_init_pass \
+        -e selftest_crosscheck_output_c_pass -e selftest_crosscheck_output_c_init_pass
+    [[ "$status" -eq 0 ]]
+    test_yaml_numeric /tests@len 'value == 4'
+    local attempt
+    for attempt in 0 1 2 3; do
+        test_yaml_regexp "/tests/$attempt/result" pass
+        test_crosscheck_message 0 "I> output init generation $((attempt + 1))" 1 "$attempt"
+        test_crosscheck_message 0 'I> output callback cleanup released captures' 1 "$attempt"
+    done
+    crosscheck_no_mismatch
+    [[ "$output" != *"captures survived"* ]]
+}
+
+@test "crosscheck C and C++ count incompatibility aborts after cleanup without data attribution" {
+    ((MAX_PROC >= 2)) || skip "Requires two workers"
+    declare -A yamldump
+    vote_run 2 --no-slicing --ignore-os-errors \
+        -O selftest_crosscheck_votes.c_worker=0 -O selftest_crosscheck_votes.shape=2
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result crash
+    test_yaml_absent /tests/0/fail/crosscheck-no-majority
+    crosscheck_no_mismatch
+    test_crosscheck_message 1 "E> Cross-check output 'vote_a': element type or count mismatch"
+    test_crosscheck_message 0 'I> vote cleanup retained snapshots'
 }

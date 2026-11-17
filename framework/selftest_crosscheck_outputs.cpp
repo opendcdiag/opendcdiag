@@ -93,7 +93,7 @@ std::array<long double, 3> long_double_values()
 namespace {
 CROSSCHECK_OUTPUT(vote_a, uint32_t);
 CROSSCHECK_OUTPUT(vote_z, uint32_t);
-int64_t vote_init, vote_values, vote_skips, vote_failures, vote_later, vote_shape;
+int64_t vote_init, vote_values, vote_skips, vote_failures, vote_later, vote_shape, vote_c_worker;
 bool vote_after, vote_cleanup_skip, vote_two_names, vote_retry;
 bool vote_repeat, vote_log_failure, vote_cleanup_failure;
 bool vote_nonfirst_slice;
@@ -120,10 +120,16 @@ int thread_outputs_run(int worker)
     };
     if (vote_cpu_case == 15) {
         const uint32_t value = 0;
-        submit_output(vote_a, &value, 1, "before reschedule");
+        auto submit_rescheduled = [&](const char *description) {
+            if (worker == vote_c_worker)
+                selftest_crosscheck_outputs_c_vote(&value, 1);
+            else
+                submit_output(vote_a, &value, 1, description);
+        };
+        submit_rescheduled("before reschedule");
         for (int i = 0; i < 32; ++i) {
             reschedule();
-            submit_output(vote_a, &value, 1, "after reschedule");
+            submit_rescheduled("after reschedule");
         }
         log_info("reschedule test thread %d finished on CPU %d", worker, sched_getcpu());
         return EXIT_SUCCESS;
@@ -226,6 +232,7 @@ static int selftest_crosscheck_votes_init(struct test *test)
     vote_failures = get_testspecific_knob_value_int(test, "failures", 0);
     vote_later = get_testspecific_knob_value_int(test, "later", -1);
     vote_shape = get_testspecific_knob_value_int(test, "shape", 0);
+    vote_c_worker = get_testspecific_knob_value_int(test, "c_worker", -1);
     vote_after = get_testspecific_knob_value_int(test, "after", 0);
     vote_cleanup_skip = get_testspecific_knob_value_int(test, "cleanup_skip", 0);
     vote_two_names = get_testspecific_knob_value_int(test, "two_names", 0);
@@ -336,7 +343,11 @@ static int selftest_crosscheck_votes_run(struct test *test, int worker)
             uint8_t byte = uint8_t(value);
             submit_output(SandstoneCrossCheck::OutputKey<uint8_t>{vote_a.name}, &byte, 1, "wrong type");
         } else {
-            submit_output(vote_a, values, vote_shape == 2 && worker == 0 ? 2 : 1, "worker computation");
+            size_t count = vote_shape == 2 && worker == 0 ? 2 : 1;
+            if (worker == vote_c_worker)
+                selftest_crosscheck_outputs_c_vote(values, count);
+            else
+                submit_output(vote_a, values, count, "worker computation");
             if (vote_repeat)
                 submit_output(vote_a, values, 1, "repeated worker submission");
         }
@@ -439,8 +450,9 @@ static int selftest_crosscheck_votes_cleanup(struct test *)
         for (int thread = 0; thread < sApp->thread_count; ++thread) {
             const auto &outputs = state.thread_outputs[thread];
             const auto *slot = outputs.find(vote_a.name);
+            const char *description = thread == vote_c_worker ? "worker computation in C" : "before reschedule";
             if (outputs.snapshots.size() != 1 || !slot || slot->first_worker != thread
-                    || slot->description != "before reschedule")
+                    || slot->description != description)
                 report_fail_msg("reschedule did not retain the test thread's first snapshot");
             if (outputs.completion_device < 0 || outputs.completion_device >= device_count()
                     || outputs.completion_cpu != LogicalProcessor(device_info[outputs.completion_device].cpu_number))
@@ -487,14 +499,22 @@ static int selftest_crosscheck_outputs_init(struct test *test)
         }
     }
     std::vector<uint32_t> source = {++output_generation, 5};
-    set_input(output_numbers, source, "owned output computation inputs");
+    if (output_case(test, "_c_init_pass"))
+        selftest_crosscheck_outputs_c_input(output_generation);
+    else
+        set_input(output_numbers, source, "owned output computation inputs");
     source.assign(2, 0);
     auto words = compute_words();
     std::string description = "CPU words computed in init";
     const bool flags[] = {true, false};
-    submit_output(output_words, words, description.c_str());
-    submit_output(output_flags, flags, nullptr);
-    submit_output(output_empty, static_cast<const uint32_t *>(nullptr), 0, nullptr);
+    if (output_case(test, "_c_init_pass") || output_case(test, "_c_bad_later")
+            || output_case(test, "_c_later_count")) {
+        selftest_crosscheck_outputs_c_init_outputs();
+    } else {
+        submit_output(output_words, words, description.c_str());
+        submit_output(output_flags, flags, nullptr);
+        submit_output(output_empty, static_cast<const uint32_t *>(nullptr), 0, nullptr);
+    }
     words.fill(0);
     description.assign("destroyed init description");
     install_failure_callback(output_failure_callback, nullptr, output_callback_cleanup);
@@ -592,12 +612,17 @@ static int selftest_crosscheck_outputs_run(struct test *test, int thread)
         const uint32_t value = 1;
         submit_output(worker_only_output, &value, 1, nullptr);
     }
+    if (output_case(test, "_c_conflict"))
+        selftest_crosscheck_outputs_c_conflict();
     if (output_case(test, "_worker_invalid_pointer"))
         submit_output(output_words, static_cast<const uint32_t *>(nullptr), 1, nullptr);
     if (output_case(test, "_worker_invalid_count")) {
         const auto words = compute_words();
         submit_output(output_words, words.data(), std::numeric_limits<size_t>::max(), nullptr);
     }
+    if (output_case(test, "_c_pass") || output_case(test, "_c_bad_later")
+            || output_case(test, "_c_later_count"))
+        return selftest_crosscheck_outputs_c_run(test, thread);
     auto words = compute_words();
     if (output_case(test, "_bad_first_skip_flag")
             && !output_case(test, "_mixed_bad_first_skip_flag")) {
@@ -753,6 +778,10 @@ CROSSCHECK_OUTPUT_SELFTEST(consensus_skip, "Preserves a worker's skip during con
                           group_negative, -1, test_schedule_default)
 CROSSCHECK_OUTPUT_SELFTEST(containers_pass, "Submits and verifies outputs from C++ containers",
                           group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_pass, "Verifies C worker outputs alongside C++ init outputs",
+                          group_positive, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_init_pass, "Verifies C++ worker outputs alongside C init outputs",
+                          group_positive, -1, test_schedule_default)
 CROSSCHECK_OUTPUT_SELFTEST(wrapper_pass, "Verifies floating-point wrapper outputs across translation units",
                           group_positive, -1, test_schedule_default)
 CROSSCHECK_OUTPUT_SELFTEST(nan_pass, "Accepts identical NaN payloads and signed zeros",
@@ -809,6 +838,8 @@ CROSSCHECK_OUTPUT_SELFTEST(error_init, "Releases captured storage after test_ini
                           group_negative, -1, test_schedule_default)
 CROSSCHECK_OUTPUT_SELFTEST(retry, "Captures fresh init outputs and first submissions on retries",
                           group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_conflict, "Reports C element type conflicts across translation units",
+                          group_negative, -1, test_schedule_default)
 CROSSCHECK_OUTPUT_SELFTEST(wrapper_conflict, "Distinguishes wrapper and native element types",
                           group_negative, -1, test_schedule_default)
 CROSSCHECK_OUTPUT_SELFTEST(submit_cleanup, "Rejects output submission in test_cleanup()",
@@ -820,4 +851,8 @@ CROSSCHECK_OUTPUT_SELFTEST(invalid_count, "Rejects excessive init output counts"
 CROSSCHECK_OUTPUT_SELFTEST(worker_invalid_pointer, "Rejects null worker output data with a nonzero count",
                           group_negative, -1, test_schedule_default)
 CROSSCHECK_OUTPUT_SELFTEST(worker_invalid_count, "Rejects excessive worker output counts",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_bad_later, "Rejects changed later C submissions",
+                          group_negative, -1, test_schedule_default)
+CROSSCHECK_OUTPUT_SELFTEST(c_later_count, "Reports C element count changes after the first submission",
                           group_negative, -1, test_schedule_default)
