@@ -1,0 +1,1 @@
+../sanity-check/23-crosscheck-output.bats

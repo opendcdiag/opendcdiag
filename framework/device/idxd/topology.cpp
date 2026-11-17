@@ -283,7 +283,9 @@ std::string build_failure_mask_for_topology(const struct test* test)
                 const int thread = wq.wq->wq();
                 assert((thread >= 0 && thread < thread_count()));
 
-                if (sApp->thread_data(thread)->has_failed()) {
+                auto *data = sApp->test_thread_data(thread);
+                if (sApp->crosscheck_failures[thread]
+                        || data->has_non_crosscheck_failure()) {
                     ++total_fail_count;
                     device_mask += 'X';
                 } else {
@@ -708,13 +710,13 @@ void rebuild_topology()
     cached_topology() = build_topology();
 }
 
-void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
+void analyze_test_failures_for_topology(const struct test *test, const PerDeviceFailures &per_device_failures)
 {
-    auto pattern_for_wq = [&per_thread_failures](const Topology::WorkQueue& wq) -> PerThreadFailures::value_type {
+    auto pattern_for_wq = [&per_device_failures](const Topology::WorkQueue& wq) -> PerDeviceFailures::value_type {
         assert(wq.wq);
         const int thread = wq.wq->wq();
-        assert(thread >= 0 && size_t(thread) < per_thread_failures.size());
-        return per_thread_failures[size_t(thread)];
+        assert(thread >= 0 && size_t(thread) < per_device_failures.size());
+        return per_device_failures[size_t(thread)];
     };
 
     const auto& topology = Topology::topology();
@@ -724,14 +726,14 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
     bool all_devices_failed_once = true;
     bool all_devices_failed_equally = true;
     int failed_devices = 0;
-    PerThreadFailures::value_type last_device_pattern = 0;
+    PerDeviceFailures::value_type last_device_pattern = 0;
 
     for (const auto& device : topology.devices) {
         int total_wqs = 0;
         int failed_wqs = 0;
         bool all_wqs_failed_once = true;
         bool all_wqs_failed_equally = true;
-        PerThreadFailures::value_type first_nonzero_pattern = 0;
+        PerDeviceFailures::value_type first_nonzero_pattern = 0;
 
         for (const auto& group : device.groups) {
             for (const auto& wq : group.wqs) {

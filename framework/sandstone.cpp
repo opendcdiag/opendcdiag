@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <map>
+#include <memory>
 #include <vector>
 
 #include <sys/mman.h>
@@ -314,6 +315,8 @@ static void attach_shmem_internal(int fd, size_t size)
     sApp->main_thread_data_ptr = reinterpret_cast<PerThreadData::Main *>(ptr);
     ptr += ROUND_UP_TO_PAGE(sizeof(PerThreadData::Main) * sApp->shmem->main_thread_count);
     sApp->test_thread_data_ptr = reinterpret_cast<PerThreadData::Test *>(ptr);
+    ptr += sizeof(PerThreadData::Test) * sApp->shmem->total_thread_count;
+    sApp->crosscheck_failures = reinterpret_cast<bool *>(ptr);
 }
 
 static void init_shmem()
@@ -321,6 +324,7 @@ static void init_shmem()
     using namespace PerThreadData;
     static_assert(std::is_trivially_copyable_v<PerThreadData::Main>);
     static_assert(std::is_trivially_copyable_v<PerThreadData::Test>);
+    static_assert(alignof(PerThreadData::Test) >= alignof(bool));
     static_assert(sizeof(PerThreadData::Main) == 64,
             "PerThreadData::Main size grew, please check if it was intended");
     static_assert(sizeof(PerThreadData::Test) == 64,
@@ -377,6 +381,7 @@ static void commit_shmem()
     size_t size = sizeof(PerThreadData::Main) * main_thread_count;
     size = ROUND_UP_TO_PAGE(size);
     size += sizeof(PerThreadData::Test) * thread_count();
+    size += sizeof(bool) * device_count();
     size = ROUND_UP_TO_PAGE(size);
 
     if (ftruncate(sApp->shmemfd, offset + size) < 0) {
@@ -384,6 +389,8 @@ static void commit_shmem()
         exit(EX_CANTCREAT);
     }
     attach_shmem_internal(sApp->shmemfd, offset + size);
+    for (int device = 0; device < device_count(); ++device)
+        std::construct_at(sApp->crosscheck_failures + device, false);
 
     if (sApp->current_fork_mode() != SandstoneApplication::ForkMode::exec_each_test) {
         close(sApp->shmemfd);

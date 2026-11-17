@@ -638,6 +638,363 @@ Information written to standard error will appear in the logs.  However,
 test writers are expected to use the framework's logging functions rather than
 writing to standard error directly.
 
+## Named inputs and cross-checked outputs
+
+The C++ API in [crosscheck.h](../framework/crosscheck.h) is an alternative to
+managing immutable input and reference buffers yourself. Existing explicit
+comparisons, including the examples above, remain supported.
+
+Declare named, typed arrays with `CROSSCHECK_INPUT(name, type)` and
+`CROSSCHECK_OUTPUT(name, type)`. These declarations establish names and element
+types; they do not store test data or capture anything until set_input() or
+submit_output() is called.
+
+Tests **set inputs**, **get inputs**, and **submit outputs**. The framework
+**captures snapshots** and verifies submitted outputs; capture describes the
+framework's copy, not a separate public test operation.
+
+| Test operation | Public API | Framework behavior |
+| --- | --- | --- |
+| Set inputs | `set_input()` | Copy the supplied elements into an owned immutable input snapshot |
+| Get inputs | `get_input()` | Return a typed, read-only view of the input snapshot |
+| Submit outputs | `submit_output()` | Capture the first submission for a name and test thread, then check that test thread's later submissions against it |
+
+### C++ declarations and type inference
+
+The macros declare static constexpr instances of these key structs in
+the SandstoneCrossCheck namespace:
+
+```cpp
+template <InputElement T> struct InputKey { const char *name; };
+template <InputElement T> struct OutputKey { const char *name; };
+```
+
+For example, the declarations expand to:
+
+```cpp
+static constexpr SandstoneCrossCheck::InputKey<uint32_t> addends{"addends"};
+static constexpr SandstoneCrossCheck::OutputKey<uint32_t> sum{"sum"};
+```
+
+These structs contain only the capture name, not input or output buffers.
+For tests spanning multiple translation units, put shared tag declarations in a
+shared header. Names match by string contents, not the address of a declaration
+or string literal. Inputs and outputs have separate name namespaces within each
+attempt, so an input and an output may use the same name. Within either namespace,
+use distinct names for unrelated values: reusing the same name, element type, and
+count cannot be detected as misuse. Type/count contracts are checked when the APIs
+are used, not when tags are declared; see the API error rules below.
+
+The InputElement constraint checks the supported element type. get_input(addends)
+returns `std::span<const uint32_t>`; use standard C++ `auto` for inference:
+
+```cpp
+const auto input = get_input(addends);
+uint32_t first = input[0];
+size_t count = input.size();
+```
+
+set_input() and submit_output() accept pointer/count pairs or contiguous, sized
+ranges with the same element type as the key. Supported ranges include raw
+arrays, std::array, std::vector (except std::vector<bool>), std::span, and
+std::string for char keys. set_input() accepts an optional description;
+submit_output() requires a description argument, which may be nullptr:
+
+```cpp
+uint32_t values[] = {1, 2};
+set_input(addends, values, 2, "Addends");
+// Equivalently: set_input(addends, values, "Addends");
+uint32_t result[] = {3};
+submit_output(sum, result, "Worker sum");
+// Equivalently: submit_output(sum, result, 1, "Worker sum");
+```
+
+### A cross-checked test
+
+For new tests, start with init setting inputs and workers computing outputs.
+
+For example, [crosschecked_add.cpp](../tests/examples/crosschecked_add.cpp) uses
+framework-owned snapshots. Its consensus_add test sets inputs in init and computes
+outputs only in workers. The named tags identify captures; unlike the simple_add
+example above, no static variable stores inputs or reference data:
+
+```cpp
+#include "crosscheck.h"
+
+CROSSCHECK_INPUT(addends, uint32_t);
+CROSSCHECK_OUTPUT(sum, uint32_t);
+
+static int consensus_add_init(struct test *)
+{
+    uint32_t scratch[] = {random32(), random32()};
+    set_input(addends, scratch, "Addends");
+    return EXIT_SUCCESS;
+}
+
+static int crosschecked_add_run(struct test *test, int)
+{
+    const auto input = get_input(addends);
+    TEST_LOOP(test, 1 << 20) {
+        uint32_t result = input[0] + input[1];
+        submit_output(sum, &result, 1, "Worker sum");
+    }
+    return EXIT_SUCCESS;
+}
+
+DECLARE_TEST(consensus_add, "Cross-check worker integer additions across CPUs")
+    .test_init = consensus_add_init,
+    .test_run = crosschecked_add_run,
+    .quality_level = TEST_QUALITY_BETA,
+END_DECLARE_TEST
+```
+
+Like the other worked examples, this source is not built by default. To try it
+in a CPU build, add the following before `tests_set_base.apply(tests_config)` in
+[tests/cpu/meson.build](../tests/cpu/meson.build), then rebuild:
+
+```meson
+tests_set_base.add(files('../examples/crosschecked_add.cpp'))
+```
+
+Run with `--beta -e consensus_add` or `--beta -e crosschecked_add`.
+
+Init supplies framework-owned inputs, but does not submit a sum. Workers
+compute from the same captured inputs and submit their sums. This
+pattern compares outputs when at least two test threads submit the
+same name. A single test thread provides local self-checking without comparison between test threads
+and does not itself cause a skip or failure. After joining, the framework logs
+`Cross-check output 'NAME': one test thread submitted; no deferred comparison` once
+per name submitted by only one test thread. Submission is optional per name, so only
+test threads with snapshots count as votes. Init shares test thread zero's vote.
+
+### Test thread zero's output from init
+
+The same source file also includes crosschecked_add, which shares the input/output
+declarations and crosschecked_add_run() above but also computes and submits a sum
+in init:
+
+```cpp
+static int crosschecked_add_init(struct test *)
+{
+    uint32_t scratch[] = {random32(), random32()};
+    set_input(addends, scratch, "Addends");
+    const auto input = get_input(addends);
+    uint32_t result = input[0] + input[1];
+    submit_output(sum, &result, 1, "Sum computed in init");
+    return EXIT_SUCCESS;
+}
+
+DECLARE_TEST(crosschecked_add, "Cross-check repeated integer additions")
+    .test_init = crosschecked_add_init,
+    .test_run = crosschecked_add_run,
+    .quality_level = TEST_QUALITY_BETA,
+END_DECLARE_TEST
+```
+
+Init may submit a computation or only set inputs in CPU, GPU, and IDXD builds.
+An init output becomes test thread zero's first snapshot in the current execution
+slice, regardless of the observed host CPU. Init has no separate snapshot, extra vote,
+or authority to establish the correct result. Test thread zero submitting a different
+value, even after migration, fails its local self-check immediately;
+this is not a two-vote tie.
+The actual host CPU and init thread_num (`-1`) remain reporting metadata.
+
+### Output snapshots and local self-checks
+
+Each output name denotes one invariant typed array per test thread within an
+execution attempt, indexed by thread_num, not device. Init shares test thread zero's
+snapshot without a separate vote. Test threads retain their snapshots across CPU
+migration, and different test threads keep separate snapshots and votes even when
+running on the same host CPU. Sequential scheduling also preserves test thread
+indices, even when reusing one OS thread.
+
+The framework keeps an immutable deep copy of the first submission
+for each name and test thread, including its first description and actual thread_num
+for reporting. Later submissions by that test thread must match the original
+snapshot immediately, including thread zero checking init's snapshot. Repetition
+never replaces the snapshot or adds a vote. A same-type/count data mismatch is an
+immediate failure implicating the detection/submission CPU or assigned accelerator and indicating a possible silent
+data error; deferred consensus cannot erase or downgrade it.
+
+Each test thread has an OutputMap (std::map) containing its named snapshots.
+Init submits before test threads start. During test_run(), only the corresponding
+test thread accesses its map. The main thread compares maps after all test threads
+have joined. Cross-check state therefore needs no locking or atomics, including
+for the first submission. Map insertion preserves references to existing snapshots.
+A repeat borrows the immutable snapshot without capture, allocation, reference-count
+changes, metadata writes, or CPU sampling. First submissions require readable buffers
+for their declared extent. When a snapshot exists, exact type and count checks
+precede actual-data access.
+
+CPU test threads may call `reschedule()` or change affinity within the selected slice.
+Output-submitting helper threads and live cross-thread output inspection remain
+unsupported. This is not a requirement for callers to add external locking.
+Framework test threads on the same CPU do not share snapshots.
+
+At the beginning of thread_runner cleanup, before callbacks and finish_reschedule(), the
+framework samples the completion host CPU and resolves the hardware device for
+each test thread with output snapshots. This also runs after skips and cancellation/failure,
+not just normal return. Deferred comparisons attribute implicated test threads to
+their completion devices. Immediate mismatches instead use detection/submission
+placement. Completion or mismatch placement outside the selected CPU slice is API
+misuse and aborts even in release builds. The API does not harden framework affinity
+setup or reconstruct where an arbitrary buffer was computed.
+
+First-submission host CPU is sampled only when capturing a new snapshot; equal
+repeats do not sample placement. Reports retain it as `first_submission_host_cpu`
+metadata, distinct from the test thread index, completion device, and completion
+`host_cpu`. Neither first submission nor completion proves computation location.
+Mismatch details identify the test thread with `thread`, retain init's `-1` in
+`first_submission_thread`, and explain the hardware observation with
+`placement_description`. Value-class membership lists test thread indices even when
+several votes map to the same device.
+
+Accelerator hardware attribution remains the assigned GPU endpoint/tile or IDXD
+work queue, not the host CPU or merely a parent accelerator. Test writers must
+compute init outputs on the first selected accelerator and test_run() outputs on their
+assigned accelerator, including with custom computation/mapping. There is no
+explicit device-selection API for submissions. Host migration never changes the
+assigned accelerator identity and does not establish a host CPU or cache fault.
+
+### Verification policy and its limits
+
+Any failure already recorded in init or a worker, including a local self-check
+mismatch or an unrelated worker error, suppresses deferred consensus for the
+entire attempt. The original failure and diagnostics remain; failed slots do not
+enter a separate voting policy. Workers are still joined and cleanup follows the
+normal execution path. Init failure or skip prevents worker launch and does not
+introduce a new cleanup or deferred-verification path.
+
+Otherwise, after joining, if any test thread succeeded, every submitted snapshot votes
+for its name and test thread, even if that test thread later skipped. First-submission
+context is reporting metadata, not voting eligibility. No
+successful confirmation is required. Init alone cannot rescue an all-workers-skipped
+run. Multiple submissions by one test thread still supply exactly one vote.
+
+Participation is optional per name. Missing submissions are neither votes nor
+evidence of agreement. Declarations alone do not register required output names,
+so a name omitted by everyone is undetectable. Input-only use is permitted. A
+name with fewer than two test thread snapshots needs no deferred comparison and does
+not itself change the test result; a later local mismatch still fails it. Exactly
+one test thread snapshot produces the informational diagnostic above, subject to normal
+verbosity and message limits. Unused names and input-only captures do not produce
+this diagnostic; all-workers-skipped runs and preexisting failures do not enter
+deferred verification.
+
+Verification partitions equal **whole named outputs** into value classes, not
+individual elements or bits. A strict majority (more than half of test thread
+snapshots for that name) implicates the outliers' completion devices. A tie or unique plurality without a strict
+majority implicates all conflicting test threads' completion devices; none is labeled correct. Conclusions
+for all names are determined before reporting, so a newly discovered disagreement
+does not change another name's votes or suppress its diagnostics. Agreement
+on one name cannot clear a failure on another.
+
+Here A, B, and C represent different whole arrays with the same exact type and
+count. Each entry is one snapshot from a different test thread, even if several
+test threads share a host CPU:
+
+| Submitted outputs | Post-join outcome |
+| --- | --- |
+| A, A, A | Agreement; no comparison failure |
+| A, A, B | Strict majority; the B test thread's completion device is implicated |
+| A, A, A, B, C | Strict majority; B and C test threads' completion devices are implicated |
+| A, A, B, B | Tie; all conflicting test threads' completion devices are implicated |
+| A, B, C | No strict majority; all conflicting test threads' completion devices are implicated |
+| A, A, A, B, B, C, C | Plurality only; all conflicting test threads' completion devices are implicated |
+
+A majority snapshot is a comparison baseline, not proven correct data. Without a
+majority, reports identify conflicting peers/value classes rather than an oracle.
+Implicated CPUs/devices are suspects based on failed data comparisons, not proof
+that each part is defective. Agreement cannot detect results that are wrong in
+the same way on every test thread. Tests needing authoritative expected-data checks can
+still use explicit comparisons such as memcmp_or_fail, as in the earlier examples.
+
+When any named output has conflicting value classes without a strict majority, the YAML
+`fail` summary includes `crosscheck-no-majority: true` beside the device mask. This
+field survives quiet output and message limits. It means the attempt contains
+inconclusive cross-check attribution, not that all its evidence is unlocalized;
+ordinary failures and majority-based comparisons retain their usual attribution.
+Other text formats qualify the failure mask in a summary message. Masks remain
+device-indexed, not test-thread-indexed; implicated test threads on the same CPU set the same
+device bit. Retry decisions and topology calculations remain unchanged. If any failed attempt
+has this qualification, retry topology analysis explains that conflicting devices
+are suspects and that observed implicated-device patterns are not independent
+proof of faulty hardware or evidence identifying which conflicting group is
+incorrect. The qualification appears at the same verbosity as topology analysis.
+Each new attempt resets the summary flag, independently across slices and retries.
+
+### API errors, lifetimes, and representation
+
+Actual submitters of a name must use the same exact element type and count.
+Incompatible types/counts are test bugs, not values to vote on or hardware-attributed
+data mismatches. These post-join contract errors abort after cleanup and cannot
+be waived by `--ignore-os-errors`. Verification still checks other names, and a
+data comparison failure or cleanup failure takes precedence over these errors.
+Zero-length inputs and outputs, including null storage with zero count, are valid.
+
+Immediate API misuse is different from a post-join contract error. Setting an
+input twice, looking up a missing input or one with a different element type,
+passing a null data pointer with a nonzero
+count or an overflowing extent, and changing the type/count of a test thread's
+later submission abort execution as a test bug, including in release builds.
+Out-of-slice CPU completion or mismatch detection is also
+misuse. These paths do not guarantee normal cleanup or callback
+unwinding. A later submission with matching type/count
+but different data is a comparison failure instead, and implicates the detection
+CPU or assigned accelerator, not necessarily the worker's initial
+hardware assignment.
+
+Set each input once in test_init(), and compute outputs from get_input() snapshots
+rather than the original randomized scratch storage. Lookup is allowed in init,
+run, and cleanup; submission is allowed in init and run for CPU, GPU, and IDXD
+outputs. A running test, a nonempty key name, the allowed lifecycle phase,
+and an assigned accelerator device index are development-time invariants checked
+by debug assertions, not runtime validation guarantees in release builds.
+Views and snapshots remain alive through cleanup, including post-join failure
+and skip paths where cleanup normally runs. Each attempt (one slice's execution
+of a pass, including fractures and retries) has independent capture state
+established before init. Captures are discarded at attempt end and never reused across
+slices, fractures, retries, or repeated no-fork executions. State is not shared
+across processes. Source buffers remain test-owned and may be reused or freed
+after set_input() or submit_output() returns. Counts are elements, not bytes.
+Captured storage has element alignment, not arbitrary SIMD alignment; use
+unaligned loads when needed. The API does not write capture files.
+
+In debug builds under process isolation, all cross-check APIs reject calls in the
+actual main process, including test_in_parent and test_init_in_parent execution.
+These calls abort the invocation rather than produce a normal child-result report. Valid
+API use with those flags is permitted in no-fork mode. Isolated-parent misuse is
+a development-time invariant; release builds do not guarantee its detection.
+
+Element types must be unqualified, non-void, trivially copyable types recognized
+by [sandstone_data.h](../framework/sandstone_data.h), including uint32_t, float,
+BFloat16, and TypeToDataType mappings such as Float32.
+Captured slots retain both a representation type for byte comparison and diagnostic
+formatting and an exact language-type identity. The latter distinguishes types
+that share a representation, such as bool and uint8_t or Float32 and float.
+Comparison preserves meaningful representation bytes, including NaN payloads
+and signed zero, while ignoring trailing scalar padding such as x87 padding.
+Supply meaningful output descriptions; each test thread's first submission retains its
+metadata. Deferred reports and callbacks use that first submission's actual
+thread_num, separately from hardware attribution. Test thread callbacks run on
+the main thread under that thread_num, not the test thread's TLS or physical
+execution context; init does not run worker failure callbacks. Vote indices are
+test thread indices, not device indices. Deferred hardware attribution uses
+completion CPU/device; immediate mismatches use the encountering thread_num
+reporting context and detection/submission placement. Accelerator attribution
+always retains the assigned endpoint/tile or work queue.
+
+Mismatch YAML details use `device_description` and `reference_device_description`
+for device topology flow-map strings (not nested topology objects), and
+`comparison_description` for the comparison rationale. `host_cpu` and
+`reference_host_cpu` describe completion placement for deferred comparisons;
+immediate `host_cpu` describes detection placement and its `reference_host_cpu`
+is first-submission metadata. Explicit `first_submission_host_cpu` (and, for
+deferred peers, `reference_first_submission_host_cpu`) preserve the first submission's CPU.
+`first_description` retains the first submission's description. Deferred mismatches also include `value_class`
+and `reference_value_class` indices, plus `value_classes_description` listing all
+value classes and their test threads and completion devices, including the majority class.
+
 ## Additional information
 
 ### Test groups

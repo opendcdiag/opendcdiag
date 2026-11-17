@@ -292,6 +292,12 @@ $defs:
             type:
               - 'null'
               - string
+          crosscheck-no-majority:
+            type: boolean
+            description: >-
+              When true, at least one crosschecked output has conflicting test thread snapshots
+              without a strict majority. The mask includes suspects whose hardware
+              attribution is inconclusive.
           time-to-fail:
             type:
               - 'null'

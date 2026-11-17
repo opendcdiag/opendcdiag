@@ -53,6 +53,11 @@ struct Common
 
     enum class Flag {
         CallbackCalled = 0x0001,
+        CrossCheckFailure = 0x0002,
+        OrdinaryFailure = 0x0004,
+        CrossCheckReporting = 0x0008,
+        WorkerFailed = 0x0010, // worker outcome before deferred crosscheck reporting
+        CrossCheckNoMajority = 0x0020,
     };
     uint32_t thread_flags;
     friend constexpr inline uint32_t operator|(Flag f1, Flag f2)
@@ -74,6 +79,11 @@ struct Common
     bool has_skipped() const
     {
         return fail_time < MonotonicTimePoint{};
+    }
+    bool has_non_crosscheck_failure() const
+    {
+        return has_failed() && (!(thread_flags & Flag::CrossCheckFailure)
+                                || (thread_flags & Flag::OrdinaryFailure));
     }
 
     void init()
