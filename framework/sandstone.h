@@ -918,10 +918,10 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
         __auto_type _expected = expected;                           \
         size_t _size = sizeof(*_actual) * size;                     \
         enum DataType _type = DATATYPEFORTYPE(*_actual);            \
-        assert(!cb || _memcmp_fail_check_cb(cb, token, size));      \
         if (__builtin_expect(!SANDSTONE_MEMCMP_EQUAL(_actual, _expected, _size), 0)) \
             _memcmp_fail_report_cb(_actual, _expected, _size, _type,\
                                    cb, token);                      \
+        assert(!cb || _memcmp_fail_check_cb(cb, token, size));      \
     })
 #define memcmp_or_fail_cb(actual, expected, size, cb, token)        \
     _memcmp_or_fail_cb((actual), (expected), (size), (cb), (token))
