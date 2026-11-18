@@ -113,8 +113,6 @@ static int selftest_lifecycle_outside(struct test *)
     return EXIT_SUCCESS;
 }
 
-static int selftest_lifecycle_run_result;
-
 static int selftest_lifecycle_init(struct test *test)
 {
     selftest_lifecycle_check(test, SandstoneApplication::TestPhase::initializing);
@@ -125,7 +123,8 @@ static int selftest_lifecycle_init(struct test *test)
             log_info("Lifecycle callback destroyed");
         });
     }
-    selftest_lifecycle_run_result = get_testspecific_knob_value_int(test, "run_result", EXIT_SUCCESS);
+    uintptr_t run_result = get_testspecific_knob_value_int(test, "run_result", EXIT_SUCCESS);
+    test->data = reinterpret_cast<void *>(run_result);
     int ret = get_testspecific_knob_value_int(test, "init_result",
                     test->flags & test_init_in_parent ? EXIT_SKIP : EXIT_SUCCESS);
     if (ret < 0)
@@ -139,7 +138,7 @@ static int selftest_lifecycle_run(struct test *test, int)
 {
     selftest_lifecycle_check(test, SandstoneApplication::TestPhase::running);
     log_info("Lifecycle worker");
-    return test->test_init ? selftest_lifecycle_run_result : EXIT_SUCCESS;
+    return test->test_init ? int(uintptr_t(test->data)) : EXIT_SUCCESS;
 }
 
 static int selftest_lifecycle_cleanup(struct test *test)
