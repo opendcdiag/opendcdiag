@@ -1151,6 +1151,17 @@ static int find_slice_by_pid(pid_t child, std::span<const pid_t> children)
     return -1;
 }
 
+static int find_slice_by_thread(int thread_num, size_t slice_count)
+{
+    for (size_t i = 0; i < slice_count; ++i) {
+        ThreadRange range = sApp->main_thread_data(i)->thread_range;
+        if (thread_num >= range.starting_thread &&
+                thread_num < range.starting_thread + range.thread_count)
+            return int(i);
+    }
+    return -1;
+}
+
 void debug_crashed_child(std::span<const pid_t> children)
 {
     if (!SandstoneConfig::ChildDebugCrashes || sApp->shmem->server_debug_socket == -1)
@@ -1171,7 +1182,11 @@ void debug_crashed_child(std::span<const pid_t> children)
             log_message(-1, SANDSTONE_LOG_WARNING
                         "Received a context dump from PID %ld that doesn't seem to match any "
                         "child slice", long(ctx.fixed.pid));
-            continue;
+            // the PID is unknown to the framework, but we can still identify the slice from ctx.fixed.thread_num
+            slice = find_slice_by_thread(ctx.fixed.thread_num, children.size());
+            if (slice < 0) {
+                continue;
+            }
         }
 
         char buf[std::numeric_limits<pid_t>::digits10 + 2];
