@@ -641,7 +641,7 @@ static std::string create_filtered_message_string(const char *fmt, va_list va)
 }
 
 // function must be async-signal-safe
-void logging_mark_thread_failed(int thread_num) noexcept
+static void logging_mark_thread_failed_on_cpu(int thread_num, LogicalProcessor cpu) noexcept
 {
     PerThreadData::Common *thr = sApp->thread_data(thread_num);
     if (thr->has_failed())
@@ -651,11 +651,24 @@ void logging_mark_thread_failed(int thread_num) noexcept
     // get_monotonic_time_now() because we'll compare to
     // sApp->current_test_starttime.
     thr->fail_time = std::chrono::steady_clock::now();
-    thr->failing_cpu_plus_1 = sched_getcpu() + 1;
+    thr->failing_cpu_plus_1 = int(cpu) + 1;
     if (thread_num >= 0) {
         auto tthr = static_cast<PerThreadData::Test *>(thr);
         tthr->inner_loop_count_at_fail = tthr->inner_loop_count;
     }
+}
+
+void logging_mark_thread_failed(int thread_num) noexcept
+{
+    auto *thread = sApp->thread_data(thread_num);
+    bool failed = thread->has_failed();
+    if (!(thread->thread_flags & PerThreadData::Common::Flag::CrossCheckReporting)) {
+        if (failed && !(thread->thread_flags & PerThreadData::Common::Flag::OrdinaryFailure))
+            thread->failing_cpu_plus_1 = sched_getcpu() + 1;
+        thread->thread_flags |= uint32_t(PerThreadData::Common::Flag::OrdinaryFailure);
+    }
+    if (!failed)
+        logging_mark_thread_failed_on_cpu(thread_num, LogicalProcessor(sched_getcpu()));
 }
 
 void logging_mark_thread_skipped(int thread_num) noexcept
@@ -1076,8 +1089,8 @@ void logging_init(const struct test *test)
         logging_printf(LOG_LEVEL_VERBOSE(3), "  details: { quality: %s, description: \"%s\" }\n",
                        YamlLogger::quality_string(test), test->description);
         logging_printf(LOG_LEVEL_VERBOSE(3), "  state: { seed: '%s', iteration: %d, retry: %s }\n",
-                       random_format_seed().c_str(), abs(sApp->current_iteration_count),
-                       sApp->current_iteration_count < 0 ? "true" : "false");
+                       random_format_seed().c_str(), abs(sApp->shmem->current_iteration_count),
+                       sApp->shmem->current_iteration_count < 0 ? "true" : "false");
         logging_printf(LOG_LEVEL_VERBOSE(2), "  time-at-start: %s\n", YamlLogger::get_current_time().c_str());
         break;
     case SandstoneApplication::OutputFormat::no_output:
@@ -1414,6 +1427,39 @@ void logging_report_mismatched_data(DataType type, const uint8_t *actual, const 
     logging_run_callback();
 }
 
+void logging_report_crosscheck_failure(int worker, std::string_view description,
+                                      const SandstoneCrossCheck::CapturedSlot *expected,
+                                      const SandstoneCrossCheck::CapturedSlot *actual)
+{
+    assert(expected && actual);
+    if (sApp->shmem->cfg.ud_on_failure)
+        ud2();
+    auto *thread = sApp->thread_data(worker);
+    thread->thread_flags |= uint32_t(PerThreadData::Common::Flag::CrossCheckFailure);
+    thread->thread_flags |= uint32_t(PerThreadData::Common::Flag::CrossCheckReporting);
+    auto restore_reporting = scopeExit([&] {
+        thread->thread_flags &= ~uint32_t(PerThreadData::Common::Flag::CrossCheckReporting);
+    });
+    logging_mark_thread_failed_on_cpu(worker, actual->cpu);
+    thread->thread_state.store(thread_failed, std::memory_order_relaxed);
+    if (SandstoneConfig::NoLogging)
+        return;
+
+    // Temporarily set the coordinator's thread_num for formatters and the failure callback.
+    // No worker is live here, and no terminating failure reporter is invoked.
+    int saved_thread = thread_num;
+    thread_num = worker;
+    auto restore_thread = scopeExit([&] { thread_num = saved_thread; });
+    auto formatter = [](const void *token, void *, ptrdiff_t) {
+        return std::string(*static_cast<const std::string_view *>(token));
+    };
+    logging_report_mismatched_data(expected->type,
+            static_cast<const uint8_t *>(actual->storage.get()),
+            static_cast<const uint8_t *>(expected->storage.get()), expected->bytes().size(),
+            SandstoneDataDetails::memcmp_offset(actual->storage.get(), expected->storage.get(),
+                          expected->bytes().size(), expected->type), formatter, &description, nullptr);
+}
+
 void log_thread_context(const char *fmt, ...)
 {
     log_thread_context(va_start_and_stdprintf(fmt));
@@ -1744,8 +1790,16 @@ inline AbstractLogger::AbstractLogger(const struct test *test, std::span<const C
         break;
 
     case TestResult::Failed:
-        // test's test_init() failed. That's usually not supposed to happen...
-        return;
+        // Deferred comparisons may fail init or workers after successful execution.
+        {
+            bool workers_started = false;
+            for_each_test_thread([&](PerThreadData::Test *data, int) {
+                workers_started |= data->thread_state.load(std::memory_order_relaxed) != thread_not_started;
+            }, slices.size());
+            if (!workers_started)
+                return;
+        }
+        break;
 
     case TestResult::TimedOut:
         // find stuck threads and insert error message
@@ -1892,6 +1946,15 @@ bool AbstractLogger::should_print_fail_info() const
     return "unknown error";
 }
 
+static bool crosscheck_has_no_majority(int max_slices)
+{
+    bool result = false;
+    for_each_main_thread([&](PerThreadData::Main *data, int) {
+        result |= bool(data->thread_flags & PerThreadData::Common::Flag::CrossCheckNoMajority);
+    }, max_slices);
+    return result;
+}
+
 /// builds the fail info message (including newline)
 /// returns an empty string if there was no failure
 std::string YamlLogger::fail_info_details()
@@ -1924,6 +1987,8 @@ std::string YamlLogger::fail_info_details()
     result += "  fail: { dev-mask: "; // keep it 3 letters
 #endif
     add_value(fail_mask, '\'');
+    if (crosscheck_has_no_majority(slices.size()))
+        result += ", crosscheck-no-majority: true";
     result += ", time-to-fail: ";
     add_value(time, '\0');
     result += ", seed: ";
@@ -2451,6 +2516,13 @@ void YamlLogger::print_tests_header(TestHeaderTime mode)
 /// and returns the effective test result
 TestResult logging_print_results(std::span<const ChildExitStatus> status, const struct test *test)
 {
+#if !SANDSTONE_LOGGING_YAML_ONLY
+    if ((current_output_format() == SandstoneApplication::OutputFormat::key_value
+         || current_output_format() == SandstoneApplication::OutputFormat::tap)
+            && crosscheck_has_no_majority(status.size()))
+        logging_printf(LOG_LEVEL_QUIET, "# Cross-check no strict majority: conflicting owners are suspects; "
+                       "failure mask includes inconclusive attribution.\n");
+#endif
     switch (current_output_format()) {
 #if SANDSTONE_LOGGING_YAML_ONLY
     // only YAML logging supported (or none at all)

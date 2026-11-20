@@ -414,6 +414,93 @@ selftest_pass() {
     test_yaml_regexp "/tests/0/test" selftest_preinit
 }
 
+@test "selftest_crosscheck_input all pass" {
+    local tests=($($SANDSTONE --selftests --list-tests |
+                      sed -n 's/\r$//; /^selftest_crosscheck_input_.*_pass$/p'))
+    [[ ${#tests[@]} -gt 0 ]]
+    declare -A yamldump
+    local test
+    for test in "${tests[@]}"; do
+        sandstone_selftest -e "$test"
+        [[ "$status" -eq 0 ]]
+        test_yaml_regexp "/exit" pass
+        test_yaml_regexp "/tests/0/test" "$test"
+        test_yaml_regexp "/tests/0/result" pass
+    done
+}
+
+@test "selftest_crosscheck_input resets between no-fork passes" {
+    declare -A yamldump
+    sandstone_selftest -fno -e selftest_crosscheck_input_containers_pass \
+        -e selftest_crosscheck_input_long_double_pass -e selftest_crosscheck_input_c_pass \
+        -e selftest_crosscheck_input_containers_pass -e selftest_crosscheck_input_long_double_pass \
+        -e selftest_crosscheck_input_c_pass
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp "/exit" pass
+    test_yaml_numeric "/tests@len" 'value == 6'
+    local i
+    for ((i = 0; i < 6; ++i)); do
+        test_yaml_regexp "/tests/$i/result" pass
+    done
+}
+
+@test "selftest_crosscheck_input duplicate is invalid" {
+    declare -A yamldump
+    sandstone_selftest -n1 -fexec --ignore-os-errors -e selftest_crosscheck_input_duplicate
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result crash
+    test_yaml_expr /tests/0/threads/0/messages/0/text = \
+        'E> Cross-check invalid execution: input name already set in this attempt'
+}
+
+@test "selftest_crosscheck_input early init exits release no-fork storage" {
+    declare -A yamldump
+    sandstone_selftest -fno -e selftest_crosscheck_input_skip_init \
+        -e selftest_crosscheck_input_containers_pass -e selftest_crosscheck_input_error_init \
+        -e selftest_crosscheck_input_containers_pass
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 4'
+    test_yaml_regexp "/tests/0/result" skip
+    test_yaml_regexp "/tests/1/result" pass
+    test_yaml_regexp "/tests/2/result" fail
+    test_yaml_regexp "/tests/3/result" pass
+}
+
+@test "selftest_crosscheck_input get in cleanup retains contents" {
+    declare -A yamldump
+    sandstone_selftest -e selftest_crosscheck_input_get_cleanup
+    [[ "$status" -eq 0 ]]
+    test_yaml_regexp /tests/0/result pass
+}
+
+@test "selftest_crosscheck_input setting in run is invalid" {
+    declare -A yamldump
+    sandstone_selftest -n1 -fexec --ignore-os-errors -e selftest_crosscheck_input_set_run
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result crash
+    test_yaml_expr /tests/0/threads/1/messages/0/text = \
+        'E> Cross-check invalid execution: set_input() must be called from test_init()'
+}
+
+@test "selftest_crosscheck_input missing is invalid" {
+    declare -A yamldump
+    sandstone_selftest -n1 -fexec --ignore-os-errors -e selftest_crosscheck_input_missing
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result crash
+    test_yaml_expr /tests/0/threads/1/messages/0/text = \
+        'E> Cross-check invalid execution: input was not set in this attempt'
+}
+
+@test "selftest_crosscheck_input type mismatch is invalid" {
+    declare -A yamldump
+    sandstone_selftest -n1 -fexec --ignore-os-errors -e selftest_crosscheck_input_type_mismatch
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp /tests/0/result crash
+    test_yaml_expr /tests/0/threads/1/messages/0/text = \
+        'E> Cross-check invalid execution: input key has a different element type'
+}
+
 @test "selftest_cxxthrowcatch" {
     # Note: we want to test with the crash handler enabled (--on-crash)
     declare -A yamldump
@@ -662,6 +749,25 @@ lifecycle_fork_modes() {
     done
 }
 
+result_sequence_entry() {
+    local entry=$1 result=$2 iteration=$3 retry=$4
+    test_yaml_regexp "/tests/$entry/test" selftest_result_sequence
+    test_yaml_regexp "/tests/$entry/result" "$result"
+    test_yaml_numeric "/tests/$entry/state/iteration" "value == $iteration"
+    test_yaml_regexp "/tests/$entry/state/retry" "$retry"
+    test_yaml_regexp "/tests/$entry/threads/1/messages/0/text" "I> Retry: ${retry,,}"
+}
+
+result_sequence_fork_modes() {
+    local mode
+    for mode in no yes exec; do
+        if $is_windows && [[ "$mode" == yes ]]; then
+            continue
+        fi
+        "$@" -f "$mode"
+    done
+}
+
 lifecycle_callbacks() {
     declare -A yamldump
     sandstone_selftest -n2 --no-slicing -e selftest_lifecycle -e selftest_lifecycle \
@@ -726,6 +832,78 @@ lifecycle_worker_failure() {
 
 @test "lifecycle: cleanup after worker failure and retries" {
     lifecycle_fork_modes lifecycle_worker_failure
+}
+
+result_sequence_skip_fracture() {
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_result_sequence -t 10s \
+        -O selftest_result_sequence.later=-1 --retest-on-failure=2 --fatal-skips "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 2'
+    result_sequence_entry 0 pass 0 False
+    result_sequence_entry 1 skip 1 False
+}
+
+result_sequence_fail_fracture() {
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_result_sequence -t 10s \
+        -O selftest_result_sequence.later=1 "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 2'
+    result_sequence_entry 0 pass 0 False
+    result_sequence_entry 1 fail 1 False
+}
+
+@test "result sequence: skip after a passing fracture stops immediately" {
+    result_sequence_fork_modes result_sequence_skip_fracture
+}
+
+@test "result sequence: failure after a passing fracture remains failed" {
+    result_sequence_fork_modes result_sequence_fail_fracture
+}
+
+result_sequence_retries() {
+    local retry_result=$1 expected_result=$2
+    shift 2
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_result_sequence \
+        -O selftest_result_sequence.first=1 -O "selftest_result_sequence.retry=$retry_result" \
+        --retest-on-failure=1 --total-retest-on-failure=2 "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    # Nonfailing retries consume the doubled budget without erasing the failure.
+    test_yaml_numeric "/tests@len" 'value == 3'
+    result_sequence_entry 0 fail 0 False
+    result_sequence_entry 1 "$expected_result" 1 True
+    result_sequence_entry 2 "$expected_result" 2 True
+}
+
+@test "result sequence: passing retries preserve failure and consume budget" {
+    result_sequence_fork_modes result_sequence_retries 0 pass
+}
+
+@test "result sequence: skipped retries preserve failure and consume budget" {
+    result_sequence_fork_modes result_sequence_retries -1 skip
+}
+
+result_sequence_reset() {
+    declare -A yamldump
+    sandstone_selftest -n1 --no-slicing -e selftest_result_sequence \
+        -e selftest_result_sequence -O selftest_result_sequence.first=1 \
+        -O selftest_result_sequence.retry=0 --retest-on-failure=1 --total-retest-on-failure=2 "$@"
+    [[ "$status" -eq 1 ]]
+    test_yaml_regexp "/exit" fail
+    test_yaml_numeric "/tests@len" 'value == 4'
+    result_sequence_entry 0 fail 0 False
+    result_sequence_entry 1 pass 1 True
+    result_sequence_entry 2 pass 2 True
+    result_sequence_entry 3 fail 0 False
+}
+
+@test "result sequence: resets the iteration after retries" {
+    result_sequence_fork_modes result_sequence_reset
 }
 
 @test "selftest_timedpass_no_fracture --max-test-loop-count=1" {
