@@ -33,6 +33,7 @@
 #include <sandstone_yaml.h>
 
 #include "gettid.h"
+#include "crosscheck_state.hpp"
 #include "test_data.h"
 #include "topology.h"
 #if SANDSTONE_FREQUENCY_MANAGER
@@ -329,19 +330,21 @@ struct SandstoneApplication : SandstoneApplicationConfig, public test_the_test_d
 
     struct SharedMemory;
 
-    enum class TestPhase { inactive, initializing, running, cleanup };
+    enum class TestPhase { Framework, Init, Run, Cleanup };
 
     // Process-local: only the coordinator writes, before launching or after joining threads.
-    // Phases cover per-attempt callbacks, not preparation, device finishing, or
-    // failure-callback destruction. The current test remains set through all of those.
+    // Framework covers time outside test_init/test_run/test_cleanup, including verification
+    // and failure-callback destruction. The current test remains set throughout the attempt.
     const struct test *current_test = nullptr;
-    TestPhase test_phase = TestPhase::inactive;
+    TestPhase test_phase = TestPhase::Framework;
 
     HardwareInfo hwinfo;
     SlicePlans slice_plans;
     std::vector<test_data_per_thread> user_thread_data;
+    SandstoneCrossCheck::CrossCheckState crosscheck_state;
     PerThreadData::Main *main_thread_data_ptr;  // points to somewhere in the shmem
     PerThreadData::Test *test_thread_data_ptr;  // points to somewhere in the shmem
+    std::atomic_bool *crosscheck_failures; // shared, indexed by selected hardware owner
     SharedMemory *shmem = nullptr;
     int shmemfd = -1;
 
@@ -477,6 +480,7 @@ inline void SandstoneApplication::select_main_thread(int slice)
     assert(current_fork_mode() != ForkMode::no_fork || slice == 0);
     main_thread_data_ptr += slice;
     test_thread_data_ptr += main_thread_data_ptr->thread_range.starting_thread;
+    crosscheck_failures += main_thread_data_ptr->device_range.starting_device;
 }
 
 template <typename Lambda> static void for_each_main_thread(Lambda &&l, int max_slices = INT_MAX)
@@ -672,6 +676,12 @@ void logging_mark_thread_skipped(int thread_num) noexcept;
 void logging_mark_knob_used(std::string_view key, YamlFormatter::SimpleValue value, KnobOrigin origin);
 void logging_cleanup_failure_callback() noexcept;
 void logging_run_callback();
+// Post-join only: hardware failures are recorded separately from this reporting context.
+// Callbacks run on the coordinator using the first submitter's worker identity,
+// not the original worker's TLS or physical CPU context.
+void logging_report_crosscheck_failure(int worker, std::string_view description,
+                                      const SandstoneCrossCheck::CapturedSlot *expected,
+                                      const SandstoneCrossCheck::CapturedSlot *actual);
 void logging_report_mismatched_data(enum DataType type, const uint8_t *actual, const uint8_t *expected,
                                     size_t size, ptrdiff_t offset,
                                     SandstoneMemcmpOrFail::FormatterCallback formatter,

@@ -238,7 +238,9 @@ std::string build_failure_mask_for_topology(const struct test* test)
             // is RootDevice, and first of the root - prepend with ':'
             mask += ':';
         }
-        if (sApp->thread_data(info.gpu())->has_failed()) {
+        auto *data = sApp->test_thread_data(info.gpu());
+        if (sApp->crosscheck_failures[info.gpu()].load(std::memory_order_relaxed)
+                || data->has_non_crosscheck_failure()) {
             totalfailcount++;
             mask += 'X';
         } else {
@@ -540,12 +542,12 @@ void rebuild_topology()
     cached_topology() = build_topology();
 }
 
-void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures)
+void analyze_test_failures_for_topology(const struct test *test, const PerDeviceFailures &per_device_failures)
 {
     bool all_devs_failed_once = true;
     bool all_devs_failed_equally = true;
     int n_failed_devs = 0;
-    PerThreadFailures::value_type last_pattern = 0;
+    PerDeviceFailures::value_type last_pattern = 0;
     logging_printf(LOG_LEVEL_VERBOSE(1), "# Topology analysis:\n");
 
     for (const auto& device : Topology::topology().devices) {
@@ -553,10 +555,10 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
             bool all_subdevs_failed_once = true;
             bool all_subdevs_failed_equally = true;
             int n_failed_subdevs = 0;
-            PerThreadFailures::value_type last_subpattern = 0;
+            PerDeviceFailures::value_type last_subpattern = 0;
 
             for (const auto& subdevice : std::get<Topology::RootDevice>(device)) {
-                const auto& thr_pattern = per_thread_failures[subdevice.gpu()];
+                const auto& thr_pattern = per_device_failures[subdevice.gpu()];
                 if (thr_pattern == 0) {
                     all_subdevs_failed_once = false;
                     all_devs_failed_once = false;
@@ -584,7 +586,7 @@ void analyze_test_failures_for_topology(const struct test *test, const PerThread
                 logging_printf(LOG_LEVEL_VERBOSE(1), "#   - Some tiles failed but some others succeeded\n");
             }
         } else {
-            const auto& thr_pattern = per_thread_failures[std::get<Topology::EndDevice>(device)->gpu()];
+            const auto& thr_pattern = per_device_failures[std::get<Topology::EndDevice>(device)->gpu()];
             if (thr_pattern == 0) {
                 all_devs_failed_once = false;
             } else {

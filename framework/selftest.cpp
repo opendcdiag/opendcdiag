@@ -28,6 +28,8 @@
 #endif
 
 #include "sandstone.h"
+#include "crosscheck.h"
+#include "selftest_crosscheck_outputs.h"
 #ifndef _WIN32
 #include "sandstone_asm.h"
 #include "sandstone_kvm.h"
@@ -35,8 +37,15 @@
 #include "sandstone_p.h"
 #include "topology.h"
 
+#include <algorithm>
+#include <array>
 #include <exception>
+#include <iterator>
+#include <memory>
+#include <span>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #ifdef __x86_64__
 #  include "amx_common.h"
@@ -108,7 +117,7 @@ static void selftest_lifecycle_check(const struct test *test, SandstoneApplicati
 static int selftest_lifecycle_outside(struct test *)
 {
     // postcleanup must not change the result, even if the last attempt failed or skipped.
-    if (current_test() || sApp->test_phase != SandstoneApplication::TestPhase::inactive) {
+    if (current_test() || sApp->test_phase != SandstoneApplication::TestPhase::Framework) {
         log_platform_message(SANDSTONE_LOG_ERROR "Lifecycle still active outside an attempt");
         abort();
     }
@@ -117,11 +126,11 @@ static int selftest_lifecycle_outside(struct test *)
 
 static int selftest_lifecycle_init(struct test *test)
 {
-    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::initializing);
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::Init);
     log_info("Lifecycle init");
     if (!(test->flags & test_init_in_parent)) {
         install_failure_callback(+[](void *) {}, test, +[](void *ptr) {
-            selftest_lifecycle_check(static_cast<struct test *>(ptr), SandstoneApplication::TestPhase::inactive);
+            selftest_lifecycle_check(static_cast<struct test *>(ptr), SandstoneApplication::TestPhase::Framework);
             log_info("Lifecycle callback destroyed");
         });
     }
@@ -138,15 +147,213 @@ static int selftest_lifecycle_init(struct test *test)
 
 static int selftest_lifecycle_run(struct test *test, int)
 {
-    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::running);
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::Run);
     log_info("Lifecycle worker");
     return test->test_init ? int(uintptr_t(test->data)) : EXIT_SUCCESS;
 }
 
 static int selftest_lifecycle_cleanup(struct test *test)
 {
-    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::cleanup);
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::Cleanup);
     log_info("Lifecycle cleanup");
+    return EXIT_SUCCESS;
+}
+
+CROSSCHECK_INPUT(crosscheck_numbers, uint32_t);
+CROSSCHECK_INPUT(crosscheck_weights, uint32_t);
+CROSSCHECK_INPUT(crosscheck_text, char);
+CROSSCHECK_INPUT(crosscheck_flags, bool);
+CROSSCHECK_INPUT(crosscheck_empty, uint32_t);
+CROSSCHECK_INPUT(crosscheck_long_doubles, long double);
+CROSSCHECK_OUTPUT(crosscheck_sum, uint32_t);
+CROSSCHECK_OUTPUT(crosscheck_padded_output, long double);
+static uint32_t crosscheck_input_generation;
+static std::weak_ptr<const void> crosscheck_input_previous_storage;
+
+static uint32_t selftest_crosscheck_input_sum()
+{
+    auto numbers = get_input(crosscheck_numbers);
+    auto weights = get_input(crosscheck_weights);
+    uint32_t sum = 0;
+    for (size_t i = 0; i < numbers.size(); ++i)
+        sum += numbers[i] * weights[i];
+    return sum;
+}
+
+static int selftest_crosscheck_input_containers_check()
+{
+    auto numbers = get_input(crosscheck_numbers);
+    auto weights = get_input(crosscheck_weights);
+    auto text = get_input(crosscheck_text);
+    auto flags = get_input(crosscheck_flags);
+    if (numbers.size() != 3 || weights.size() != 3 || text.size() != 6 || flags.size() != 3
+            || !get_input(crosscheck_empty).empty())
+        report_fail_msg("Cross-check input sizes changed");
+    uint32_t sum = selftest_crosscheck_input_sum();
+    if (sum != crosscheck_input_generation * 2 + 31
+            || std::string(text.begin(), text.end()) != "inputs"
+            || !flags[0] || flags[1] || !flags[2])
+        report_fail_msg("Cross-check inputs did not preserve the captured values");
+#ifdef SANDSTONE_DEVICE_CPU
+    submit_output(crosscheck_sum, &sum, 1, "captured input computation");
+#endif
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_containers_init(struct test *)
+{
+    if (!crosscheck_input_previous_storage.expired())
+        report_fail_msg("Cross-check input storage survived the previous pass");
+    std::vector<uint32_t> numbers = { ++crosscheck_input_generation, 3, 5 };
+    std::array<uint32_t, 3> weights = { 2, 2, 5 };
+    std::string text = "inputs";
+    bool flags[] = { true, false, true };
+    set_input(crosscheck_numbers, numbers, "Owned vector snapshot");
+    set_input(crosscheck_weights, std::span<const uint32_t>(weights));
+    set_input(crosscheck_text, text);
+    set_input(crosscheck_flags, flags, std::size(flags), "Boolean array");
+    set_input(crosscheck_empty, static_cast<const uint32_t *>(nullptr), 0);
+    crosscheck_input_previous_storage = sApp->crosscheck_state.inputs.at(crosscheck_numbers.name).storage;
+    std::fill(numbers.begin(), numbers.end(), 0);
+    weights.fill(0);
+    text.assign(text.size(), '?');
+    std::fill(std::begin(flags), std::end(flags), false);
+    return selftest_crosscheck_input_containers_check();
+}
+
+static int selftest_crosscheck_input_containers_run(struct test *, int)
+{
+    return selftest_crosscheck_input_containers_check();
+}
+
+static int selftest_crosscheck_input_containers_cleanup(struct test *)
+{
+    if (crosscheck_input_previous_storage.expired())
+        report_fail_msg("Cross-check input storage was released before cleanup");
+    auto numbers = get_input(crosscheck_numbers);
+    auto weights = get_input(crosscheck_weights);
+    if (numbers.size() != 3 || weights.size() != 3
+            || numbers[0] != crosscheck_input_generation || numbers[1] != 3 || numbers[2] != 5
+            || weights[0] != 2 || weights[1] != 2 || weights[2] != 5
+            || selftest_crosscheck_input_sum() != crosscheck_input_generation * 2 + 31)
+        report_fail_msg("Cleanup input contents changed");
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_skip_init(struct test *test)
+{
+    selftest_crosscheck_input_containers_init(test);
+    log_skip(SelftestSkipCategory, "Skip after capturing cross-check inputs");
+    return EXIT_SKIP;
+}
+
+static int selftest_crosscheck_input_error_init(struct test *test)
+{
+    selftest_crosscheck_input_containers_init(test);
+    return 1;
+}
+
+static int selftest_crosscheck_parent_init(struct test *test)
+{
+    uint32_t value = 42;
+    auto api = get_testspecific_knob_value_int(test, "api", 3);
+    if (api == 0 || api == 3)
+        set_input(crosscheck_numbers, &value, 1);
+    if (api == 1 || api == 3) {
+        auto input = get_input(crosscheck_numbers);
+        if (input.size() != 1 || input[0] != value)
+            report_fail_msg("Parent no-fork input contents changed");
+    }
+    if (api == 2 || api == 3) {
+        if (sApp->current_fork_mode() == SandstoneApplication::ForkMode::no_fork) {
+#ifdef SANDSTONE_DEVICE_CPU
+            if (!pin_to_logical_processor(LogicalProcessor(device_info[0].cpu_number))) {
+                log_skip(SelftestSkipCategory, "Cannot pin parent no-fork output fixture");
+                return EXIT_SKIP;
+            }
+#else
+            log_skip(SelftestSkipCategory, "Parent output fixture requires a CPU build");
+            return EXIT_SKIP;
+#endif
+        }
+        submit_output(crosscheck_sum, &value, 1, "parent no-fork output");
+    }
+    if (test->flags & test_init_in_parent) {
+        log_skip(SelftestSkipCategory, "parent init completed");
+        return EXIT_SKIP;
+    }
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_long_double_check()
+{
+    auto values = get_input(crosscheck_long_doubles);
+    if (values.size() != 2 || values[0] != 1.25L || values[1] != -2.5L)
+        report_fail_msg("Cross-check long double values changed");
+    constexpr size_t real_size = SandstoneDataDetails::type_real_size(SANDSTONE_LONG_DOUBLE_TYPE);
+    for (const long double &value : values) {
+        auto bytes = reinterpret_cast<const unsigned char *>(&value);
+        for (size_t i = real_size; i < sizeof(value); ++i) {
+            if (bytes[i] != 0)
+                report_fail_msg("Cross-check long double padding was not normalized");
+        }
+    }
+#ifdef SANDSTONE_DEVICE_CPU
+    submit_output(crosscheck_padded_output, values, "captured padded input");
+#endif
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_long_double_init(struct test *)
+{
+    long double values[] = { 1.25L, -2.5L };
+    constexpr size_t real_size = SandstoneDataDetails::type_real_size(SANDSTONE_LONG_DOUBLE_TYPE);
+    for (long double &value : values)
+        memset(reinterpret_cast<unsigned char *>(&value) + real_size, 0xa5,
+               sizeof(value) - real_size);
+    set_input(crosscheck_long_doubles, values);
+    memset(values, 0, sizeof(values));
+    return selftest_crosscheck_input_long_double_check();
+}
+
+static int selftest_crosscheck_input_long_double_run(struct test *, int)
+{
+    return selftest_crosscheck_input_long_double_check();
+}
+
+static int selftest_crosscheck_input_duplicate_init(struct test *)
+{
+    const uint32_t value = 42;
+    set_input(crosscheck_numbers, &value, 1);
+    set_input(crosscheck_numbers, &value, 1);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_set_run(struct test *, int)
+{
+    const uint32_t value = 42;
+    set_input(crosscheck_numbers, &value, 1);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_missing_run(struct test *, int)
+{
+    (void)get_input(crosscheck_numbers);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_type_mismatch_init(struct test *)
+{
+    CROSSCHECK_INPUT(shared, bool);
+    const bool value = true;
+    set_input(shared, &value, 1);
+    return EXIT_SUCCESS;
+}
+
+static int selftest_crosscheck_input_type_mismatch_run(struct test *, int)
+{
+    CROSSCHECK_INPUT(shared, uint8_t);
+    (void)get_input(shared);
     return EXIT_SUCCESS;
 }
 
@@ -567,7 +774,7 @@ template <int PackageId> static int selftest_log_skip_socket_run(struct test *te
 
 static int selftest_result_sequence_init(struct test *test)
 {
-    const char *knob = sApp->shmem->current_iteration_count < 0 ? "retry" :
+    [[maybe_unused]] const char *knob = sApp->shmem->current_iteration_count < 0 ? "retry" :
                        sApp->shmem->current_iteration_count == 0 ? "first" : "later";
     selftest_run_result = get_testspecific_knob_value_int(test, knob,
                             sApp->shmem->current_iteration_count > 0 ? EXIT_SKIP : EXIT_SUCCESS);
@@ -1652,6 +1859,23 @@ const test_group group_test_hw_features = {
 };
 #endif
 
+DECLARE_SELFTEST(selftest_crosscheck_parent, "Checks cross-check API process isolation for test_in_parent")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_parent_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_in_parent,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_init_parent, "Checks cross-check API process isolation for test_init_in_parent")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_parent_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+    .flags = test_init_in_parent,
+END_DECLARE_TEST
+
 DECLARE_SELFTEST(selftest_pass, "Just pass")
     .groups = DECLARE_TEST_GROUPS(&group_positive, &group_selftest_passes),
     .test_init = selftest_init_installcallback,
@@ -2133,6 +2357,29 @@ DECLARE_SELFTEST(kvm_real_setup_check, "Checks the setup and check handlers are 
 END_DECLARE_TEST
 #endif // __linux__
 
+DECLARE_SELFTEST(selftest_crosscheck_input_skip_init, "Releases cross-check inputs after test_init() skips")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_crosscheck_input_skip_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_containers_pass, "Cross-check inputs own container snapshots in test_init() and test_run()")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_crosscheck_input_containers_init,
+    .test_run = selftest_crosscheck_input_containers_run,
+    .test_cleanup = selftest_crosscheck_input_containers_cleanup,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_long_double_pass, "Cross-check inputs normalize long double padding")
+    .groups = DECLARE_TEST_GROUPS(&group_positive),
+    .test_init = selftest_crosscheck_input_long_double_init,
+    .test_run = selftest_crosscheck_input_long_double_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+
     /* Randomly failing tests */
 
 DECLARE_SELFTEST(selftest_randomfail_50pct, "Fails about 50% of the time, randomly")
@@ -2219,6 +2466,40 @@ DECLARE_SELFTEST(selftest_sigsegv_socket1, "Crashes with SIGSEGV (data) derefere
 END_DECLARE_TEST
 
     /* Negative tests */
+
+DECLARE_SELFTEST(selftest_crosscheck_input_error_init, "Releases cross-check inputs after test_init() errors")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_input_error_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_duplicate, "Rejects duplicate cross-check input setting")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_input_duplicate_init,
+    .test_run = selftest_pass_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_set_run, "Rejects cross-check input setting outside test_init()")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crosscheck_input_set_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_missing, "Rejects missing cross-check input lookup")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_run = selftest_crosscheck_input_missing_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
+DECLARE_SELFTEST(selftest_crosscheck_input_type_mismatch, "Rejects different cross-check tag types with the same name and DataType")
+    .groups = DECLARE_TEST_GROUPS(&group_negative),
+    .test_init = selftest_crosscheck_input_type_mismatch_init,
+    .test_run = selftest_crosscheck_input_type_mismatch_run,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+END_DECLARE_TEST
 
 DECLARE_SELFTEST(selftest_failinit, "Fails in the init function")
     .groups = DECLARE_TEST_GROUPS(&group_negative),
