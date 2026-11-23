@@ -326,6 +326,19 @@ TEST(PrepareTestForDevice, UnsupportedOperationSkips)
     EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Skipped);
 }
 
+TEST(PrepareTestForDevice, OperationNotSupportedByOpConfigSkips)
+{
+    PrepareTestFixture fixture;
+    auto& device = topo_global.devices[0];
+    auto& op_cap_bits = device.op_cap.bits;
+    op_cap_bits[std::size(op_cap_bits) - 1 - IDXD_OPCODE_MEMMOVE / 32] |=
+        1u << (IDXD_OPCODE_MEMMOVE % 32);
+    device.groups[0].wqs[0].op_config = accfg_op_config{};
+    fixture.test.minimum_cpu = device_feature_op_memmove;
+
+    EXPECT_EQ(prepare_test_for_device(&fixture.test), TestResult::Skipped);
+}
+
 TEST(PrepareTestForDevice, UndefinedFeatureBitsAssert)
 {
     PrepareTestFixture fixture;

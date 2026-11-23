@@ -86,16 +86,17 @@ inline int wq_info_t::wq() const
     return this - ::device_info;
 }
 
-inline bool has_opcode(const accfg_op_cap& op_cap, unsigned opcode)
+template <typename Capability>
+inline bool has_opcode(const Capability& cap, unsigned opcode)
 {
-    constexpr unsigned words = sizeof(op_cap.bits) / sizeof(op_cap.bits[0]);
+    constexpr unsigned words = sizeof(cap.bits) / sizeof(cap.bits[0]);
     const unsigned idx = opcode / 32;
     const unsigned bit = opcode % 32;
     if (idx >= words) {
         return false;
     }
     // libaccel-config stores the sysfs op_cap words in text order: bits[0] is the most significant
-    return (op_cap.bits[words - 1 - idx] & (1u << bit)) != 0;
+    return (cap.bits[words - 1 - idx] & (1u << bit)) != 0;
 }
 
 bool has_opcode(const wq_info_t& info, unsigned opcode);
