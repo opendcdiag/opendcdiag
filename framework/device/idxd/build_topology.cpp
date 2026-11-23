@@ -32,7 +32,10 @@ void append_topo_group(Topology::Group& group, accfg_wq* wq_handle, const wq_inf
     wq.max_batch_size = accfg_wq_get_max_batch_size(wq_handle);
     wq.size = accfg_wq_get_size(wq_handle);
 
-    accfg_wq_get_op_config(wq_handle, &wq.op_config);
+    accfg_op_config op_config = {};
+    if (accfg_wq_get_op_config(wq_handle, &op_config) == 0) {
+        wq.op_config = op_config;
+    }
 
     if (int v = accfg_wq_get_threshold(wq_handle); wq.mode == ACCFG_WQ_SHARED && v >= 0) {
         wq.threshold = v;
@@ -269,9 +272,12 @@ bool has_feature(const wq_info_t& info, device_features_t features)
         return false;
     }
 
-    const accfg_op_cap& op_cap = Topology::topology().work_queue(info).this_device->op_cap;
+    const auto& wq = Topology::topology().work_queue(info);
     return std::ranges::all_of(features_to_opcodes(features, info.dev_type),
-                               [&op_cap](unsigned opcode) { return has_opcode(op_cap, opcode); });
+                               [&wq](unsigned opcode) {
+                                   return has_opcode(wq.this_device->op_cap, opcode) &&
+                                           (!wq.op_config || has_opcode(*wq.op_config, opcode));
+                               });
 }
 
 

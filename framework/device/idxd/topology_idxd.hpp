@@ -96,7 +96,7 @@ public:
         std::optional<bool> ats_disable;
         std::optional<bool> prs_disable;
 
-        accfg_op_config op_config = {}; // for effective op check: this_device->op_cap[i] & op_config[i]
+        std::optional<accfg_op_config> op_config;
 
         // this variable is derived from others, not set manually (ENABLED state + USER mode)
         bool targetable = false;

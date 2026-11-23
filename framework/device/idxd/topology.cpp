@@ -354,7 +354,10 @@ extern "C" bool idxd_wq_block_on_fault(const wq_info_t* info)
 
 extern "C" bool idxd_wq_has_opcode(const wq_info_t* info, unsigned opcode)
 {
-    return topology_wq(info).targetable && has_opcode(*info, opcode);
+    const auto& wq = topology_wq(info);
+    return wq.targetable
+        && (!wq.op_config || has_opcode(*wq.op_config, opcode))
+        && has_opcode(wq.this_device->op_cap, opcode);
 }
 
 extern "C" bool idxd_wq_is_shared(const wq_info_t* info)
