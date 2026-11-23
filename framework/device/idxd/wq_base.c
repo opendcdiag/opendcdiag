@@ -50,6 +50,7 @@ int wq_open_nolog(struct idxd_wq_handle_t* handle, const struct wq_info_t* info)
     handle->completion = NULL;
     handle->completion_addr = NULL;
     handle->completion_phys = 0;
+    handle->page_faults = 0;
 
     return 0;
 }

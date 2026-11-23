@@ -20,6 +20,7 @@ struct idxd_wq_handle_t
     void* completion;
     const void* completion_addr;
     uintptr_t completion_phys;
+    uint64_t page_faults;
 };
 typedef struct idxd_wq_handle_t idxd_wq_handle_t;
 
