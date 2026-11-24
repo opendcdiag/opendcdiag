@@ -115,8 +115,12 @@ Topology build_topology(accfg_ctx* ctx)
             it->id = info->device_id;
             it->dev_type = info->dev_type;
             it->dev_version = info->dev_version;
-            if (!ctx)
+            if (!ctx) {
+                // can't read anything else without ctx, just proceed
+                it->wqs.emplace_back(info);
+                info++;
                 continue;
+            }
 
             auto device_handle = accfg_ctx_device_get_by_id(ctx, it->id);
             assert(device_handle != nullptr);
