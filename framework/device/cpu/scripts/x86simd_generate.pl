@@ -36,6 +36,7 @@ open(FH, '<', $input_conf_file) or die $!;
 my $i = 0;
 my @features;
 my %feature_ids;
+my %aliases;
 my $feature_type = "uint64_t";
 my @architecture_names;
 my %architectures;
@@ -66,7 +67,7 @@ while (<FH>) {
         my @extrafeatures;
         @basefeatures = @{$architectures{$based}->{allfeatures}} if $based ne "<>";
         @extrafeatures = @{$architectures{$arch}{features}} if defined($architectures{$arch});
-        @extrafeatures = (@extrafeatures, split(',', $f));
+        @extrafeatures = (@extrafeatures, map { $aliases{$_} ? $aliases{$_}->{target} : $_ } split(',', $f));
         my @allfeatures = sort { $feature_ids{$a} <=> $feature_ids{$b} } (@basefeatures, @extrafeatures);
 
         $architectures{$arch} = {
@@ -80,6 +81,16 @@ while (<FH>) {
         };
         push @architecture_names, $arch
             unless grep {$_ eq $arch} @architecture_names;
+    } elsif (s/^alias=//) {
+        my ($name, $target) = split /\s+/;
+        die("Alias \"$name\" refers to unknown feature \"$target\"")
+            unless defined $feature_ids{$target};
+        die("Alias \"$name\" conflicts with an existing feature or alias")
+            if defined $feature_ids{$name} || defined $aliases{$name};
+
+        my $id = uc($name);
+        $id =~ s/[^A-Z0-9_]/_/g;
+        $aliases{$name} = { name => $name, id => $id, target => $target, comment => $comment };
     } elsif (s/^xsave=//) {
         my ($name, $value, $required) = split /\s+/;
         $required =~ s/[^a-z0-9_,]/_/g;
@@ -143,6 +154,13 @@ for (my $i = 0; $i < scalar @features; ++$i) {
 
     # Feature
     printf "#define cpu_feature_%-31s (CPU_FEATURE_CONSTANT(%d))\n", lc($feature->{id}), $i;
+}
+
+# Print the aliases (same bit as the feature they refer to)
+for my $name (sort keys %aliases) {
+    my $alias = $aliases{$name};
+    my $target = $features[$feature_ids{$alias->{target}}];
+    printf "#define cpu_feature_%-31s cpu_feature_%s\n", lc($alias->{id}), lc($target->{id});
 }
 
 # Print the architecture list
@@ -211,6 +229,16 @@ for (my $i = 0; $i < scalar @features; ++$i) {
         $feature->{id}, lc($feature->{id});
 }
 
+for my $name (sort keys %aliases) {
+    my $alias = $aliases{$name};
+    my $target = $features[$feature_ids{$alias->{target}}];
+    printf
+        "#ifdef __%s__\n" .
+        "         | cpu_feature_%s\n" .
+        "#endif\n",
+        $alias->{id}, lc($target->{id});
+}
+
 print '        ;';
 if ($headerguard ne "") {
     print q|
@@ -221,6 +249,16 @@ enum X86CpuFeatures : device_features_t {|;
         my $line = sprintf "CpuFeature%s = cpu_feature_%s,", $_->{id}, lc($_->{id});
         if ($_->{comment} ne "") {
             printf "    %-56s ///< %s\n", $line, $_->{comment};
+        } else {
+            print "    $line";
+        }
+    }
+
+    for my $name (sort keys %aliases) {
+        my $alias = $aliases{$name};
+        my $line = sprintf "CpuFeature%s = cpu_feature_%s,", $alias->{id}, lc($alias->{id});
+        if ($alias->{comment} ne "") {
+            printf "    %-56s ///< %s\n", $line, $alias->{comment};
         } else {
             print "    $line";
         }
