@@ -1348,7 +1348,7 @@ struct ProgramOptionsParser {
         return EXIT_SUCCESS;
     }
 
-    bool validate_thread_ratio(std::string str_value, ThreadRatio& thread_ratio, const int device_count) {
+    bool validate_thread_ratio(const std::string &str_value, ThreadRatio& thread_ratio, const int device_count) {
         bool isValid = false;
         char *end = nullptr;
         if (str_value.starts_with('-')) {
