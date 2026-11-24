@@ -803,8 +803,9 @@ static inline void memcmp_or_fail(const T &actual, const T &expected)
 /// single repeated value (e.g. a fill/eviction marker) instead of a golden
 /// reference array. Additional overloads for other pattern types can be added
 /// by calling this template directly.
-template <ValidDataType T, FormatterFunction Fn>
-static inline void memcmp_pattern_or_fail(const T *actual, T pattern, size_t count, Fn formatter)
+template <ValidDataType T, typename TesterFn, typename ReportFailureFn>
+static inline void memcmp_pattern_or_fail_common(const T *actual, T pattern, size_t count,
+                                                 TesterFn tester_fn, ReportFailureFn report_failure_fn)
 {
     constexpr DataType type = TypeToDataType<T>::Type;
     size_t elem_size = sizeof(T);
@@ -816,20 +817,30 @@ static inline void memcmp_pattern_or_fail(const T *actual, T pattern, size_t cou
             || (memcmp_equal<type>(actual, &pattern, elem_size)
                 && (count == 1 || memcmp_equal<type>(actual, actual + 1, (count - 1) * elem_size)));
     if (matches) [[likely]] {
-        if constexpr (!std::is_null_pointer_v<Fn>)
-            assert(test_formatter(formatter, count));
+        tester_fn();
         return;
     }
 
     // mismatch found: build a reference buffer so the existing reporting/logging code,
     // which diffs two equally-sized buffers, can be reused unchanged
-    std::vector<T> expected(count);
+    auto expected = std::make_unique<T[]>(count);
     for (size_t i = 0; i < count; ++i)
         memcpy(&expected[i], &pattern, elem_size);
 
-    auto [cb, token] = make_formatter_cb(formatter);
-    report(actual, expected.data(), count * elem_size, type, cb, token);
-    __builtin_unreachable();
+    report_failure_fn(expected.get());
+}
+
+template <ValidDataType T, FormatterFunction Fn>
+static inline void memcmp_pattern_or_fail(const T *actual, T pattern, size_t count, Fn formatter)
+{
+    constexpr DataType type = TypeToDataType<T>::Type;
+    memcmp_pattern_or_fail_common(actual, pattern, count, [&] {
+        if constexpr (!std::is_null_pointer_v<Fn>)
+            assert(test_formatter(formatter, count));
+    }, [&](const T *expected) {
+        auto [cb, token] = make_formatter_cb(formatter);
+        report(actual, expected, count * sizeof(T), type, cb, token);
+    });
 }
 
 template <ValidDataType T> static inline void
@@ -860,6 +871,23 @@ using SandstoneMemcmpOrFail::memcmp_byte_or_fail;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
+template <SandstoneDataDetails::ValidDataType T, typename... FmtArgs>
+static inline void memcmp_pattern_or_fail(const T *actual, T pattern, size_t count, const char *fmt, FmtArgs &&... args)
+{
+    if (SandstoneConfig::NoLogging)
+        fmt = nullptr;
+
+    if (!fmt)
+        return memcmp_pattern_or_fail(actual, pattern, count);
+
+    constexpr DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
+    SandstoneMemcmpOrFail::memcmp_pattern_or_fail_common(actual, pattern, count, [&] {
+        assert(_memcmp_or_fail_check_fmt(fmt, std::forward<FmtArgs>(args)...));
+    }, [&](const T *expected) {
+        _memcmp_fail_report(actual, expected, count * sizeof(T), type, fmt, std::forward<FmtArgs>(args)...);
+    });
+}
+
 /// compares the arrays actual and expected, both of which are expected to have count elements,
 /// and fails the test if the two arrays are not equal.  In the case of a mismatch the calling
 /// thread will exit and diagnostic information will be output to the logs to indicate the
@@ -886,6 +914,12 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
     assert(_memcmp_or_fail_check_fmt(fmt, std::forward<FmtArgs>(args)...));
 }
 #pragma GCC diagnostic pop
+
+template <typename... FmtArgs>
+static inline void memcmp_byte_or_fail(const void *actual, uint8_t pattern, size_t count, const char *fmt, FmtArgs &&... args)
+{
+    memcmp_pattern_or_fail(static_cast<const uint8_t *>(actual), pattern, count, fmt, std::forward<FmtArgs>(args)...);
+}
 
 #else
 #define memcmp_fail_report(actual, expected, size, fmt, ...)        \
