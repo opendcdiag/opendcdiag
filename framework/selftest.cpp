@@ -108,7 +108,7 @@ static void selftest_lifecycle_check(const struct test *test, SandstoneApplicati
 static int selftest_lifecycle_outside(struct test *)
 {
     // postcleanup must not change the result, even if the last attempt failed or skipped.
-    if (current_test() || sApp->test_phase != SandstoneApplication::TestPhase::inactive) {
+    if (current_test() || sApp->test_phase != SandstoneApplication::TestPhase::Framework) {
         log_platform_message(SANDSTONE_LOG_ERROR "Lifecycle still active outside an attempt");
         abort();
     }
@@ -117,11 +117,11 @@ static int selftest_lifecycle_outside(struct test *)
 
 static int selftest_lifecycle_init(struct test *test)
 {
-    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::initializing);
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::Init);
     log_info("Lifecycle init");
     if (!(test->flags & test_init_in_parent)) {
         install_failure_callback(+[](void *) {}, test, +[](void *ptr) {
-            selftest_lifecycle_check(static_cast<struct test *>(ptr), SandstoneApplication::TestPhase::inactive);
+            selftest_lifecycle_check(static_cast<struct test *>(ptr), SandstoneApplication::TestPhase::Framework);
             log_info("Lifecycle callback destroyed");
         });
     }
@@ -138,14 +138,14 @@ static int selftest_lifecycle_init(struct test *test)
 
 static int selftest_lifecycle_run(struct test *test, int)
 {
-    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::running);
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::Run);
     log_info("Lifecycle worker");
     return test->test_init ? int(uintptr_t(test->data)) : EXIT_SUCCESS;
 }
 
 static int selftest_lifecycle_cleanup(struct test *test)
 {
-    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::cleanup);
+    selftest_lifecycle_check(test, SandstoneApplication::TestPhase::Cleanup);
     log_info("Lifecycle cleanup");
     return EXIT_SUCCESS;
 }
