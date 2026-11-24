@@ -521,7 +521,9 @@ struct Pipe
     Pipe()                      { open(); }
     Pipe(DontCreateFlag)        { }
     ~Pipe()                     { close_input(); close_output(); }
+    Pipe(Pipe &&) = delete;
     Pipe(const Pipe &) = delete;
+    Pipe &operator=(Pipe &&) = delete;
     Pipe &operator=(const Pipe &) = delete;
     Pipe(Pipe &&other)
     {
