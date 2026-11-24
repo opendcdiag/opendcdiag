@@ -1290,7 +1290,10 @@ static StartedChild call_forkfd()
         pid_t parentpid = getpid();
         int efdpid = eventfd(0, EFD_CLOEXEC);
         int efdpoll = eventfd(0, EFD_CLOEXEC);
-        assert(efdpid != -1);
+        if (efdpid < 0 || efdpoll < 0) [[unlikely]] {
+            perror("eventfd");
+            exit(EX_OSERR);
+        }
 
         int ffd = forkfd(FFD_CLOEXEC, &pid);
 
