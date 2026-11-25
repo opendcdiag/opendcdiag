@@ -523,13 +523,13 @@ struct Pipe
     ~Pipe()                     { close_input(); close_output(); }
     Pipe(const Pipe &) = delete;
     Pipe &operator=(const Pipe &) = delete;
-    Pipe(Pipe &&other)
+    Pipe(Pipe &&other) noexcept
     {
         fds[0] = other.fds[0];
         fds[1] = other.fds[1];
         other.fds[0] = other.fds[1] = -1;
     }
-    Pipe &operator=(Pipe &&other)
+    Pipe &operator=(Pipe &&other) noexcept
     {
         close_input();
         close_output();
