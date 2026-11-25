@@ -921,7 +921,10 @@ memcmp_or_fail(const T *actual, const T *expected, size_t count, const char *fmt
         if (__builtin_expect(!SANDSTONE_MEMCMP_EQUAL(_actual, _expected, _size), 0)) \
             _memcmp_fail_report_cb(_actual, _expected, _size, _type,\
                                    cb, token);                      \
+        _Pragma("GCC diagnostic push")                              \
+        _Pragma("GCC diagnostic ignored \"-Waddress\"")             \
         assert(!cb || _memcmp_fail_check_cb(cb, token, size));      \
+        _Pragma("GCC diagnostic pop")                               \
     })
 #define memcmp_or_fail_cb(actual, expected, size, cb, token)        \
     _memcmp_or_fail_cb((actual), (expected), (size), (cb), (token))
