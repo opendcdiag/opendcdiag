@@ -30,8 +30,7 @@
 
 using namespace Eigen;
 
-typedef Matrix < double, Dynamic, Dynamic > Mat;
-typedef Eigen::BDCSVD < Mat > SVD;
+using SVD = BDCSVD<Matrix<double, Dynamic, Dynamic>, ComputeFullU | ComputeFullV>;
 
 #define M_DIM 256
 

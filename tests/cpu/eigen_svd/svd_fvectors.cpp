@@ -33,8 +33,9 @@
 #include "fp_vectors/static_vectors.h"
 
 using namespace Eigen;
-typedef Matrix < float, Dynamic, Dynamic > Mat;
-typedef Eigen::BDCSVD < Mat > SVD;
+
+using Mat = Matrix<float, Dynamic, Dynamic>;
+using SVD = BDCSVD<Mat, ComputeFullU | ComputeFullV>;
 
 #define M_DIM 512
 
