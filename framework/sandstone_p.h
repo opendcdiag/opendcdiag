@@ -593,6 +593,10 @@ struct ScopedValueRollback
         requires std::assignable_from<T &, X> && std::assignable_from<T &, O>
         : var(var = std::forward<X>(newval)), oldval(std::move(oldval))
     {}
+    ScopedValueRollback(ScopedValueRollback &&) = delete;
+    ScopedValueRollback(const ScopedValueRollback &) = delete;
+    ScopedValueRollback &operator=(ScopedValueRollback &&) = delete;
+    ScopedValueRollback &operator=(const ScopedValueRollback &) = delete;
     ~ScopedValueRollback()
     {
         var = std::move(oldval);
