@@ -84,7 +84,7 @@ enum {
     retest_on_failure_option,
     reschedule_option,
     schedule_by_option,
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(SANDSTONE_DEVICE_GPU)
     sde_trace_option,
 #endif
 #ifndef NO_SELF_TESTS
@@ -184,7 +184,7 @@ static struct option long_options[]  = {
     { "reschedule", required_argument, nullptr, reschedule_option },
     { "rng-state", required_argument, nullptr, 's' },
     { "schedule-by", required_argument, nullptr, schedule_by_option },
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(SANDSTONE_DEVICE_GPU)
     { "sde-trace", required_argument, nullptr, sde_trace_option },
 #endif
 #ifndef NO_SELF_TESTS
@@ -508,7 +508,7 @@ struct ProgramOptionsParser {
             case disable_option:
             case 'e':
             case 'O':
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(SANDSTONE_DEVICE_GPU)
             case sde_trace_option:
 #endif
 #if SANDSTONE_ULOG
@@ -943,7 +943,7 @@ struct ProgramOptionsParser {
         if (auto comm = string_opt_for(gdb_server_option))
             app_cfg->exec_wrapper = { "gdbserver", "--no-startup-with-shell", comm };
 #endif
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(SANDSTONE_DEVICE_GPU)
         if (auto it = opts_map.find(sde_trace_option); it != opts_map.end()) {
             if (app_cfg->exec_wrapper.size()) {
                 fprintf(ERR_STREAM, "%s: --sde-trace is incompatible with other executable "
