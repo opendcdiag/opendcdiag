@@ -182,10 +182,6 @@ static device_features_t detect_cpu()
         __cpuid_count(0x1d, 2, eax, ebx, ecx, edx);
 
         int acever __attribute__((unused)) = eax & 0xff;
-#ifdef cpu_feature_ace1
-        if (acever >= 1)
-            features |= cpu_feature_ace1;
-#endif
 #ifdef cpu_feature_ace2
         if (acever >= 2)
             features |= cpu_feature_ace2;
