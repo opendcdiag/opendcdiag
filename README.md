@@ -96,6 +96,11 @@ of Conduct, both in letter and in spirit.
 
 [coc]: CODE_OF_CONDUCT.md
 
+## Running tests
+
+See [Running tests](docs/running_tests.md) for test-list syntax and replaying
+tests with per-entry random seeds.
+
 ## Writing Tests
 
 The OpenDCDiag framework is designed to make the creation of new CPU

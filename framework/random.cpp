@@ -7,6 +7,7 @@
 #include "sandstone_p.h"
 
 #include <algorithm>
+#include <charconv>
 #include <memory>
 #include <new>
 #include <random>
@@ -169,13 +170,13 @@ template <typename E> struct EngineWrapper : public RandomEngineWrapper
 
     void seedGlobalEngine(SeedSequence &sseq) override
     {
-        new (rng_for_thread(-1)->u8) engine_type(*sseq.data());
+        new (per_thread.front().u8) engine_type(*sseq.data());
     }
 
     void seedThread(thread_rng *buffer, uint32_t mixin) override
     {
         // generic version: just XOR the mixin to the global engine's current state
-        thread_rng *global = rng_for_thread(-1);
+        thread_rng *global = &per_thread.front();
         for (size_t i = 0; i < std::size(buffer->u32); ++i)
             buffer->u32[i] = global->u32[i] ^ mixin;
     }
@@ -211,9 +212,9 @@ protected:
         return *reinterpret_cast<E *>(generator->u8);
     }
 
-    static E &globalEngine()
+    E &globalEngine()
     {
-        return engine(rng_for_thread(-1));
+        return engine(&per_thread.front());
     }
 };
 
@@ -334,7 +335,7 @@ template<>
 std::string EngineWrapper<aes_engine>::globalState()
 {
     static const char hexdigits[] = "0123456789abcdef";
-    const uint8_t *state = rng_for_thread(-1)->u8;
+    const uint8_t *state = per_thread.front().u8;
     std::string result;
     result.resize(2 * sizeof(aes_engine::state));
     for (size_t i = 0; i < sizeof(aes_engine::state); ++i) {
@@ -347,7 +348,7 @@ std::string EngineWrapper<aes_engine>::globalState()
 template<>
 void EngineWrapper<aes_engine>::reloadGlobalState(const char *ptr)
 {
-    uint8_t *state = rng_for_thread(-1)->u8;
+    uint8_t *state = per_thread.front().u8;
     for (size_t i = 0; ptr[i]; ++i) {
         unsigned char c = ptr[i];
         // dirty, doesn't check if it's out of range!
@@ -509,6 +510,23 @@ void random_init_global(const char *seed_from_user)
     EngineType engine_type;
     if (fd == -1 && seed_from_user) {
         // not a file (or does not exist), attempt to parse
+        auto result = random_load_seed_checked(seed_from_user);
+        if (result == RandomSeedResult::Success)
+            return;
+        if (result == RandomSeedResult::Unavailable) {
+            fprintf(stderr, "%s: engine type 'AES' not available on this system. Available engines are:\n",
+                    program_invocation_name);
+            listEngines(stderr);
+            exit(EX_USAGE);
+        }
+        std::string_view seed(seed_from_user);
+        auto colon = seed.find(':');
+        if (colon != std::string_view::npos && colon + 1 != seed.size()) {
+            fprintf(stderr, "%s: invalid random engine seed '%s'. Available engines are:\n",
+                    program_invocation_name, seed_from_user);
+            listEngines(stderr);
+            exit(EX_USAGE);
+        }
         engine_type = engineFromName(seed_from_user);
         seed_from_user = strchr(seed_from_user, ':');
         if (seed_from_user)
@@ -539,15 +557,10 @@ void random_init_global(const char *seed_from_user)
         break;
     }
 
-    if (seed_from_user && *seed_from_user) {
-        // use the seed state provided in the command-line
-        sApp->random_engine->reloadGlobalState(seed_from_user);
-    } else {
-        // use a random-generated seed
-        SeedSequence sseq;
-        read_from_seed(sseq);
-        sApp->random_engine->seedGlobalEngine(sseq);
-    }
+    // use a random-generated seed
+    SeedSequence sseq;
+    read_from_seed(sseq);
+    sApp->random_engine->seedGlobalEngine(sseq);
 
     // save the engine state
     sApp->random_engine->saveEngineState();
@@ -559,6 +572,57 @@ std::string random_format_seed()
     result += ':';
     result += sApp->random_engine->globalState();
     return result;
+}
+
+RandomSeedResult random_load_seed_checked(std::string_view seed, bool apply, std::string *canonical)
+{
+    auto colon = seed.find(':');
+    if (colon == std::string_view::npos || colon + 1 == seed.size())
+        return RandomSeedResult::Invalid;
+    auto name = seed.substr(0, colon);
+    auto state = seed.substr(colon + 1);
+    decltype(sApp->random_engine) candidate;
+    std::string serialized_state;
+    if (name == "AES") {
+        if (!haveAes())
+            return RandomSeedResult::Unavailable;
+        if (state.size() != 64 || state.find_first_not_of("0123456789abcdefABCDEF") != std::string_view::npos)
+            return RandomSeedResult::Invalid;
+        serialized_state = state;
+#ifdef RANDOM_HAS_AES
+        static_assert(2 * sizeof(aes_engine::state) == 64);
+        candidate.reset(new EngineWrapper<aes_engine>(AESSequence));
+#endif
+    } else if (name == "Constant" || name == "LCG") {
+        uint32_t value;
+        int base = 10;
+        if (name == "Constant" && state.starts_with("0x")) {
+            base = 16;
+            state.remove_prefix(2);
+        }
+        auto [end, error] = std::from_chars(state.data(), state.data() + state.size(), value, base);
+        if (error != std::errc{} || end != state.data() + state.size())
+            return RandomSeedResult::Invalid;
+        if (name == "Constant") {
+            candidate.reset(new EngineWrapper<constant_value_engine>(Constant));
+        } else {
+            if (value < 1 || value > 0x7ffffffe)
+                return RandomSeedResult::Invalid;
+            candidate.reset(new EngineWrapper<std::minstd_rand>(LCG));
+        }
+        // Constant's stream parser would otherwise interpret leading zeroes as octal.
+        serialized_state = std::to_string(value);
+    } else {
+        return RandomSeedResult::Invalid;
+    }
+    candidate->reloadGlobalState(serialized_state.c_str());
+    if (canonical)
+        *canonical = std::string(name) + ':' + candidate->globalState();
+    if (apply) {
+        candidate->saveEngineState();
+        sApp->random_engine = std::move(candidate);
+    }
+    return RandomSeedResult::Success;
 }
 
 void random_advance_seed() noexcept
