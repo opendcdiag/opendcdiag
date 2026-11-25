@@ -541,7 +541,7 @@ int16_t detect_via_os_internal(const char* name, int cpu)
     }
     auto file = std::format("/sys/devices/system/cpu/cpu{}/topology/{}", cpu, name);
 
-    FILE* fp = fopen(file.c_str(), "r");
+    FILE* fp = fopen(file.c_str(), "re");
     if (!fp) [[unlikely]] {
         fprintf(stderr, "%s: internal error: unable to find %s file: %m\n",
                 program_invocation_name, name);

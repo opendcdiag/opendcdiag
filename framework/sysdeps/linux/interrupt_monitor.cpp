@@ -66,7 +66,7 @@ static const std::vector<int> &parse_header(char *line, ssize_t nread)
 std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
 {
     static_assert(InterruptMonitorWorks);
-    static AutoClosingFile f = { fopen(proc_interrupts_file, "r") };
+    static AutoClosingFile f = { fopen(proc_interrupts_file, "re") };
 
     // Sum both rows for MCE: "MCE:" (raw #MC exceptions -- the fatal/uncorrected
     // path, which usually doesn't survive to be read, except in the rare

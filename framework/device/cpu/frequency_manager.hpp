@@ -46,7 +46,7 @@ private:
     {
         /* Read first line of given file */
         char line[100]; //100 characters should be more than enough
-        AutoClosingFile file(fopen(file_path.data(), "r"));
+        AutoClosingFile file(fopen(file_path.data(), "re"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, file_path.data());
@@ -58,7 +58,7 @@ private:
 
     void write_file(std::string_view file_path, std::string_view line)
     {
-        AutoClosingFile file(fopen(file_path.data(), "w"));
+        AutoClosingFile file(fopen(file_path.data(), "we"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot write \"%s\" to file \"%s\". Make sure the user is root: %m\n", program_invocation_name, line.data(), file_path.data());
@@ -72,7 +72,7 @@ private:
     {
         /* Read frequency value from file */
         int frequency = 0;
-        AutoClosingFile file(fopen(file_path.data(), "r"));
+        AutoClosingFile file(fopen(file_path.data(), "re"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, file_path.data());
@@ -108,7 +108,7 @@ private:
     {
         const char *scaling_governor_path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors";
         char read_file[100];
-        AutoClosingFile file(fopen(scaling_governor_path, "r"));
+        AutoClosingFile file(fopen(scaling_governor_path, "re"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, scaling_governor_path);
@@ -130,7 +130,7 @@ private:
     {
         // check for 0th socket. 0th socket should always be present.
         const char *uncore_path = "/sys/devices/system/cpu/intel_uncore_frequency/package_00_die_00/initial_min_freq_khz";
-        AutoClosingFile file(fopen(uncore_path, "r"));
+        AutoClosingFile file(fopen(uncore_path, "re"));
 
         if (file == nullptr) {
             fprintf(stderr, "%s: cannot read from file: %s. Please check if intel_uncore_frequency directory is present in the file path /sys/devices/system/cpu: %m\n", program_invocation_name, uncore_path);

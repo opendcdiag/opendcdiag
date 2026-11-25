@@ -310,7 +310,7 @@ static auto_fd open_sysfs_cpu_dir(int cpu)
 void TopologyDetector::ProcCpuInfoData::load()
 {
     static const char header[] = "processor\t";
-    AutoClosingFile f{ fopen("/proc/cpuinfo", "r") };
+    AutoClosingFile f{ fopen("/proc/cpuinfo", "re") };
     assert(f.f && "/proc must be mounted for proper operation");
 
     auto &result = *this;
