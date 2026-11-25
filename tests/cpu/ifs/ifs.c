@@ -152,7 +152,7 @@ static int scan_common_init(struct test *test)
         }
 
         /* see if we can open run_test for writing */
-        int run_fd = openat(ifs_fd, "run_test", O_WRONLY);
+        int run_fd = openat(ifs_fd, "run_test", O_WRONLY | O_CLOEXEC);
         int saved_errno = errno;
         if (run_fd < 0) {
                 log_skip(OSResourceIssueSkipCategory, "could not open %s/run_test for writing (not running as root?): %m", ifs_info->sys_dir);
@@ -162,7 +162,7 @@ static int scan_common_init(struct test *test)
         close(run_fd);
 
         /* try open current_batch for writing */
-        int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+        int batch_fd = openat(ifs_fd, "current_batch", O_RDWR | O_CLOEXEC);
         saved_errno = errno;
         if (saved_errno == ENOENT)
         {

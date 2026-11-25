@@ -163,7 +163,7 @@ TEST(IFSLoadImage, PreviousImageNone)
     char sys_path[PATH_MAX];
     IGNORE_RETVAL(snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir));
     int ifs_fd = open_sysfs_ifs_base(sys_path);
-    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR | O_CLOEXEC);
     const char *status_buf = file_contents_by_name(load_test2, "status");
 
     EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
@@ -191,7 +191,7 @@ TEST(IFSLoadImage, PreviousImageCannotBeParsed)
     char sys_path[PATH_MAX];
     IGNORE_RETVAL(snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir));
     int ifs_fd = open_sysfs_ifs_base(sys_path);
-    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR | O_CLOEXEC);
     const char *status_buf = file_contents_by_name(load_test3, "status");
 
     EXPECT_FALSE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
@@ -219,7 +219,7 @@ TEST(IFSLoadImage, PreviousImageUntested)
     char sys_path[PATH_MAX];
     IGNORE_RETVAL(snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir));
     int ifs_fd = open_sysfs_ifs_base(sys_path);
-    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR | O_CLOEXEC);
     const char *status_buf = file_contents_by_name(load_test4, "status");
 
     EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));
@@ -247,7 +247,7 @@ TEST(IFSLoadImage, LoadNextImage)
     char sys_path[PATH_MAX];
     IGNORE_RETVAL(snprintf(sys_path, PATH_MAX, PATH_SYS_IFS_BASE "%s", ifs_info->sys_dir));
     int ifs_fd = open_sysfs_ifs_base(sys_path);
-    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR);
+    int batch_fd = openat(ifs_fd, "current_batch", O_RDWR | O_CLOEXEC);
     const char *status_buf = file_contents_by_name(load_test5, "status");
 
     EXPECT_TRUE(load_test_file(ifs_fd, batch_fd, test_t, ifs_info, status_buf));

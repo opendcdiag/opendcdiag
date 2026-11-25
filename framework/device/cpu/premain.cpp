@@ -86,7 +86,7 @@ static void fallback_exec(char **argv)
     // current user, by root, or by the same user that owns the current
     // executable.
     struct stat st;
-    int fd = open(buf, O_PATH);
+    int fd = open(buf, O_PATH); // NOT O_CLOEXEC, otherwise fexecve fails
     if (fd == -1)
         return;
     if (fstat(fd, &st) == -1)

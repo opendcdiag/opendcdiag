@@ -616,7 +616,7 @@ bool TopologyDetector::detect_cache_via_os(Topology::Thread *info, int cpufd)
 
 bool TopologyDetector::detect_numa()
 {
-    int dfd = open("/sys/devices/system/node", O_RDONLY | O_DIRECTORY);
+    int dfd = open("/sys/devices/system/node", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (dfd < 0)
         return false;
 
