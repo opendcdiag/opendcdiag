@@ -4,6 +4,8 @@
  */
 
 #include "sandstone.h"
+#include "idxd_utils.hpp"
+#include "sandstone_utils.h"
 #include "topology.h"
 #include "topology_idxd.hpp"
 
@@ -15,6 +17,9 @@
 #include <format>
 #include <optional>
 #include <vector>
+
+#include <fcntl.h>
+#include <sys/mman.h>
 
 namespace {
 // append existing group with a new wq, fill its config
@@ -99,6 +104,33 @@ void Topology::finalize_links()
     }
 }
 
+namespace {
+void try_read_dsacap(const wq_info_t* info, Topology::Device& device)
+{
+    // reset so when read-out wouldn't succeed, we won't stay with stale values
+    device.dsacap.reset();
+
+    auto_fd fd = {
+        open(std::format("/sys/bus/pci/devices/{}/resource0", to_string(info->bdf)).c_str(), O_RDONLY | O_CLOEXEC)
+    };
+    if (fd < 0) {
+        return;
+    }
+
+    void* bar0 = mmap(NULL, 4096, PROT_READ, MAP_SHARED, fd, 0);
+    if (bar0 == MAP_FAILED) {
+        return;
+    }
+
+    auto& dsacap = device.dsacap.emplace();
+    dsacap[0] = *reinterpret_cast<uint64_t*>(static_cast<uint8_t*>(bar0) + 0x180);
+    dsacap[1] = *reinterpret_cast<uint64_t*>(static_cast<uint8_t*>(bar0) + 0x188);
+    dsacap[2] = *reinterpret_cast<uint64_t*>(static_cast<uint8_t*>(bar0) + 0x190);
+
+    munmap(bar0, 4096);
+}
+} // end anonymous namespace
+
 Topology build_topology(accfg_ctx* ctx)
 {
     Topology topo;
@@ -115,6 +147,11 @@ Topology build_topology(accfg_ctx* ctx)
             it->id = info->device_id;
             it->dev_type = info->dev_type;
             it->dev_version = info->dev_version;
+
+            if (it->dev_type == accfg_device_type::ACCFG_DEVICE_DSA) {
+                try_read_dsacap(info, *it);
+            }
+
             if (!ctx) {
                 // can't read anything else without ctx, just proceed
                 it->wqs.emplace_back(info);

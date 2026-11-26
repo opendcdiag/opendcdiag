@@ -10,6 +10,7 @@
 
 #include <accel-config/libaccel_config.h>
 
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <optional>
@@ -131,6 +132,7 @@ public:
         uint32_t max_groups = 0;
 
         accfg_op_cap op_cap = {};
+        std::optional<std::array<uint64_t, 3>> dsacap;
 
         std::vector<const Thread*> wqs; // all wqs; immutable
         std::vector<Group> groups; // wqs divided into groups
