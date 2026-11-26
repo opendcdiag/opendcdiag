@@ -42,6 +42,7 @@ using ThreadRatio = std::variant<int, float>;
 void make_rescheduler(RescheduleMode mode);
 
 using PerThreadFailures = std::vector<__uint128_t>;
+using PerDeviceFailures = std::vector<__uint128_t>;
 
 struct LogicalProcessorSetOps
 {
@@ -254,7 +255,7 @@ void setup_devices(const EnabledDevices& enabled_devices);
 
 void restrict_topology(DeviceRange range);
 void rebuild_topology();
-void analyze_test_failures_for_topology(const struct test *test, const PerThreadFailures &per_thread_failures);
+void analyze_test_failures_for_topology(const struct test *test, const PerDeviceFailures &per_device_failures);
 std::string build_failure_mask_for_topology(const struct test* test);
 
 void print_temperature_of_device();
