@@ -13,6 +13,7 @@ framework_files += files(
     'build_topology.cpp',
     'idxd_config.cpp',
     'idxd_device.cpp',
+    'idxd_utils.cpp',
     'topology.cpp',
     'logging_idxd.cpp',
     'wq_base.c',
