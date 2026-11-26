@@ -53,7 +53,7 @@ uint64_t retrieve_physical_address(const volatile void *ptr)
     if (v < PAGE_SIZE || v > ~uintptr_t(PAGE_SIZE))
         return 0;
 
-    static const auto_fd pagemap = { open("/proc/self/pagemap", O_RDONLY) };
+    static const auto_fd pagemap = { open("/proc/self/pagemap", O_RDONLY | O_CLOEXEC) };
     if (pagemap.fd == -1)
         return 0;
 

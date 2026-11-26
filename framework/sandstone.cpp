@@ -793,7 +793,7 @@ static float system_idle_load()
     // Look at loadavg for hints whether the system is reasonably idle or not
     // any error and we assume it's busy/under load for simplicity
 
-    loadavg = fopen("/proc/loadavg", "r");
+    loadavg = fopen("/proc/loadavg", "re");
     if (!loadavg)
         return std::numeric_limits<float>::infinity();
 

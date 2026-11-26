@@ -30,7 +30,7 @@ int setup_sysfs_file(const char *tmp_dir, const char *file, const char *contents
     sprintf(file_path.get(), "%s/%s", tmp_dir, file);
 
     // Create file
-    FILE *fp = fopen(file_path.get(), "w");
+    FILE *fp = fopen(file_path.get(), "we");
     if (!fp)
         return -errno;
 
@@ -50,7 +50,7 @@ int read_sysfs_file(const char *tmp_dir, const char *file, char *contents)
     sprintf(file_path.get(), "%s/%s", tmp_dir, file);
 
     // Open file
-    FILE *fp = fopen(file_path.get(), "r");
+    FILE *fp = fopen(file_path.get(), "re");
     if (!fp)
         return -errno;
 

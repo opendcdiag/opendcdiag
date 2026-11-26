@@ -12,7 +12,7 @@
 static std::string readfile(const char *filename)
 {
     static constexpr size_t max_line_len = 256;
-    AutoClosingFile fp = { fopen(filename, "r") };
+    AutoClosingFile fp = { fopen(filename, "re") };
 
     if (fp == NULL) {
         return {};

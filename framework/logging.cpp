@@ -489,10 +489,10 @@ void logging_init_global(void)
             !SandstoneConfig::AllowStdoutFromTests) {
         // replace stdout with /dev/null
         close(STDOUT_FILENO);
-        int devnull = open(_PATH_DEVNULL, O_RDWR);
+        int devnull = open(_PATH_DEVNULL, O_RDWR | O_CLOEXEC);
         assert(devnull >= 0);
         if (devnull != STDOUT_FILENO) {
-            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDOUT_FILENO);   // not O_CLOEXEC: fd must survive
             close(devnull);
         }
     }

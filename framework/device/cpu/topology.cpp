@@ -310,7 +310,7 @@ static auto_fd open_sysfs_cpu_dir(int cpu)
 void TopologyDetector::ProcCpuInfoData::load()
 {
     static const char header[] = "processor\t";
-    AutoClosingFile f{ fopen("/proc/cpuinfo", "r") };
+    AutoClosingFile f{ fopen("/proc/cpuinfo", "re") };
     assert(f.f && "/proc must be mounted for proper operation");
 
     auto &result = *this;
@@ -616,7 +616,7 @@ bool TopologyDetector::detect_cache_via_os(Topology::Thread *info, int cpufd)
 
 bool TopologyDetector::detect_numa()
 {
-    int dfd = open("/sys/devices/system/node", O_RDONLY | O_DIRECTORY);
+    int dfd = open("/sys/devices/system/node", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (dfd < 0)
         return false;
 

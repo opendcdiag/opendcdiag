@@ -19,6 +19,10 @@
 #include <sysexits.h>
 #include <unistd.h>
 
+#if !defined(O_CLOEXEC) && defined(_O_NOINHERIT)
+// Windows
+#  define O_CLOEXEC     _O_NOINHERIT
+#endif
 #ifndef O_SYNC
 #  define O_SYNC        0
 #endif
@@ -104,7 +108,7 @@ void ulog_init(std::span<const char * const> args)
             }
         }
         if (fd == -1) {
-            fd = open(filename.c_str(), O_RDWR | O_SYNC);
+            fd = open(filename.c_str(), O_RDWR | O_SYNC | O_CLOEXEC);
             if (fd == -1) {
                 fprintf(stderr, "%s: --ulog: cannot open '%s': %s\n",
                         program_invocation_name, filename.c_str(), strerror(errno));
