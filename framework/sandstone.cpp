@@ -1045,13 +1045,14 @@ int main(int argc, char **argv)
     }
 
 #if SANDSTONE_DEVICE_IDXD
-        // TODO: it's possible to apply config even when running with --help/version.
-        // It's a consequence of pre-existing detect/setup_devices happening before taking opts.action.
-        if (opts.idxd_default_config) {
-            if (int ret = apply_global_idxd_config()) {
-                return ret;
-            }
+    if (opts.idxd_default_config && opts.action == Action::run) {
+        if (int ret = apply_global_idxd_config(opts.idxd_restore)) {
+            return ret;
         }
+        // For cases where cleanup_global() won't get called, such as exit(EX_USAGE);
+        // Child processes always call _exit(), so they won't inherit this handler.
+        std::ignore = std::atexit(idxd_config_cleanup);
+    }
 #endif
 
     if (!opts.deviceset.empty() && any_device) {
