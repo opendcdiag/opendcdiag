@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define _GNU_SOURCE 1
 #include "selftest_p.h"
 #include "sandstone.h"
 
@@ -24,6 +25,24 @@ static int selftest_memcmp_c_cleanup(struct test *test)
 {
     log_info("C worker memcmp cleanup after join");
     return EXIT_SUCCESS;
+}
+
+static char *selftest_datacompare_fail_double_cb(void *token, ptrdiff_t idx)
+{
+    // same content as formatter lambda in selftest_datacomparefail_run()
+    char *buf;
+    asprintf(&buf, "data of type '%s' at index %td\n"
+                   "rare: false\n"
+                   "modified_at: %td\n"
+                   "count: %zu",
+             "double", idx, idx, *(size_t *)token);
+    return buf;
+}
+
+void selftest_datacomparefail_run_double(const double *actual, const double *expected, size_t size)
+{
+    // test memcmp_or_fail_cb, which is only provided as a C macro
+    memcmp_or_fail_cb(actual, expected, size, selftest_datacompare_fail_double_cb, &size);
 }
 
 DECLARE_SELFTEST(selftest_memcmp_c, "Fails by calling memcmp_or_fail() from a C worker")

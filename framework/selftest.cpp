@@ -886,7 +886,9 @@ static int selftest_datacomparefail_with_cb_init(struct test *test)
     return EXIT_SUCCESS;
 }
 
-template <typename T> static int selftest_datacomparefail_run(struct test *, int thread)
+extern "C"
+void selftest_datacomparefail_run_double(const double *actual, const double *expected, size_t size);
+template <typename T> static int selftest_datacomparefail_run(struct test *test, int thread)
 {
     constexpr size_t Count = 16;
     const char *type_name = SandstoneDataDetails::TypeToDataType<T>::name();
@@ -915,22 +917,14 @@ template <typename T> static int selftest_datacomparefail_run(struct test *, int
                        "rare: false\n"
                        "modified_at: %d\n"
                        "count: %zu\n", type_name, diff, Count);
-    } else if constexpr (std::is_integral_v<T>) {
+    } else if constexpr (std::is_same_v<T, double>) {
+        // use the C way
+        // memcmp_or_fail_cb is only provided as a C macro (it uses C generics
+        // and __auto_type), so it must be in an actual .c file.
+        selftest_datacomparefail_run_double(values, values + 1, Count);
+    } else {
         // use the C++ way with a lambda
         memcmp_or_fail(values, values + 1, Count, formatter);
-    } else {
-        // use the C way
-        using FormatterType = decltype(formatter);
-        auto c_callback = [](void *token, ptrdiff_t idx) {
-            auto formatter = static_cast<FormatterType *>(token);
-            std::string result = std::move(*formatter)(idx);
-            return strdup(result.c_str());
-        };
-
-        // memcmp_or_fail_cb is only provided as a C macro (it uses C generics
-        // and __auto_type), so we must go straight to the callback.
-        DataType type = SandstoneDataDetails::TypeToDataType<T>::Type;
-        _memcmp_fail_report_cb(values, values + 1, Count * sizeof(T), type, c_callback, &formatter);
     }
 
     // won't be reached, but verify that it compiles
