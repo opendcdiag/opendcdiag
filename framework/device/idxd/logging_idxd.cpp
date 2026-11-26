@@ -5,6 +5,7 @@
 
 #include "logging.h"
 #include "idxd_device.h"
+#include "idxd_utils.hpp"
 #include "topology_idxd.hpp"
 
 #include <algorithm>
@@ -12,17 +13,6 @@
 #include <string>
 
 #if !SANDSTONE_NO_LOGGING
-static std::string to_string(accfg_device_type device_type)
-{
-    switch (device_type) {
-    case ACCFG_DEVICE_DSA:
-        return "dsa";
-    case ACCFG_DEVICE_IAX:
-        return "iax";
-    default:
-        return {};
-    }
-}
 
 static auto calc_spacing()
 {
@@ -59,23 +49,6 @@ static auto calc_spacing()
     return spacing;
 }
 
-static const char* to_string(accfg_wq_state state)
-{
-    switch (state) {
-    case accfg_wq_state::ACCFG_WQ_DISABLED:
-        return "disabled";
-    case accfg_wq_state::ACCFG_WQ_ENABLED:
-        return "enabled";
-    case accfg_wq_state::ACCFG_WQ_QUIESCING:
-        return "quiescing";
-    case accfg_wq_state::ACCFG_WQ_LOCKED:
-        return "locked";
-    case accfg_wq_state::ACCFG_WQ_UNKNOWN:
-    default:
-        return "unknown";
-    }
-}
-
 std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerbosity verbosity)
 {
     const wq_info_t* info = device_info + thread;
@@ -89,9 +62,7 @@ std::string AbstractLogger::thread_id_header_for_device(int thread, LogLevelVerb
     line += std::format("group: {:{}}, ", wq.this_group->id, spacing.group);
     line += std::format("state: {}, ", to_string(wq.state));
     line += std::format("logical_cpu: {:{}}, numa_node: {}, ", info->cpu_number, spacing.cpu, info->numa_id);
-    line += std::format("pci_address: '{:04x}:{:02x}:{:02x}.{:01x}'",
-        info->bdf.domain, info->bdf.bus, info->bdf.device, info->bdf.function
-    );
+    line += std::format("pci_address: '{}'", to_string(info->bdf));
     line += " }";
 
     return line;
